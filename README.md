@@ -9,6 +9,8 @@ Spil: https://woodmandk.github.io/Mini-Football/
 - Bolden følger spilleren, der har den. **SKYD** (hold inde for hårdere, to tryk for lob) og **AFLEVER** (to tryk for stikning). Uden bolden bliver knapperne **TACKLE** og **SKIFT**. Frit joystick, træk langt ud for at spurte.
 - Indkast, hjørnespark, målspark og frispark. Gentagelse af målene i slowmotion, publikumslyd, statistik efter kampen og en stilling med topscorer på telefonen.
 - Navne og fire trøjesæt, hurtige beskeder online ("Flot!", "GG") og revanche-knap. Power-ups kan slås til (superskud, turbo, kæmpebold).
+- Frispark og straffespark (sigt med joysticket, målmanden kaster sig), gule og røde kort, hovedstød og indlæg, sigtehjælp på skud, to halvlege og straffesparkskonkurrence ved uafgjort.
+- Turnering for 3 til 8 venner på én telefon, og online kan man selv vælge sin plads. Kommentator via telefonens danske stemme.
 - Spillet ligger altid ned, også hvis telefonen holdes oprejst. Kan lægges på hjemmeskærmen som en app.
 
 Tastatur: WASD + mellemrum + Shift. Spiller 2: piletaster + Enter + punktum.

@@ -107,6 +107,10 @@ table.st th, table.st td { padding: 5px 6px; border-bottom: 1px solid rgba(244,2
 table.st th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
 table.st td.l, table.st th.l { text-align: left; }
 .tablewrap { overflow-x: auto; max-width: 100%; }
+.cupnames { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
+#cupScoreRow input { width: 64px; flex: none; text-align: center; }
+#cupNext { font-weight: 700; }
+.roster li.pick { cursor: pointer; text-decoration: underline dotted; }
 .help { display: grid; gap: 10px; text-align: left; }
 .help div { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: center; font-size: 14px; line-height: 1.35; }
 .help b.k { display: inline-flex; align-items: center; justify-content: center; width: 70px; height: 34px; border-radius: 17px; border: 2px solid var(--chalk); font-size: 11px; letter-spacing: 0.04em; }
@@ -148,7 +152,7 @@ table.st td.l, table.st th.l { text-align: left; }
           </div>
           <div class="lbl">Ekstra</div>
           <div class="toggles">
-            <button id="tReplay">Genafspilning</button><button id="tPu">Power-ups</button><button id="tCrowd">Publikum</button>
+            <button id="tReplay">Genafspilning</button><button id="tPu">Power-ups</button><button id="tCrowd">Publikum og kommentator</button>
           </div>
         </div>
         <div class="col">
@@ -167,6 +171,7 @@ table.st td.l, table.st th.l { text-align: left; }
             <button id="bHelp" class="alt" style="flex:1">Sådan spiller du</button>
             <button id="bLeague" class="alt" style="flex:1">Stilling</button>
           </div>
+          <button id="bCup" class="alt">Turnering</button>
           <button id="fs" class="alt" hidden>Fuld skærm</button>
         </div>
       </div>
@@ -183,6 +188,7 @@ table.st td.l, table.st th.l { text-align: left; }
         <ul class="tr" id="rosterR"></ul>
         <ul class="tb" id="rosterB"></ul>
       </div>
+      <p class="hint" id="lobbyHint">Tryk på en ledig plads for at tage den.</p>
       <div class="lbl" id="lobbyFormLbl">Jeres formation</div>
       <div class="seg" id="lobbyForm" role="group" aria-label="Formation"></div>
       <div class="btns">
@@ -206,6 +212,9 @@ table.st td.l, table.st th.l { text-align: left; }
         <div><b class="k">AFLEVER</b><span>Med bolden. Peg med joysticket mod den medspiller, du vil aflevere til. Tryk to gange hurtigt for en stikning frem i løbet.</span></div>
         <div><b class="k">TACKLE</b><span>Uden bolden. En glidende tackling, der sigter mod bolden. Kommer du bagfra, er det frispark.</span></div>
         <div><b class="k">OFFSIDE</b><span>Ved 5 og 11 mod 11. Står modtageren bag forsvaret, når bolden spilles, får modstanderen frispark.</span></div>
+        <div><b class="k">HOVED</b><span>Når bolden kommer gennem luften, header spilleren den automatisk. Tæt på mål går den mod mål.</span></div>
+        <div><b class="k">KORT</b><span>Tackler du bagfra, er det frispark, i feltet straffespark. Anden gang er gult kort, tredje gang rødt kort og 40 sekunder udenfor.</span></div>
+        <div><b class="k">STRAFFE</b><span>Sigt med joysticket og tryk SKYD. Som målmand bestemmer joysticket, hvilken vej du kaster dig.</span></div>
         <div><b class="k">SKIFT</b><span>Uden bolden. Skift til den medspiller, der er tættest på bolden.</span></div>
       </div>
       <div class="btns"><button id="helpOk">Forstået</button></div>
@@ -222,6 +231,32 @@ table.st td.l, table.st th.l { text-align: left; }
       <div class="btns">
         <button id="leagueClose">Luk</button>
         <button id="leagueReset" class="alt">Nulstil stillingen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="cup" hidden>
+    <div class="card">
+      <h1>Turnering</h1>
+      <div id="cupSetup">
+        <p>Skriv 3 til 8 navne. Alle møder alle én gang. Spil kampene på denne telefon, eller spil dem online og skriv resultatet ind.</p>
+        <div class="cupnames" id="cupNames"></div>
+        <div class="btns"><button id="cupStart">Start turneringen</button><button id="cupClose1" class="alt">Luk</button></div>
+      </div>
+      <div id="cupView" hidden>
+        <div class="tablewrap"><table class="st" id="cupTable"></table></div>
+        <div class="lbl" id="cupNextLbl">Næste kamp</div>
+        <p id="cupNext"></p>
+        <div class="joinrow" id="cupScoreRow">
+          <input id="cupGa" inputmode="numeric" maxlength="2" placeholder="0" aria-label="Mål hjemme">
+          <input id="cupGb" inputmode="numeric" maxlength="2" placeholder="0" aria-label="Mål ude">
+          <button id="cupSave" class="alt">Gem resultat</button>
+        </div>
+        <div class="btns">
+          <button id="cupPlay">Spil kampen på denne telefon</button>
+          <button id="cupClose" class="alt">Luk</button>
+          <button id="cupReset" class="alt">Ny turnering</button>
+        </div>
       </div>
     </div>
   </div>
@@ -245,6 +280,7 @@ table.st td.l, table.st th.l { text-align: left; }
       <div class="btns">
         <button id="again">Spil igen</button>
         <button id="ready" hidden>Klar til revanche</button>
+        <button id="toCup" hidden>Tilbage til turneringen</button>
         <button id="toMenu" class="alt">Til menuen</button>
       </div>
     </div>
@@ -300,13 +336,14 @@ table.st td.l, table.st th.l { text-align: left; }
 
   // league: every finished match on this phone
   function loadLeague() { try { return JSON.parse(localStorage.getItem('mf-league') || '') || { pl: {}, sc: {} }; } catch (_) { return { pl: {}, sc: {} }; } }
-  function recordMatch(teams, sc, goals) {
+  function recordMatch(teams, sc, goals, win) {
+    if (win === undefined) win = sc[0] === sc[1] ? -1 : sc[0] > sc[1] ? 0 : 1;
     const L = loadLeague();
     teams.forEach((names, t) => {
       for (const n of new Set(names)) {
         const r = L.pl[n] || (L.pl[n] = { k: 0, v: 0, u: 0, t: 0, mf: 0, mm: 0 });
         r.k++; r.mf += sc[t]; r.mm += sc[1 - t];
-        if (sc[t] > sc[1 - t]) r.v++; else if (sc[t] === sc[1 - t]) r.u++; else r.t++;
+        if (win === t) r.v++; else if (win < 0) r.u++; else r.t++;
       }
     });
     for (const g of goals) L.sc[g] = (L.sc[g] || 0) + 1;
@@ -409,6 +446,8 @@ table.st td.l, table.st th.l { text-align: left; }
   let mode = null;          // 'cpu' | 'two' | 'host' | 'guest'
   let state = 'menu';       // 'menu' | 'lobby' | 'play' | 'end'
   let size = 1, score = [0, 0], clock = 120, pause = 0, banner = '', golden = false, paused = false;
+  let half = 1, matchLen = 120, pen = null, so = null, soG = null, celeb = -1, cupMatch = null;
+  const on = p => !(p.out > 0); // not sent off
   let matchNo = 0;
   const ball = { x: CX, y: CY, z: 0, vz: 0, vx: 0, vy: 0, owner: -1, loose: 0, stealCd: 0, trail: [], lastTeam: -1, lastIdx: -1 };
   let stats = null, matchGoals = [], item = null, itemT = 8, bigT = 0, replay = null, recBuf = [], recT = 0, guard = 0;
@@ -422,7 +461,7 @@ table.st td.l, table.st th.l { text-align: left; }
       P.push({ team: t, k, x: 0, y: 0, vx: 0, vy: 0, fx: t ? -1 : 1, fy: 0, ctrl: 'ai', peer: null,
         hold: 0, charging: false, wasA: false, wasB: false, stamina: 1, sprint: false,
         tackle: 0, tdx: 0, tdy: 0, tcd: 0, recover: 0, stun: 0, nopick: 0, swcd: 0, cd: 0, think: 0, plan: null,
-        pending: 0, frozen: 0, superShot: false, turbo: 0, name: '', windup: 0, recv: 0, pendB: 0, pendQ: null });
+        pending: 0, frozen: 0, superShot: false, turbo: 0, name: '', windup: 0, out: 0, fouls: 0, yc: 0, dive: 0, dvy: 0, recv: 0, pendB: 0, pendQ: null });
   }
   const slotOf = (t, k) => t * size + k;
   function humanSlots(t) { return HUMAN_ORDER[size].map(k => slotOf(t, k)); }
@@ -431,11 +470,11 @@ table.st td.l, table.st th.l { text-align: left; }
   const owner = () => (ball.owner >= 0 ? P[ball.owner] : null);
 
   function kickoff() {
-    recBuf = [];
+    recBuf = []; pen = null; guard = 0;
     ball.x = CX; ball.y = CY; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.trail = []; ball.owner = -1; ball.loose = 0; ball.last = null; ball.lastTeam = -1;
     for (const p of P) {
       const h = homeOf(p); p.x = h.x; p.y = h.y;
-      p.vx = p.vy = 0; p.hold = 0; p.charging = false; p.tackle = 0; p.stun = 0; p.recover = 0; p.nopick = 0; p.cd = 0; p.pending = 0; p.frozen = 0; p.windup = 0; p.recv = 0; p.pendB = 0;
+      p.vx = p.vy = 0; p.hold = 0; p.charging = false; p.tackle = 0; p.stun = 0; p.recover = 0; p.nopick = 0; p.cd = 0; p.pending = 0; p.frozen = 0; p.windup = 0; p.recv = 0; p.dive = 0; p.pendB = 0;
       p.fx = p.team ? -1 : 1; p.fy = 0;
     }
   }
@@ -620,6 +659,20 @@ table.st td.l, table.st th.l { text-align: left; }
       ooh() { swell = Math.max(swell, 0.5); },
     };
   })();
+  // commentator: the phone's own Danish voice says a few words at big moments
+  const SAY = { 'MÅL!': 'Mål!', 'Redning!': 'Hvilken redning!', 'Straffespark': 'Straffespark!', 'Pause': 'Pause', 'Gult kort': 'Gult kort', 'Rødt kort': 'Rødt kort! Han er ude.',
+    'Offside': 'Offside', 'Brændt!': 'Brændt!', 'Hovedstød!': 'Hovedstød!', 'Straffespark-konkurrence': 'Straffesparkskonkurrence!', 'Superskud!': 'Superskud!' };
+  let saidText = '';
+  function commentate(text) {
+    if (text === saidText) return; saidText = text;
+    if (!text || !cfg.crowd || !SAY[text] || !window.speechSynthesis) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(SAY[text]); u.lang = 'da-DK'; u.rate = 1.1; u.volume = 0.9;
+      const v = speechSynthesis.getVoices().find(x => /^da/i.test(x.lang)); if (v) u.voice = v;
+      speechSynthesis.speak(u);
+    } catch (_) {}
+  }
   const names = new Map();     // peer -> name (host)
   const readyMap = new Map();  // peer -> match number they want a rematch after (host)
   const lobbyReady = new Map(); // peer -> ready in the lobby (host)
@@ -650,13 +703,15 @@ table.st td.l, table.st th.l { text-align: left; }
   }
   function startMatch(m) {
     mode = m;
+    if (m !== 'two') cupMatch = null;
     if (m !== 'host') { makePlayers(cfg.size); assignLocal(); }
-    score = [0, 0]; clock = cfg.mins * 60; golden = false; paused = false;
+    score = [0, 0]; clock = cfg.mins * 60; matchLen = clock; half = 1; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
+    for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; }
     particles = []; matchNo++;
     stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = [];
     if (m !== 'guest') {
       setKit(cfg.kit);
-      teamForm = [myForm(size), m === 'two' ? myForm(size) : m === 'host' ? teamForm[1] : (FORMS[size] ? Math.floor(Math.random() * FORMS[size].length) : 0)];
+      if (m !== 'host') teamForm = [myForm(size), m === 'two' ? myForm(size) : (FORMS[size] ? Math.floor(Math.random() * FORMS[size].length) : 0)];
     }
     hostReady = false; $('ready').hidden = true; rxList = [];
     $('rxbar').hidden = !(m === 'host' || m === 'guest');
@@ -674,12 +729,16 @@ table.st td.l, table.st th.l { text-align: left; }
     state = 'end'; $('pauseBtn').hidden = true; replay = null;
     const me = mode === 'guest' ? myTeam() : 0;
     const t = $('endTitle');
-    if (score[0] === score[1]) t.textContent = 'Uafgjort';
-    else if (mode === 'two' || me === null) t.textContent = KITN[kit][score[0] > score[1] ? 0 : 1] + ' vinder';
-    else if (mode === 'cpu' && size === 1) t.textContent = score[0] > score[1] ? 'Du vandt' : 'Computeren vandt';
-    else t.textContent = score[me] > score[1 - me] ? 'I vandt' : (mode === 'cpu' ? 'Computeren vandt' : 'I tabte');
+    const ss = mode === 'guest' ? soG : soSums();
+    const ws = ss ? [ss[0], ss[1]] : score; // who won (a shootout decides a draw)
+    const win = ws[0] === ws[1] ? -1 : ws[0] > ws[1] ? 0 : 1;
+    if (win < 0) t.textContent = 'Uafgjort';
+    else if (cupMatch) t.textContent = cupMatch.n[win] + ' vinder';
+    else if (mode === 'two' || me === null) t.textContent = KITN[kit][win] + ' vinder';
+    else if (mode === 'cpu' && size === 1) t.textContent = win === 0 ? 'Du vandt' : 'Computeren vandt';
+    else t.textContent = win === me ? 'I vandt' : (mode === 'cpu' ? 'Computeren vandt' : 'I tabte');
     $('fh').textContent = score[0]; $('fa').textContent = score[1];
-    $('endMsg').textContent = mode === 'guest' ? 'Værten kan starte en ny kamp.' : '';
+    $('endMsg').textContent = (ss ? `Straffesparkskonkurrence: ${ss[0]}-${ss[1]}. ` : '') + (mode === 'guest' ? 'Værten kan starte en ny kamp.' : '');
     $('again').hidden = mode === 'guest';
     $('again').textContent = 'Spil igen';
     if (mode === 'host') updateAgain();
@@ -695,11 +754,13 @@ table.st td.l, table.st th.l { text-align: left; }
     // league on this phone
     const teamNames = t => {
       if (mode === 'cpu') return t ? ['Computer'] : [myName()];
-      if (mode === 'two') return [t ? 'Spiller 2' : (cfg.name || 'Spiller 1')];
+      if (mode === 'two') return [cupMatch ? cupMatch.n[t] : t ? 'Spiller 2' : (cfg.name || 'Spiller 1')];
       const n = [...new Set(P.filter(p => p.team === t).map(p => (p.ctrl === 'ME' ? myName() : mode === 'guest' ? p.name : nameOf(p))).filter(Boolean))];
       return n.length ? n : ['Computer'];
     };
-    recordMatch([teamNames(0), teamNames(1)], score, matchGoals);
+    recordMatch([teamNames(0), teamNames(1)], score, matchGoals, win);
+    if (cupMatch) { cupResult(cupMatch.i, score[0], score[1], win); }
+    $('toCup').hidden = !cupMatch; $('again').hidden = $('again').hidden || !!cupMatch;
     $('end').hidden = false;
     sfx.whistle(3);
   }
@@ -743,7 +804,7 @@ table.st td.l, table.st th.l { text-align: left; }
     h.charging = false; h.hold = 0; q.charging = false; q.hold = 0; q.swcd = 0.4; q.windup = 0;
     if (q.ctrl === 'R') { const e = roster.find(r => r[0] === q.peer); if (e) e[1] = P.indexOf(q); }
   }
-  const freeMates = h => P.filter(q => q.team === h.team && q.ctrl === 'ai');
+  const freeMates = h => P.filter(q => q.team === h.team && q.ctrl === 'ai' && on(q));
   function nearestFree(h) {
     const f = freeMates(h); if (!f.length) return null;
     return f.reduce((a, b) => (dBall(b) < dBall(a) ? b : a));
@@ -783,17 +844,31 @@ table.st td.l, table.st th.l { text-align: left; }
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     const pw = Math.min(1, hold / MAXCHARGE);
     let power = 640 + pw * 620;
+    const isPen = ball.rs === 'pen' && p.frozen > 0 && (pen || so);
+    if (isPen) power = 470 + pw * 280;
+    { // aim help: a shot roughly at goal is pulled toward the goal mouth
+      const dir = p.team ? -1 : 1, gx = p.team ? PL : PR, dist = (gx - p.x) * dir;
+      if (isHuman(p) && dist > 30 && dist < 560 && p.fx * dir > 0.35) {
+        const yc = p.y + p.fy * (gx - p.x) / p.fx, lim = MOUTH * (pw > 0.75 ? 0.8 : 0.62);
+        if (Math.abs(yc - CY) < MOUTH * 2.4) {
+          const ty = Math.max(CY - lim, Math.min(CY + lim, yc)), ax = gx - p.x, ay = ty - p.y, l = Math.hypot(ax, ay);
+          let nx = p.fx * 0.3 + ax / l * 0.7, ny = p.fy * 0.3 + ay / l * 0.7; const nl = Math.hypot(nx, ny); p.fx = nx / nl; p.fy = ny / nl;
+        }
+      }
+    }
     if (p.superShot) { power *= 1.6; p.superShot = false; flash = { text: 'Superskud!', t: 0.8 }; shake = Math.max(shake, 8); }
     if (stats) stats.sh[p.team]++;
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     release(p, p.fx * power + p.vx * 0.25, p.fy * power + p.vy * 0.25, 0.3);
     ball.last = { team: p.team, pass: false };
+    if (pw > 0.75 && !isPen) ball.vz = 140; // a hard shot rises a little
+    if (isPen) penShot(p);
     sfx.kick(pw);
     if (pw > 0.8) shake = Math.max(shake, 5);
     if (localHuman(p)) buzz(pw > 0.8 ? 30 : 15);
   }
   function passTarget(p, dx, dy) {
-    const mates = P.filter(q => q.team === p.team && q !== p);
+    const mates = P.filter(q => q.team === p.team && q !== p && on(q));
     if (!mates.length) return null;
     let l = Math.hypot(dx, dy);
     if (l < 0.2) { dx = p.fx; dy = p.fy; l = 1; }
@@ -821,7 +896,7 @@ table.st td.l, table.st th.l { text-align: left; }
     return Math.max(CX * dir, xs[1]) * dir;
   }
   function pass(p, q, through) {
-    if (!q) return;
+    if (!q || (ball.rs === 'pen' && p.frozen > 0 && (pen || so))) return; // no passing at a penalty
     const dir = q.team ? -1 : 1;
     const off = isOffside(q, p); // judged when the ball is played
     let tx = q.x + q.vx * 0.15, ty = q.y + q.vy * 0.15, pt = null;
@@ -846,10 +921,28 @@ table.st td.l, table.st th.l { text-align: left; }
   function lob(p, ax, ay) {
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
-    release(p, p.fx * 540 + p.vx * 0.2, p.fy * 540 + p.vy * 0.2, 0.35);
+    const hs = ax !== undefined ? Math.max(260, Math.min(600, Math.hypot(ax, ay) / 0.85)) : 540; // crosses land where they're aimed
+    release(p, p.fx * hs + p.vx * 0.2, p.fy * hs + p.vy * 0.2, 0.35);
     ball.vz = 470; ball.last = { team: p.team, pass: false };
     if (stats) stats.sh[p.team]++;
     tone(200, 0.12, 'triangle', 0.12, 120);
+  }
+  function header(p) {
+    const dir = p.team ? -1 : 1, gx = p.team ? PL : PR, near = (gx - p.x) * dir < 430 && (gx - p.x) * dir > 0;
+    let tx, ty;
+    if (near) { tx = gx; ty = CY + (Math.random() - 0.5) * MOUTH * 1.2; }
+    else {
+      const i = p.ctrl === 'L0' ? localInput(0) : p.ctrl === 'L1' ? localInput(1) : p.ctrl === 'R' ? (remoteIn.get(p.peer) || ZERO) : null;
+      if (i && Math.hypot(i.x, i.y) > 0.3) { tx = p.x + i.x * 300; ty = p.y + i.y * 300; }
+      else { tx = p.x + dir * 320; ty = p.y + (CY - p.y) * 0.3; } // clear it upfield
+    }
+    const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = near ? 640 : 500;
+    p.fx = dx / d; p.fy = dy / d;
+    ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
+    ball.last = { team: p.team, pass: false }; ball.lastTeam = p.team; ball.lastIdx = P.indexOf(p); ball.headCd = 0.3;
+    if (near && stats) stats.sh[p.team]++;
+    if (near) flash = { text: 'Hovedstød!', t: 0.7 };
+    tone(180, 0.07, 'triangle', 0.12, -60);
   }
   function startTackle(p) {
     if (p.tcd > 0 || p.tackle > 0 || p.recover > 0) return;
@@ -869,6 +962,82 @@ table.st td.l, table.st th.l { text-align: left; }
     grab(a);
     sfx.win(); shake = Math.max(shake, 3);
   }
+  // ---------- Fouls, cards, penalties ----------
+  const inBox = (team, x, y) => Math.abs(x - (team ? PR : PL)) < 120 && Math.abs(y - CY) < 150; // team's own penalty area
+  function foul(a, b) {
+    const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
+    let card = '';
+    if (size > 1) {
+      a.fouls++;
+      if (a.fouls === 2) { a.yc = 1; card = 'Gult kort'; }
+      else if (a.fouls >= 3) { card = 'Rødt kort'; sendOff(a); }
+    }
+    if (inBox(a.team, b.x, b.y) && size > 1) startPenalty(b.team);
+    else restart('free', b.team, x, y);
+    if (card) flash = { text: card, t: 1.4 };
+  }
+  function sendOff(p) {
+    if (isHuman(p)) { const q = nearestFree(p); if (q) swapControl(p, q); }
+    p.out = 40; p.fouls = 0; p.yc = 0; p.stun = 0; p.tackle = 0; p.windup = 0;
+    if (ball.owner === P.indexOf(p)) ball.owner = -1;
+  }
+  function startPenalty(team) { // team takes a penalty at the other end
+    const dir = team ? -1 : 1, gx = team ? PL : PR;
+    pen = { team, t: 0 };
+    ball.x = gx - dir * 105; ball.y = CY; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.last = null; ball.rs = 'pen'; ball.loose = 0;
+    const kp = size > 1 ? P[slotOf(1 - team, 0)] : P.find(q => q.team !== team);
+    const ours = P.filter(q => q.team === team && on(q));
+    let taker = ours.find(q => isHuman(q)) || ours.reduce((a, b) => (formOf(b)[0] > formOf(a)[0] ? b : a));
+    for (const p of P) {
+      p.vx = p.vy = 0; p.tackle = 0; p.stun = 0; p.windup = 0; p.recover = 0; p.dive = 0; p.frozen = 0; p.charging = false; p.hold = 0;
+      if (on(p) && Math.abs(p.x - gx) < 280) { p.x = gx - dir * (290 + Math.random() * 90); p.y = Math.max(PT + 30, Math.min(PB - 30, p.y)); }
+    }
+    kp.x = gx - dir * 14; kp.y = CY; kp.fx = -dir; kp.fy = 0; kp.frozen = 99;
+    taker.x = ball.x - dir * (REACH - 3); taker.y = CY; taker.fx = dir; taker.fy = 0; taker.think = 0;
+    // a human on the team takes it
+    const hs = P.filter(q => q.team === team && isHuman(q));
+    if (hs.length && !isHuman(taker)) swapControl(hs[0], taker);
+    ball.owner = P.indexOf(taker); ball.lastTeam = team; ball.lastIdx = ball.owner;
+    taker.frozen = 99; guard = 99; pen.kp = P.indexOf(kp); pen.tk = ball.owner;
+    // the keeper's own player takes over the keeper
+    const kh = P.filter(q => q.team !== team && isHuman(q));
+    if (kh.length && !isHuman(kp)) swapControl(kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp);
+    flash = { text: so ? KITN[kit][team] + ' skyder' : 'Straffespark', t: 1.4 };
+    sfx.whistle();
+  }
+  function penShot(taker) { // the taker struck the ball: the keeper commits to a side
+    const kp = P[pen.kp];
+    if (kp) {
+      let d = 0;
+      if (isHuman(kp)) { const i = kp.ctrl === 'L0' ? localInput(0) : kp.ctrl === 'L1' ? localInput(1) : (remoteIn.get(kp.peer) || ZERO); d = Math.abs(i.y) > 0.3 ? Math.sign(i.y) : 0; }
+      else {
+        const truth = Math.abs(taker.fy) < 0.08 ? 0 : Math.sign(taker.fy);
+        const right = 0.3 + (mode === 'cpu' ? cfg.diff : 1) * 0.12;
+        d = Math.random() < right ? truth : [-1, 0, 1][Math.floor(Math.random() * 3)];
+      }
+      kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * 470;
+    }
+    guard = 0; if (so) so.shot = true;
+    pen = null;
+  }
+  const soSums = () => (so ? [so.k[0].reduce((a, b) => a + b, 0), so.k[1].reduce((a, b) => a + b, 0), so.k[0].length, so.k[1].length] : null);
+  function startShootout() {
+    so = { k: [[], []], turn: 0, shot: false, wait: -1 };
+    ball.owner = -1; banner = ''; pause = 2.2; flash = { text: 'Straffespark-konkurrence', t: 2 }; sfx.whistle(2);
+  }
+  function soResult(v) {
+    if (!so || so.wait < 0) return;
+    so.k[so.turn].push(v); so.wait = -1; so.shot = false;
+    flash = { text: v ? 'MÅL!' : 'Brændt!', t: 1.2 };
+    if (v) { goalFx(so.turn); } else sfx.post();
+    so.turn = 1 - so.turn; pause = 1.8; banner = '';
+    ball.owner = -1; ball.vx *= 0.2; ball.vy *= 0.2;
+  }
+  function soDone() {
+    const [a, b, la, lb] = soSums();
+    if (la <= 5 && lb <= 5) { if (a > b + (5 - lb) || b > a + (5 - la)) return true; if (la === 5 && lb === 5) return a !== b; return false; }
+    return la === lb && a !== b; // sudden death
+  }
   function tackleBody(a, b) {
     const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces, i.e. from behind
     if (ball.owner === P.indexOf(b) && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
@@ -876,8 +1045,8 @@ table.st td.l, table.st th.l { text-align: left; }
     a.tackle = 0;
     if (behind) {
       a.stun = 1.1; a.vx = a.vy = 0;              // foul: the tackler goes down
-      flash = { text: 'Frispark', t: 0.9 };
       sfx.foul(); if (localHuman(a)) buzz(80);
+      foul(a, b);
       return;
     }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
@@ -910,8 +1079,8 @@ table.st td.l, table.st th.l { text-align: left; }
     const o = owner();
     for (const t of [0, 1]) {
       if (o && o.team === t) continue;
-      const free = new Set(P.filter(f => f.team !== t && f !== o && f.k !== 0));
-      const ours = P.filter(q => q.team === t && q.k !== 0 && q.ctrl === 'ai' && formOf(q)[0] < 0.7).sort((a, b) => formOf(a)[0] - formOf(b)[0]);
+      const free = new Set(P.filter(f => f.team !== t && f !== o && f.k !== 0 && on(f)));
+      const ours = P.filter(q => q.team === t && q.k !== 0 && q.ctrl === 'ai' && on(q) && formOf(q)[0] < 0.7).sort((a, b) => formOf(a)[0] - formOf(b)[0]);
       for (const q of ours) {
         const [sx, sy] = shapeSpot(q, 0, false);
         let best = null, bd = 170;
@@ -925,8 +1094,8 @@ table.st td.l, table.st th.l { text-align: left; }
     const dir = p.team ? -1 : 1;
     const goalX = dir > 0 ? PR : PL, ownX = dir > 0 ? PL : PR;
     const o = owner();
-    const mates = P.filter(q => q.team === p.team);
-    const foes = P.filter(q => q.team !== p.team);
+    const mates = P.filter(q => q.team === p.team && on(q));
+    const foes = P.filter(q => q.team !== p.team && on(q));
     const keeper = size > 1 && p.k === 0;
     const out = { x: 0, y: 0, sprint: false };
     let tx = p.x, ty = p.y;
@@ -934,6 +1103,12 @@ table.st td.l, table.st th.l { text-align: left; }
     const nearestFoe = foes.reduce((a, b) => (Math.hypot(b.x - p.x, b.y - p.y) < Math.hypot(a.x - p.x, a.y - p.y) ? b : a));
     const foeD = Math.hypot(nearestFoe.x - p.x, nearestFoe.y - p.y);
 
+    if ((pen || so) && ball.rs === 'pen' && o !== p) return out; // everyone waits during a penalty
+    if (o === p && p.frozen > 0 && ball.rs === 'pen') { // penalty: pick a corner
+      p.think += dt;
+      if (p.think > 1.1) { const ty = CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.3 + Math.random() * 0.45) * (Math.random() < 0.2 ? 0 : 1); out.shoot = 0.2 + Math.random() * 0.5; out.aim = [goalX - p.x, ty - p.y]; }
+      return out;
+    }
     if (o === p && p.frozen > 0) {
       // taking a throw-in, corner or goal kick
       p.think += dt;
@@ -952,7 +1127,9 @@ table.st td.l, table.st th.l { text-align: left; }
       const fx = nearestFoe.x - p.x, fy = nearestFoe.y - p.y;
       if (foeD < 110 && (fx * ax + fy * ay) / foeD > 0.5) { const side = (fx * -ay + fy * ax) > 0 ? -1 : 1; ax += -ay * side * 0.9; ay += ax * side * 0.9; }
       go(p.x + ax * 100, p.y + ay * 100, foeD > 140 && p.stamina > 0.5);
-      if (keeper && p.think > 0.6) { out.passTo = passTarget(p, dir, 0) || null; if (!out.passTo) { out.shoot = MAXCHARGE; out.aim = [dir, 0]; } }
+      const wide = Math.abs(p.y - CY) > MOUTH + 70 && (goalX - p.x) * dir < 260 && (goalX - p.x) * dir > 20;
+      if (!keeper && size >= 3 && wide && p.think > 0.4 && Math.random() < 1.6 * dt) { out.lob = true; out.aim = [goalX - dir * 115 - p.x, CY + (Math.random() - 0.5) * 110 - p.y]; } // cross
+      else if (keeper && p.think > 0.6) { out.passTo = passTarget(p, dir, 0) || null; if (!out.passTo) { out.shoot = MAXCHARGE; out.aim = [dir, 0]; } }
       else if (gd < 340 && p.think > d.react + 0.2 && Math.random() < d.shoot * dt * (gd < 220 ? 1.5 : 0.6)) {
         const err = (Math.random() - 0.5) * 2 * d.aimErr;
         const gy = CY + (Math.random() - 0.5) * (MOUTH * 1.3);
@@ -1060,26 +1237,33 @@ table.st td.l, table.st th.l { text-align: left; }
     if (paused) return;
     if (pause > 0) {
       const was = pause; pause -= dt;
+      const c = P[celeb]; // the scorer runs off to celebrate
+      if (banner === 'MÅL!' && c) { const cx = c.team ? PL + 60 : PR - 60, cy = c.y < CY ? PT + 40 : PB - 40, dx = cx - c.x, dy = cy - c.y, d = Math.hypot(dx, dy); if (d > 20) { c.x += dx / d * 220 * dt; c.y += dy / d * 220 * dt; c.fx = dx / d; c.fy = dy / d; } }
       if (/^[123]$/.test(banner)) {
         const n = Math.ceil(pause / 0.8);
         if (n !== Math.ceil(was / 0.8) && n > 0) { banner = String(n); sfx.beep(); }
         if (pause <= 0) { banner = ''; sfx.whistle(); }
       } else if (pause <= 0) {
-        if (banner === 'MÅL!' && golden) { finish(); return; }
+        if (so) { if (soDone()) { finish(); return; } startPenalty(so.turn); so.wait = 0; so.shot = false; return; }
         if (banner === 'MÅL!') { kickoff(); pause = 1.0; banner = 'Klar'; return; }
+        if (banner === 'Pause') { kickoff(); pause = 1.0; banner = 'Klar'; return; }
         if (banner === 'Klar') sfx.whistle();
         banner = '';
       }
       return;
     }
-    if (!golden) {
+    if (!so && !pen) {
       clock -= dt;
+      if (half === 1 && clock <= matchLen / 2) { half = 2; banner = 'Pause'; pause = 2.6; sfx.whistle(2); return; }
       if (clock <= 0) {
         clock = 0;
-        if (score[0] === score[1]) { golden = true; banner = 'Golden goal'; pause = 1.6; sfx.whistle(2); return; }
+        if (score[0] === score[1]) { sfx.whistle(2); startShootout(); return; }
         finish(); return;
       }
     }
+    if (pen) { pen.t += dt; if (pen.t > 7) { const tk = P[pen.tk]; if (tk && ball.owner === pen.tk) shoot(tk, 0.3); else pen = null; } } // don't wait forever
+    if (so && so.shot) { so.wait += dt; if (so.wait > 2.6 || ball.owner >= 0) soResult(0); }
+    if (ball.headCd > 0) ball.headCd -= dt;
     record(dt);
     if (stats && ball.owner >= 0) stats.pos[P[ball.owner].team] += dt;
     if (bigT > 0) { bigT -= dt; if (bigT <= 0) setBallSize(false); }
@@ -1087,6 +1271,11 @@ table.st td.l, table.st th.l { text-align: left; }
 
     assignMarks();
     for (const p of P) {
+      if (p.out > 0) { // sent off: waits by the touchline
+        p.out -= dt; p.vx = p.vy = 0; p.x = CX + (p.team ? 1 : -1) * (80 + p.k * 30); p.y = PT - 26;
+        if (p.out <= 0) { const h = homeOf(p); p.x = h.x; p.y = PT + 30; }
+        continue;
+      }
       const down = p.stun > 0 || p.recover > 0;
       const inp = down ? ZERO : inputFor(p, dt);
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
@@ -1113,7 +1302,8 @@ table.st td.l, table.st th.l { text-align: left; }
           p.fx = Math.cos(na); p.fy = Math.sin(na);
         } else { p.fx = Math.cos(ta); p.fy = Math.sin(ta); }
       }
-      if (p.tackle > 0) {
+      if (p.dive > 0) { p.dive -= dt; p.vx = 0; p.vy = p.dvy; p.frozen = 0; } // keeper diving at a penalty
+      else if (p.tackle > 0) {
         const k = 0.45 + 0.55 * (p.tackle / TACKLE_T);
         p.vx = p.tdx * TACKLE_V * k; p.vy = p.tdy * TACKLE_V * k;
         p.tackle -= dt; if (Math.random() < 0.6) dust(p.x, p.y);
@@ -1163,6 +1353,7 @@ table.st td.l, table.st th.l { text-align: left; }
     // bodies
     for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
       const a = P[i], b = P[j];
+      if (!on(a) || !on(b)) continue;
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), m = PRAD * 2;
       if (d < m && d > 0) {
         const o = (m - d) / 2, nx = dx / d, ny = dy / d; a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o;
@@ -1218,7 +1409,7 @@ table.st td.l, table.st th.l { text-align: left; }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => p.stun <= 0 && p.nopick <= 0 && (ball.z < 26 || (keeperCatch(p) && ball.z < 75)) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && (ball.z < 26 || (keeperCatch(p) && ball.z < 75)) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -1228,10 +1419,20 @@ table.st td.l, table.st th.l { text-align: left; }
       for (const p of cands) {
         const rv = Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
         if (ball.last && ball.last.pass && ball.last.team === p.team) { grab(p); break; }
-        if (rv < 760 || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) { if (p.tackle > 0) tackleWins(p); else grab(p); break; }
+        if (rv < 760 || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
+          const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
+          if (p.tackle > 0) tackleWins(p); else grab(p);
+          if (save) { flash = { text: 'Redning!', t: 1.0 }; crowd.ooh(); }
+          break;
+        }
+      }
+      if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0)) { // headers
+        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(size > 1 && p.k === 0) && !(P.indexOf(p) === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
+        if (h) header(h);
       }
       if (ball.owner < 0 && ball.z < 26) {
         for (const p of P) {
+          if (!on(p)) continue;
           const dx = ball.x - p.x, dy = ball.y - p.y, d = Math.hypot(dx, dy);
           if (d < REACH && d > 0) {
             const nx = dx / d, ny = dy / d; ball.x = p.x + nx * REACH; ball.y = p.y + ny * REACH;
@@ -1268,11 +1469,12 @@ table.st td.l, table.st th.l { text-align: left; }
     }
   }
   function restart(type, team, x, y, label) {
+    if (so) { soResult(0); return; } // in a shootout, anything but a goal is a miss
     if (team !== 0 && team !== 1) team = 0;
     ball.x = x; ball.y = y; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.rs = type; ball.last = null;
     let taker;
     if (type === 'goal' && size > 1) taker = P[slotOf(team, 0)];
-    else taker = P.filter(p => p.team === team && !(size > 1 && p.k === 0 && type !== 'goal')).reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
+    else taker = P.filter(p => p.team === team && on(p) && !(size > 1 && p.k === 0 && type !== 'goal')).reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
     // stand just outside the line, facing into the pitch
     let fx = CX - x, fy = CY - y; const l = Math.hypot(fx, fy) || 1; fx /= l; fy /= l;
     if (type === 'throw') { fx = 0; fy = y < CY ? 1 : -1; }
@@ -1288,6 +1490,7 @@ table.st td.l, table.st th.l { text-align: left; }
   }
   // A pass to your own side that rolls into your own net is not a goal: the keeper gets it back.
   function scoreOn(side) {
+    if (so) { soResult(1); return; }
     if (ball.last && ball.last.pass && ball.last.team === side && size > 1) { restart('goal', side, (side ? PR - 70 : PL + 70), CY); return; }
     goal(1 - side);
   }
@@ -1301,6 +1504,7 @@ table.st td.l, table.st th.l { text-align: left; }
   function goal(team) {
     score[team]++;
     const sn = scorerName(team); lastScorer = scorerName(team, true) || ''; goalSeq++;
+    const sp = P[ball.lastIdx]; celeb = sp && sp.team === team ? ball.lastIdx : -1;
     if (sn) matchGoals.push(sn);
     banner = 'MÅL!'; pause = cfg.replay ? 5.4 : 1.8; ball.owner = -1;
     if (cfg.replay) startReplay();
@@ -1314,6 +1518,7 @@ table.st td.l, table.st th.l { text-align: left; }
   let lastScorer = '', goalSeq = 0;
   // who is behind a player: your own name, a friend's, or nobody (computer)
   function nameOf(p, others) {
+    if (cupMatch && (p.ctrl === 'L0' || p.ctrl === 'L1')) return cupMatch.n[p.ctrl === 'L0' ? 0 : 1];
     if (p.ctrl === 'L0') return mode === 'two' ? (cfg.name || 'Spiller 1') : others ? (cfg.name || 'Vært') : myName();
     if (p.ctrl === 'L1') return 'Spiller 2';
     if (p.ctrl === 'R') return names.get(p.peer) || 'Ven';
@@ -1353,6 +1558,67 @@ table.st td.l, table.st th.l { text-align: left; }
     if (recBuf.length > 66) recBuf.shift();
   }
   function startReplay() { if (recBuf.length > 10) replay = { frames: recBuf.slice(), t: -0.9 }; }
+
+  // ---------- Tournament (on this phone) ----------
+  const cupLoad = () => { try { return JSON.parse(localStorage.getItem('mf-cup') || 'null'); } catch (_) { return null; } };
+  const cupSave = c => { try { localStorage.setItem('mf-cup', JSON.stringify(c)); } catch (_) {} };
+  function cupInit() {
+    const box = $('cupNames'); box.textContent = '';
+    for (let i = 0; i < 8; i++) { const inp = document.createElement('input'); inp.className = 'namein'; inp.maxLength = 12; inp.placeholder = 'Navn ' + (i + 1); box.appendChild(inp); }
+    $('bCup').onclick = cupShow;
+    $('cupClose').onclick = $('cupClose1').onclick = () => { $('cup').hidden = true; };
+    $('cupReset').onclick = () => { if ($('cupReset').dataset.sure) { try { localStorage.removeItem('mf-cup'); } catch (_) {} cupShow(); } else { $('cupReset').dataset.sure = '1'; $('cupReset').textContent = 'Tryk igen for at slette'; } };
+    $('cupStart').onclick = () => {
+      const n = [...new Set([...$('cupNames').querySelectorAll('input')].map(i => cleanName(i.value)).filter(Boolean))];
+      if (n.length < 3) { $('cupStart').textContent = 'Skriv mindst 3 navne'; return; }
+      // round robin (circle method)
+      const t = n.slice(); if (t.length % 2) t.push(null);
+      const games = [];
+      for (let r = 0; r < t.length - 1; r++) {
+        for (let i = 0; i < t.length / 2; i++) { const a = t[i], b = t[t.length - 1 - i]; if (a !== null && b !== null) games.push({ a: n.indexOf(r % 2 ? b : a), b: n.indexOf(r % 2 ? a : b), ga: null, gb: null }); }
+        t.splice(1, 0, t.pop());
+      }
+      cupSave({ n, games }); cupShow();
+    };
+    $('cupSave').onclick = () => {
+      const c = cupLoad(); if (!c) return;
+      const i = c.games.findIndex(g => g.ga === null); if (i < 0) return;
+      const ga = parseInt($('cupGa').value, 10), gb = parseInt($('cupGb').value, 10);
+      if (!(ga >= 0 && gb >= 0)) return;
+      cupResult(i, ga, gb); $('cupGa').value = $('cupGb').value = ''; cupShow();
+    };
+    $('cupPlay').onclick = () => {
+      const c = cupLoad(); if (!c) return;
+      const i = c.games.findIndex(g => g.ga === null); if (i < 0) return;
+      $('cup').hidden = true;
+      withHelp(() => { startMatch('two'); cupMatch = { i, n: [c.n[c.games[i].a], c.n[c.games[i].b]] }; });
+    };
+    $('toCup').onclick = () => { toMenu(); cupShow(); };
+  }
+  function cupResult(i, ga, gb) {
+    const c = cupLoad(); if (!c || !c.games[i] || c.games[i].ga !== null) return;
+    c.games[i].ga = ga; c.games[i].gb = gb; cupSave(c);
+  }
+  function cupShow() {
+    const c = cupLoad();
+    $('cupReset').textContent = 'Ny turnering'; $('cupReset').dataset.sure = ''; $('cupStart').textContent = 'Start turneringen';
+    $('cupSetup').hidden = !!c; $('cupView').hidden = !c;
+    if (c) {
+      const R = c.n.map(n => ({ n, k: 0, v: 0, u: 0, t: 0, f: 0, m: 0 }));
+      for (const g of c.games) {
+        if (g.ga === null) continue;
+        const A = R[g.a], B = R[g.b]; A.k++; B.k++; A.f += g.ga; A.m += g.gb; B.f += g.gb; B.m += g.ga;
+        if (g.ga > g.gb) { A.v++; B.t++; } else if (g.ga < g.gb) { B.v++; A.t++; } else { A.u++; B.u++; }
+      }
+      const rows = R.map(r => [r.n, r.k, r.v, r.u, r.t, `${r.f}-${r.m}`, r.v * 3 + r.u]).sort((a, b) => b[6] - a[6] || (parseInt(b[5]) - parseInt(b[5].split('-')[1])) - (parseInt(a[5]) - parseInt(a[5].split('-')[1])));
+      fillTable($('cupTable'), ['Spiller', 'K', 'V', 'U', 'T', 'Mål', 'P'], rows);
+      const next = c.games.find(g => g.ga === null), left = c.games.filter(g => g.ga === null).length;
+      $('cupNextLbl').textContent = next ? `Næste kamp (${left} tilbage)` : 'Turneringen er slut';
+      $('cupNext').textContent = next ? `${c.n[next.a]} mod ${c.n[next.b]}` : `Vinder: ${rows[0][0]}`;
+      $('cupScoreRow').hidden = $('cupPlay').hidden = !next;
+    }
+    $('cup').hidden = false;
+  }
 
   // ---------- Online ----------
   // Same shape as the claude.ai room, built on PeerJS (WebRTC) for the plain web link.
@@ -1396,8 +1662,8 @@ table.st td.l, table.st th.l { text-align: left; }
   let room = null, net = null, lastSend = 0, lostAt = 0, sentIn = '', myPeer = null, seenMatch = -1, tgt = null, lobbySize = 1;
   let roster = []; // [[peer, slot]] (guests also get [peer, slot, name])
   let hostReady = false, hostInfo = [0, 'Vært'], lobbyLr = [0, 0, 0];
-  let gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gSeenGoal = null;
-  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm }).catch(() => {}); };
+  let gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null;
+  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs }).catch(() => {}); };
   const netmsg = $('netmsg');
   (async () => {
     const framed = window.top !== window;
@@ -1415,7 +1681,7 @@ table.st td.l, table.st th.l { text-align: left; }
     names.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    leaveNet(); state = 'menu'; mode = null; paused = false;
+    leaveNet(); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null;
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm();
     if (text) netmsg.textContent = text;
@@ -1425,21 +1691,26 @@ table.st td.l, table.st th.l { text-align: left; }
   function humanSlotsFor(n, t) { return HUMAN_ORDER[n].map(k => t * n + k); }
   function renderRoster(isHost) {
     const R = $('rosterR'), B = $('rosterB');
-    R.textContent = ''; B.textContent = '';
     const n = isHost ? size : lobbySize;
+    const items = [];
     for (let t = 0; t < 2; t++) for (let k = 0; k < n; k++) {
       const slot = t * n + k;
-      const li = document.createElement('li');
       let label = 'Computer';
-      if (isHost && slot === humanSlotsFor(n, 0)[0]) label = 'Dig (vært)' + (hostReady ? ' ✓' : '');
+      if (isHost && P[slot] && P[slot].ctrl === 'L0') label = 'Dig (vært)' + (hostReady ? ' ✓' : '');
       if (!isHost && slot === hostInfo[0]) label = hostInfo[1] + ' (vært)' + (lobbyLr[2] ? ' ✓' : '');
       const e = roster.find(r => r[1] === slot);
       if (e) {
         label = e[0] === myPeer ? 'Dig' : ((isHost ? names.get(e[0]) : e[2]) || 'Ven');
         if (isHost ? lobbyReady.get(e[0]) : e[3]) label += ' ✓';
       }
-      li.textContent = label + (k === 0 && n > 1 ? ' · målmand' : '');
-      if (label === 'Computer') li.className = 'cpu';
+      items.push([t, slot, label + (k === 0 && n > 1 ? ' · målmand' : ''), label === 'Computer']);
+    }
+    const key = JSON.stringify(items);
+    if (R.dataset.key === key) return; // unchanged: keep the list so a tap isn't lost
+    R.dataset.key = key; R.textContent = ''; B.textContent = '';
+    for (const [t, slot, text, free] of items) {
+      const li = document.createElement('li'); li.textContent = text;
+      if (free) { li.className = 'cpu pick'; li.onclick = () => pickSlot(slot); }
       (t ? B : R).appendChild(li);
     }
   }
@@ -1453,6 +1724,9 @@ table.st td.l, table.st th.l { text-align: left; }
       names.set(g.peer, cleanName(pr.n));
       if (pr.rd !== undefined) readyMap.set(g.peer, Number(pr.rd));
       lobbyReady.set(g.peer, !!pr.lr);
+      if (state === 'lobby' && Number.isInteger(pr.ws) && P[pr.ws] && P[pr.ws].ctrl === 'ai' && !roster.some(r => r[1] === pr.ws)) {
+        const e = roster.find(r => r[0] === g.peer); if (e && e[1] !== pr.ws) e[1] = pr.ws; // move to the spot they asked for
+      }
       if (Array.isArray(pr.rx)) {
         const seq = Number(pr.rx[0]) | 0;
         if (seq > (rxSeen.get(g.peer) || 0)) { rxSeen.set(g.peer, seq); const e = roster.find(r => r[0] === g.peer); if (e) addRx(e[1], Number(pr.rx[1]) | 0); }
@@ -1482,14 +1756,22 @@ table.st td.l, table.st th.l { text-align: left; }
       teamForm[1] = FORMS[size] && FORMS[size][v] ? v : 0;
     }
   }
+  function pickSlot(slot) {
+    if (state !== 'lobby') return;
+    if (mode === 'host') {
+      if (!P[slot] || P[slot].ctrl !== 'ai') return;
+      const me = P.find(q => q.ctrl === 'L0'); if (me) me.ctrl = 'ai';
+      P[slot].ctrl = 'L0'; lobbyUI();
+    } else if (mode === 'guest') { gWs = slot; sendG(); }
+  }
   function lobbyUI() {
     if (state !== 'lobby') return;
     const isHost = mode === 'host', n = isHost ? size : lobbySize;
-    const myT = isHost ? 0 : myTeam();
+    const myT = isHost ? (P.find(q => q.ctrl === 'L0') || { team: 0 }).team : myTeam();
     const cap = roster.find(r => P[r[1]] && P[r[1]].team === 1);
     const canPick = isHost || (myT === 1 && cap && cap[0] === myPeer);
     const ok = myT !== null && formSeg($('lobbyForm'), n, teamForm[myT] | 0, v => {
-      if (isHost) { setMyForm(size, v); teamForm[0] = v; } else { gFm = v; teamForm[1] = v; sendG(); }
+      if (isHost) { setMyForm(size, v); teamForm[myT] = v; } else { gFm = v; teamForm[1] = v; sendG(); }
       lobbyUI();
     }, !canPick);
     $('lobbyForm').hidden = $('lobbyFormLbl').hidden = !ok;
@@ -1515,7 +1797,7 @@ table.st td.l, table.st th.l { text-align: left; }
     netmsg.textContent = 'Opretter kamp…';
     try { net = await room.join('mf-' + code, 'h'); } catch (e) { netmsg.textContent = 'Kunne ikke oprette kampen. Prøv igen.'; return; }
     mode = 'host'; state = 'lobby'; roster = [];
-    makePlayers(cfg.size); assignLocal(); kickoff();
+    makePlayers(cfg.size); assignLocal(); kickoff(); $('rosterR').dataset.key = '';
     $('menu').hidden = true; $('lobby').hidden = false;
     $('lobbyCode').textContent = code;
     $('lobbyMsg').textContent = `Send koden til dine venner (op til ${size * 2 - 1}). Tomme pladser spilles af computeren.`;
@@ -1549,10 +1831,10 @@ table.st td.l, table.st th.l { text-align: left; }
     if (code.length !== 4) { netmsg.textContent = 'Koden har 4 cifre.'; return; }
     netmsg.textContent = 'Forbinder…';
     try { net = await room.join('mf-' + code, 'g'); } catch (e) { netmsg.textContent = 'Kunne ikke finde kampen. Tjek koden, og at værten har trykket Opret kamp.'; return; }
-    mode = 'guest'; state = 'lobby'; seenMatch = -1; tgt = null; gIn = [0, 0, 0, 0]; gRx = [0, 0]; gRd = -1; gLr = 0; gFm = myForm(cfg.size); rxGuestSeen = 0;
+    mode = 'guest'; state = 'lobby'; seenMatch = -1; tgt = null; gIn = [0, 0, 0, 0]; gRx = [0, 0]; gRd = -1; gLr = 0; gWs = -1; gFm = myForm(cfg.size); rxGuestSeen = 0;
     $('menu').hidden = true; $('lobby').hidden = false; $('startOnline').hidden = true; $('share').hidden = true;
     $('lobbyCode').textContent = code; $('lobbyMsg').textContent = 'Forbundet. Venter på at værten starter kampen…';
-    $('rosterR').textContent = ''; $('rosterB').textContent = '';
+    $('rosterR').textContent = ''; $('rosterB').textContent = ''; $('rosterR').dataset.key = '';
     sendG();
     net.onPeers(ch => {
       const me = ch.peers.find(p => p.sameTab); if (me) myPeer = me.peer;
@@ -1572,7 +1854,7 @@ table.st td.l, table.st th.l { text-align: left; }
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
       k: kit, tf: teamForm, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'],
       pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > 12 ? 1 : 0,
-      gs: [goalSeq, lastScorer], rp: cfg.replay ? 1 : 0,
+      gs: [goalSeq, lastScorer], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
       rx: rxOut.filter(r => now - r[3] < 3000).map(r => [r[0], r[1], r[2]]),
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
     };
@@ -1604,6 +1886,8 @@ table.st td.l, table.st th.l { text-align: left; }
       return;
     }
     const big = !!s.bb; if (big !== (BRAD > 12)) setBallSize(big);
+    soG = Array.isArray(s.so) ? s.so.map(v => Number(v) | 0) : null; celeb = Number(s.ce) | 0;
+    if (Array.isArray(s.ou)) s.ou.forEach((v, i) => { if (P[i]) { P[i].out = v & 2 ? 1 : 0; P[i].yc = v & 1; } });
     item = Array.isArray(s.pu) ? { type: Object.keys(ITEMS)[Number(s.pu[0]) | 0] || 'super', x: Number(s.pu[1]) || 0, y: Number(s.pu[2]) || 0, t: 1 } : null;
     if (s.ss && Array.isArray(s.ss.sh)) { const n2 = a => (Array.isArray(a) ? [Number(a[0]) || 0, Number(a[1]) || 0] : [0, 0]); stats = { sh: n2(s.ss.sh), pos: n2(s.ss.pos), pa: n2(s.ss.pa), tk: n2(s.ss.tk) }; }
     const prev = score.slice();
@@ -1698,7 +1982,9 @@ table.st td.l, table.st th.l { text-align: left; }
   const myPlayers = () => P.filter(isMine);
   function drawPlayer(p) {
     const sliding = p.tackle > 0, down = p.stun > 0;
-    ctx.save(); ctx.translate(p.x, p.y);
+    const hop = banner === 'MÅL!' && P[celeb] === p && !(replay && replay.t >= 0) ? Math.abs(Math.sin(performance.now() / 110)) * 10 : 0;
+    ctx.save(); ctx.translate(p.x, p.y - hop);
+    if (p.out > 0) ctx.globalAlpha = 0.45;
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4, 6, PRAD, PRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
     if (p.hold > 0.05) {
       ctx.strokeStyle = col.gold; ctx.lineWidth = 5;
@@ -1707,7 +1993,7 @@ table.st td.l, table.st th.l { text-align: left; }
     if (p.superShot) { ctx.fillStyle = `rgba(255,140,40,${0.25 + 0.15 * Math.sin(performance.now() / 120)})`; ctx.beginPath(); ctx.arc(0, 0, PRAD + 10, 0, Math.PI * 2); ctx.fill(); }
     if (p.turbo > 0) { ctx.strokeStyle = 'rgba(120,220,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, PRAD + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     if (sliding) { ctx.rotate(Math.atan2(p.fy, p.fx)); ctx.scale(1.3, 0.78); }
-    ctx.globalAlpha = down ? 0.55 : 1;
+    ctx.globalAlpha = down || p.out > 0 ? 0.5 : 1;
     ctx.fillStyle = p.team ? col.away : col.home;
     ctx.beginPath(); ctx.arc(0, 0, PRAD, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = isMine(p) ? col.gold : col.chalk; ctx.stroke();
@@ -1715,6 +2001,7 @@ table.st td.l, table.st th.l { text-align: left; }
     ctx.restore();
     if (!sliding) { ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(p.x + p.fx * (PRAD - 7), p.y + p.fy * (PRAD - 7), 4, 0, Math.PI * 2); ctx.fill(); }
     if (size > 1 && p.k === 0 && !sliding) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = `700 13px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M', p.x, p.y + 1); }
+    if (p.yc || p.out > 0) { ctx.fillStyle = p.out > 0 ? '#e5483b' : '#ffd447'; ctx.fillRect(p.x + PRAD - 4, p.y - PRAD - 2, 9, 13); }
     if (p.windup > 0 && !down) { // about to slide in: show it
       ctx.font = `700 22px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillText('!', p.x + 1, p.y - PRAD - 3); ctx.fillStyle = col.gold; ctx.fillText('!', p.x, p.y - PRAD - 4);
@@ -1817,8 +2104,9 @@ table.st td.l, table.st th.l { text-align: left; }
     ctx.fillStyle = col.home; ctx.fillText(score[0], sw / 2 - bw * 0.37, y + fs * 0.25);
     ctx.fillStyle = col.away; ctx.fillText(score[1], sw / 2 + bw * 0.37, y + fs * 0.25);
     const m = Math.floor(clock / 60), s = Math.floor(clock % 60);
-    ctx.fillStyle = golden ? col.gold : col.chalk;
-    ctx.fillText(golden ? 'GOLDEN' : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
+    const ss = mode === 'guest' ? soG : soSums();
+    ctx.fillStyle = ss ? col.gold : col.chalk;
+    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
     const text = (replay && replay.t >= 0) ? '' : banner || (flash ? flash.text : '');
     if (text) {
       const big = /^[123]$/.test(text);
@@ -1902,11 +2190,13 @@ table.st td.l, table.st th.l { text-align: left; }
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
     for (const r of rxList) r.t -= dt; rxList = rxList.filter(r => r.t > 0); rxCd -= dt;
     crowd.update(dt);
+    if (state === 'play') commentate(banner || (flash ? flash.text : ''));
     render(dt);
     requestAnimationFrame(frame);
   }
-  makePlayers(cfg.size); kickoff(); menuForm();
-  window.__mf = () => ({ state, mode, score, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
+  makePlayers(cfg.size); kickoff(); menuForm(); cupInit();
+  window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
