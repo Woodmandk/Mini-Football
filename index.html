@@ -405,7 +405,7 @@ table.st td.l, table.st th.l { text-align: left; }
     const f = formOf(p), half = (PR - PL) / 2;
     return { x: p.team ? PR - f[0] * half : PL + f[0] * half, y: PT + f[1] * (PB - PT) };
   }
-  const MAXV = 290, ACC = 12, BALL_DAMP = 0.55, MAXCHARGE = 0.7;
+  const MAXV = 245, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7;
   const TACKLE_T = 0.38, TACKLE_V = 600;
   let TACKLE_REACH = REACH + 16;
   function setBallSize(big) { BRAD = big ? 20 : 12; REACH = PRAD + BRAD; TACKLE_REACH = REACH + 16; }
@@ -426,7 +426,7 @@ table.st td.l, table.st th.l { text-align: left; }
       P.push({ team: t, k, x: 0, y: 0, vx: 0, vy: 0, fx: t ? -1 : 1, fy: 0, ctrl: 'ai', peer: null,
         hold: 0, charging: false, wasA: false, wasB: false, stamina: 1, sprint: false,
         tackle: 0, tdx: 0, tdy: 0, tcd: 0, recover: 0, stun: 0, nopick: 0, swcd: 0, cd: 0, think: 0, plan: null,
-        pending: 0, frozen: 0, superShot: false, turbo: 0, name: '', recv: 0, pendB: 0, pendQ: null });
+        pending: 0, frozen: 0, superShot: false, turbo: 0, name: '', windup: 0, recv: 0, pendB: 0, pendQ: null });
   }
   const slotOf = (t, k) => t * size + k;
   function humanSlots(t) { return HUMAN_ORDER[size].map(k => slotOf(t, k)); }
@@ -439,7 +439,7 @@ table.st td.l, table.st th.l { text-align: left; }
     ball.x = CX; ball.y = CY; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.trail = []; ball.owner = -1; ball.loose = 0; ball.last = null; ball.lastTeam = -1;
     for (const p of P) {
       const h = homeOf(p); p.x = h.x; p.y = h.y;
-      p.vx = p.vy = 0; p.hold = 0; p.charging = false; p.tackle = 0; p.stun = 0; p.recover = 0; p.nopick = 0; p.cd = 0; p.pending = 0; p.frozen = 0; p.recv = 0; p.pendB = 0;
+      p.vx = p.vy = 0; p.hold = 0; p.charging = false; p.tackle = 0; p.stun = 0; p.recover = 0; p.nopick = 0; p.cd = 0; p.pending = 0; p.frozen = 0; p.windup = 0; p.recv = 0; p.pendB = 0;
       p.fx = p.team ? -1 : 1; p.fy = 0;
     }
   }
@@ -744,7 +744,7 @@ table.st td.l, table.st th.l { text-align: left; }
     if (!h || !q || h === q || q.ctrl !== 'ai' || !isHuman(h)) return;
     q.ctrl = h.ctrl; q.peer = h.peer; h.ctrl = 'ai'; h.peer = null;
     q.wasA = h.wasA; q.wasB = h.wasB; h.wasA = h.wasB = false;
-    h.charging = false; h.hold = 0; q.charging = false; q.hold = 0; q.swcd = 0.4;
+    h.charging = false; h.hold = 0; q.charging = false; q.hold = 0; q.swcd = 0.4; q.windup = 0;
     if (q.ctrl === 'R') { const e = roster.find(r => r[0] === q.peer); if (e) e[1] = P.indexOf(q); }
   }
   const freeMates = h => P.filter(q => q.team === h.team && q.ctrl === 'ai');
@@ -1101,7 +1101,7 @@ table.st td.l, table.st th.l { text-align: left; }
       if (p.turbo > 0) { p.turbo -= dt; p.stamina = 1; }
       if (p.sprint && p.turbo <= 0) p.stamina = Math.max(0, p.stamina - 0.5 * dt);
       else p.stamina = Math.min(1, p.stamina + 0.22 * dt);
-      const top = MAXV * (p.sprint ? 1.4 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1);
+      const top = MAXV * (p.sprint ? 1.35 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1);
 
       if (mag > 0.2 && p.tackle <= 0) {
         const ta = Math.atan2(inp.y, inp.x);
@@ -1109,6 +1109,11 @@ table.st td.l, table.st th.l { text-align: left; }
           const ca = Math.atan2(p.fy, p.fx);
           let da = ta - ca; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
           const na = ca + Math.max(-11 * dt, Math.min(11 * dt, da));
+          p.fx = Math.cos(na); p.fy = Math.sin(na);
+        } else if (p.ctrl === 'ai') { // computer players turn gradually instead of snapping round
+          const ca = Math.atan2(p.fy, p.fx);
+          let da = ta - ca; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+          const na = ca + Math.max(-7 * dt, Math.min(7 * dt, da));
           p.fx = Math.cos(na); p.fy = Math.sin(na);
         } else { p.fx = Math.cos(ta); p.fy = Math.sin(ta); }
       }
@@ -1120,7 +1125,7 @@ table.st td.l, table.st th.l { text-align: left; }
       } else if (p.stun > 0) { p.vx *= 0.85; p.vy *= 0.85; }
       else if (p.frozen > 0) { p.frozen -= dt; p.vx = p.vy = 0; if (p.frozen <= 0 && has && p.ctrl === 'ai') p.frozen = 0.01; }
       else {
-        const t = Math.min(1, ACC * dt);
+        const t = Math.min(1, (p.ctrl === 'ai' ? ACC_AI : ACC) * dt); // the computer has more momentum: no instant turns
         p.vx += (inp.x * top - p.vx) * t; p.vy += (inp.y * top - p.vy) * t;
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
@@ -1132,9 +1137,11 @@ table.st td.l, table.st th.l { text-align: left; }
         if (has && inp.lob) lob(p, inp.aim[0], inp.aim[1]);
         else if (has && inp.shoot) shoot(p, inp.shoot, inp.aim[0], inp.aim[1]);
         else if (has && inp.passTo) pass(p, inp.passTo, inp.through);
-        else if (!has && inp.tackle) startTackle(p);
+        else if (!has && inp.tackle && !(p.windup > 0) && p.tcd <= 0) p.windup = 0.35; // a short warning before the slide
+        if (p.windup > 0) { p.windup -= dt; if (p.windup <= 0) { p.windup = 0; if (!has && dBall(p) < 110) startTackle(p); else p.tcd = 0.4; } }
         continue;
       }
+      p.windup = 0;
       const aDown = !!inp.a && !p.wasA, bDown = !!inp.b && !p.wasB;
       if (has) {
         if (aDown) { if (p.pending > 0) { p.pending = 0; lob(p); } else p.charging = true; }
@@ -1196,7 +1203,8 @@ table.st td.l, table.st th.l { text-align: left; }
           if (p.team === o.team || p.stun > 0 || o.frozen > 0) continue;
           const db = dBall(p);
           if (p.tackle > 0 && db < TACKLE_REACH) { tackleWins(p); break; }
-          if (p.tackle <= 0 && ball.stealCd <= 0 && db < REACH + 2 && Math.random() < 2.0 * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
+          const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
+          if (p.tackle <= 0 && ball.stealCd <= 0 && facing && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
         }
       }
     }
@@ -1564,7 +1572,7 @@ table.st td.l, table.st th.l { text-align: left; }
     const o = {
       m: matchNo, st, z: size, c: Math.ceil(clock * 10), g: golden ? 1 : 0, sc: score, bn: banner, fl: flash ? flash.text : '',
       b: [RND(ball.x), RND(ball.y), ball.owner, RND(ball.z)],
-      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0)]),
+      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0)]),
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
       k: kit, tf: teamForm, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'],
       pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > 12 ? 1 : 0,
@@ -1657,7 +1665,7 @@ table.st td.l, table.st th.l { text-align: left; }
           p.x += (q[0] - p.x) * k; p.y += (q[1] - p.y) * k;
           p.fx = (Number(q[2]) || 0) / 100; p.fy = (Number(q[3]) || 0) / 100;
           p.hold = (Number(q[4]) || 0) / 100; p.stamina = (Number(q[5]) || 0) / 100;
-          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0;
+          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0; p.windup = f & 16 ? 0.1 : 0;
           if (p.tackle && Math.random() < 0.5) dust(p.x, p.y);
         });
       }
@@ -1711,6 +1719,10 @@ table.st td.l, table.st th.l { text-align: left; }
     ctx.restore();
     if (!sliding) { ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(p.x + p.fx * (PRAD - 7), p.y + p.fy * (PRAD - 7), 4, 0, Math.PI * 2); ctx.fill(); }
     if (size > 1 && p.k === 0 && !sliding) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = `700 13px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M', p.x, p.y + 1); }
+    if (p.windup > 0 && !down) { // about to slide in: show it
+      ctx.font = `700 22px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillText('!', p.x + 1, p.y - PRAD - 3); ctx.fillStyle = col.gold; ctx.fillText('!', p.x, p.y - PRAD - 4);
+    }
     if (down) { ctx.fillStyle = col.gold; for (let i = 0; i < 3; i++) { const a = performance.now() / 150 + i * 2.1; ctx.beginPath(); ctx.arc(p.x + Math.cos(a) * 16, p.y - PRAD - 4 + Math.sin(a) * 5, 3, 0, Math.PI * 2); ctx.fill(); } }
     let tag = '';
     if (p.ctrl === 'L0') tag = mode === 'two' ? 'P1' : 'DU';
