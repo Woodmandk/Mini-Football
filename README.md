@@ -4,7 +4,7 @@ Et simpelt fodboldspil i arkadestil, lavet til mobilen (hold telefonen på langs
 
 Spil: https://woodmandk.github.io/Mini-Football/
 
-- **1 mod 1, 2 mod 2 eller 3 mod 3**, med computerstyrede holdkammerater og målmand
+- **1, 2, 3, 5 eller 10 spillere pr. hold** på en bane der vokser med holdene, med computerstyrede holdkammerater og målmand
 - **Mod computeren** (Let, Normal, Svær), **2 spillere på én telefon** eller **online med op til 6** via en 4-cifret kode. Tomme pladser spilles af computeren.
 - Du styrer automatisk den spiller, der er tættest på bolden.
 - Én knap til **SKYD** (hold inde for et hårdere skud) og **TACKLE** når du ikke har bolden, plus **SPURT** med udholdenhed.

@@ -109,9 +109,9 @@ button:active { transform: translateY(1px); }
       <p id="rotate">Drej telefonen på langs for den bedste bane.</p>
       <div class="cols">
         <div class="col">
-          <div class="lbl">Hold</div>
+          <div class="lbl">Spillere pr. hold</div>
           <div class="seg" id="segSize" role="group" aria-label="Holdstørrelse">
-            <button data-v="1">1 mod 1</button><button data-v="2">2 mod 2</button><button data-v="3">3 mod 3</button>
+            <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="10">10</button>
           </div>
           <div class="lbl">Kamplængde</div>
           <div class="seg" id="segMins" role="group" aria-label="Kamplængde">
@@ -152,6 +152,7 @@ button:active { transform: translateY(1px); }
       </div>
       <div class="btns">
         <button id="startOnline" hidden>Start kamp</button>
+        <button id="share" class="alt" hidden>Del invitationslink</button>
         <button id="cancel" class="alt">Forlad</button>
       </div>
     </div>
@@ -208,26 +209,43 @@ button:active { transform: translateY(1px); }
   ];
 
   // ---------- World ----------
-  const WW = 1100, WH = 600;
-  const PL = 50, PR = 1050, PT = 20, PB = 580;
-  const CY = 300, MOUTH = 85;
+  // pitch grows with the team size; all of these are set by setPitch()
+  let WW = 1100, WH = 600, PL = 50, PR = 1050, PT = 20, PB = 580, CX = 550, CY = 300, MOUTH = 85, POSTS = [];
+  const PITCH = { 1: [1000, 560], 2: [1000, 560], 3: [1000, 560], 5: [1400, 760], 10: [2100, 1150] };
+  function setPitch(n) {
+    const [L, H] = PITCH[n] || PITCH[1];
+    WW = L + 100; WH = H + 40; PL = 50; PR = 50 + L; PT = 20; PB = 20 + H; CX = WW / 2; CY = WH / 2;
+    MOUTH = n >= 5 ? 95 : 85;
+    POSTS = [[PL, CY - MOUTH], [PL, CY + MOUTH], [PR, CY - MOUTH], [PR, CY + MOUTH]];
+  }
+  setPitch(1);
   const PRAD = 22, BRAD = 12, POSTR = 6, REACH = PRAD + BRAD;
-  const POSTS = [[PL, CY - MOUTH], [PL, CY + MOUTH], [PR, CY - MOUTH], [PR, CY + MOUTH]];
-  const FORM = { 1: [[330, 300]], 2: [[170, 300], [420, 300]], 3: [[150, 300], [390, 185], [390, 415]] };
-  const HUMAN_ORDER = { 1: [0], 2: [1, 0], 3: [1, 2, 0] }; // keeper is the last spot a human gets
+  // formations as [share of own half from the goal line, share of pitch height]; index 0 is the keeper
+  const FORM = {
+    1: [[0.56, 0.5]],
+    2: [[0.24, 0.5], [0.74, 0.5]],
+    3: [[0.2, 0.5], [0.7, 0.3], [0.7, 0.7]],
+    5: [[0.07, 0.5], [0.36, 0.3], [0.36, 0.7], [0.76, 0.36], [0.76, 0.64]],
+    10: [[0.05, 0.5], [0.3, 0.14], [0.3, 0.38], [0.3, 0.62], [0.3, 0.86], [0.56, 0.25], [0.56, 0.5], [0.56, 0.75], [0.84, 0.38], [0.84, 0.62]],
+  };
+  const HUMAN_ORDER = { 1: [0], 2: [1, 0], 3: [1, 2, 0], 5: [3, 4, 1, 2, 0], 10: [8, 9, 6, 5, 7, 2, 3, 1, 4, 0] }; // keeper is the last spot a human gets
+  function homeOf(p) {
+    const f = FORM[size][p.k], half = (PR - PL) / 2;
+    return { x: p.team ? PR - f[0] * half : PL + f[0] * half, y: PT + f[1] * (PB - PT) };
+  }
   const MAXV = 290, ACC = 12, BALL_DAMP = 0.55, MAXCHARGE = 0.7;
-  const TACKLE_T = 0.32, TACKLE_V = 560;
+  const TACKLE_T = 0.38, TACKLE_V = 600, TACKLE_REACH = REACH + 16;
 
   let mode = null;          // 'cpu' | 'two' | 'host' | 'guest'
   let state = 'menu';       // 'menu' | 'lobby' | 'play' | 'end'
   let size = 1, score = [0, 0], clock = 120, pause = 0, banner = '', golden = false, paused = false;
   let matchNo = 0;
-  const ball = { x: 550, y: 300, vx: 0, vy: 0, owner: -1, loose: 0, stealCd: 0, trail: [] };
+  const ball = { x: CX, y: CY, vx: 0, vy: 0, owner: -1, loose: 0, stealCd: 0, trail: [] };
   let P = [];
   let particles = [], shake = 0;
 
   function makePlayers(n) {
-    size = n; P = [];
+    size = n; setPitch(n); P = [];
     for (let t = 0; t < 2; t++) for (let k = 0; k < n; k++)
       P.push({ team: t, k, x: 0, y: 0, vx: 0, vy: 0, fx: t ? -1 : 1, fy: 0, ctrl: 'ai', peer: null,
         hold: 0, charging: false, wasA: false, wasB: false, stamina: 1, sprint: false,
@@ -240,17 +258,16 @@ button:active { transform: translateY(1px); }
   const owner = () => (ball.owner >= 0 ? P[ball.owner] : null);
 
   function kickoff() {
-    ball.x = 550; ball.y = 300; ball.vx = ball.vy = 0; ball.trail = []; ball.owner = -1; ball.loose = 0;
+    ball.x = CX; ball.y = CY; ball.vx = ball.vy = 0; ball.trail = []; ball.owner = -1; ball.loose = 0;
     for (const p of P) {
-      const f = FORM[size][p.k];
-      p.x = p.team ? WW - f[0] : f[0]; p.y = f[1];
+      const h = homeOf(p); p.x = h.x; p.y = h.y;
       p.vx = p.vy = 0; p.hold = 0; p.charging = false; p.tackle = 0; p.stun = 0; p.recover = 0; p.nopick = 0; p.cd = 0;
       p.fx = p.team ? -1 : 1; p.fy = 0;
     }
   }
 
   // ---------- Screen mapping & camera ----------
-  let dpr = 1, sw = 0, sh = 0, sc = 1, ox = 0, oy = 0, camX = 550, camY = 300;
+  let dpr = 1, sw = 0, sh = 0, sc = 1, ox = 0, oy = 0, camX = CX, camY = CY;
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     sw = cv.clientWidth; sh = cv.clientHeight;
@@ -261,7 +278,7 @@ button:active { transform: translateY(1px); }
   function updateCamera(dt, snap) {
     const full = Math.min(sw / WW, sh / WH);
     const zoomed = Math.min(sw / 760, sh / 440);
-    sc = (mode === 'two' || state !== 'play') ? full : Math.max(full, zoomed);
+    sc = ((mode === 'two' && size <= 3) || state !== 'play') ? full : Math.max(full, zoomed);
     const vw = sw / sc, vh = sh / sc;
     const k = snap ? 1 : 1 - Math.pow(0.02, dt);
     camX += (ball.x - camX) * k; camY += (ball.y - camY) * k;
@@ -309,23 +326,30 @@ button:active { transform: translateY(1px); }
     }
     refreshBtns();
   }
+  function stickHome(i) {
+    if (!twoSides()) return { x: Math.max(STICK_R + 28, sw * 0.14), y: sh - STICK_R - 34 };
+    return { x: i === 0 ? Math.max(STICK_R + 24, sw * 0.2) : Math.min(sw - STICK_R - 24, sw * 0.8), y: sh * 0.42 };
+  }
+  function setStick(s, x, y) {
+    const dx = x - s.ox, dy = y - s.oy, d = Math.hypot(dx, dy);
+    s.x = x; s.y = y;
+    if (d < STICK_R * DEAD) { s.dx = s.dy = 0; return; }
+    const m = Math.min(1, (d / STICK_R - DEAD) / (1 - DEAD));
+    const mm = d > STICK_R * 1.05 ? 1 : Math.min(0.95, m); // past the ring = full stick (sprint)
+    s.dx = dx / d * mm; s.dy = dy / d * mm;
+  }
   function grabStick(i, t) {
     const s = sticks[i];
     if (s.id !== null) return;
-    s.id = t.identifier; s.ox = s.x = t.clientX; s.oy = s.y = t.clientY; s.dx = s.dy = 0;
+    const h = stickHome(i); // the stick is locked in place; the touch only sets direction
+    s.id = t.identifier; s.ox = h.x; s.oy = h.y; setStick(s, t.clientX, t.clientY);
   }
   function onMove(e) {
     if (state !== 'play') return;
     e.preventDefault();
     for (const t of e.changedTouches) for (const s of sticks) {
       if (s.id !== t.identifier) continue;
-      const dx = t.clientX - s.ox, dy = t.clientY - s.oy, d = Math.hypot(dx, dy);
-      s.x = t.clientX; s.y = t.clientY;
-      if (d < STICK_R * DEAD) { s.dx = s.dy = 0; continue; }
-      const m = Math.min(1, (d / STICK_R - DEAD) / (1 - DEAD));
-      // pulling past the ring counts as full stick (sprint)
-      const mm = d > STICK_R * 1.05 ? 1 : Math.min(0.95, m);
-      s.dx = dx / d * mm; s.dy = dy / d * mm;
+      setStick(s, t.clientX, t.clientY);
     }
   }
   function onEnd(e) {
@@ -477,7 +501,7 @@ button:active { transform: translateY(1px); }
   // ---------- Actions ----------
   function grab(p) {
     const prev = ball.owner;
-    ball.owner = P.indexOf(p); ball.loose = 0;
+    ball.owner = P.indexOf(p); ball.loose = 0; ball.last = null;
     p.tackle = 0; p.charging = false; p.hold = 0;
     if (prev !== ball.owner) { sfx.trap(); onPossession(p); }
   }
@@ -491,6 +515,7 @@ button:active { transform: translateY(1px); }
     const power = 640 + pw * 620;
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     release(p, p.fx * power + p.vx * 0.25, p.fy * power + p.vy * 0.25, 0.3);
+    ball.last = { team: p.team, pass: false };
     sfx.kick(pw);
     if (pw > 0.8) shake = Math.max(shake, 5);
     if (localHuman(p)) buzz(pw > 0.8 ? 30 : 15);
@@ -515,9 +540,12 @@ button:active { transform: translateY(1px); }
     const tx = q.x + q.vx * 0.35, ty = q.y + q.vy * 0.35;
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1;
     p.fx = dx / d; p.fy = dy / d;
-    const speed = Math.max(430, Math.min(980, d * 1.5 + 220));
+    let speed = Math.max(430, Math.min(980, d * 1.5 + 220));
+    const toKeeper = size > 1 && q.k === 0;
+    if (toKeeper) speed = Math.min(speed, 560); // gentle back-pass
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     release(p, p.fx * speed, p.fy * speed, 0.3);
+    ball.last = { team: p.team, pass: true, to: P.indexOf(q) };
     sfx.pass();
     if (isHuman(p)) swapControl(p, q);
   }
@@ -525,9 +553,9 @@ button:active { transform: translateY(1px); }
     if (p.tcd > 0 || p.tackle > 0 || p.recover > 0) return;
     let dx = p.fx, dy = p.fy;
     const db = dBall(p);
-    if (db < 180) { dx = ball.x + ball.vx * 0.1 - p.x; dy = ball.y + ball.vy * 0.1 - p.y; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; }
+    if (db < 230) { dx = ball.x + ball.vx * 0.18 - p.x; dy = ball.y + ball.vy * 0.18 - p.y; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; }
     p.fx = dx; p.fy = dy; p.tdx = dx; p.tdy = dy;
-    p.tackle = TACKLE_T; p.tcd = 1.0; p.charging = false; p.hold = 0;
+    p.tackle = TACKLE_T; p.tcd = 0.7; p.charging = false; p.hold = 0;
     sfx.slide();
   }
   function tackleWins(a) {
@@ -539,7 +567,9 @@ button:active { transform: translateY(1px); }
     sfx.win(); shake = Math.max(shake, 3);
   }
   function tackleBody(a, b) {
-    const behind = (a.tdx * b.fx + a.tdy * b.fy) > 0.45; // sliding in the same way the victim faces
+    const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces, i.e. from behind
+    if (ball.owner === P.indexOf(b) && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
+    const behind = dot > 0.8 && ball.owner === P.indexOf(b);
     a.tackle = 0;
     if (behind) {
       a.stun = 1.1; a.vx = a.vy = 0;              // foul: the tackler goes down
@@ -548,8 +578,8 @@ button:active { transform: translateY(1px); }
       return;
     }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
-    if (ball.owner === P.indexOf(b)) { ball.owner = -1; ball.vx = a.tdx * 70; ball.vy = a.tdy * 70; } // ball drops right there
-    a.recover = 0.25;
+    if (ball.owner === P.indexOf(b)) { tackleWins(a); return; } // got the man with the ball: you win it
+    a.recover = 0.2;
     tone(70, 0.18, 'square', 0.1, -30); shake = Math.max(shake, 5);
     if (localHuman(b)) buzz(60);
   }
@@ -594,9 +624,22 @@ button:active { transform: translateY(1px); }
       const weHave = o && o.team === p.team;
       const chaser = mates.reduce((a, b) => (dBall(b) < dBall(a) ? b : a));
       const ballInBox = Math.abs(ball.x - ownX) < 170 && Math.abs(ball.y - CY) < 160;
+      const L = PR - PL;
+      const shape = push => { // keep the team shape, sliding with the ball
+        const h = homeOf(p);
+        const x = h.x + (ball.x - CX) * 0.55 + dir * push * L;
+        const y = h.y + (ball.y - CY) * 0.25;
+        return [Math.max(PL + 40, Math.min(PR - 40, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
+      };
+      const second = size >= 3 ? mates.filter(q => q !== chaser && !(q.k === 0)).sort((a, b) => dBall(a) - dBall(b))[0] : null;
       if (weHave) {
         if (keeper) go(ownX + dir * 45, CY + (ball.y - CY) * 0.3);
-        else { const lane = p.k === 1 ? -1 : 1; go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 170)), CY + lane * 130, Math.abs(p.x - o.x) < 60); }
+        else if (size <= 3) { const lane = p.k === 1 ? -1 : 1; go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 170)), CY + lane * 130, Math.abs(p.x - o.x) < 60); }
+        else { const [x, y] = shape(0.12); go(x, y, Math.hypot(x - p.x, y - p.y) > 220); }
+      } else if (p === second && o) {
+        // second man cuts off the way to goal
+        const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1;
+        go(o.x + gx / gl * 90, o.y + gy / gl * 90, true);
       } else if (p === chaser || (keeper && ballInBox && dBall(p) < 150)) {
         // go for the ball, staying goal-side of whoever has it
         let bx = ball.x + ball.vx * 0.15, by = ball.y + ball.vy * 0.15;
@@ -608,6 +651,8 @@ button:active { transform: translateY(1px); }
         }
       } else if (keeper) {
         go(ownX + dir * 38, CY + Math.max(-MOUTH + 10, Math.min(MOUTH - 10, (ball.y - CY) * 0.6)));
+      } else if (size >= 5) {
+        const [x, y] = shape(-0.08); go(x, y, Math.hypot(x - p.x, y - p.y) > 220);
       } else {
         // mark the most dangerous free opponent
         const mark = foes.filter(f => f !== o).sort((a, b) => Math.abs(a.x - ownX) - Math.abs(b.x - ownX))[(p.k + 1) % Math.max(1, foes.length - 1)] || foes[0];
@@ -749,8 +794,8 @@ button:active { transform: translateY(1px); }
         for (const p of P) {
           if (p.team === o.team || p.stun > 0) continue;
           const db = dBall(p);
-          if (p.tackle > 0 && db < REACH + 4) { tackleWins(p); break; }
-          if (p.tackle <= 0 && ball.stealCd <= 0 && db < REACH - 2 && Math.random() < 1.3 * dt) { ball.stealCd = 0.8; o.nopick = 0.35; grab(p); break; }
+          if (p.tackle > 0 && db < TACKLE_REACH) { tackleWins(p); break; }
+          if (p.tackle <= 0 && ball.stealCd <= 0 && db < REACH + 2 && Math.random() < 2.0 * dt) { ball.stealCd = 0.8; o.nopick = 0.35; grab(p); break; }
         }
       }
     }
@@ -762,10 +807,16 @@ button:active { transform: translateY(1px); }
       if (sp > 1500) { ball.vx *= 1500 / sp; ball.vy *= 1500 / sp; }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
-      const cands = P.filter(p => p.stun <= 0 && p.nopick <= 0 && dBall(p) < REACH + 3).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => p.stun <= 0 && p.nopick <= 0 && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
+      // the keeper always catches a pass from his own team
+      if (ball.last && ball.last.pass) {
+        const k = P[ball.last.to];
+        if (k && size > 1 && k.k === 0 && k.team === ball.last.team && k.stun <= 0 && dBall(k) < REACH + 14 && !cands.includes(k)) cands.unshift(k);
+      }
       for (const p of cands) {
         const rv = Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
+        if (ball.last && ball.last.pass && ball.last.team === p.team) { grab(p); break; }
         if (rv < 760 || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) { if (p.tackle > 0) tackleWins(p); else grab(p); break; }
       }
       if (ball.owner < 0) {
@@ -797,8 +848,19 @@ button:active { transform: translateY(1px); }
       if (ball.x < PL + BRAD && ball.x > PL - BRAD * 3) { ball.x = PL + BRAD; ball.vx = Math.abs(ball.vx) * 0.7; }
       if (ball.x > PR - BRAD && ball.x < PR + BRAD * 3) { ball.x = PR - BRAD; ball.vx = -Math.abs(ball.vx) * 0.7; }
     }
-    if (ball.x < PL - BRAD) goal(1);
-    else if (ball.x > PR + BRAD) goal(0);
+    if (ball.x < PL - BRAD) scoreOn(0);
+    else if (ball.x > PR + BRAD) scoreOn(1);
+  }
+  // A pass to your own side that rolls into your own net is not a goal: the keeper gets it back.
+  function scoreOn(side) {
+    if (ball.last && ball.last.pass && ball.last.team === side) {
+      const k = P[slotOf(side, 0)];
+      ball.x = (side ? PR : PL) + (side ? -60 : 60); ball.y = CY; ball.vx = ball.vy = 0;
+      k.x = ball.x + (side ? 30 : -30); k.y = CY; k.stun = 0; k.nopick = 0;
+      flash = { text: 'Målspark', t: 0.9 };
+      grab(k); ball.last = null; return;
+    }
+    goal(1 - side);
   }
   function goal(team) {
     score[team]++;
@@ -860,7 +922,7 @@ button:active { transform: translateY(1px); }
     if (!room && window.Peer) room = peerRoom();
     if (!room) { netmsg.textContent = 'Online virker på spillets eget link.'; return; }
     $('host').disabled = false; $('join').disabled = false;
-    netmsg.textContent = 'Opret en kamp og send koden, eller skriv en vens kode.';
+    netmsg.textContent = netmsg.dataset.invite ? 'Du er inviteret. Tryk Deltag.' : 'Opret en kamp og send koden, eller skriv en vens kode.';
   })();
 
   function leaveNet() {
@@ -927,7 +989,7 @@ button:active { transform: translateY(1px); }
     $('menu').hidden = true; $('lobby').hidden = false;
     $('lobbyCode').textContent = code;
     $('lobbyMsg').textContent = `Send koden til dine venner (op til ${size * 2 - 1}). Tomme pladser spilles af computeren.`;
-    $('startOnline').hidden = false;
+    $('startOnline').hidden = false; $('share').hidden = window.top !== window; $('share').textContent = 'Del invitationslink';
     net.onPeers(ch => {
       const me = ch.peers.find(p => p.sameTab); if (me) myPeer = me.peer;
       hostAssign(ch.peers);
@@ -937,6 +999,13 @@ button:active { transform: translateY(1px); }
     renderRoster(true);
   };
   $('startOnline').onclick = () => startMatch('host');
+  // invite link: the page opens with the code filled in
+  $('share').onclick = async () => {
+    const url = location.href.split('#')[0] + '#' + $('lobbyCode').textContent;
+    try { if (navigator.share) { await navigator.share({ title: 'Mini Football', text: 'Spil med! Kode ' + $('lobbyCode').textContent, url }); return; } } catch (_) { return; }
+    try { await navigator.clipboard.writeText(url); $('share').textContent = 'Link kopieret'; } catch (_) { $('lobbyMsg').textContent = url; }
+  };
+  { const m = /^#(\d{4})$/.exec(location.hash); if (m) { $('code').value = m[1]; netmsg.dataset.invite = '1'; if (!$('join').disabled) netmsg.textContent = 'Du er inviteret. Tryk Deltag.'; } }
 
   $('join').onclick = async () => {
     audioOn();
@@ -945,7 +1014,7 @@ button:active { transform: translateY(1px); }
     netmsg.textContent = 'Forbinder…';
     try { net = await room.join('mf-' + code, 'g'); } catch (e) { netmsg.textContent = 'Kunne ikke finde kampen. Tjek koden, og at værten har trykket Opret kamp.'; return; }
     mode = 'guest'; state = 'lobby'; seenMatch = -1; tgt = null;
-    $('menu').hidden = true; $('lobby').hidden = false; $('startOnline').hidden = true;
+    $('menu').hidden = true; $('lobby').hidden = false; $('startOnline').hidden = true; $('share').hidden = true;
     $('lobbyCode').textContent = code; $('lobbyMsg').textContent = 'Forbundet. Venter på at værten starter kampen…';
     $('rosterR').textContent = ''; $('rosterB').textContent = '';
     net.presence({ r: 'g', i: [0, 0, 0, 0] });
@@ -970,7 +1039,7 @@ button:active { transform: translateY(1px); }
 
   function applyState(s) {
     if (!s || !Array.isArray(s.p) || !Array.isArray(s.b)) return;
-    const z = Math.max(1, Math.min(3, Number(s.z) || 1));
+    const z = [1, 2, 3, 5, 10].includes(Number(s.z)) ? Number(s.z) : 1;
     if (P.length !== z * 2) makePlayers(z);
     lobbySize = z;
     roster = Array.isArray(s.ro) ? s.ro.filter(r => Array.isArray(r) && typeof r[0] === 'string').map(r => [r[0], Number(r[1]) | 0]) : [];
@@ -1048,9 +1117,9 @@ button:active { transform: translateY(1px); }
     }
     ctx.strokeStyle = 'rgba(244,247,242,0.85)'; ctx.lineWidth = 3;
     ctx.strokeRect(PL, PT, PR - PL, PB - PT);
-    ctx.beginPath(); ctx.moveTo(550, PT); ctx.lineTo(550, PB); ctx.stroke();
-    ctx.beginPath(); ctx.arc(550, CY, 75, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(550, CY, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(CX, PT); ctx.lineTo(CX, PB); ctx.stroke();
+    ctx.beginPath(); ctx.arc(CX, CY, size >= 5 ? 95 : 75, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(CX, CY, 4, 0, Math.PI * 2); ctx.fill();
     ctx.strokeRect(PL, CY - 150, 120, 300); ctx.strokeRect(PR - 120, CY - 150, 120, 300);
     ctx.strokeRect(PL, CY - 95, 45, 190); ctx.strokeRect(PR - 45, CY - 95, 45, 190);
     for (const [px, py] of POSTS) { ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(px, py, POSTR, 0, Math.PI * 2); ctx.fill(); }
@@ -1128,6 +1197,18 @@ button:active { transform: translateY(1px); }
       ctx.restore();
     }
   }
+  function drawMinimap() {
+    // small overview of the whole pitch when the camera is zoomed in
+    const w = Math.min(150, sw * 0.2), h = w * WH / WW;
+    const x0 = sw - w - 12, y0 = 8, k = w / WW;
+    ctx.fillStyle = 'rgba(9,20,15,0.65)'; ctx.fillRect(x0 - 3, y0 - 3, w + 6, h + 6);
+    ctx.strokeStyle = 'rgba(244,247,242,0.5)'; ctx.lineWidth = 1;
+    ctx.strokeRect(x0 + PL * k, y0 + PT * k, (PR - PL) * k, (PB - PT) * k);
+    ctx.beginPath(); ctx.moveTo(x0 + CX * k, y0 + PT * k); ctx.lineTo(x0 + CX * k, y0 + PB * k); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,212,71,0.6)'; ctx.strokeRect(x0 - ox * k / sc, y0 - oy * k / sc, sw * k / sc, sh * k / sc);
+    for (const p of P) { ctx.fillStyle = isMine(p) ? col.gold : (p.team ? col.away : col.home); ctx.beginPath(); ctx.arc(x0 + p.x * k, y0 + p.y * k, isMine(p) ? 3.5 : 2.5, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x0 + ball.x * k, y0 + ball.y * k, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
   function drawHUD() {
     const fs = Math.max(16, Math.min(26, sh * 0.055));
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -1163,17 +1244,10 @@ button:active { transform: translateY(1px); }
   function drawControls() {
     sticks.forEach((s, i) => {
       if (!twoSides() && i === 1) return;
-      if (s.id === null) {
-        const hx = !twoSides() ? sw * 0.16 : (i === 0 ? sw * 0.24 : sw * 0.76);
-        const hy = !twoSides() ? sh * 0.7 : sh * 0.45;
-        ctx.strokeStyle = 'rgba(244,247,242,0.18)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(hx, hy, STICK_R, 0, Math.PI * 2); ctx.stroke();
-        return;
-      }
-      const m = Math.hypot(s.dx, s.dy);
-      ctx.fillStyle = 'rgba(244,247,242,0.12)'; ctx.beginPath(); ctx.arc(s.ox, s.oy, STICK_R, 0, Math.PI * 2); ctx.fill();
+      const h = stickHome(i), m = Math.hypot(s.dx, s.dy), on = s.id !== null;
+      ctx.fillStyle = on ? 'rgba(244,247,242,0.12)' : 'rgba(244,247,242,0.06)'; ctx.beginPath(); ctx.arc(h.x, h.y, STICK_R, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = m > 0.97 ? col.gold : 'rgba(244,247,242,0.35)'; ctx.lineWidth = m > 0.97 ? 4 : 2; ctx.stroke();
-      ctx.fillStyle = 'rgba(244,247,242,0.5)'; ctx.beginPath(); ctx.arc(s.ox + s.dx * STICK_R, s.oy + s.dy * STICK_R, 24, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = on ? 'rgba(244,247,242,0.55)' : 'rgba(244,247,242,0.25)'; ctx.beginPath(); ctx.arc(h.x + s.dx * STICK_R, h.y + s.dy * STICK_R, 24, 0, Math.PI * 2); ctx.fill();
     });
     const sides = twoSides() ? [0, 1] : [0];
     for (const side of sides) {
@@ -1202,6 +1276,7 @@ button:active { transform: translateY(1px); }
     drawParticles();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (state === 'play') drawOffscreen();
+    if (state === 'play' && sc * WW > sw + 2) drawMinimap();
     if (state === 'play' || state === 'end') drawHUD();
     if (state === 'play' && !paused) drawControls();
   }
