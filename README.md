@@ -4,11 +4,12 @@ Et simpelt fodboldspil i arkadestil, lavet til mobilen (hold telefonen på langs
 
 Spil: https://woodmandk.github.io/Mini-Football/
 
-- **1, 2, 3, 5 eller 10 spillere pr. hold** på en bane der vokser med holdene, med computerstyrede holdkammerater og målmand
-- **Mod computeren** (Let, Normal, Svær), **2 spillere på én telefon** eller **online med op til 6** via en 4-cifret kode. Tomme pladser spilles af computeren.
-- Du styrer automatisk den spiller, der er tættest på bolden.
-- Én knap til **SKYD** (hold inde for et hårdere skud) og **TACKLE** når du ikke har bolden, plus **SPURT** med udholdenhed.
-- Nedtælling, golden goal ved uafgjort, pause, lyd, vibration og fuld skærm. Kan lægges på hjemmeskærmen som en app.
+- **1, 2, 3, 5 eller 11 spillere pr. hold** på en bane der vokser med holdene. Ved 5 og 11 vælger hvert hold formation (fx 4-4-2, 4-3-3, 3-5-2, 5-3-2), og der er offside.
+- **Mod computeren** (Let, Normal, Svær), **2 spillere på én telefon** eller **online** via en 4-cifret kode eller et invitationslink. I lobbyen trykker alle Klar, så starter kampen. Tomme pladser spilles af computeren.
+- Bolden følger spilleren, der har den. **SKYD** (hold inde for hårdere, to tryk for lob) og **AFLEVER** (to tryk for stikning). Uden bolden bliver knapperne **TACKLE** og **SKIFT**. Frit joystick, træk langt ud for at spurte.
+- Indkast, hjørnespark, målspark og frispark. Gentagelse af målene i slowmotion, publikumslyd, statistik efter kampen og en stilling med topscorer på telefonen.
+- Navne og fire trøjesæt, hurtige beskeder online ("Flot!", "GG") og revanche-knap. Power-ups kan slås til (superskud, turbo, kæmpebold).
+- Spillet ligger altid ned, også hvis telefonen holdes oprejst. Kan lægges på hjemmeskærmen som en app.
 
 Tastatur: WASD + mellemrum + Shift. Spiller 2: piletaster + Enter + punktum.
 
