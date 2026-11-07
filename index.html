@@ -1,4 +1,4 @@
-<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body{margin:0}</style></head><body>
+<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body{margin:0}</style><script src="peerjs.min.js"></script></head><body>
 <title>Banebold</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -293,12 +293,49 @@ button:disabled { opacity: 0.45; cursor: default; }
   const $ = id => document.getElementById(id);
   const netmsg = $('netmsg');
   (async () => {
-    for (let i = 0; i < 50 && !(window.claude && window.claude.use); i++) await new Promise(r => setTimeout(r, 100));
+    const framed = window.top !== window;
+    for (let i = 0; framed && i < 50 && !(window.claude && window.claude.use); i++) await new Promise(r => setTimeout(r, 100));
     try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (_) { room = null; }
+    if (!room && window.Peer) room = peerRoom();
     if (!room) { netmsg.textContent = 'Online virker kun, når siden er åbnet på claude.ai af en, den er delt med.'; return; }
     $('host').disabled = false; $('join').disabled = false;
     netmsg.textContent = 'Opret en kamp og send koden, eller skriv modstanderens kode.';
   })();
+  // Same shape as the claude.ai room, built on PeerJS (WebRTC) for the plain web link.
+  function peerRoom() {
+    return {
+      join: (name, role) => new Promise((resolve, reject) => {
+        const id = 'minifootball-' + name;
+        let mine = {}, theirs = null, conns = [], subs = [], peer, done = false;
+        const fire = () => {
+          const ps = [{ peer: 'me', sameTab: true, isMe: true, presence: mine }];
+          if (theirs) ps.push({ peer: 'them', sameTab: false, isMe: false, presence: theirs });
+          subs.forEach(f => f({ peers: ps }));
+        };
+        const wire = c => {
+          c.on('open', () => { conns.push(c); c.send(mine); if (!done) { done = true; resolve(api); } fire(); });
+          c.on('data', d => { if (d && typeof d === 'object') { theirs = d; fire(); } });
+          c.on('close', () => { conns = conns.filter(x => x !== c); theirs = null; fire(); });
+        };
+        const api = {
+          presence: async patch => { mine = { ...mine, ...patch }; conns.forEach(c => { try { c.send(mine); } catch (_) {} }); },
+          onPeers: f => { subs.push(f); setTimeout(fire, 0); return () => {}; },
+          leave: async () => { try { peer.destroy(); } catch (_) {} },
+        };
+        if (role === 'h') {
+          peer = new Peer(id);
+          peer.on('open', () => { done = true; resolve(api); });
+          peer.on('connection', c => { conns.forEach(x => x.close()); conns = []; wire(c); });
+        } else {
+          peer = new Peer();
+          peer.on('open', () => wire(peer.connect(id, { serialization: 'json' })));
+        }
+        peer.on('error', e => { if (!done) { done = true; try { peer.destroy(); } catch (_) {} reject(e); } });
+        setTimeout(() => { if (!done) { done = true; try { peer.destroy(); } catch (_) {} reject(new Error('timeout')); } }, 12000);
+      }),
+    };
+  }
+
   function showLobby(code, text) {
     $('menu').hidden = true; $('end').hidden = true; $('lobby').hidden = false;
     $('lobbyCode').textContent = code; $('lobbyMsg').textContent = text;
@@ -316,7 +353,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   $('host').onclick = async () => {
     audioOn();
     const code = String(1000 + Math.floor(Math.random() * 9000));
-    try { net = await room.join('mf-' + code); } catch (e) { netmsg.textContent = 'Kunne ikke oprette kampen. Prøv igen.'; return; }
+    try { net = await room.join('mf-' + code, 'h'); } catch (e) { netmsg.textContent = 'Kunne ikke oprette kampen. Prøv igen.'; return; }
     mode = 'host'; state = 'lobby'; matchNo = 0;
     showLobby(code, 'Send koden til din modstander. Kampen starter, når de deltager.');
     net.presence({ r: 'h' });
@@ -335,7 +372,7 @@ button:disabled { opacity: 0.45; cursor: default; }
     audioOn();
     const code = ($('code').value || '').replace(/\D/g, '');
     if (code.length !== 4) { netmsg.textContent = 'Koden har 4 cifre.'; return; }
-    try { net = await room.join('mf-' + code); } catch (e) { netmsg.textContent = 'Kunne ikke deltage. Tjek koden.'; return; }
+    try { net = await room.join('mf-' + code, 'g'); } catch (e) { netmsg.textContent = 'Kunne ikke finde kampen. Tjek koden, og at værten har trykket Opret kamp.'; return; }
     mode = 'guest'; state = 'lobby'; seenMatch = -1;
     showLobby(code, 'Venter på værten… Du spiller blå.');
     net.presence({ r: 'g', i: [0, 0, 0] });
