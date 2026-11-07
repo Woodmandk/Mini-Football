@@ -1,11 +1,19 @@
 # Mini Football
 
-Et simpelt 1 mod 1 fodboldspil i arkadestil, lavet til mobilen (hold telefonen på langs).
+Et simpelt fodboldspil i arkadestil, lavet til mobilen (hold telefonen på langs).
 
-- **Mod computeren** eller **2 spillere på én telefon**
-- **Online** med en 4-cifret kampkode. På et almindeligt link går forbindelsen direkte mellem telefonerne (WebRTC via PeerJS og dens gratis forbindelsesserver). Inde på claude.ai bruges claude.ai's egen `room`-funktion.
-- Styring: venstre tommelfinger styrer, tryk i højre side for at skyde. På computer: WASD + mellemrum, piletaster + Enter for spiller 2.
+Spil: https://woodmandk.github.io/Mini-Football/
 
-Spillet ligger i `index.html` (ren canvas og JavaScript). `peerjs.min.js` er PeerJS 1.5.4 (MIT-licens).
+- **1 mod 1, 2 mod 2 eller 3 mod 3**, med computerstyrede holdkammerater og målmand
+- **Mod computeren** (Let, Normal, Svær), **2 spillere på én telefon** eller **online med op til 6** via en 4-cifret kode. Tomme pladser spilles af computeren.
+- Du styrer automatisk den spiller, der er tættest på bolden.
+- Én knap til **SKYD** (hold inde for et hårdere skud) og **TACKLE** når du ikke har bolden, plus **SPURT** med udholdenhed.
+- Nedtælling, golden goal ved uafgjort, pause, lyd, vibration og fuld skærm. Kan lægges på hjemmeskærmen som en app.
 
-Næste skridt: egen server (Colyseus) så online virker uden for claude.ai.
+Tastatur: WASD + mellemrum + Shift. Spiller 2: piletaster + Enter + punktum.
+
+## Sådan er det bygget
+
+- `game.html` er hele spillet (canvas og JavaScript, ingen biblioteker). Den bruges også som claude.ai-artefakt.
+- `./build.sh` laver `index.html` (siden på GitHub Pages) ud fra `game.html`.
+- Online går direkte mellem telefonerne med WebRTC via `peerjs.min.js` (PeerJS 1.5.4, MIT) og PeerJS' gratis forbindelsesserver. Værten kører kampen, og de andre sender deres styring.
