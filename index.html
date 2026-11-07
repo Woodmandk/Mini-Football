@@ -1,0 +1,622 @@
+<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body{margin:0}</style></head><body>
+<title>Banebold</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&display=swap">
+<style>
+/* Layout: one full-screen canvas pitch, HTML overlays for menu and result. Single deliberate look (floodlit night pitch). */
+:root {
+  --night: #0d1a14;
+  --grass-a: #2f7d46;
+  --grass-b: #2a7140;
+  --chalk: #f4f7f2;
+  --home: #e5483b;
+  --away: #2f7ff0;
+  --panel: rgba(9, 20, 15, 0.86);
+  --muted: #a9c2b3;
+  --font: "Chakra Petch", "Trebuchet MS", system-ui, sans-serif;
+  color-scheme: dark;
+}
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  background: var(--night);
+  color: var(--chalk);
+  font-family: var(--font);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+#wrap { position: relative; width: 100%; height: 100%; }
+canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px;
+  background: rgba(5, 12, 9, 0.55);
+}
+.card {
+  background: var(--panel);
+  border: 2px solid rgba(244, 247, 242, 0.18);
+  border-radius: 14px;
+  padding: 22px 24px;
+  max-width: 440px; width: 100%;
+  display: flex; flex-direction: column; gap: 14px;
+  text-align: center;
+}
+h1 { margin: 0; font-size: clamp(30px, 7vw, 44px); letter-spacing: 0.04em; text-transform: uppercase; line-height: 1; text-wrap: balance; }
+h1 span { color: var(--home); }
+h1 span + span { color: var(--away); }
+p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.btns { display: flex; flex-direction: column; gap: 10px; }
+button {
+  font: 700 17px/1 var(--font);
+  letter-spacing: 0.03em;
+  color: var(--chalk);
+  background: var(--grass-b);
+  border: 2px solid var(--chalk);
+  border-radius: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+button.alt { background: transparent; border-color: rgba(244, 247, 242, 0.45); }
+button:focus-visible { outline: 3px solid #ffd447; outline-offset: 2px; }
+button:active { transform: translateY(1px); }
+.final { font-size: 48px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.final .h { color: var(--home); } .final .a { color: var(--away); }
+.online { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid rgba(244,247,242,0.18); padding-top: 12px; }
+.lbl { font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.joinrow { display: flex; gap: 8px; }
+.joinrow input { flex: 1; min-width: 0; font: 700 20px/1 var(--font); letter-spacing: 0.3em; text-align: center; color: var(--chalk); background: rgba(0,0,0,0.35); border: 2px solid rgba(244,247,242,0.45); border-radius: 10px; padding: 10px; }
+.joinrow input:focus-visible { outline: 3px solid #ffd447; outline-offset: 2px; }
+button:disabled { opacity: 0.45; cursor: default; }
+.bigcode { font-size: 56px; font-weight: 700; letter-spacing: 0.25em; font-variant-numeric: tabular-nums; color: #ffd447; }
+.card { max-height: 100%; overflow-y: auto; }
+#rotate { display: none; font-size: 13px; color: #ffd447; }
+@media (orientation: portrait) { #rotate { display: block; } }
+@media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
+</style>
+
+<div id="wrap">
+  <canvas id="c" aria-label="Fodboldbane"></canvas>
+
+  <div class="overlay" id="menu">
+    <div class="card">
+      <h1><span>Bane</span><span>bold</span></h1>
+      <p>Hurtig 1 mod 1 fodbold. Første prototype til mobil.</p>
+      <p id="rotate">Drej telefonen på langs for den bedste bane.</p>
+      <div class="btns">
+        <button id="b1">Mod computeren</button>
+        <button id="b2" class="alt">2 spillere på én telefon</button>
+      </div>
+      <div class="online" id="online">
+        <div class="lbl">Online mod en anden</div>
+        <button id="host" disabled>Opret kamp</button>
+        <div class="joinrow">
+          <input id="code" inputmode="numeric" maxlength="4" placeholder="Kode" aria-label="Kampkode" autocomplete="off">
+          <button id="join" class="alt" disabled>Deltag</button>
+        </div>
+        <p id="netmsg">Forbinder…</p>
+      </div>
+      <p>Venstre tommelfinger styrer, tryk i højre side for at skyde. På computer: WASD + mellemrum (og piletaster + Enter for spiller 2).</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="lobby" hidden>
+    <div class="card">
+      <div class="lbl">Din kampkode</div>
+      <div class="bigcode" id="lobbyCode">0000</div>
+      <p id="lobbyMsg">Send koden til din modstander. Kampen starter, når de deltager.</p>
+      <div class="btns"><button id="cancel" class="alt">Annullér</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="end" hidden>
+    <div class="card">
+      <h1 id="endTitle">Slut</h1>
+      <div class="final"><span class="h" id="fh">0</span> – <span class="a" id="fa">0</span></div>
+      <div class="btns">
+        <button id="again">Spil igen</button>
+        <button id="toMenu" class="alt">Til menuen</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+
+  // ---- World ----
+  const WW = 1100, WH = 600;
+  const PL = 50, PR = 1050, PT = 20, PB = 580;
+  const CY = 300, MOUTH = 85;           // goal half-height
+  const PRAD = 22, BRAD = 12;
+  const MATCH = 120;                    // seconds
+  const POSTS = [[PL, CY - MOUTH], [PL, CY + MOUTH], [PR, CY - MOUTH], [PR, CY + MOUTH]];
+  const POSTR = 6;
+
+  let mode = null, state = 'menu', kickPulse = 0;
+  let score = [0, 0], clock = MATCH, pause = 0, banner = '';
+  const ball = { x: 550, y: 300, vx: 0, vy: 0 };
+  const P = [
+    { x: 300, y: 300, vx: 0, vy: 0, team: 0, cd: 0, fx: 1, fy: 0, kick: false },
+    { x: 800, y: 300, vx: 0, vy: 0, team: 1, cd: 0, fx: -1, fy: 0, kick: false },
+  ];
+
+  // ---- Screen mapping ----
+  let dpr = 1, sw = 0, sh = 0, sc = 1, ox = 0, oy = 0;
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    sw = cv.clientWidth; sh = cv.clientHeight;
+    cv.width = Math.round(sw * dpr); cv.height = Math.round(sh * dpr);
+    sc = Math.min(sw / WW, sh / WH);
+    ox = (sw - WW * sc) / 2; oy = (sh - WH * sc) / 2;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ---- Input ----
+  const sticks = [
+    { id: null, ox: 0, oy: 0, x: 0, y: 0, dx: 0, dy: 0 },
+    { id: null, ox: 0, oy: 0, x: 0, y: 0, dx: 0, dy: 0 },
+  ];
+  const kickTouches = new Map();       // touch id -> player index
+  const STICK_R = 56;
+
+  function kickBtn(i) {               // screen-space kick button for player i (2P mode)
+    const r = Math.min(58, sh * 0.13);
+    return i === 0 ? { x: r + 22, y: sh - r - 22, r } : { x: sw - r - 22, y: sh - r - 22, r };
+  }
+
+  function onStart(e) {
+    if (state !== 'play') return;
+    e.preventDefault();
+    audioOn();
+    for (const t of e.changedTouches) {
+      const x = t.clientX, y = t.clientY;
+      if (mode !== 2) {
+        if (x < sw * 0.5) grabStick(0, t);
+        else { kickTouches.set(t.identifier, 0); P[0].kick = true; kickPulse = performance.now(); }
+      } else {
+        const side = x < sw / 2 ? 0 : 1;
+        const kb = kickBtn(side);
+        if (Math.hypot(x - kb.x, y - kb.y) < kb.r + 14) { kickTouches.set(t.identifier, side); P[side].kick = true; }
+        else grabStick(side, t);
+      }
+    }
+  }
+  function grabStick(i, t) {
+    const s = sticks[i];
+    if (s.id !== null) return;
+    s.id = t.identifier; s.ox = s.x = t.clientX; s.oy = s.y = t.clientY; s.dx = s.dy = 0;
+  }
+  function onMove(e) {
+    if (state !== 'play') return;
+    e.preventDefault();
+    for (const t of e.changedTouches) for (const s of sticks) {
+      if (s.id !== t.identifier) continue;
+      let dx = t.clientX - s.ox, dy = t.clientY - s.oy;
+      const d = Math.hypot(dx, dy);
+      if (d > STICK_R) { // drag the base along so the stick never feels stuck
+        s.ox += dx * (1 - STICK_R / d); s.oy += dy * (1 - STICK_R / d);
+        dx = t.clientX - s.ox; dy = t.clientY - s.oy;
+      }
+      s.x = t.clientX; s.y = t.clientY;
+      s.dx = dx / STICK_R; s.dy = dy / STICK_R;
+    }
+  }
+  function onEnd(e) {
+    for (const t of e.changedTouches) {
+      for (const s of sticks) if (s.id === t.identifier) { s.id = null; s.dx = s.dy = 0; }
+      if (kickTouches.has(t.identifier)) {
+        const i = kickTouches.get(t.identifier); kickTouches.delete(t.identifier);
+        if (![...kickTouches.values()].includes(i)) P[i].kick = false;
+      }
+    }
+  }
+  cv.addEventListener('touchstart', onStart, { passive: false });
+  cv.addEventListener('touchmove', onMove, { passive: false });
+  cv.addEventListener('touchend', onEnd);
+  cv.addEventListener('touchcancel', onEnd);
+
+  const keys = new Set();
+  addEventListener('keydown', e => { keys.add(e.code); if (state === 'play' && e.code.startsWith('Arrow')) e.preventDefault(); audioOn(); });
+  addEventListener('keyup', e => keys.delete(e.code));
+  function keyAxis(i) {
+    const k = i === 0 ? ['KeyA', 'KeyD', 'KeyW', 'KeyS', 'Space'] : ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'];
+    return { x: (keys.has(k[1]) ? 1 : 0) - (keys.has(k[0]) ? 1 : 0), y: (keys.has(k[3]) ? 1 : 0) - (keys.has(k[2]) ? 1 : 0), kick: keys.has(k[4]) };
+  }
+
+  // ---- Sound ----
+  let ac = null;
+  function audioOn() { if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) {} } }
+  function beep(f, d, type = 'square', vol = 0.06) {
+    if (!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + d);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + d);
+  }
+
+  // ---- Game flow ----
+  function kickoff(towards) {
+    ball.x = 550; ball.y = 300; ball.vx = ball.vy = 0;
+    P[0].x = 330; P[0].y = 300; P[1].x = 770; P[1].y = 300;
+    for (const p of P) { p.vx = p.vy = 0; p.cd = 0; }
+    P[0].fx = 1; P[0].fy = 0; P[1].fx = -1; P[1].fy = 0;
+    if (towards !== undefined) { const p = P[towards]; p.x = towards === 0 ? 490 : 610; }
+  }
+  function start(m) {
+    if (m === 'host') matchNo++;
+    mode = m; score = [0, 0]; clock = MATCH; pause = 1.2; banner = 'Klar';
+    kickoff();
+    for (const s of sticks) { s.id = null; s.dx = s.dy = 0; }
+    kickTouches.clear(); P[0].kick = P[1].kick = false;
+    document.getElementById('menu').hidden = true;
+    document.getElementById('end').hidden = true;
+    document.getElementById('lobby').hidden = true;
+    document.getElementById('again').hidden = false;
+    state = 'play';
+    audioOn(); beep(660, 0.12); setTimeout(() => beep(990, 0.2), 140);
+  }
+  function finish() {
+    state = 'end';
+    const t = document.getElementById('endTitle');
+    if (score[0] === score[1]) t.textContent = 'Uafgjort';
+    else if (mode === 1) t.textContent = score[0] > score[1] ? 'Du vandt' : 'Computeren vandt';
+    else if (mode === 'host') t.textContent = score[0] > score[1] ? 'Du vandt' : 'Du tabte';
+    else if (mode === 'guest') t.textContent = score[1] > score[0] ? 'Du vandt' : 'Du tabte';
+    else t.textContent = score[0] > score[1] ? 'Rød vinder' : 'Blå vinder';
+    document.getElementById('fh').textContent = score[0];
+    document.getElementById('fa').textContent = score[1];
+    document.getElementById('end').hidden = false;
+    beep(520, 0.15); setTimeout(() => beep(390, 0.15), 170); setTimeout(() => beep(260, 0.4), 340);
+  }
+  document.getElementById('b1').onclick = () => start(1);
+  document.getElementById('b2').onclick = () => start(2);
+  document.getElementById('again').onclick = () => start(mode);
+  document.getElementById('toMenu').onclick = () => {
+    leaveNet();
+    state = 'menu'; document.getElementById('end').hidden = true; document.getElementById('menu').hidden = false;
+  };
+
+  // ---- Online (claude.ai room: host runs the match, guest sends input) ----
+  let room = null, net = null, remoteIn = { x: 0, y: 0, kick: false }, lastSend = 0, lostAt = 0, sentIn = '';
+  let tgt = null, matchNo = 0, seenMatch = -1;
+  const $ = id => document.getElementById(id);
+  const netmsg = $('netmsg');
+  (async () => {
+    for (let i = 0; i < 50 && !(window.claude && window.claude.use); i++) await new Promise(r => setTimeout(r, 100));
+    try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (_) { room = null; }
+    if (!room) { netmsg.textContent = 'Online virker kun, når siden er åbnet på claude.ai af en, den er delt med.'; return; }
+    $('host').disabled = false; $('join').disabled = false;
+    netmsg.textContent = 'Opret en kamp og send koden, eller skriv modstanderens kode.';
+  })();
+  function showLobby(code, text) {
+    $('menu').hidden = true; $('end').hidden = true; $('lobby').hidden = false;
+    $('lobbyCode').textContent = code; $('lobbyMsg').textContent = text;
+  }
+  function leaveNet() {
+    if (net) { try { net.leave(); } catch (_) {} }
+    net = null; tgt = null; remoteIn = { x: 0, y: 0, kick: false };
+  }
+  function toMenu(text) {
+    leaveNet(); state = 'menu'; mode = null;
+    $('lobby').hidden = true; $('end').hidden = true; $('menu').hidden = false;
+    if (text) netmsg.textContent = text;
+  }
+  $('cancel').onclick = () => toMenu();
+  $('host').onclick = async () => {
+    audioOn();
+    const code = String(1000 + Math.floor(Math.random() * 9000));
+    try { net = await room.join('mf-' + code); } catch (e) { netmsg.textContent = 'Kunne ikke oprette kampen. Prøv igen.'; return; }
+    mode = 'host'; state = 'lobby'; matchNo = 0;
+    showLobby(code, 'Send koden til din modstander. Kampen starter, når de deltager.');
+    net.presence({ r: 'h' });
+    net.onPeers(ch => {
+      const g = ch.peers.find(p => !p.sameTab && p.presence && p.presence.r === 'g');
+      if (g) {
+        lostAt = 0;
+        const i = Array.isArray(g.presence.i) ? g.presence.i : [0, 0, 0];
+        const cl = v => Math.max(-1, Math.min(1, (Number(v) || 0) / 100));
+        remoteIn = { x: cl(i[0]), y: cl(i[1]), kick: !!i[2] };
+        if (state === 'lobby') start('host');
+      } else if (state === 'play' && !lostAt) lostAt = performance.now();
+    });
+  };
+  $('join').onclick = async () => {
+    audioOn();
+    const code = ($('code').value || '').replace(/\D/g, '');
+    if (code.length !== 4) { netmsg.textContent = 'Koden har 4 cifre.'; return; }
+    try { net = await room.join('mf-' + code); } catch (e) { netmsg.textContent = 'Kunne ikke deltage. Tjek koden.'; return; }
+    mode = 'guest'; state = 'lobby'; seenMatch = -1;
+    showLobby(code, 'Venter på værten… Du spiller blå.');
+    net.presence({ r: 'g', i: [0, 0, 0] });
+    net.onPeers(ch => {
+      const h = ch.peers.find(p => !p.sameTab && p.presence && p.presence.r === 'h');
+      if (h && h.presence.s) { lostAt = 0; applyState(h.presence.s); }
+      else if (!h && state === 'play' && !lostAt) lostAt = performance.now();
+    });
+  };
+  const R = v => Math.round(v);
+  function pack() {
+    return {
+      m: matchNo, st: state === 'end' ? 'e' : 'p', c: Math.ceil(clock * 10), sc: score, bn: banner,
+      b: [R(ball.x), R(ball.y)],
+      p: P.map(p => [R(p.x), R(p.y), R(p.fx * 100), R(p.fy * 100), p.cd > 0.2 ? 1 : 0]),
+    };
+  }
+  function applyState(s) {
+    if (!s || !Array.isArray(s.p) || !Array.isArray(s.b)) return;
+    const prevScore = score.slice();
+    score = [Number(s.sc && s.sc[0]) || 0, Number(s.sc && s.sc[1]) || 0];
+    clock = (Number(s.c) || 0) / 10;
+    banner = typeof s.bn === 'string' ? s.bn.slice(0, 12) : '';
+    tgt = s;
+    if (s.st === 'p' && (state !== 'play' || s.m !== seenMatch)) {
+      seenMatch = s.m; state = 'play';
+      $('lobby').hidden = true; $('end').hidden = true; $('menu').hidden = true;
+      ball.x = s.b[0]; ball.y = s.b[1];
+      s.p.forEach((q, i) => { P[i].x = q[0]; P[i].y = q[1]; });
+      beep(660, 0.12); setTimeout(() => beep(990, 0.2), 140);
+    } else if (s.st === 'p' && (score[0] !== prevScore[0] || score[1] !== prevScore[1])) {
+      beep(523, 0.12); setTimeout(() => beep(659, 0.12), 120); setTimeout(() => beep(784, 0.3), 240);
+    }
+    if (s.st === 'e' && state === 'play') { finish(); $('again').hidden = true; }
+  }
+  function netTick(now) {
+    if (!net) return;
+    if (lostAt && now - lostAt > 4000 && state === 'play') { lostAt = 0; toMenu('Forbindelsen til modstanderen blev afbrudt.'); return; }
+    if (mode === 'host' && (state === 'play' || state === 'end') && now - lastSend > 33) {
+      lastSend = now; net.presence({ r: 'h', s: pack() }).catch(() => {});
+    }
+    if (mode === 'guest') {
+      if (state === 'play') {
+        const k = keyAxis(0), s = sticks[0];
+        let x = s.dx + k.x, y = s.dy + k.y; const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+        const kick = P[0].kick || k.kick || now - kickPulse < 180 ? 1 : 0;
+        const key = R(x * 100) + ',' + R(y * 100) + ',' + kick;
+        if (key !== sentIn) { sentIn = key; net.presence({ r: 'g', i: [R(x * 100), R(y * 100), kick] }).catch(() => {}); }
+      }
+      if (tgt) { // smooth toward the host's latest picture
+        const a = 0.45;
+        ball.x += (tgt.b[0] - ball.x) * a; ball.y += (tgt.b[1] - ball.y) * a;
+        tgt.p.forEach((q, i) => {
+          const p = P[i]; if (!p || !Array.isArray(q)) return;
+          p.x += (q[0] - p.x) * a; p.y += (q[1] - p.y) * a;
+          p.fx = (Number(q[2]) || 0) / 100; p.fy = (Number(q[3]) || 0) / 100; p.cd = q[4] ? 0.3 : 0;
+        });
+      }
+    }
+  }
+
+  // ---- AI (team 1 attacks the left goal) ----
+  function aiInput(p, dt) {
+    const gx = PL, gy = CY;
+    let tx, ty;
+    const bx = ball.x + ball.vx * 0.12, by = ball.y + ball.vy * 0.12;
+    if (p.x > ball.x + 6) {
+      const dx = bx - gx, dy = by - gy, d = Math.hypot(dx, dy) || 1;
+      tx = bx + dx / d * (PRAD + BRAD - 4); ty = by + dy / d * (PRAD + BRAD - 4);
+    } else { // get back around the ball without pushing it toward our own goal
+      tx = ball.x + 60; ty = ball.y + (p.y < ball.y ? -55 : 55);
+    }
+    // fall back to defend when the ball is deep in our half and we're beaten
+    if (ball.x > 820 && p.x < ball.x) { tx = Math.min(PR - 40, ball.x + 50); ty = CY + (ball.y - CY) * 0.5; }
+    let ix = tx - p.x, iy = ty - p.y; const il = Math.hypot(ix, iy);
+    if (il > 1) { ix /= il; iy /= il; } else ix = iy = 0;
+    const scale = Math.min(1, il / 30) * 0.86;
+    const near = Math.hypot(ball.x - p.x, ball.y - p.y) < PRAD + BRAD + 10;
+    return { x: ix * scale, y: iy * scale, kick: near && p.x > ball.x - 4 && Math.random() < 0.25 };
+  }
+
+  // ---- Physics ----
+  const MAXV = 300, ACC = 9, BALL_DAMP = 0.6, KICK = 820;
+  function step(dt) {
+    if (pause > 0) { pause -= dt; if (pause <= 0) banner = ''; return; }
+    clock -= dt;
+    if (clock <= 0) { clock = 0; finish(); return; }
+
+    for (let i = 0; i < 2; i++) {
+      const p = P[i];
+      let inp;
+      if (i === 1 && mode === 1) inp = aiInput(p, dt);
+      else if (i === 1 && mode === 'host') inp = remoteIn;
+      else {
+        const k = keyAxis(i);
+        const s = sticks[i];
+        let x = s.dx + k.x, y = s.dy + k.y;
+        const l = Math.hypot(x, y); if (l > 1) { x /= l; y /= l; }
+        inp = { x, y, kick: p.kick || k.kick };
+      }
+      const t = Math.min(1, ACC * dt);
+      p.vx += (inp.x * MAXV - p.vx) * t;
+      p.vy += (inp.y * MAXV - p.vy) * t;
+      if (Math.hypot(inp.x, inp.y) > 0.2) { const l = Math.hypot(inp.x, inp.y); p.fx = inp.x / l; p.fy = inp.y / l; }
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.x = Math.max(PL + PRAD - 30, Math.min(PR - PRAD + 30, p.x));
+      p.y = Math.max(PT + PRAD - 10, Math.min(PB - PRAD + 10, p.y));
+      p.cd -= dt;
+      if (inp.kick && p.cd <= 0) {
+        const dx = ball.x - p.x, dy = ball.y - p.y, d = Math.hypot(dx, dy);
+        if (d < PRAD + BRAD + 12) {
+          ball.vx = dx / d * KICK + p.vx * 0.35; ball.vy = dy / d * KICK + p.vy * 0.35;
+          p.cd = 0.35; beep(180, 0.08, 'triangle', 0.12);
+        }
+      }
+    }
+
+    // player vs player
+    {
+      const a = P[0], b = P[1];
+      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), m = PRAD * 2;
+      if (d < m && d > 0) { const o = (m - d) / 2, nx = dx / d, ny = dy / d; a.x -= nx * o; a.y -= ny * o; b.x += nx * o; b.y += ny * o; }
+    }
+
+    // ball movement
+    const damp = Math.pow(BALL_DAMP, dt);
+    ball.vx *= damp; ball.vy *= damp;
+    const sp = Math.hypot(ball.vx, ball.vy);
+    if (sp > 1400) { ball.vx *= 1400 / sp; ball.vy *= 1400 / sp; }
+    ball.x += ball.vx * dt; ball.y += ball.vy * dt;
+
+    // player vs ball
+    for (const p of P) {
+      const dx = ball.x - p.x, dy = ball.y - p.y, d = Math.hypot(dx, dy), m = PRAD + BRAD;
+      if (d < m && d > 0) {
+        const nx = dx / d, ny = dy / d;
+        ball.x = p.x + nx * m; ball.y = p.y + ny * m;
+        const rv = (ball.vx - p.vx) * nx + (ball.vy - p.vy) * ny;
+        if (rv < 0) { ball.vx -= 1.5 * rv * nx; ball.vy -= 1.5 * rv * ny; }
+      }
+    }
+
+    // posts
+    for (const [px, py] of POSTS) {
+      const dx = ball.x - px, dy = ball.y - py, d = Math.hypot(dx, dy), m = BRAD + POSTR;
+      if (d < m && d > 0) {
+        const nx = dx / d, ny = dy / d; ball.x = px + nx * m; ball.y = py + ny * m;
+        const rv = ball.vx * nx + ball.vy * ny; if (rv < 0) { ball.vx -= 1.7 * rv * nx; ball.vy -= 1.7 * rv * ny; beep(900, 0.05); }
+      }
+    }
+
+    // walls
+    const inMouth = Math.abs(ball.y - CY) < MOUTH - POSTR;
+    if (ball.y < PT + BRAD) { ball.y = PT + BRAD; ball.vy = Math.abs(ball.vy) * 0.75; }
+    if (ball.y > PB - BRAD) { ball.y = PB - BRAD; ball.vy = -Math.abs(ball.vy) * 0.75; }
+    if (!inMouth) {
+      if (ball.x < PL + BRAD && ball.x > PL - BRAD * 3) { ball.x = PL + BRAD; ball.vx = Math.abs(ball.vx) * 0.75; }
+      if (ball.x > PR - BRAD && ball.x < PR + BRAD * 3) { ball.x = PR - BRAD; ball.vx = -Math.abs(ball.vx) * 0.75; }
+    }
+
+    // goals
+    if (ball.x < PL - BRAD) goal(1);
+    else if (ball.x > PR + BRAD) goal(0);
+  }
+  function goal(team) {
+    score[team]++;
+    banner = 'MÅL!';
+    pause = 1.6;
+    beep(523, 0.12); setTimeout(() => beep(659, 0.12), 120); setTimeout(() => beep(784, 0.3), 240);
+    kickoff(1 - team);
+  }
+
+  // ---- Drawing ----
+  const C = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const col = { a: C('--grass-a'), b: C('--grass-b'), chalk: C('--chalk'), home: C('--home'), away: C('--away'), night: C('--night'), font: C('--font') };
+
+  function drawPitch() {
+    ctx.fillStyle = col.night; ctx.fillRect(0, 0, WW, WH);
+    const stripes = 10, w = (PR - PL) / stripes;
+    for (let i = 0; i < stripes; i++) { ctx.fillStyle = i % 2 ? col.a : col.b; ctx.fillRect(PL + i * w, PT, w + 1, PB - PT); }
+    // goal boxes (nets)
+    for (const side of [0, 1]) {
+      const gx = side ? PR : PL - 40;
+      ctx.fillStyle = 'rgba(244,247,242,0.10)'; ctx.fillRect(gx, CY - MOUTH, 40, MOUTH * 2);
+      ctx.strokeStyle = 'rgba(244,247,242,0.28)'; ctx.lineWidth = 1;
+      for (let y = CY - MOUTH; y <= CY + MOUTH; y += 10) { ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx + 40, y); ctx.stroke(); }
+      for (let x = gx; x <= gx + 40; x += 10) { ctx.beginPath(); ctx.moveTo(x, CY - MOUTH); ctx.lineTo(x, CY + MOUTH); ctx.stroke(); }
+    }
+    ctx.strokeStyle = 'rgba(244,247,242,0.85)'; ctx.lineWidth = 3;
+    ctx.strokeRect(PL, PT, PR - PL, PB - PT);
+    ctx.beginPath(); ctx.moveTo(550, PT); ctx.lineTo(550, PB); ctx.stroke();
+    ctx.beginPath(); ctx.arc(550, CY, 75, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(550, CY, 4, 0, Math.PI * 2); ctx.fill();
+    // penalty areas
+    ctx.strokeRect(PL, CY - 150, 120, 300); ctx.strokeRect(PR - 120, CY - 150, 120, 300);
+    ctx.strokeRect(PL, CY - 95, 45, 190); ctx.strokeRect(PR - 45, CY - 95, 45, 190);
+    // posts
+    for (const [px, py] of POSTS) { ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(px, py, POSTR, 0, Math.PI * 2); ctx.fill(); }
+  }
+  function drawPlayer(p) {
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(p.x + 4, p.y + 6, PRAD, PRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = p.team ? col.away : col.home;
+    ctx.beginPath(); ctx.arc(p.x, p.y, PRAD, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = p.cd > 0.2 ? 5 : 3; ctx.strokeStyle = col.chalk; ctx.stroke();
+    ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(p.x + p.fx * (PRAD - 7), p.y + p.fy * (PRAD - 7), 4, 0, Math.PI * 2); ctx.fill();
+  }
+  function drawBall() {
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(ball.x + 3, ball.y + 5, BRAD, BRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, BRAD, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  function drawHUD() {
+    const m = Math.floor(clock / 60), s = Math.floor(clock % 60);
+    const fs = Math.max(16, Math.min(26, sh * 0.055));
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const y = Math.max(6, oy + 4);
+    ctx.fillStyle = 'rgba(9,20,15,0.8)';
+    const bw = fs * 7.2, bh = fs * 1.5;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(sw / 2 - bw / 2, y, bw, bh, 8) : ctx.rect(sw / 2 - bw / 2, y, bw, bh); ctx.fill();
+    ctx.font = `700 ${fs}px ${col.font}`;
+    ctx.fillStyle = col.home; ctx.fillText(score[0], sw / 2 - bw * 0.36, y + fs * 0.25);
+    ctx.fillStyle = col.away; ctx.fillText(score[1], sw / 2 + bw * 0.36, y + fs * 0.25);
+    ctx.fillStyle = col.chalk; ctx.fillText(`${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
+    if (banner) {
+      const bf = Math.min(sw * 0.12, 72);
+      ctx.font = `700 ${bf}px ${col.font}`; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillText(banner, sw / 2 + 3, sh / 2 + 3);
+      ctx.fillStyle = '#ffd447'; ctx.fillText(banner, sw / 2, sh / 2);
+    }
+  }
+  function drawControls() {
+    // joysticks
+    sticks.forEach((s, i) => {
+      if (mode !== 2 && i === 1) return;
+      if (s.id === null) {
+        const hx = mode !== 2 ? sw * 0.16 : (i === 0 ? sw * 0.2 : sw * 0.8);
+        const hy = mode !== 2 ? sh * 0.72 : sh * 0.5;
+        ctx.strokeStyle = 'rgba(244,247,242,0.18)'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(hx, hy, STICK_R, 0, Math.PI * 2); ctx.stroke();
+        return;
+      }
+      ctx.fillStyle = 'rgba(244,247,242,0.12)'; ctx.beginPath(); ctx.arc(s.ox, s.oy, STICK_R, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(244,247,242,0.35)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = 'rgba(244,247,242,0.5)'; ctx.beginPath(); ctx.arc(s.ox + s.dx * STICK_R, s.oy + s.dy * STICK_R, 24, 0, Math.PI * 2); ctx.fill();
+    });
+    // kick buttons
+    const btns = mode !== 2 ? [{ ...kickBtn(1), i: 0 }] : [{ ...kickBtn(0), i: 0 }, { ...kickBtn(1), i: 1 }];
+    for (const b of btns) {
+      const on = P[b.i].kick;
+      ctx.fillStyle = on ? 'rgba(255,212,71,0.55)' : 'rgba(244,247,242,0.14)';
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = (b.i || mode === 'guest') ? col.away : col.home; ctx.lineWidth = 3; ctx.stroke();
+      ctx.fillStyle = col.chalk; ctx.font = `700 ${Math.round(b.r * 0.36)}px ${col.font}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('SKYD', b.x, b.y);
+    }
+  }
+
+  function render() {
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = col.night; ctx.fillRect(0, 0, sw, sh);
+    ctx.setTransform(dpr * sc, 0, 0, dpr * sc, dpr * ox, dpr * oy);
+    drawPitch();
+    drawBall();
+    for (const p of P) drawPlayer(p);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (state !== 'menu') drawHUD();
+    if (state === 'play') drawControls();
+  }
+
+  let last = performance.now(), acc = 0;
+  const DT = 1 / 120;
+  function frame(now) {
+    acc += Math.min(0.1, (now - last) / 1000); last = now;
+    while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT); acc -= DT; }
+    netTick(now);
+    render();
+    requestAnimationFrame(frame);
+  }
+  kickoff();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body></html>
