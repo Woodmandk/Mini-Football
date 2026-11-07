@@ -353,7 +353,6 @@ table.st td.l, table.st th.l { text-align: left; }
     for (const g of goals) L.sc[g] = (L.sc[g] || 0) + 1;
     try { localStorage.setItem('mf-league', JSON.stringify(L)); } catch (_) {}
   }
-  function cell(tr, text, cls) { const td = document.createElement(tr.parentNode && tr.parentNode.tagName === 'THEAD' ? 'th' : 'td'); td.textContent = text; if (cls) td.className = cls; tr.appendChild(td); }
   function fillTable(tbl, head, rows) {
     tbl.textContent = '';
     const tr = tbl.insertRow(); head.forEach((h, i) => { const th = document.createElement('th'); th.textContent = h; if (i === 0) th.className = 'l'; tr.appendChild(th); });
@@ -462,7 +461,7 @@ table.st td.l, table.st th.l { text-align: left; }
   function makePlayers(n) {
     size = n; setPitch(n); P = [];
     for (let t = 0; t < 2; t++) for (let k = 0; k < n; k++)
-      P.push({ team: t, k, x: 0, y: 0, vx: 0, vy: 0, fx: t ? -1 : 1, fy: 0, ctrl: 'ai', peer: null,
+      P.push({ i: t * n + k, team: t, k, x: 0, y: 0, vx: 0, vy: 0, fx: t ? -1 : 1, fy: 0, ctrl: 'ai', peer: null,
         hold: 0, charging: false, wasA: false, wasB: false, stamina: 1, sprint: false,
         tackle: 0, tdx: 0, tdy: 0, tcd: 0, recover: 0, stun: 0, nopick: 0, swcd: 0, cd: 0, think: 0, plan: null,
         pending: 0, frozen: 0, superShot: false, turbo: 0, name: '', windup: 0, out: 0, fouls: 0, yc: 0, dive: 0, dvy: 0, recv: 0, pendB: 0, pendQ: null });
@@ -636,7 +635,7 @@ table.st td.l, table.st th.l { text-align: left; }
   };
   // crowd: looping filtered noise that swells near the goals and roars on a goal
   const crowd = (() => {
-    let g = null, flt = null, swell = 0;
+    let g = null, flt = null, swell = 0, last = -1;
     function start() {
       if (!ac || g) return;
       try {
@@ -656,6 +655,8 @@ table.st td.l, table.st th.l { text-align: left; }
         swell = Math.max(0, swell - dt / 2.5);
         const near = Math.max(0, 1 - Math.min(Math.abs(ball.x - PL), Math.abs(PR - ball.x)) / 320);
         const target = on ? 0.025 + near * 0.035 + swell * 0.2 : 0;
+        if (Math.abs(target - last) < 0.002) return; // nothing audible changed
+        last = target;
         g.gain.setTargetAtTime(target, ac.currentTime, 0.15);
         flt.frequency.setTargetAtTime(600 + swell * 500 + near * 150, ac.currentTime, 0.2);
       },
@@ -663,20 +664,79 @@ table.st td.l, table.st th.l { text-align: left; }
       ooh() { swell = Math.max(swell, 0.5); },
     };
   })();
-  // commentator: the phone's own Danish voice says a few words at big moments
-  const SAY = { 'MÅL!': 'Mål!', 'Redning!': 'Hvilken redning!', 'Straffespark': 'Straffespark!', 'Pause': 'Pause', 'Gult kort': 'Gult kort', 'Rødt kort': 'Rødt kort! Han er ude.',
-    'Offside': 'Offside', 'Brændt!': 'Brændt!', 'Hovedstød!': 'Hovedstød!', 'Straffespark-konkurrence': 'Straffesparkskonkurrence!', 'Superskud!': 'Superskud!' };
-  let saidText = '';
-  function commentate(text) {
-    if (text === saidText) return; saidText = text;
-    if (!text || !cfg.crowd || !SAY[text] || !window.speechSynthesis) return;
+  // ---------- Commentator ----------
+  // The phone's own Danish voice talks through the match: big moments always, small ones when there's room.
+  const SAY = { 'Redning!': 'Hvilken redning!', 'Straffespark': 'Straffespark!', 'Pause': 'Så er der pause', 'Gult kort': 'Gult kort', 'Rødt kort': 'Rødt kort! Han er ude.',
+    'Offside': 'Offside!', 'Brændt!': 'Brændt!', 'Hovedstød!': 'Hovedstød!', 'Straffespark-konkurrence': 'Det skal afgøres på straffespark!', 'Superskud!': 'Superskud!',
+    'Frispark': 'Frispark', 'Hjørnespark': 'Hjørnespark', 'Golden goal': '' };
+  const pick = a => a[Math.floor(Math.random() * a.length)];
+  const comm = { last: 0, text: '', owner: -1, team: -1, shotAt: 0, missSaid: 0, alone: -1, prevClock: 999, prevBanner: '' };
+  function say(text, prio) { // prio 1: needs a quiet moment, 1.5: soon after the last line, 2: interrupts
+    if (!text || !cfg.crowd || !window.speechSynthesis) return;
+    const now = performance.now();
+    if (prio < 2 && (speechSynthesis.speaking || now - comm.last < (prio >= 1.5 ? 1200 : 4500))) return;
     try {
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(SAY[text]); u.lang = 'da-DK'; u.rate = 1.1; u.volume = 0.9;
+      if (prio >= 2) speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text); u.lang = 'da-DK'; u.rate = 1.12; u.volume = 0.9;
       const v = speechSynthesis.getVoices().find(x => /^da/i.test(x.lang)); if (v) u.voice = v;
-      speechSynthesis.speak(u);
+      speechSynthesis.speak(u); comm.last = now;
     } catch (_) {}
   }
+  const whoIs = p => (mode === 'guest' ? (p.ctrl === 'ME' ? myName() : p.name) : nameOf(p)) || KITN[kit][p.team];
+  const teamIs = t => KITN[kit][t];
+  function scoreLine() {
+    if (score[0] === score[1]) return score[0] ? `Det står ${score[0]} mod ${score[1]}` : 'Stadig ingen mål';
+    const t = score[0] > score[1] ? 0 : 1;
+    return `${teamIs(t)} fører ${score[t]} mod ${score[1 - t]}`;
+  }
+  function commentary() {
+    if (state !== 'play' || paused || !cfg.crowd || !window.speechSynthesis) { comm.prevBanner = banner; return; }
+    const now = performance.now();
+    // big moments from the banner and the flash text
+    const text = banner || (flash ? flash.text : '');
+    if (text !== comm.text) {
+      comm.text = text;
+      if (text === 'MÅL!' && (so || soG)) say('Mål!', 2);
+      else if (text === 'MÅL!') {
+        let n = mode === 'guest' ? matchGoals[matchGoals.length - 1] : lastScorer; if (n === 'Computer') n = '';
+        const t = score[0] + score[1] ? (comm.lastScore0 !== score[0] ? 0 : 1) : 0;
+        say((n ? pick([`Mål! ${n} scorer!`, `Mååål! Og det er ${n}!`, `Mål af ${n}!`]) : `Mål til ${teamIs(t)}!`) + ' ' + scoreLine() + '.', 2);
+      } else if (comm.prevBanner === 'Pause' && text === 'Klar') say('Så er vi i gang med anden halvleg', 2);
+      else if ((text === 'Målspark' || text === 'Hjørnespark') && now - comm.shotAt < 2500 && comm.missSaid !== comm.shotAt) { comm.missSaid = comm.shotAt; say(pick(['Lige forbi!', 'Tæt på!', 'Uh, det var tæt på!']), 2); }
+      else if (SAY[text]) say(SAY[text], 2);
+    }
+    comm.prevBanner = banner; comm.lastScore0 = score[0];
+    if (banner || pen) return;
+    // clock
+    if (comm.prevClock > 30 && clock <= 30 && clock > 0) say('Sidste halve minut!', 1.5);
+    if (comm.prevClock > 10 && clock <= 10 && clock > 0) say('Ti sekunder tilbage!', 1.5);
+    comm.prevClock = clock;
+    const o = ball.owner >= 0 ? P[ball.owner] : null;
+    if (o && o.i !== comm.owner) {
+      if (comm.team === o.team && comm.owner >= 0) say(pick([`Fin aflevering til ${whoIs(o)}`, `Videre til ${whoIs(o)}`, `${whoIs(o)} tager imod`]), 1);
+      else if (comm.team >= 0 && comm.team !== o.team) say(pick([`${whoIs(o)} vinder bolden`, `${teamIs(o.team)} tager bolden`, `God erobring af ${whoIs(o)}`]), 1);
+      else say(`${whoIs(o)} har bolden`, 1);
+      comm.owner = o.i; comm.team = o.team; comm.alone = -1;
+    }
+    if (o && size > 1 && comm.alone !== o.i) { // through on goal
+      const dir = o.team ? -1 : 1, gx = o.team ? PL : PR, dist = (gx - o.x) * dir;
+      if (dist > 60 && dist < 380 && now - (comm.aloneAt || 0) > 6000 && !P.some(f => f.team !== o.team && on(f) && f.k !== 0 && (gx - f.x) * dir < dist + 10)) { comm.alone = o.i; comm.aloneAt = now; say(`${whoIs(o)} er alene med målmanden!`, 1.5); }
+    }
+    if (!o) { // a shot on its way
+      const sp = Math.hypot(ball.vx, ball.vy), gx = ball.vx > 0 ? PR : PL, dist = Math.abs(gx - ball.x);
+      if (sp > 620 && dist < 620 && now - comm.shotAt > 3000) {
+        const yAt = ball.y + ball.vy * (gx - ball.x) / (ball.vx || 1);
+        if (Math.abs(yAt - CY) < MOUTH * 1.8) { comm.shotAt = now; say(pick(['Skud!', 'Han skyder!', 'Afslutning!', 'Der er skud!']), 1.5); }
+      }
+    }
+    // something to say when it's quiet
+    if (now - comm.last > 13000) {
+      const S = stats; let line = scoreLine();
+      if (S && Math.random() < 0.4) { const tot = (S.pos[0] + S.pos[1]) || 1, t = S.pos[0] > S.pos[1] ? 0 : 1; line = `${teamIs(t)} har haft bolden ${Math.round(S.pos[t] / tot * 100)} procent af tiden`; }
+      say(line, 1);
+    }
+  }
+  function resetCommentary() { Object.assign(comm, { owner: -1, team: -1, shotAt: 0, alone: -1, prevClock: 999, text: '', last: performance.now() }); }
   const names = new Map();     // peer -> name (host)
   const readyMap = new Map();  // peer -> match number they want a rematch after (host)
   const lobbyReady = new Map(); // peer -> ready in the lobby (host)
@@ -720,7 +780,7 @@ table.st td.l, table.st th.l { text-align: left; }
     hostReady = false; $('ready').hidden = true; rxList = [];
     $('rxbar').hidden = !(m === 'host' || m === 'guest');
     readyMap.clear();
-    kickoff(); pause = 2.4; banner = '3';
+    kickoff(); pause = 2.4; banner = '3'; resetCommentary();
     clearInput();
     for (const id of ['menu', 'end', 'lobby', 'paused']) $(id).hidden = true;
     $('again').hidden = false;
@@ -731,7 +791,7 @@ table.st td.l, table.st th.l { text-align: left; }
   }
   function finish() {
     state = 'end'; $('pauseBtn').hidden = true; replay = null;
-    const me = mode === 'guest' ? myTeam() : 0;
+    const me = mode === 'guest' ? myTeam() : (P.find(q => q.ctrl === 'L0') || { team: 0 }).team;
     const t = $('endTitle');
     const ss = mode === 'guest' ? soG : soSums();
     const ws = ss ? [ss[0], ss[1]] : score; // who won (a shootout decides a draw)
@@ -806,7 +866,7 @@ table.st td.l, table.st th.l { text-align: left; }
     q.ctrl = h.ctrl; q.peer = h.peer; h.ctrl = 'ai'; h.peer = null;
     q.wasA = h.wasA; q.wasB = h.wasB; h.wasA = h.wasB = false;
     h.charging = false; h.hold = 0; q.charging = false; q.hold = 0; q.swcd = 0.4; q.windup = 0;
-    if (q.ctrl === 'R') { const e = roster.find(r => r[0] === q.peer); if (e) e[1] = P.indexOf(q); }
+    if (q.ctrl === 'R') { const e = roster.find(r => r[0] === q.peer); if (e) e[1] = q.i; }
   }
   const freeMates = h => P.filter(q => q.team === h.team && q.ctrl === 'ai' && on(q));
   function nearestFree(h) {
@@ -830,19 +890,19 @@ table.st td.l, table.st th.l { text-align: left; }
   // ---------- Actions ----------
   function grab(p) {
     const prev = ball.owner;
-    if (ball.last && ball.last.off && ball.last.to === P.indexOf(p) && ball.last.team === p.team) { // received while offside
+    if (ball.last && ball.last.off && ball.last.to === p.i && ball.last.team === p.team) { // received while offside
       const x = p.x, y = p.y; p.recv = 0; restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return;
     }
     for (const q of P) q.recv = 0;
-    ball.owner = P.indexOf(p); ball.loose = 0; ball.last = null; ball.z = ball.vz = 0;
-    ball.lastTeam = p.team; ball.lastIdx = P.indexOf(p);
+    ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0;
+    ball.lastTeam = p.team; ball.lastIdx = p.i;
     p.tackle = 0; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0;
     if (prev !== ball.owner) { sfx.trap(); onPossession(p); }
   }
   function release(p, vx, vy, nopick) {
-    if (ball.owner === P.indexOf(p)) ball.owner = -1;
+    if (ball.owner === p.i) ball.owner = -1;
     ball.vx = vx; ball.vy = vy; p.nopick = nopick; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.frozen = 0;
-    ball.lastTeam = p.team; ball.lastIdx = P.indexOf(p);
+    ball.lastTeam = p.team; ball.lastIdx = p.i;
   }
   function shoot(p, hold, ax, ay) {
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
@@ -894,7 +954,12 @@ table.st td.l, table.st th.l { text-align: left; }
     const foes = P.filter(f => f.team !== q.team).map(f => f.x * dir).sort((a, b) => b - a);
     return q.x * dir > foes[1] + 6;
   }
-  function offsideLine(team) { // x of the second-last defender of the other team
+  let offCache = null;
+  function offsideLine(team) { // x of the second-last defender of the other team (cached for one step)
+    if (offCache && offCache[team] !== undefined) return offCache[team];
+    const v = offsideLineNow(team); if (offCache) offCache[team] = v; return v;
+  }
+  function offsideLineNow(team) {
     const dir = team ? -1 : 1;
     const xs = P.filter(f => f.team !== team).map(f => f.x * dir).sort((a, b) => b - a);
     return Math.max(CX * dir, xs[1]) * dir;
@@ -915,7 +980,7 @@ table.st td.l, table.st th.l { text-align: left; }
     if (toKeeper) speed = Math.min(speed, 560); // gentle back-pass
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     release(p, p.fx * speed, p.fy * speed, 0.3);
-    ball.last = { team: p.team, pass: true, to: P.indexOf(q), off, pt };
+    ball.last = { team: p.team, pass: true, to: q.i, off, pt };
     q.recv = 1.8; // the receiver runs to meet the ball by himself for a moment
     if (stats) stats.pa[p.team]++;
     sfx.pass();
@@ -928,7 +993,8 @@ table.st td.l, table.st th.l { text-align: left; }
     const hs = ax !== undefined ? Math.max(260, Math.min(600, Math.hypot(ax, ay) / 0.85)) : 540; // crosses land where they're aimed
     release(p, p.fx * hs + p.vx * 0.2, p.fy * hs + p.vy * 0.2, 0.35);
     ball.vz = 470; ball.last = { team: p.team, pass: false };
-    if (stats) stats.sh[p.team]++;
+    const gx = p.team ? PL : PR;
+    if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
     tone(200, 0.12, 'triangle', 0.12, 120);
   }
   function header(p) {
@@ -943,7 +1009,7 @@ table.st td.l, table.st th.l { text-align: left; }
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = near ? 640 : 500;
     p.fx = dx / d; p.fy = dy / d;
     ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false }; ball.lastTeam = p.team; ball.lastIdx = P.indexOf(p); ball.headCd = 0.3;
+    ball.last = { team: p.team, pass: false }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3;
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Hovedstød!', t: 0.7 };
     tone(180, 0.07, 'triangle', 0.12, -60);
@@ -983,7 +1049,7 @@ table.st td.l, table.st th.l { text-align: left; }
   function sendOff(p) {
     if (isHuman(p)) { const q = nearestFree(p); if (q) swapControl(p, q); }
     p.out = 40; p.fouls = 0; p.yc = 0; p.stun = 0; p.tackle = 0; p.windup = 0;
-    if (ball.owner === P.indexOf(p)) ball.owner = -1;
+    if (ball.owner === p.i) ball.owner = -1;
   }
   function startPenalty(team) { // team takes a penalty at the other end
     const dir = team ? -1 : 1, gx = team ? PL : PR;
@@ -1001,8 +1067,8 @@ table.st td.l, table.st th.l { text-align: left; }
     // a human on the team takes it
     const hs = P.filter(q => q.team === team && isHuman(q));
     if (hs.length && !isHuman(taker)) swapControl(hs[0], taker);
-    ball.owner = P.indexOf(taker); ball.lastTeam = team; ball.lastIdx = ball.owner;
-    taker.frozen = 99; guard = 99; pen.kp = P.indexOf(kp); pen.tk = ball.owner;
+    ball.owner = taker.i; ball.lastTeam = team; ball.lastIdx = ball.owner;
+    taker.frozen = 99; guard = 99; pen.kp = kp.i; pen.tk = ball.owner;
     // the keeper's own player takes over the keeper
     const kh = P.filter(q => q.team !== team && isHuman(q));
     if (kh.length && !isHuman(kp)) swapControl(kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp);
@@ -1044,8 +1110,8 @@ table.st td.l, table.st th.l { text-align: left; }
   }
   function tackleBody(a, b) {
     const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces, i.e. from behind
-    if (ball.owner === P.indexOf(b) && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
-    const behind = dot > 0.8 && ball.owner === P.indexOf(b);
+    if (ball.owner === b.i && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
+    const behind = dot > 0.8 && ball.owner === b.i;
     a.tackle = 0;
     if (behind) {
       a.stun = 1.1; a.vx = a.vy = 0;              // foul: the tackler goes down
@@ -1054,7 +1120,7 @@ table.st td.l, table.st th.l { text-align: left; }
       return;
     }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
-    if (ball.owner === P.indexOf(b)) { tackleWins(a); return; } // got the man with the ball: you win it
+    if (ball.owner === b.i) { tackleWins(a); return; } // got the man with the ball: you win it
     a.recover = 0.2;
     tone(70, 0.18, 'square', 0.1, -30); shake = Math.max(shake, 5);
     if (localHuman(b)) buzz(60);
@@ -1219,7 +1285,7 @@ table.st td.l, table.st th.l { text-align: left; }
     return { x: dx / l * k, y: dy / l * k, sprint: spr && p.stamina > 0.2 };
   }
   function inputFor(p, dt) {
-    if (p.recv > 0 && ball.owner < 0 && ball.last && ball.last.pass && ball.last.to === P.indexOf(p)) {
+    if (p.recv > 0 && ball.owner < 0 && ball.last && ball.last.pass && ball.last.to === p.i) {
       const m = meetInput(p);
       if (p.ctrl === 'ai') return m;
       const h = p.ctrl === 'L0' ? localInput(0) : p.ctrl === 'L1' ? localInput(1) : (remoteIn.get(p.peer) || ZERO);
@@ -1273,7 +1339,7 @@ table.st td.l, table.st th.l { text-align: left; }
     if (bigT > 0) { bigT -= dt; if (bigT <= 0) setBallSize(false); }
     if (cfg.pu || (mode === 'guest')) stepItems(dt);
 
-    assignMarks();
+    offCache = {}; assignMarks();
     for (const p of P) {
       if (p.out > 0) { // sent off: waits by the touchline
         p.out -= dt; p.vx = p.vy = 0; p.x = CX + (p.team ? 1 : -1) * (80 + p.k * 30); p.y = PT - 26;
@@ -1284,7 +1350,7 @@ table.st td.l, table.st th.l { text-align: left; }
       const inp = down ? ZERO : inputFor(p, dt);
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
       p.tcd -= dt; p.swcd -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt;
-      const has = ball.owner === P.indexOf(p);
+      const has = ball.owner === p.i;
       const mag = Math.hypot(inp.x, inp.y);
       p.sprint = (inp.sprint || mag > 0.97) && p.stamina > 0.04 && mag > 0.2 && p.tackle <= 0;
       if (p.turbo > 0) { p.turbo -= dt; p.stamina = 1; }
@@ -1340,20 +1406,21 @@ table.st td.l, table.st th.l { text-align: left; }
           else if (p.hold < 0.14) { p.charging = false; p.pending = 0.2; p.pendHold = p.hold; } // wait a moment: a second tap makes it a lob
           else shoot(p, p.hold);
         }
-        if (p.pending > 0) { p.pending -= dt; if (p.pending <= 0 && ball.owner === P.indexOf(p)) shoot(p, p.pendHold || 0); }
-        if (bDown && ball.owner === P.indexOf(p)) {
+        if (p.pending > 0) { p.pending -= dt; if (p.pending <= 0 && ball.owner === p.i) shoot(p, p.pendHold || 0); }
+        if (bDown && ball.owner === p.i) {
           if (p.pendB > 0) { const q = p.pendQ; p.pendB = 0; pass(p, q, size > 1); }
           else { p.pendQ = passTarget(p, inp.x, inp.y); p.pendB = 0.2; } // wait a moment: a second tap makes it a through ball
         }
-        if (p.pendB > 0) { p.pendB -= dt; if (p.pendB <= 0 && ball.owner === P.indexOf(p)) pass(p, p.pendQ); }
+        if (p.pendB > 0) { p.pendB -= dt; if (p.pendB <= 0 && ball.owner === p.i) pass(p, p.pendQ); }
       } else {
         p.charging = false; p.hold = 0;
-        if (aDown) startTackle(p);
-        if (bDown && p.swcd <= 0) manualSwitch(p);
+        if (aDown && !(p.frozen > 0)) startTackle(p);
+        if (bDown && p.swcd <= 0 && !(p.frozen > 0)) manualSwitch(p);
       }
       p.wasA = !!inp.a; p.wasB = !!inp.b;
     }
 
+    offCache = null;
     // bodies
     for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
       const a = P[i], b = P[j];
@@ -1372,7 +1439,7 @@ table.st td.l, table.st th.l { text-align: left; }
       guard -= dt;
       const tk = owner();
       if (tk) for (const p of P) {
-        if (p.team === tk.team) continue;
+        if (p.team === tk.team || !on(p)) continue;
         const dx = p.x - ball.x, dy = p.y - ball.y, d = Math.hypot(dx, dy) || 1;
         if (d < 90) { p.x = ball.x + dx / d * 90; p.y = ball.y + dy / d * 90; }
       }
@@ -1391,7 +1458,7 @@ table.st td.l, table.st th.l { text-align: left; }
         ball.vx = o.vx; ball.vy = o.vy;
         // tackles and shoulder-to-shoulder steals
         for (const p of P) {
-          if (p.team === o.team || p.stun > 0 || o.frozen > 0) continue;
+          if (p.team === o.team || p.stun > 0 || o.frozen > 0 || !on(p)) continue;
           const db = dBall(p);
           if (p.tackle > 0 && db < TACKLE_REACH) { tackleWins(p); break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
@@ -1431,7 +1498,7 @@ table.st td.l, table.st th.l { text-align: left; }
         }
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0)) { // headers
-        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(size > 1 && p.k === 0) && !(P.indexOf(p) === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
+        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
         if (h) header(h);
       }
       if (ball.owner < 0 && ball.z < 26) {
@@ -1441,7 +1508,7 @@ table.st td.l, table.st th.l { text-align: left; }
           if (d < REACH && d > 0) {
             const nx = dx / d, ny = dy / d; ball.x = p.x + nx * REACH; ball.y = p.y + ny * REACH;
             const rv = (ball.vx - p.vx) * nx + (ball.vy - p.vy) * ny;
-            if (rv < 0) { ball.vx -= 1.4 * rv * nx; ball.vy -= 1.4 * rv * ny; ball.lastTeam = p.team; ball.lastIdx = P.indexOf(p); }
+            if (rv < 0) { ball.vx -= 1.4 * rv * nx; ball.vy -= 1.4 * rv * ny; ball.lastTeam = p.team; ball.lastIdx = p.i; }
           }
         }
       }
@@ -1487,7 +1554,7 @@ table.st td.l, table.st th.l { text-align: left; }
     taker.vx = taker.vy = 0; taker.stun = 0; taker.tackle = 0; taker.nopick = 0; taker.think = 0;
     const hs = P.filter(q => q.team === team && isHuman(q));
     if (hs.length && taker.ctrl === 'ai') swapControl(hs.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a)), taker);
-    ball.owner = P.indexOf(taker); ball.loose = 0; ball.lastTeam = team; ball.lastIdx = ball.owner;
+    ball.owner = taker.i; ball.loose = 0; ball.lastTeam = team; ball.lastIdx = ball.owner;
     taker.frozen = 3; guard = 1.2;
     flash = { text: label || (type === 'throw' ? 'Indkast' : type === 'corner' ? 'Hjørnespark' : type === 'free' ? 'Frispark' : 'Målspark'), t: 1.0 };
     sfx.whistle();
@@ -1741,7 +1808,7 @@ table.st td.l, table.st th.l { text-align: left; }
       if (roster.some(r => r[0] === g.peer)) continue;
       const taken = new Set(roster.map(r => r[1]));
       const hostSlot = P.findIndex(q => q.ctrl === 'L0'); taken.add(hostSlot >= 0 ? hostSlot : humanSlots(0)[0]);
-      const humans = t => P.filter(q => q.team === t && (q.ctrl === 'L0' || roster.some(r => r[1] === P.indexOf(q)))).length;
+      const humans = t => P.filter(q => q.team === t && (q.ctrl === 'L0' || roster.some(r => r[1] === q.i))).length;
       const order = humans(1) < humans(0) ? [1, 0] : [0, 1];
       let slot = null;
       for (const t of order) {
@@ -1849,6 +1916,7 @@ table.st td.l, table.st th.l { text-align: left; }
   };
 
   const RND = v => Math.round(v);
+  let packN = 0;
   function pack(st) {
     const now = performance.now();
     const o = {
@@ -1856,13 +1924,14 @@ table.st td.l, table.st th.l { text-align: left; }
       b: [RND(ball.x), RND(ball.y), ball.owner, RND(ball.z)],
       p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0)]),
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
-      k: kit, tf: teamForm, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'],
+      // slow-changing fields go every 15th message (and always in the lobby)
       pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > 12 ? 1 : 0,
       gs: [goalSeq, lastScorer], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
       rx: rxOut.filter(r => now - r[3] < 3000).map(r => [r[0], r[1], r[2]]),
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
     };
     if (st === 'e' && stats) o.ss = stats;
+    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, tf: teamForm, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'] });
     return o;
   }
   function myTeam() { const e = roster.find(r => r[0] === myPeer); return e && P[e[1]] ? P[e[1]].team : null; }
@@ -1905,7 +1974,7 @@ table.st td.l, table.st th.l { text-align: left; }
     const no = Number(s.b[2]); ball.owner = Number.isInteger(no) && no >= 0 && no < P.length ? no : -1;
     tgt = s;
     if (s.st === 'p' && (state !== 'play' || s.m !== seenMatch)) {
-      seenMatch = s.m; state = 'play'; particles = [];
+      seenMatch = s.m; state = 'play'; particles = []; resetCommentary();
       stats = newStats(); matchGoals = []; replay = null; recBuf = []; rxList = []; gLr = 0; gRd = -1; sendG();
       gSeenGoal = Array.isArray(s.gs) ? s.gs[0] : null;
       $('ready').hidden = true; $('rxbar').hidden = false;
@@ -2029,7 +2098,7 @@ table.st td.l, table.st th.l { text-align: left; }
   function drawPassHint() {
     if (size < 2 || mode === 'guest') return;
     for (const me of myPlayers()) {
-      if (ball.owner !== P.indexOf(me)) continue;
+      if (ball.owner !== me.i) continue;
       const i = me.ctrl === 'L1' ? 1 : 0;
       const inp = localInput(i);
       const q = passTarget(me, inp.x, inp.y); if (!q) continue;
@@ -2144,7 +2213,7 @@ table.st td.l, table.st th.l { text-align: left; }
       const at = twoSides() ? side : 1;
       const me = P.find(p => p.ctrl === (side ? 'L1' : 'L0') || (mode === 'guest' && p.ctrl === 'ME'));
       const ring = twoSides() ? (side ? col.away : col.home) : (me && me.team ? col.away : col.home);
-      const has = me && ball.owner === P.indexOf(me);
+      const has = me && ball.owner === me.i;
       const ready = me && me.tcd <= 0 && me.recover <= 0;
       drawButton(aBtn(at), has ? 'SKYD' : 'TACKLE', btn[side].a, ring, me ? Math.min(1, me.hold / MAXCHARGE) : 0, !has && !ready && mode !== 'guest');
       if (size > 1) drawButton(bBtn(at), has ? 'AFLEVER' : 'SKIFT', btn[side].b, ring, 0, false);
@@ -2194,7 +2263,7 @@ table.st td.l, table.st th.l { text-align: left; }
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
     for (const r of rxList) r.t -= dt; rxList = rxList.filter(r => r.t > 0); rxCd -= dt;
     crowd.update(dt);
-    if (state === 'play') commentate(banner || (flash ? flash.text : ''));
+    commentary();
     render(dt);
     requestAnimationFrame(frame);
   }
