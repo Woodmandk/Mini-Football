@@ -135,6 +135,7 @@ button.big small { font: 500 11px/1.2 var(--font); color: var(--muted); letter-s
 .teams button.lock { opacity: 0.35; }
 .teams button.lock::after { content: "🔒"; position: absolute; top: -6px; right: -4px; font-size: 10px; }
 .teams button.taken { opacity: 0.3; }
+.lbl .sty { color: var(--muted); font-weight: 500; }
 .lbl .stars { color: var(--gold); letter-spacing: 0; }
 .full { grid-column: 1 / -1; }
 .profgrid, .shopgrid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; text-align: left; }
@@ -290,7 +291,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           </div></div>
         <div class="col" id="diffBox"><div class="lbl" id="diffLbl">Niveau</div>
           <div class="seg" id="segDiff" role="group" aria-label="Computerens niveau">
-            <button data-v="0">Let</button><button data-v="1">Normal</button><button data-v="2">Svær</button>
+            <button data-v="0">Let</button><button data-v="1">Normal</button><button data-v="2">Svær</button><button data-v="3">Legende</button>
           </div></div>
         <div class="col" id="serBox"><div class="lbl">Serie</div>
           <div class="seg" id="segSer" role="group" aria-label="Serie">
@@ -680,7 +681,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     { id: 'clean', t: 'Hold målet rent en hel kamp', c: 40, ev: 'match', ok: m => m.ga === 0 },
     { id: 'pass', t: 'Lav 15 afleveringer i én kamp', c: 30, ev: 'match', ok: m => m.pa >= 15 },
     { id: 'tk', t: 'Vind 4 tacklinger i én kamp', c: 30, ev: 'match', ok: m => m.tk >= 4 },
-    { id: 'hard', t: 'Slå computeren på Svær', c: 60, ev: 'match', ok: m => m.win && m.mode === 'cpu' && m.diff === 2 },
+    { id: 'hard', t: 'Slå computeren på Svær', c: 60, ev: 'match', ok: m => m.win && m.mode === 'cpu' && m.diff >= 2 },
     { id: 'online', t: 'Spil en kamp online', c: 30, ev: 'match', ok: m => m.online },
     { id: 'team', t: 'Vind med 5 eller 11 spillere pr. hold', c: 40, ev: 'match', ok: m => m.win && m.size >= 5 },
     { id: 'm3', t: 'Spil 3 kampe i dag', c: 30, ev: 'match', ok: () => true, need: 3 },
@@ -800,10 +801,22 @@ button.small { font-size: 13px; padding: 9px 10px; }
   $('friendsClose').onclick = () => { $('friends').hidden = true; };
   // per-second rates for AI decisions
   const DIFF = [
-    { spd: 0.74, shoot: 0.9, pass: 0.8, tackle: 0.8, aimErr: 0.22, react: 0.5 },
-    { spd: 0.87, shoot: 1.6, pass: 1.4, tackle: 1.6, aimErr: 0.12, react: 0.3 },
-    { spd: 0.97, shoot: 2.6, pass: 2.2, tackle: 2.8, aimErr: 0.06, react: 0.15 },
+  // iq (0..1) is how clever the choices are: where to shoot, who to pass to, when to slide in, cutting off passes
+    { spd: 0.74, shoot: 0.9, pass: 0.8, tackle: 0.8, aimErr: 0.22, react: 0.5, iq: 0.1 },
+    { spd: 0.87, shoot: 1.6, pass: 1.4, tackle: 1.6, aimErr: 0.12, react: 0.3, iq: 0.45 },
+    { spd: 0.97, shoot: 2.6, pass: 2.2, tackle: 2.8, aimErr: 0.06, react: 0.15, iq: 0.75 },
+    { spd: 1.02, shoot: 3.2, pass: 2.9, tackle: 3.3, aimErr: 0.035, react: 0.08, iq: 1 },
   ];
+  const DIFFN = ['Let', 'Normal', 'Svær', 'Legende'];
+  // how the computer teams play; tac is the same mentality/pressing/width/passing as your own tactics
+  const STYLES = {
+    pres: { n: 'Højt pres', d: 'jagter bolden over hele banen', tac: { m: 1, pr: 2, w: 1, pt: 1 } },
+    kontra: { n: 'Kontra', d: 'ligger dybt og slår hurtigt til, når de vinder bolden', tac: { m: 0, pr: 0, w: 1, pt: 2 } },
+    kort: { n: 'Kort spil', d: 'holder bolden med mange korte afleveringer', tac: { m: 1, pr: 1, w: 1, pt: 0 } },
+    kant: { n: 'Kantspil', d: 'går ud på kanterne og slår indlæg', tac: { m: 1, pr: 1, w: 2, pt: 1 } },
+    angreb: { n: 'Alt i angreb', d: 'mange mand frem og skyder fra distancen', tac: { m: 2, pr: 2, w: 1, pt: 2 } },
+    mur: { n: 'Forsvarsmur', d: 'parkerer bussen foran målet og rydder langt', tac: { m: 0, pr: 1, w: 0, pt: 2 } },
+  };
 
   // ---------- World ----------
   // pitch grows with the team size; all of these are set by setPitch()
@@ -868,8 +881,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const myLay = n => cleanLay(loadMT().lay[n], n);
   const packLay = L => (L ? L.flat().map(v => Math.round(v * 100)) : 0);
   const unpackLay = (a, n) => { if (!Array.isArray(a) || a.length !== n * 2) return null; const r = []; for (let i = 0; i < n; i++) r.push([Number(a[i * 2]) / 100, Number(a[i * 2 + 1]) / 100]); return cleanLay(r, n); };
-  let teamForm = [0, 0], teamLay = [null, null], teamTac = [TAC0, TAC0];
-  const tac = t => teamTac[t] || TAC0;
+  let teamForm = [0, 0], teamLay = [null, null], teamTac = [TAC0, TAC0], teamSty = [null, null], wonAt = [0, 0];
+  // the computer reads the match: late on it chases a goal when behind and sits back when ahead (not on Let)
+  const tac = t => {
+    const T = teamTac[t] || TAC0;
+    if (mode !== 'cpu' || t !== 1 || state !== 'play' || kind === 'train' || clock > matchLen * 0.35 || aiD(1).iq < 0.4) return T;
+    const g = score[1] - score[0];
+    return g < 0 ? { ...T, m: Math.min(2, T.m + 1), pr: Math.min(2, T.pr + 1) } : g > 0 ? { ...T, m: Math.max(0, T.m - 1) } : T;
+  };
   function formOf(p) {
     const L = teamForm[p.team] === CUST && teamLay[p.team];
     if (L && L[p.k]) return p.team ? [L[p.k][0], 1 - L[p.k][1]] : L[p.k]; // blue plays the other way: its left is our right
@@ -918,7 +937,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   let mode = null;          // 'cpu' | 'two' | 'host' | 'guest'
   let state = 'menu';       // 'menu' | 'lobby' | 'play' | 'end'
   let size = 1, score = [0, 0], clock = 120, pause = 0, banner = '', golden = false, paused = false;
-  let half = 1, matchLen = 120, pen = null, so = null, soG = null, celeb = -1, cupMatch = null;
+  let introFlash = null, half = 1, matchLen = 120, pen = null, so = null, soG = null, celeb = -1, cupMatch = null;
   const on = p => !(p.out > 0); // not sent off
   let matchNo = 0;
   const ball = { x: CX, y: CY, z: 0, vz: 0, vx: 0, vy: 0, owner: -1, loose: 0, stealCd: 0, trail: [], lastTeam: -1, lastIdx: -1 };
@@ -1468,6 +1487,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     $('rxbar').hidden = !(m === 'host' || m === 'guest');
     readyMap.clear();
     kickoff(); pause = 2.4; banner = '3'; resetCommentary();
+    introFlash = m === 'cpu' && teamSty[1] && kind !== 'train' && kind !== 'pen' ? { text: `${tn(1)}: ${STYLES[teamSty[1]].n}`, t: 1.8 } : null; // shown at the whistle: how they play
     if (!speechUnlocked) unlockSpeech();
     clearInput();
     for (const id of ['menu', 'end', 'lobby', 'paused']) $(id).hidden = true;
@@ -1637,6 +1657,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     }
     for (const q of P) q.recv = 0;
     setp = null;
+    if (ball.lastTeam !== p.team) wonAt[p.team] = clock; // we just won it (the clock counts down)
     ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0; ball.fresh = false;
     ball.lastTeam = p.team; ball.lastIdx = p.i;
     p.tackle = 0; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0;
@@ -1830,7 +1851,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (Math.abs(yg - CY) > MOUTH + 20) return null; // going wide
     return { t, y: ball.y + ball.vy * t };
   }
-  function keeperSkill(p) { return mode === 'cpu' && p.team === 1 ? [0.45, 0.62, 0.78][cfg.diff] || 0.62 : 0.7; }
+  function keeperSkill(p) { return mode === 'cpu' && p.team === 1 ? [0.45, 0.62, 0.78, 0.86][matchDiff()] || 0.62 : 0.7; }
   function dive(p, vx, vy) {
     const l = Math.hypot(vx, vy) || 1;
     p.dive = 0.36; p.dvx = vx; p.dvy = vy; p.fx = vx / l; p.fy = vy / l; p.tackle = 0; p.windup = 0; p.frozen = 0; p.charging = false; p.hold = 0;
@@ -1920,7 +1941,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (isHuman(kp)) { const i = kp.ctrl === 'L0' ? localInput(0) : kp.ctrl === 'L1' ? localInput(1) : (remoteIn.get(kp.peer) || ZERO); d = Math.abs(i.y) > 0.3 ? Math.sign(i.y) : 0; }
       else {
         const truth = Math.abs(taker.fy) < 0.08 ? 0 : Math.sign(taker.fy);
-        const right = 0.3 + (mode === 'cpu' ? cfg.diff : 1) * 0.12 + (drill && drill.id === 'pens' ? drill.i * 0.035 : 0); // in the penalty challenge he gets better every kick
+        const right = 0.3 + (mode === 'cpu' ? Math.min(2.5, matchDiff()) : 1) * 0.12 + (drill && drill.id === 'pens' ? drill.i * 0.035 : 0); // in the penalty challenge he gets better every kick
         d = Math.random() < right ? truth : [-1, 0, 1][Math.floor(Math.random() * 3)];
       }
       kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * 470; kp.dvx = 0;
@@ -2026,15 +2047,29 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const f = formOf(p), half = (PR - PL) / 2, dir = p.team ? -1 : 1, ownX = p.team ? PR : PL;
     const T = tac(p.team);
     const u0 = f[0], ub = (ball.x - ownX) * dir / half; // 0 = own goal line, 1 = halfway, 2 = their goal line
-    push += (T.m - 1) * 0.05 + (weHave ? 0 : (T.pr - 1) * 0.04); // attacking teams play higher, pressing teams defend higher up
+    push += (T.m - 1) * 0.05 + (weHave ? 0 : (T.pr - 1) * 0.04 - (teamSty[p.team] === 'mur' ? 0.07 : 0)); // attacking teams play higher, pressing teams defend higher up, the wall sits deep
     let u = weHave
       ? 0.2 + u0 + (ub - 1) * (0.15 + 0.25 * u0) + push * 2    // with the ball: spread out to give passing options
       : 0.08 + u0 * 0.9 + (ub - 1) * (0.25 + 0.45 * u0) + push * 2; // without: drop back as a compact block
+    if (!weHave && teamSty[p.team] === 'kontra' && u0 > 0.8) u = Math.max(u, 0.95); // the counter team leaves a striker up, ready to go
     u = Math.max(0.1, Math.min(1.85, u));
     let x = ownX + dir * u * half;
     if (weHave) { const ol = offsideLine(p.team); x = dir > 0 ? Math.min(x, ol - 10) : Math.max(x, ol + 10); } // stay onside
     const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1 : 0.82) * [0.74, 1, 1.18][T.w] + (ball.y - CY) * 0.3;
     return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
+  }
+  // the best mate to pass to: free of markers, a clear lane, and further up the pitch
+  function bestPass(p, list, foes, dir) {
+    let best = null, bs = -1e9;
+    for (const q of list) {
+      const vx = q.x - p.x, vy = q.y - p.y, r2 = vx * vx + vy * vy || 1, r = Math.sqrt(r2);
+      const open = Math.min(130, Math.min(...foes.map(f => Math.hypot(f.x - q.x, f.y - q.y))));
+      const lane = Math.min(70, Math.min(...foes.map(f => { const t = Math.max(0, Math.min(1, ((f.x - p.x) * vx + (f.y - p.y) * vy) / r2)); return Math.hypot(p.x + vx * t - f.x, p.y + vy * t - f.y); })));
+      const sc = open * 1.1 + lane * 1.6 + vx * dir * 0.45 - Math.max(0, r - 300) * 0.4;
+      if (sc > bs) { bs = sc; best = q; }
+    }
+    bestPass.sc = bs;
+    return best;
   }
   // defenders and midfielders pick up the nearest attacker in their zone (one man each)
   let marks = new Map();
@@ -2090,19 +2125,44 @@ button.small { font-size: 13px; padding: 9px 10px; }
     }
     if (o === p) {
       p.think += dt;
-      const gd = Math.hypot(goalX - p.x, CY - p.y);
-      if (!p.plan) p.plan = { aimY: CY + (Math.random() - 0.5) * 110 };
+      const gd = Math.hypot(goalX - p.x, CY - p.y), sty = teamSty[p.team], iq = d.iq || 0;
+      const toGoal = (goalX - p.x) * dir, fromOwn = (p.x - ownX) * dir, Lp = PR - PL;
+      if (!p.plan) p.plan = { aimY: sty === 'kant' && size >= 3 && toGoal > 300 ? (p.y < CY ? PT + 70 : PB - 70) : CY + (Math.random() - 0.5) * 110 }; // wingers run down the line
+      if (p.plan.aimY !== undefined && sty === 'kant' && toGoal < 300 && Math.abs(p.y - CY) < MOUTH + 40) p.plan.aimY = CY;
       // dribble toward goal, stepping around whoever is in front
       let ax = goalX - p.x, ay = p.plan.aimY - p.y; const al = Math.hypot(ax, ay) || 1; ax /= al; ay /= al;
       const fx = nearestFoe.x - p.x, fy = nearestFoe.y - p.y;
+      let dodge = false;
       if (foeD < 110 && (fx * ax + fy * ay) / foeD > 0.5) { const side = (fx * -ay + fy * ax) > 0 ? -1 : 1; ax += -ay * side * 0.9; ay += ax * side * 0.9; }
-      go(p.x + ax * 100, p.y + ay * 100, foeD > 140 && p.stamina > 0.5);
-      const wide = Math.abs(p.y - CY) > MOUTH + 70 && (goalX - p.x) * dir < 260 && (goalX - p.x) * dir > 20;
-      if (!keeper && size >= 3 && wide && p.think > 0.4 && Math.random() < 1.6 * dt) { out.cross = true; out.aim = [goalX - dir * 115 - p.x, CY - p.y]; } // cross to a man in the box
+      // a clever dribbler sees the slide coming ('!') and cuts away from it
+      if (iq > 0.3 && nearestFoe.windup > 0 && foeD < 95 && Math.random() < iq * 0.9) {
+        const ffx = nearestFoe.fx, ffy = nearestFoe.fy, side = ffx * -fy - ffy * -fx >= 0 ? 1 : -1; // step off the line he slides along
+        ax = -ffy * side + ax * 0.35; ay = ffx * side + ay * 0.35; dodge = true;
+      }
+      go(p.x + ax * 100, p.y + ay * 100, dodge || (foeD > 140 && p.stamina > 0.5));
+      const wide = Math.abs(p.y - CY) > MOUTH + 70 && toGoal < 260 && toGoal > 20;
+      const sinceWon = wonAt[p.team] - clock;
+      const ahead = mates.filter(q => q !== p && q.k !== 0 && (q.x - p.x) * dir > 140 && !isOffside(q, p) && !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 55));
+      const range = [300, 340, 400][T.pt] + (sty === 'angreb' ? 60 : sty === 'kort' ? -50 : 0);
+      if (!keeper && size >= 3 && wide && p.think > 0.4 && Math.random() < (sty === 'kant' ? 3.5 : 1.6) * dt) { out.cross = true; out.aim = [goalX - dir * 115 - p.x, CY - p.y]; } // cross to a man in the box
       else if (keeper && p.think > 0.6) { out.passTo = passTarget(p, dir, 0) || null; if (!out.passTo) { out.shoot = MAXCHARGE; out.aim = [dir, 0]; } }
-      else if (gd < [300, 340, 400][T.pt] && p.think > d.react + 0.2 && Math.random() < d.shoot * dt * (gd < 220 ? 1.5 : 0.6)) {
+      else if (!keeper && sty === 'mur' && size >= 3 && fromOwn < Lp * 0.33 && foeD < 100 && p.think > 0.25 && !p.plan.cl) {
+        // the wall: no messing about at the back, it goes long
+        p.plan.cl = true;
+        const fw = mates.filter(q => q !== p).reduce((a, b) => ((b.x - a.x) * dir > 0 ? b : a));
+        out.lob = true; out.aim = [fw.x + dir * 60 - p.x, fw.y - p.y];
+      } else if (size >= 3 && ahead.length && p.think > 0.2 && p.think < 1.2 && sinceWon < 2.5 && !p.plan.ct && (sty === 'kontra' || Math.random() < iq * 0.4)) {
+        // counter: we just won it, so play it forward fast before they get back
+        p.plan.ct = true;
+        const q = ahead.reduce((a, b) => ((b.x - a.x) * dir > 0 ? b : a));
+        if ((q.x - p.x) * dir > 60) { out.passTo = q; out.through = size >= 5 || (sty === 'kontra' && Math.random() < 0.6); }
+      }
+      else if (gd < range && p.think > d.react + 0.2 && Math.random() < d.shoot * (sty === 'angreb' ? 1.4 : 1) * dt * (gd < 220 ? 1.5 : 0.6)) {
         const err = (Math.random() - 0.5) * 2 * d.aimErr;
-        const gy = CY + (Math.random() - 0.5) * (MOUTH * 1.3);
+        const gk0 = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
+        // a clever shooter goes for the corner the keeper can't reach; the rest just hit it somewhere at goal
+        const far = gk0 && Math.random() < iq ? -Math.sign((gk0.y - CY) || (p.y - CY) || 1) : 0;
+        const gy = far ? CY + far * MOUTH * (0.55 + Math.random() * 0.3) : CY + (Math.random() - 0.5) * (MOUTH * 1.3);
         const gx = goalX - p.x, gyy = gy - p.y, a = Math.atan2(gyy, gx) + err;
         out.shoot = gd > 260 ? MAXCHARGE : 0.3 + Math.random() * 0.3; out.aim = [Math.cos(a), Math.sin(a)];
         const gk = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
@@ -2110,7 +2170,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
       } else if (size > 1 && foeD < (T.pt ? 75 : 105) && p.think > d.react && Math.random() < d.pass * [1.5, 1, 0.8][T.pt] * dt) {
         const free = mates.filter(q => q !== p && !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 70));
         const ok = free.filter(q => !isOffside(q, p));
-        if (ok.length) out.passTo = ok.reduce((a, b) => ((b.x - p.x) * dir > (a.x - p.x) * dir ? b : a));
+        if (ok.length) out.passTo = Math.random() < iq ? bestPass(p, ok, foes, dir) : ok.reduce((a, b) => ((b.x - p.x) * dir > (a.x - p.x) * dir ? b : a));
+      } else if (size > 1 && !keeper && p.think > d.react + 0.3 && Math.random() < d.pass * (sty === 'kort' ? 0.9 : 0.25 * iq) * dt) {
+        // looking up: pass to a mate who is in a better spot (short-passing teams do this all the time)
+        const ok = mates.filter(q => q !== p && q.k !== 0 && !isOffside(q, p) && Math.hypot(q.x - p.x, q.y - p.y) < (sty === 'kort' ? 260 : 420));
+        const q = ok.length ? bestPass(p, ok, foes, dir) : null;
+        if (q && bestPass.sc > (sty === 'kort' ? 120 : 190) && (sty === 'kort' || (goalX - q.x) * dir < toGoal - 90)) out.passTo = q; // only if he is really free
       } else if (size >= 5 && p.think > d.react + 0.4 && Math.random() < d.pass * 0.35 * [0.4, 1, 2.2][T.pt] * dt) {
         // through ball to a forward who is level with the last line
         const run = mates.find(q => q !== p && formOf(q)[0] > 0.8 && (q.x - p.x) * dir > 80 && !isOffside(q, p));
@@ -2124,11 +2189,15 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const L = PR - PL;
       const shape = push => size >= 5 ? shapeSpot(p, push, weHave) : (() => { // keep the team shape, sliding with the ball
         const h = homeOf(p);
-        const x = h.x + (ball.x - CX) * 0.55 + dir * (push + (T.m - 1) * 0.05) * L;
+        const x = h.x + (ball.x - CX) * 0.55 + dir * (push + (T.m - 1) * 0.05 - (!weHave && teamSty[p.team] === 'mur' ? 0.06 : 0)) * L;
         const y = CY + (h.y - CY) * [0.75, 1, 1.15][T.w] + (ball.y - CY) * 0.25;
         return [Math.max(PL + 40, Math.min(PR - 40, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
       })();
-      const second = size >= 3 ? mates.filter(q => q !== chaser && !(q.k === 0)).sort((a, b) => dBall(a) - dBall(b))[0] : null;
+      const byBall = size >= 3 ? mates.filter(q => q !== chaser && !(q.k === 0)).sort((a, b) => dBall(a) - dBall(b)) : [];
+      const second = byBall[0] || null;
+      // pressing teams send a third man at the ball when it is in the other half
+      const sty = teamSty[p.team], iq = d.iq || 0;
+      const third = size >= 5 && (sty === 'pres' || sty === 'angreb') && o && o.team !== p.team && (o.x - ownX) * dir > L * 0.45 ? byBall[1] : null;
       const bp = boxPiece();
       const bs = bp && !keeper ? (weHave ? boxSpot(p) : boxMark(p)) : null;
       if (bs) go(bs[0], bs[1], Math.hypot(bs[0] - p.x, bs[1] - p.y) > 110);
@@ -2167,6 +2236,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
           const ux = gx / gl, uy = gy / gl, r = setp.r + 14;
           go(Math.max(PL + 25, Math.min(PR - 25, ball.x + (ux - uy * side) * r)), Math.max(PT + 25, Math.min(PB - 25, ball.y + (uy + ux * side) * r)));
         }
+      } else if (p === third) {
+        // close the nearest passing option so the man on the ball has nowhere to go
+        const opt = foes.filter(f => f !== o && f.k !== 0).sort((a, b) => Math.hypot(a.x - o.x, a.y - o.y) - Math.hypot(b.x - o.x, b.y - o.y))[0];
+        if (opt) go(o.x + (opt.x - o.x) * 0.6, o.y + (opt.y - o.y) * 0.6, true); else { const [x, y] = shape(0); go(x, y); }
       } else if (p === second && o) {
         // second man cuts off the way to goal; with high pressing he hunts the ball in their half too
         const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1;
@@ -2179,7 +2252,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         const wait = o && !keeper && T.pr === 0 && (o.x - ownX) * dir > L * 0.55;
         if (o) { const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1, r = wait ? 140 : 26; bx = o.x + gx / gl * r; by = o.y + gy / gl * r; }
         go(bx, by, dBall(p) > 60 && !wait);
-        if (o && !wait && dBall(p) < 70 && p.tcd <= 0 && Math.random() < d.tackle * [0.8, 1, 1.3][T.pr] * dt) {
+        if (o && !wait && dBall(p) < 70 - 12 * iq && p.tcd <= 0 && Math.random() < d.tackle * [0.8, 1, 1.3][T.pr] * dt) { // clever defenders wait until they are close enough to win it
           const front = ((p.x - o.x) * o.fx + (p.y - o.y) * o.fy) > -5; // only slide from the front or side
           if (front || Math.random() < 0.15) out.tackle = true;
         }
@@ -2187,13 +2260,16 @@ button.small { font-size: 13px; padding: 9px 10px; }
         go(ownX + dir * 38, CY + Math.max(-MOUTH + 10, Math.min(MOUTH - 10, (ball.y - CY) * 0.6)));
       } else if (size >= 5) {
         const m = marks.get(p);
-        if (m) { const gx = ownX - m.x, gy = CY - m.y, gl = Math.hypot(gx, gy) || 1; go(m.x + gx / gl * 38, m.y + gy / gl * 38, Math.hypot(m.x - p.x, m.y - p.y) > 160); }
+        if (m) { // goal side of the man; the clever ones lean into the passing lane to pick it off
+          const gx = ownX - m.x, gy = CY - m.y, gl = Math.hypot(gx, gy) || 1, k = o ? 0.28 * iq : 0;
+          go(m.x + gx / gl * 38 * (1 - k) + (o ? (o.x - m.x) * k * 0.5 : 0), m.y + gy / gl * 38 * (1 - k) + (o ? (o.y - m.y) * k * 0.5 : 0), Math.hypot(m.x - p.x, m.y - p.y) > 160);
+        }
         else { const [x, y] = shape(0); go(x, y, Math.hypot(x - p.x, y - p.y) > 220); }
       } else {
         // mark the most dangerous free opponent
         const mark = foes.filter(f => f !== o).sort((a, b) => Math.abs(a.x - ownX) - Math.abs(b.x - ownX))[(p.k + 1) % Math.max(1, foes.length - 1)] || foes[0];
-        const gx = ownX - mark.x, gy = CY - mark.y, gl = Math.hypot(gx, gy) || 1;
-        go(mark.x + gx / gl * 55, mark.y + gy / gl * 55);
+        const gx = ownX - mark.x, gy = CY - mark.y, gl = Math.hypot(gx, gy) || 1, k = o ? 0.35 * iq : 0;
+        go(mark.x + gx / gl * 55 * (1 - k) + (o ? (o.x - mark.x) * k * 0.45 : 0), mark.y + gy / gl * 55 * (1 - k) + (o ? (o.y - mark.y) * k * 0.45 : 0), iq > 0.7 && Math.hypot(mark.x - p.x, mark.y - p.y) > 150);
       }
     }
     let ix = tx - p.x, iy = ty - p.y; const il = Math.hypot(ix, iy);
@@ -2249,7 +2325,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (/^[123]$/.test(banner)) {
         const n = Math.ceil(pause / 0.8);
         if (n !== Math.ceil(was / 0.8) && n > 0) { banner = String(n); sfx.beep(); }
-        if (pause <= 0) { banner = ''; sfx.whistle(); if (wxIntro) { flash = { text: wxIntro, t: 2.2 }; wxIntro = ''; } }
+        if (pause <= 0) { // at the whistle: who you are up against and how they play, and the weather
+          banner = ''; sfx.whistle();
+          const it = [introFlash && introFlash.text, wxIntro].filter(Boolean).join(' · ');
+          if (it) flash = { text: it, t: 2.2 }; introFlash = null; wxIntro = '';
+        }
       } else if (pause <= 0) {
         if (so) { if (soDone()) { finish(); return; } startPenalty(so.turn); so.wait = 0; so.shot = false; return; }
         if (banner === 'MÅL!') { kickoff(); pause = 1.0; banner = 'Klar'; return; }
@@ -2789,20 +2869,20 @@ button.small { font-size: 13px; padding: 9px 10px; }
   // ---------- Teams, profile, coins, shop, season, practice and the living menu ----------
   function light(hex) { const v = parseInt(hex.slice(1), 16); return ((v >> 16) * 299 + ((v >> 8) & 255) * 587 + (v & 255) * 114) / 1000 > 150; }
   const TEAMS = [
-    { n: 'Røde Tyre', s: 'TYR', c1: '#e5483b', c2: '#f4f7f2', str: 3, st: '2211' },
-    { n: 'Havnens Hajer', s: 'HAJ', c1: '#2f7ff0', c2: '#f4f7f2', str: 3, st: '1122' },
-    { n: 'Ildfuglene', s: 'ILD', c1: '#f2992e', c2: '#23262b', str: 2, st: '2110' },
-    { n: 'Stormen', s: 'STM', c1: '#8a5cf0', c2: '#f4f7f2', str: 4, st: '1210' },
-    { n: 'Nordlys', s: 'NRD', c1: '#17b3a3', c2: '#23262b', str: 2, st: '0012' },
-    { n: 'Flamingo IF', s: 'FLA', c1: '#e8508f', c2: '#f4f7f2', str: 1, st: '1021' },
-    { n: 'Kongerne', s: 'KNG', c1: '#f1f1ec', c2: '#23262b', str: 4, st: '1110' },
-    { n: 'Natravnene', s: 'RAV', c1: '#23262b', c2: '#f1f1ec', str: 3, st: '0102' },
-    { n: 'Guldørnene', s: 'GLD', c1: '#ffd447', c2: '#23262b', str: 5, price: 250, st: '2210' },
-    { n: 'Isbjørnene', s: 'ISB', c1: '#a9d8ff', c2: '#1f3a7a', str: 5, price: 250, st: '0221' },
+    { n: 'Røde Tyre', s: 'TYR', c1: '#e5483b', c2: '#f4f7f2', str: 3, sty: 'angreb' },
+    { n: 'Havnens Hajer', s: 'HAJ', c1: '#2f7ff0', c2: '#f4f7f2', str: 3, sty: 'kant' },
+    { n: 'Ildfuglene', s: 'ILD', c1: '#f2992e', c2: '#23262b', str: 2, sty: 'kort' },
+    { n: 'Stormen', s: 'STM', c1: '#8a5cf0', c2: '#f4f7f2', str: 4, sty: 'pres' },
+    { n: 'Nordlys', s: 'NRD', c1: '#17b3a3', c2: '#23262b', str: 2, sty: 'kontra' },
+    { n: 'Flamingo IF', s: 'FLA', c1: '#e8508f', c2: '#f4f7f2', str: 1, sty: 'kant' },
+    { n: 'Kongerne', s: 'KNG', c1: '#f1f1ec', c2: '#23262b', str: 4, sty: 'kort' },
+    { n: 'Natravnene', s: 'RAV', c1: '#23262b', c2: '#f1f1ec', str: 3, sty: 'kontra' },
+    { n: 'Guldørnene', s: 'GLD', c1: '#ffd447', c2: '#23262b', str: 5, price: 250, sty: 'pres' },
+    { n: 'Isbjørnene', s: 'ISB', c1: '#a9d8ff', c2: '#1f3a7a', str: 5, price: 250, sty: 'mur' },
     { n: 'Mit hold', s: 'MIT', c1: '#2f9d55', c2: '#f4f7f2', str: 3, own: true }, // your own team, filled in from 'mf-myteam'
   ];
-  // st: each team's style as digits for mentality, pressing, width and passing (see TAC0)
-  TEAMS.forEach((t, i) => { t.id = i; t.c3 = light(t.c1) ? '#0d1a14' : '#f4f7f2'; if (t.st) t.tac = { m: +t.st[0], pr: +t.st[1], w: +t.st[2], pt: +t.st[3] }; });
+  // sty: each team's way of playing (see STYLES), which also sets its tactics
+  TEAMS.forEach((t, i) => { t.id = i; t.c3 = light(t.c1) ? '#0d1a14' : '#f4f7f2'; if (t.sty) t.tac = { ...STYLES[t.sty].tac }; });
   const OWN = TEAMS.length - 1;
   function syncOwn() {
     const mt = loadMT(), t = TEAMS[OWN];
@@ -2829,6 +2909,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ['comeback', 'Comeback', 'Vind efter at have været bagud'], ['online', 'Online-debut', 'Spil en online kamp'], ['sofa', 'Sofakamp', 'Spil 2 på én telefon'],
     ['eleven', 'Fuldt hold', 'Spil 11 mod 11'], ['pens', 'Is i maven', 'Vind en straffesparks­konkurrence'], ['season', 'Sæsonmester', 'Vind en sæson'],
     ['games10', 'Stamgæst', 'Spil 10 kampe'], ['goals50', 'Målmaskine', 'Score 50 mål i alt'], ['shop', 'Shopaholic', 'Køb noget i butikken'],
+    ['legend', 'Legende', 'Slå computeren på Legende'],
   ];
   const troName = id => (TRO.find(t => t[0] === id) || [0, id])[1];
 
@@ -2861,7 +2942,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     return [A.c1, a];
   }
   function applyTeams(m) {
-    teamPick = null;
+    teamPick = null; teamSty = [null, null];
     if (m === 'cpu' || m === 'two') {
       let a = teamOpen(cfg.team) ? cfg.team : 1, b = teamOpen(cfg.opp) ? cfg.opp : 0;
       if (kind === 'season') { const S = seasonLoad(); if (S) { a = S.me; b = seasonOpp(S); } }
@@ -2871,6 +2952,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       // you coach team 1 with your own tactics; the other side plays its own style (your tactics if it is your team)
       teamTac = [loadMT().tac, B.tac || (m === 'two' && B.own ? loadMT().tac : TAC0)];
       if (m === 'two') teamTac[0] = A.tac || loadMT().tac;
+      teamSty = [m === 'two' ? A.sty || null : null, B.sty || null];
     } else if (m === 'host') {
       // online: each side plays as its captain's own team if they made one
       const hT = hostTeam(), mine = myCardTeam(), other = netTeam;
@@ -2921,12 +3003,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (won) pr.w++; else if (lost) pr.l++; else pr.d++;
       pr.streak = won ? pr.streak + 1 : 0; pr.bestStreak = Math.max(pr.bestStreak, pr.streak);
       if (won) pr.bigWin = Math.max(pr.bigWin, gf - ga);
-      coins = kind === 'pen' ? 10 + (won ? 15 : 0) : 10 + Math.min(30, gf * 5) + (won ? 20 + (mode === 'cpu' && matchDiff() === 2 ? 10 : 0) : win < 0 ? 5 : 0);
+      coins = kind === 'pen' ? 10 + (won ? 15 : 0) : 10 + Math.min(30, gf * 5) + (won ? 20 + (mode === 'cpu' && matchDiff() >= 2 ? 10 * (matchDiff() - 1) : 0) : win < 0 ? 5 : 0);
       if (won) give('first');
       if (gf >= 3) give('hat');
       if (won && ga === 0 && kind !== 'pen') give('clean');
       if (gf - ga >= 5) give('big');
-      if (won && mode === 'cpu' && matchDiff() === 2) give('hard');
+      if (won && mode === 'cpu' && matchDiff() >= 2) give('hard');
+      if (won && mode === 'cpu' && matchDiff() >= 3) give('legend');
       if (pr.streak >= 3) give('streak');
       if (won && wasBehind) give('comeback');
       if (mode === 'host' || mode === 'guest') give('online');
@@ -3228,6 +3311,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const t = TEAMS[get()] || TEAMS[0];
       lbl.textContent = `${title()}: ${t.n} `;
       const st = document.createElement('span'); st.className = 'stars'; st.textContent = '★'.repeat(t.str) + '☆'.repeat(5 - t.str); lbl.appendChild(st);
+      if (t.sty) { const sy = document.createElement('span'); sy.className = 'sty'; sy.textContent = ' · ' + STYLES[t.sty].n; sy.title = STYLES[t.sty].d; lbl.appendChild(sy); }
     };
     TEAMS.forEach(t => {
       const b = document.createElement('button'); b.textContent = t.s; b.setAttribute('aria-label', t.n);
@@ -3565,7 +3649,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     teamPicker($('seasonTeams'), $('seasonTeamLbl'), () => 'Vælg dit hold', () => cfg.team, v => { cfg.team = v; saveCfg(); });
     mkSeg($('seasonSize'), [1, 2, 3, 5, 11], ['1', '2', '3', '5', '11'], () => sv.size, v => { sv.size = v; });
     mkSeg($('seasonMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => sv.mins, v => { sv.mins = v; });
-    mkSeg($('seasonDiff'), [0, 1, 2], ['Let', 'Normal', 'Svær'], () => sv.diff, v => { sv.diff = v; });
+    mkSeg($('seasonDiff'), [0, 1, 2, 3], DIFFN, () => sv.diff, v => { sv.diff = v; });
     $('goSeason').onclick = seasonShow;
     $('seasonClose').onclick = () => { $('season').hidden = true; seasonSub(); };
     $('seasonStart').onclick = () => { seasonNew(teamOpen(cfg.team) ? cfg.team : 1, sv.size, sv.mins, sv.diff); seasonShow(); seasonSub(); };
@@ -4228,6 +4312,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const big = /^[123]$/.test(text);
       const bf = Math.min(sw * (big ? 0.16 : 0.1), big ? 110 : 64) * (banner ? 1 : 0.7);
       ctx.font = `700 ${bf}px ${col.font}`; ctx.textBaseline = 'middle';
+      const tw = ctx.measureText(text).width; if (tw > sw * 0.92) ctx.font = `700 ${bf * sw * 0.92 / tw}px ${col.font}`; // long lines shrink to fit
       ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillText(text, sw / 2 + 3, sh * 0.42 + 3);
       ctx.fillStyle = col.gold; ctx.fillText(text, sw / 2, sh * 0.42);
       if (text === 'Gult kort' || text === 'Rødt kort') { // the referee holds up the card
@@ -4332,7 +4417,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), wx: (w, n) => { if (w !== undefined) setWeather(w, n); return { wx, night, damp: WX().damp }; } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: (w, n) => { if (w !== undefined) setWeather(w, n); return { wx, night, damp: WX().damp }; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
