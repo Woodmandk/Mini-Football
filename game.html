@@ -118,7 +118,7 @@ table.st td.l, table.st th.l { text-align: left; }
 .namechip { display: flex; align-items: center; gap: 8px; }
 .namechip span { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .namechip input { padding: 8px 10px; font-size: 15px; }
-.minis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.minis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .minis button { font-size: 12px; padding: 9px 4px; line-height: 1.15; }
 .bigs { gap: 7px; }
 button.big { font-size: 16px; padding: 9px 14px; text-align: left; display: flex; flex-direction: column; gap: 3px; }
@@ -129,7 +129,7 @@ button.big small { font: 500 11px/1.2 var(--font); color: var(--muted); letter-s
 .coins { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .coins::before { content: "● "; }
 .coins.big { font-size: 18px; font-weight: 700; flex: 0 0 92px; text-align: right; }
-.teams { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.teams { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; }
 .teams button { padding: 7px 0 9px; font-size: 10px; border-width: 2px; border-color: transparent; border-radius: 6px 6px 45% 45%; background: var(--c1); color: var(--c3); position: relative; }
 .teams button[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
 .teams button.lock { opacity: 0.35; }
@@ -192,6 +192,31 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
 .hlclose { position: absolute; top: calc(8px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); padding: 8px 12px; font-size: 13px; background: rgba(9,20,15,0.7); border-color: rgba(244,247,242,0.4); }
 table.st tr.me td { color: var(--gold); }
 #rotate { display: none; font-size: 13px; color: var(--gold); }
+/* your own team */
+.minis button.mine { border-color: var(--gold); color: var(--gold); }
+.linkbtn { font: 500 11px/1 var(--font); letter-spacing: 0.04em; text-transform: none; padding: 2px 4px; margin-left: 6px; border: 0; background: none; color: var(--gold); text-decoration: underline; }
+button.small { font-size: 13px; padding: 9px 10px; }
+#lobbyTeams { font-size: 15px; }
+.mtcard { padding: 10px 14px; gap: 8px; max-width: 820px; }
+.mtgrid { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; text-align: left; align-items: start; }
+.mtleft { gap: 6px; }
+.mtrow { display: grid; grid-template-columns: 74px 1fr; gap: 6px; align-items: center; }
+.mtleft .seg { padding: 3px; }
+.mtleft .seg button { padding: 7px 2px; font-size: 12px; }
+.mtname { display: flex; gap: 6px; }
+.mtname .namein { padding: 7px 10px; font-size: 15px; }
+.mtname .short { flex: 0 0 64px; text-transform: uppercase; text-align: center; }
+.swatches { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; max-width: 300px; }
+.swatches button { width: 100%; aspect-ratio: 1; height: auto; padding: 0; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); background: var(--c); }
+.swatches button[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.mtright { gap: 6px; align-items: center; }
+.mtright .seg { width: 100%; padding: 3px; }
+.mtright .seg button { padding: 7px 2px; font-size: 12px; }
+#mtCv { border-radius: 8px; touch-action: none; cursor: grab; display: block; }
+.mtfrom button { font-size: 11px !important; }
+.mttip { font-size: 11px; line-height: 1.3; }
+#mtLayTip { max-width: 300px; }
+.mtgrid.narrow { grid-template-columns: 1fr; } .mtgrid.narrow .mtright { justify-self: center; } /* set from script: the game may be turned */
 @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
 </style>
 
@@ -209,6 +234,7 @@ table.st tr.me td { color: var(--gold); }
           <label class="namechip"><span>Du spiller som</span>
             <input id="name" class="namein" maxlength="12" placeholder="Skriv dit navn" autocomplete="off" aria-label="Dit navn"></label>
           <div class="minis">
+            <button id="goMine" class="alt mine">Mit hold</button>
             <button id="goProf" class="alt">Profil og trofæer</button><button id="goShop" class="alt">Butik <span class="coins" data-coins>0</span></button>
             <button id="bLeague" class="alt">Stilling</button><button id="bCup" class="alt">Turnering</button>
             <button id="bHelp" class="alt">Sådan spiller du</button><button id="goSet" class="alt">Indstillinger</button>
@@ -248,7 +274,7 @@ table.st tr.me td { color: var(--gold); }
           <div class="seg" id="segSize" role="group" aria-label="Holdstørrelse">
             <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="11">11</button>
           </div></div>
-        <div class="col" id="formBox"><div class="lbl" id="formLbl">Formation</div>
+        <div class="col" id="formBox"><div class="lbl" id="formLbl">Formation <button id="setupMine" class="linkbtn">Taktik og opstilling ›</button></div>
           <div class="seg" id="segForm" role="group" aria-label="Formation"></div></div>
         <div class="col"><div class="lbl">Kamplængde</div>
           <div class="seg" id="segMins" role="group" aria-label="Kamplængde">
@@ -356,12 +382,42 @@ table.st tr.me td { color: var(--gold); }
         <ul class="tb" id="rosterB"></ul>
       </div>
       <p class="hint" id="lobbyHint">Tryk på en ledig plads for at tage den.</p>
+      <p class="vs" id="lobbyTeams" hidden></p>
       <div class="lbl" id="lobbyFormLbl">Jeres formation</div>
       <div class="seg" id="lobbyForm" role="group" aria-label="Formation"></div>
+      <button id="lobbyMine" class="alt small">Lav dit eget hold</button>
       <div class="btns">
         <button id="startOnline" hidden>Klar</button>
         <button id="share" class="alt" hidden>Del invitationslink</button>
         <button id="cancel" class="alt">Forlad</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- your own team: name, colours, tactics and a line-up you drag into place -->
+  <div class="overlay" id="myteam" hidden>
+    <div class="card wide mtcard">
+      <div class="top"><button class="alt back" id="mtClose">‹ Færdig</button><h2>Mit hold</h2><span class="sp"></span></div>
+      <div class="mtgrid">
+        <div class="col mtleft">
+          <div class="mtname">
+            <input id="mtName" class="namein" maxlength="16" placeholder="Holdets navn" autocomplete="off" aria-label="Holdets navn">
+            <input id="mtShort" class="namein short" maxlength="3" placeholder="FCK" autocomplete="off" aria-label="Forkortelse (3 bogstaver)">
+          </div>
+          <div class="mtrow"><span class="lbl">Trøje</span><div class="swatches" id="mtC1" role="group" aria-label="Trøjefarve"></div></div>
+          <div class="mtrow"><span class="lbl">Reserve</span><div class="swatches" id="mtC2" role="group" aria-label="Reservetrøje"></div></div>
+          <div class="mtrow"><span class="lbl">Spillestil</span><div class="seg" id="mtM" role="group" aria-label="Spillestil"></div></div>
+          <div class="mtrow"><span class="lbl">Pres</span><div class="seg" id="mtPr" role="group" aria-label="Pres"></div></div>
+          <div class="mtrow"><span class="lbl">Bredde</span><div class="seg" id="mtW" role="group" aria-label="Bredde"></div></div>
+          <div class="mtrow"><span class="lbl">Aflevering</span><div class="seg" id="mtPt" role="group" aria-label="Afleveringer"></div></div>
+          <p id="mtTacTip" class="mttip"></p>
+        </div>
+        <div class="col mtright" id="mtLay">
+          <div class="seg" id="mtSize" role="group" aria-label="Opstilling til holdstørrelse"></div>
+          <canvas id="mtCv" aria-label="Opstilling. Træk spillerne derhen, hvor de skal stå"></canvas>
+          <div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start fra en formation"></div>
+          <p class="mttip" id="mtLayTip"></p>
+        </div>
       </div>
     </div>
   </div>
@@ -757,20 +813,68 @@ table.st tr.me td { color: var(--gold); }
         ['3-5-2', [[0.04, 0.5], [0.26, 0.25], [0.24, 0.5], [0.26, 0.75], [0.56, 0.1], [0.52, 0.32], [0.5, 0.5], [0.52, 0.68], [0.56, 0.9], [0.86, 0.4], [0.86, 0.6]]],
         ['5-3-2', [[0.04, 0.5], [0.3, 0.1], [0.24, 0.3], [0.22, 0.5], [0.24, 0.7], [0.3, 0.9], [0.55, 0.3], [0.52, 0.5], [0.55, 0.7], [0.86, 0.4], [0.86, 0.6]]]],
   };
-  let teamForm = [0, 0];
-  const formOf = p => (FORMS[size] ? (FORMS[size][teamForm[p.team]] || FORMS[size][0])[1] : FORM[size])[p.k];
-  const myForm = n => { const v = (cfg.forms || {})[n] | 0; return FORMS[n] && FORMS[n][v] ? v : 0; };
+  // ----- your own team ("Mit hold"): name, colours, tactics and your own line-ups; localStorage 'mf-myteam' -----
+  const CUST = 9; // formation index that means "your own line-up"
+  const TAC0 = { m: 1, pr: 1, w: 1, pt: 1 }; // mentality, pressing, width, passing; 0..2 each, 1 = normal
+  const t3 = v => ([0, 1, 2].includes(Number(v)) ? Number(v) : 1);
+  const cleanTac = o => { o = o && typeof o === 'object' ? o : {}; return { m: t3(o.m), pr: t3(o.pr), w: t3(o.w), pt: t3(o.pt) }; };
+  const MT0 = () => ({ n: 'Mit hold', s: 'MIT', c1: '#2f9d55', c2: '#f4f7f2', made: false, tac: { ...TAC0 }, lay: {} });
+  let mtCache = null;
+  function loadMT() {
+    if (!mtCache) {
+      try { mtCache = Object.assign(MT0(), JSON.parse(localStorage.getItem('mf-myteam') || '{}')); } catch (_) { mtCache = MT0(); }
+      mtCache.tac = cleanTac(mtCache.tac); if (!mtCache.lay || typeof mtCache.lay !== 'object') mtCache.lay = {};
+    }
+    return mtCache;
+  }
+  function saveMT() { try { localStorage.setItem('mf-myteam', JSON.stringify(loadMT())); } catch (_) {} }
+  const formList = n => FORMS[n] || (n > 1 && FORM[n] ? [['Standard', FORM[n]]] : null);
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // a line-up is [share of own half from the goal line, share of pitch height] per slot; slot 0 is the keeper
+  function cleanLay(a, n) {
+    if (!Array.isArray(a) || a.length !== n || n < 2) return null;
+    const r = [];
+    for (const q of a) {
+      if (!Array.isArray(q) || !Number.isFinite(Number(q[0])) || !Number.isFinite(Number(q[1]))) return null;
+      r.push([Number(q[0]), Number(q[1])]);
+    }
+    r[0] = [clamp(r[0][0], 0.03, 0.3), clamp(r[0][1], 0.35, 0.65)];
+    for (let i = 1; i < n; i++) r[i] = [clamp(r[i][0], 0.12, 0.95), clamp(r[i][1], 0.05, 0.95)];
+    return [r[0], ...r.slice(1).sort((x, y) => x[0] - y[0])]; // back to front, so the slots keep their roles
+  }
+  const myLay = n => cleanLay(loadMT().lay[n], n);
+  const packLay = L => (L ? L.flat().map(v => Math.round(v * 100)) : 0);
+  const unpackLay = (a, n) => { if (!Array.isArray(a) || a.length !== n * 2) return null; const r = []; for (let i = 0; i < n; i++) r.push([Number(a[i * 2]) / 100, Number(a[i * 2 + 1]) / 100]); return cleanLay(r, n); };
+  let teamForm = [0, 0], teamLay = [null, null], teamTac = [TAC0, TAC0];
+  const tac = t => teamTac[t] || TAC0;
+  function formOf(p) {
+    const L = teamForm[p.team] === CUST && teamLay[p.team];
+    if (L && L[p.k]) return p.team ? [L[p.k][0], 1 - L[p.k][1]] : L[p.k]; // blue plays the other way: its left is our right
+    return (FORMS[size] ? (FORMS[size][teamForm[p.team]] || FORMS[size][0])[1] : FORM[size])[p.k];
+  }
+  const myForm = n => { const v = (cfg.forms || {})[n] | 0; if (v === CUST) return myLay(n) ? CUST : 0; const l = formList(n); return l && l[v] ? v : 0; };
   function setMyForm(n, v) { cfg.forms = { ...(cfg.forms || {}), [n]: v }; saveCfg(); }
   function formSeg(el, n, cur, pick, locked) {
-    if (!FORMS[n]) { el.textContent = ''; el.dataset.key = ''; return false; }
-    const key = [n, cur, !!locked].join();
+    const list = formList(n);
+    if (!list) { el.textContent = ''; el.dataset.key = ''; return false; }
+    const key = [n, cur, !!locked, !!myLay(n)].join();
     el._pick = pick;
     if (el.dataset.key === key) return true; // unchanged: keep the buttons so taps are not lost
     el.dataset.key = key; el.textContent = '';
-    FORMS[n].forEach(([name], i) => {
+    list.forEach(([name], i) => {
       const b = document.createElement('button'); b.textContent = name; b.setAttribute('aria-pressed', String(i === cur)); b.disabled = !!locked;
       b.onclick = () => el._pick(i); el.appendChild(b);
     });
+    // your own line-up: tap to use it, tap again (or the first time) to drag the players around
+    const b = document.createElement('button'); b.textContent = 'Egen ✎'; b.setAttribute('aria-pressed', String(cur === CUST)); b.disabled = !!locked;
+    b.setAttribute('aria-label', 'Egen opstilling');
+    b.onclick = () => {
+      const had = !!myLay(n);
+      if (!had) { const mt = loadMT(); const l = formList(n); mt.lay[n] = (l[cur === CUST ? 0 : cur] || l[0])[1].map(q => q.slice()); saveMT(); }
+      el._pick(CUST);
+      if (!had || cur === CUST) mtShow(n, 'lay', () => el._pick(CUST));
+    };
+    el.appendChild(b);
     return true;
   }
   function menuForm() {
@@ -1134,7 +1238,10 @@ table.st tr.me td { color: var(--gold); }
     stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = []; hlReset(); lastGk = ''; lastGoalTeam = 0;
     if (m !== 'guest') {
       setKit(cfg.kit);
-      if (m !== 'host') teamForm = [myForm(size), m === 'two' ? myForm(size) : (FORMS[size] ? Math.floor(Math.random() * FORMS[size].length) : 0)];
+      if (m !== 'host') {
+        teamForm = [myForm(size), m === 'two' ? myForm(size) : (FORMS[size] ? Math.floor(Math.random() * FORMS[size].length) : 0)];
+        teamLay = [myLay(size), m === 'two' ? myLay(size) : null];
+      }
     }
     applyTeams(m);
     hostReady = false; $('ready').hidden = true; rxList = [];
@@ -1600,14 +1707,16 @@ table.st tr.me td { color: var(--gold); }
   // Big teams: the block slides with the ball but the lines keep their gaps, forwards move more than defenders.
   function shapeSpot(p, push, weHave) {
     const f = formOf(p), half = (PR - PL) / 2, dir = p.team ? -1 : 1, ownX = p.team ? PR : PL;
+    const T = tac(p.team);
     const u0 = f[0], ub = (ball.x - ownX) * dir / half; // 0 = own goal line, 1 = halfway, 2 = their goal line
+    push += (T.m - 1) * 0.05 + (weHave ? 0 : (T.pr - 1) * 0.04); // attacking teams play higher, pressing teams defend higher up
     let u = weHave
       ? 0.2 + u0 + (ub - 1) * (0.15 + 0.25 * u0) + push * 2    // with the ball: spread out to give passing options
       : 0.08 + u0 * 0.9 + (ub - 1) * (0.25 + 0.45 * u0) + push * 2; // without: drop back as a compact block
     u = Math.max(0.1, Math.min(1.85, u));
     let x = ownX + dir * u * half;
     if (weHave) { const ol = offsideLine(p.team); x = dir > 0 ? Math.min(x, ol - 10) : Math.max(x, ol + 10); } // stay onside
-    const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1 : 0.82) + (ball.y - CY) * 0.3;
+    const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1 : 0.82) * [0.74, 1, 1.18][T.w] + (ball.y - CY) * 0.3;
     return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
   }
   // defenders and midfielders pick up the nearest attacker in their zone (one man each)
@@ -1629,7 +1738,7 @@ table.st tr.me td { color: var(--gold); }
     }
   }
   function aiInput(p, dt) {
-    const d = aiD(p.team);
+    const d = aiD(p.team), T = tac(p.team);
     const dir = p.team ? -1 : 1;
     const goalX = dir > 0 ? PR : PL, ownX = dir > 0 ? PL : PR;
     const o = owner();
@@ -1674,18 +1783,18 @@ table.st tr.me td { color: var(--gold); }
       const wide = Math.abs(p.y - CY) > MOUTH + 70 && (goalX - p.x) * dir < 260 && (goalX - p.x) * dir > 20;
       if (!keeper && size >= 3 && wide && p.think > 0.4 && Math.random() < 1.6 * dt) { out.lob = true; out.aim = [goalX - dir * 115 - p.x, CY + (Math.random() - 0.5) * 110 - p.y]; } // cross
       else if (keeper && p.think > 0.6) { out.passTo = passTarget(p, dir, 0) || null; if (!out.passTo) { out.shoot = MAXCHARGE; out.aim = [dir, 0]; } }
-      else if (gd < 340 && p.think > d.react + 0.2 && Math.random() < d.shoot * dt * (gd < 220 ? 1.5 : 0.6)) {
+      else if (gd < [300, 340, 400][T.pt] && p.think > d.react + 0.2 && Math.random() < d.shoot * dt * (gd < 220 ? 1.5 : 0.6)) {
         const err = (Math.random() - 0.5) * 2 * d.aimErr;
         const gy = CY + (Math.random() - 0.5) * (MOUTH * 1.3);
         const gx = goalX - p.x, gyy = gy - p.y, a = Math.atan2(gyy, gx) + err;
         out.shoot = gd > 260 ? MAXCHARGE : 0.3 + Math.random() * 0.3; out.aim = [Math.cos(a), Math.sin(a)];
         const gk = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
         if (gk && gd > 180 && Math.abs(gk.x - goalX) > 70 && Math.random() < 0.6) out.lob = true; // keeper off his line: chip him
-      } else if (size > 1 && foeD < 75 && p.think > d.react && Math.random() < d.pass * dt) {
+      } else if (size > 1 && foeD < (T.pt ? 75 : 105) && p.think > d.react && Math.random() < d.pass * [1.5, 1, 0.8][T.pt] * dt) {
         const free = mates.filter(q => q !== p && !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 70));
         const ok = free.filter(q => !isOffside(q, p));
         if (ok.length) out.passTo = ok.reduce((a, b) => ((b.x - p.x) * dir > (a.x - p.x) * dir ? b : a));
-      } else if (size >= 5 && p.think > d.react + 0.4 && Math.random() < d.pass * 0.35 * dt) {
+      } else if (size >= 5 && p.think > d.react + 0.4 && Math.random() < d.pass * 0.35 * [0.4, 1, 2.2][T.pt] * dt) {
         // through ball to a forward who is level with the last line
         const run = mates.find(q => q !== p && formOf(q)[0] > 0.8 && (q.x - p.x) * dir > 80 && !isOffside(q, p));
         if (run) { out.passTo = run; out.through = true; }
@@ -1698,14 +1807,14 @@ table.st tr.me td { color: var(--gold); }
       const L = PR - PL;
       const shape = push => size >= 5 ? shapeSpot(p, push, weHave) : (() => { // keep the team shape, sliding with the ball
         const h = homeOf(p);
-        const x = h.x + (ball.x - CX) * 0.55 + dir * push * L;
-        const y = h.y + (ball.y - CY) * 0.25;
+        const x = h.x + (ball.x - CX) * 0.55 + dir * (push + (T.m - 1) * 0.05) * L;
+        const y = CY + (h.y - CY) * [0.75, 1, 1.15][T.w] + (ball.y - CY) * 0.25;
         return [Math.max(PL + 40, Math.min(PR - 40, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
       })();
       const second = size >= 3 ? mates.filter(q => q !== chaser && !(q.k === 0)).sort((a, b) => dBall(a) - dBall(b))[0] : null;
       if (weHave) {
         if (keeper) go(ownX + dir * 45, CY + (ball.y - CY) * 0.3);
-        else if (size <= 3) { const lane = p.k === 1 ? -1 : 1; go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 170)), CY + lane * 130, Math.abs(p.x - o.x) < 60); }
+        else if (size <= 3) { const lane = p.k === 1 ? -1 : 1; go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 170)), CY + lane * [100, 130, 160][T.w], Math.abs(p.x - o.x) < 60); }
         else { const [x, y] = shape(0.06); go(x, y, Math.hypot(x - p.x, y - p.y) > 220); }
       } else if (setp && setp.team !== p.team && o && (keeper || p === chaser || p === second)) {
         // set piece against us: the keeper minds his goal, the nearest men stand the right distance off, between the ball and our goal
@@ -1716,15 +1825,18 @@ table.st tr.me td { color: var(--gold); }
           go(Math.max(PL + 25, Math.min(PR - 25, ball.x + (ux - uy * side) * r)), Math.max(PT + 25, Math.min(PB - 25, ball.y + (uy + ux * side) * r)));
         }
       } else if (p === second && o) {
-        // second man cuts off the way to goal
+        // second man cuts off the way to goal; with high pressing he hunts the ball in their half too
         const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1;
-        go(o.x + gx / gl * 90, o.y + gy / gl * 90, true);
+        const hunt = T.pr === 2 && (o.x - ownX) * dir > L * 0.5;
+        const r = hunt ? 30 : T.pr === 0 ? 120 : 90;
+        go(o.x + gx / gl * r + (hunt ? (p.k % 2 ? 24 : -24) : 0), o.y + gy / gl * r, true);
       } else if (p === chaser || (keeper && ballInBox && dBall(p) < 150)) {
-        // go for the ball, staying goal-side of whoever has it
+        // go for the ball, staying goal-side of whoever has it (low pressing: wait for them further back until they come close)
         let bx = ball.x + ball.vx * 0.15, by = ball.y + ball.vy * 0.15;
-        if (o) { const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1; bx = o.x + gx / gl * 26; by = o.y + gy / gl * 26; }
-        go(bx, by, dBall(p) > 120);
-        if (o && dBall(p) < 70 && p.tcd <= 0 && Math.random() < d.tackle * dt) {
+        const wait = o && !keeper && T.pr === 0 && (o.x - ownX) * dir > L * 0.55;
+        if (o) { const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1, r = wait ? 140 : 26; bx = o.x + gx / gl * r; by = o.y + gy / gl * r; }
+        go(bx, by, dBall(p) > 120 && !wait);
+        if (o && !wait && dBall(p) < 70 && p.tcd <= 0 && Math.random() < d.tackle * [0.8, 1, 1.3][T.pr] * dt) {
           const front = ((p.x - o.x) * o.fx + (p.y - o.y) * o.fy) > -5; // only slide from the front or side
           if (front || Math.random() < 0.15) out.tackle = true;
         }
@@ -2320,18 +2432,28 @@ table.st tr.me td { color: var(--gold); }
   // ---------- Teams, profile, coins, shop, season, practice and the living menu ----------
   function light(hex) { const v = parseInt(hex.slice(1), 16); return ((v >> 16) * 299 + ((v >> 8) & 255) * 587 + (v & 255) * 114) / 1000 > 150; }
   const TEAMS = [
-    { n: 'Røde Tyre', s: 'TYR', c1: '#e5483b', c2: '#f4f7f2', str: 3 },
-    { n: 'Havnens Hajer', s: 'HAJ', c1: '#2f7ff0', c2: '#f4f7f2', str: 3 },
-    { n: 'Ildfuglene', s: 'ILD', c1: '#f2992e', c2: '#23262b', str: 2 },
-    { n: 'Stormen', s: 'STM', c1: '#8a5cf0', c2: '#f4f7f2', str: 4 },
-    { n: 'Nordlys', s: 'NRD', c1: '#17b3a3', c2: '#23262b', str: 2 },
-    { n: 'Flamingo IF', s: 'FLA', c1: '#e8508f', c2: '#f4f7f2', str: 1 },
-    { n: 'Kongerne', s: 'KNG', c1: '#f1f1ec', c2: '#23262b', str: 4 },
-    { n: 'Natravnene', s: 'RAV', c1: '#23262b', c2: '#f1f1ec', str: 3 },
-    { n: 'Guldørnene', s: 'GLD', c1: '#ffd447', c2: '#23262b', str: 5, price: 250 },
-    { n: 'Isbjørnene', s: 'ISB', c1: '#a9d8ff', c2: '#1f3a7a', str: 5, price: 250 },
+    { n: 'Røde Tyre', s: 'TYR', c1: '#e5483b', c2: '#f4f7f2', str: 3, st: '2211' },
+    { n: 'Havnens Hajer', s: 'HAJ', c1: '#2f7ff0', c2: '#f4f7f2', str: 3, st: '1122' },
+    { n: 'Ildfuglene', s: 'ILD', c1: '#f2992e', c2: '#23262b', str: 2, st: '2110' },
+    { n: 'Stormen', s: 'STM', c1: '#8a5cf0', c2: '#f4f7f2', str: 4, st: '1210' },
+    { n: 'Nordlys', s: 'NRD', c1: '#17b3a3', c2: '#23262b', str: 2, st: '0012' },
+    { n: 'Flamingo IF', s: 'FLA', c1: '#e8508f', c2: '#f4f7f2', str: 1, st: '1021' },
+    { n: 'Kongerne', s: 'KNG', c1: '#f1f1ec', c2: '#23262b', str: 4, st: '1110' },
+    { n: 'Natravnene', s: 'RAV', c1: '#23262b', c2: '#f1f1ec', str: 3, st: '0102' },
+    { n: 'Guldørnene', s: 'GLD', c1: '#ffd447', c2: '#23262b', str: 5, price: 250, st: '2210' },
+    { n: 'Isbjørnene', s: 'ISB', c1: '#a9d8ff', c2: '#1f3a7a', str: 5, price: 250, st: '0221' },
+    { n: 'Mit hold', s: 'MIT', c1: '#2f9d55', c2: '#f4f7f2', str: 3, own: true }, // your own team, filled in from 'mf-myteam'
   ];
-  TEAMS.forEach((t, i) => { t.id = i; t.c3 = light(t.c1) ? '#0d1a14' : '#f4f7f2'; });
+  // st: each team's style as digits for mentality, pressing, width and passing (see TAC0)
+  TEAMS.forEach((t, i) => { t.id = i; t.c3 = light(t.c1) ? '#0d1a14' : '#f4f7f2'; if (t.st) t.tac = { m: +t.st[0], pr: +t.st[1], w: +t.st[2], pt: +t.st[3] }; });
+  const OWN = TEAMS.length - 1;
+  function syncOwn() {
+    const mt = loadMT(), t = TEAMS[OWN];
+    Object.assign(t, { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2, c3: light(mt.c1) ? '#0d1a14' : '#f4f7f2' });
+    t.tac = mt.tac;
+    document.querySelectorAll('.teams button[data-own]').forEach(b => { b.textContent = t.s; b.setAttribute('aria-label', t.n); b.style.setProperty('--c1', t.c1); b.style.setProperty('--c3', t.c3); });
+  }
+  syncOwn();
   const BALLS = [
     { n: 'Klassisk', c: '#ffffff', d: '#1a1a1a', tr: '255,255,255', p: 0 },
     { n: 'Retro', c: '#c98b4f', d: '#5a3214', tr: '230,190,140', p: 80 },
@@ -2383,13 +2505,33 @@ table.st tr.me td { color: var(--gold); }
       const A = TEAMS[a], B = TEAMS[b], [h, w] = kitColors(A, B);
       col.home = h; col.away = w;
       teamPick = [A, Object.assign({}, B, { c1: w, c3: light(w) ? '#0d1a14' : '#f4f7f2' })];
-    }
+      // you coach team 1 with your own tactics; the other side plays its own style (your tactics if it is your team)
+      teamTac = [loadMT().tac, B.tac || (m === 'two' && B.own ? loadMT().tac : TAC0)];
+      if (m === 'two') teamTac[0] = A.tac || loadMT().tac;
+    } else if (m === 'host') {
+      // online: each side plays as its captain's own team if they made one
+      const hT = hostTeam(), mine = myCardTeam(), other = netTeam;
+      const t = [null, null]; t[hT] = mine; t[1 - hT] = other;
+      teamTac = [TAC0, TAC0]; teamTac[hT] = loadMT().tac; teamTac[1 - hT] = netTac || TAC0;
+      teamLay[hT] = myLay(size); teamLay[1 - hT] = netLay;
+      teamForm[hT] = myForm(size);
+      netPick(t);
+    } else teamTac = [TAC0, TAC0];
     const base = DIFF[mode === 'cpu' ? matchDiff() : 1];
     tD = [0, 1].map(t => {
       if (!teamPick) return base;
       const f = teamPick[t].str - 3;
       return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
+  }
+  // online: show the captains' own teams (names, badges, colours); a side without one keeps its kit colour
+  function netPick(t) {
+    if (!t[0] && !t[1]) { teamPick = null; setKit(kit); return; }
+    const A = t[0] || { n: KITN[kit][0], s: KITN[kit][0].slice(0, 3).toUpperCase(), c1: KITS[kit][0], c2: '#f4f7f2' };
+    const B = t[1] || { n: KITN[kit][1], s: KITN[kit][1].slice(0, 3).toUpperCase(), c1: KITS[kit][1], c2: '#f4f7f2' };
+    const [h, w] = kitColors(A, B);
+    col.home = h; col.away = w;
+    teamPick = [Object.assign({}, A, { str: 3, c1: h, c3: light(h) ? '#0d1a14' : '#f4f7f2' }), Object.assign({}, B, { str: 3, c1: w, c3: light(w) ? '#0d1a14' : '#f4f7f2' })];
   }
   function applyKind() {
     myTeamNow = mode === 'cpu' || mode === 'host' ? 0 : -1; wasBehind = false;
@@ -2438,7 +2580,7 @@ table.st tr.me td { color: var(--gold); }
 
   // ----- season: you meet the 7 other teams, weakest first -----
   function seasonNew(me, sz, mins, diff) {
-    let pool = TEAMS.filter(t => t.id !== me && !t.price);
+    let pool = TEAMS.filter(t => t.id !== me && !t.price && !t.own);
     if (pool.length > 7) pool = pool.sort((a, b) => a.str - b.str).slice(1);
     const ids = [me, ...pool.map(t => t.id)];
     const t = ids.slice(), rounds = [];
@@ -2528,7 +2670,7 @@ table.st tr.me td { color: var(--gold); }
     };
     TEAMS.forEach(t => {
       const b = document.createElement('button'); b.textContent = t.s; b.setAttribute('aria-label', t.n);
-      b.style.setProperty('--c1', t.c1); b.style.setProperty('--c3', t.c3);
+      b.style.setProperty('--c1', t.c1); b.style.setProperty('--c3', t.c3); if (t.own) b.dataset.own = '1';
       b.onclick = () => { if (!teamOpen(t.id)) { lbl.textContent = `${t.n} er låst. Køb holdet i Butik for ${t.price} mønter.`; return; } set(t.id); paint(); menuColors(); };
       el.appendChild(b);
     });
@@ -2667,6 +2809,152 @@ table.st tr.me td { color: var(--gold); }
     };
   })();
 
+  // ----- Mit hold: the team editor (name, colours, tactics, drag the players into your own line-up) -----
+  const SWATCH = ['#e5483b', '#f2992e', '#ffd447', '#2f9d55', '#17b3a3', '#a9d8ff', '#2f7ff0', '#1f3a7a', '#8a5cf0', '#e8508f', '#f1f1ec', '#23262b'];
+  const TAC_TXT = { m: ['Forsvar', 'Balanceret', 'Angreb'], pr: ['Lavt', 'Mellem', 'Højt'], w: ['Smal', 'Normal', 'Bred'], pt: ['Korte', 'Blandet', 'Lange'] };
+  const TAC_TIP = {
+    m: ['Spillestil Forsvar: holdet ligger dybt og lukker af foran målet.', '', 'Spillestil Angreb: flere går med frem, men der bliver mere plads bagved.'],
+    pr: ['Lavt pres: venter på modstanderen tæt ved eget mål.', '', 'Højt pres: jager bolden langt oppe ad banen og tackler oftere.'],
+    w: ['Smal: holdet står samlet inde i midten.', '', 'Bred: spillerne spreder sig ud til siderne.'],
+    pt: ['Korte afleveringer: mange småafleveringer, færre langskud.', '', 'Lange bolde: flere stikninger frem og skud langt fra.'],
+  };
+  let mtN = 5, mtAfter = null, mtDrag = -1, mtBuilt = false;
+  const mtSizes = [2, 3, 5, 11];
+  function mtLayNow() { // what the editor shows: your saved line-up for this size, or the chosen formation
+    const mt = loadMT();
+    if (cleanLay(mt.lay[mtN], mtN)) return mt.lay[mtN];
+    const l = formList(mtN), v = myForm(mtN);
+    return (l[v] || l[0])[1];
+  }
+  function mtMade() {
+    const mt = loadMT();
+    if (!mt.made) { mt.made = true; cfg.team = OWN; saveCfg(); } // the first time: pick your new team in the menus
+    saveMT(); syncOwn();
+  }
+  function mtTip(k) {
+    const mt = loadMT(), t = TAC_TIP[k] && TAC_TIP[k][mt.tac[k]];
+    const any = Object.keys(TAC_TIP).filter(x => TAC_TIP[x][mt.tac[x]]);
+    $('mtTacTip').textContent = t || (any.length ? TAC_TIP[any[0]][mt.tac[any[0]]] : 'Dine medspillere og computerens spillere på dit hold følger taktikken.');
+  }
+  function mtBuild() {
+    mtBuilt = true;
+    const mt = loadMT();
+    const sw = (el, key) => {
+      el.textContent = '';
+      for (const c of SWATCH) {
+        const b = document.createElement('button'); b.style.setProperty('--c', c); b.setAttribute('aria-label', 'Farve ' + c);
+        b.onclick = () => { mt[key] = c; mtMade(); paint(); mtDraw(); };
+        el.appendChild(b);
+      }
+      const paint = () => [...el.children].forEach((b, i) => b.setAttribute('aria-pressed', String(SWATCH[i] === mt[key])));
+      paint(); el._paint = paint;
+    };
+    sw($('mtC1'), 'c1'); sw($('mtC2'), 'c2');
+    for (const [id, k] of [['mtM', 'm'], ['mtPr', 'pr'], ['mtW', 'w'], ['mtPt', 'pt']])
+      mkSeg($(id), [0, 1, 2], TAC_TXT[k], () => loadMT().tac[k], v => { loadMT().tac[k] = v; mtMade(); mtTip(k); });
+    mkSeg($('mtSize'), mtSizes, mtSizes.map(n => n + ' mod ' + n), () => mtN, v => { mtN = v; mtFrom(); mtDraw(); });
+    const nm = $('mtName'), sh = $('mtShort');
+    nm.addEventListener('input', () => {
+      const v = nm.value.replace(/[^\p{L}\p{N} ._'-]/gu, '').slice(0, 16);
+      mt.n = v.trim() || 'Mit hold';
+      if (!mt.sTyped) mt.s = (mt.n.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3) || 'MIT').toUpperCase();
+      sh.value = mt.s; mtMade();
+    });
+    sh.addEventListener('input', () => {
+      const v = sh.value.replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase();
+      if (v.length) { mt.s = v; mt.sTyped = true; mtMade(); }
+    });
+    const cv2 = $('mtCv');
+    const at = e => { // pointer position on the little pitch, also when the whole game is turned on its side
+      const r = cv2.getBoundingClientRect();
+      return turned ? { x: e.clientY - r.top, y: r.right - e.clientX } : { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    const toUV = (x, y) => [1 - y / cv2.clientHeight, x / cv2.clientWidth];
+    cv2.addEventListener('pointerdown', e => {
+      const p = at(e), L = mtLayNow(), w = cv2.clientWidth, h = cv2.clientHeight;
+      let best = -1, bd = Math.max(26, w * 0.08);
+      L.forEach((q, i) => { const d = Math.hypot(q[1] * w - p.x, (1 - q[0]) * h - p.y); if (d < bd) { bd = d; best = i; } });
+      if (best < 0) return;
+      const mt = loadMT();
+      if (!cleanLay(mt.lay[mtN], mtN)) mt.lay[mtN] = L.map(q => q.slice());
+      mtDrag = best; cv2.setPointerCapture(e.pointerId); e.preventDefault(); mtDraw();
+    });
+    cv2.addEventListener('pointermove', e => {
+      if (mtDrag < 0) return;
+      const p = at(e), [u, v] = toUV(p.x, p.y), mt = loadMT(), q = mt.lay[mtN][mtDrag];
+      if (mtDrag === 0) { q[0] = clamp(u, 0.03, 0.3); q[1] = clamp(v, 0.35, 0.65); } else { q[0] = clamp(u, 0.12, 0.95); q[1] = clamp(v, 0.05, 0.95); }
+      mtDraw();
+    });
+    const up = () => { if (mtDrag < 0) return; mtDrag = -1; saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
+    cv2.addEventListener('pointerup', up); cv2.addEventListener('pointercancel', up);
+    $('mtClose').onclick = mtClose;
+    addEventListener('resize', () => { if (!$('myteam').hidden) mtDraw(); });
+  }
+  function mtFrom() { // start from one of the ready-made formations
+    const el = $('mtFrom'), l = formList(mtN), cur = myForm(mtN);
+    el.textContent = '';
+    l.forEach(([name, f], i) => {
+      const b = document.createElement('button'); b.textContent = '↺ ' + name; b.setAttribute('aria-label', 'Start fra ' + name); b.setAttribute('aria-pressed', 'false');
+      b.onclick = () => { loadMT().lay[mtN] = f.map(q => q.slice()); saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
+      el.appendChild(b);
+    });
+    $('mtLayTip').textContent = cur === CUST ? `Træk spillerne på plads. Din opstilling bruges i ${mtN} mod ${mtN} (Egen under Formation).`
+      : `Træk en spiller for at lave din egen opstilling til ${mtN} mod ${mtN}.`;
+  }
+  function mtDraw() {
+    const c = $('mtCv'), mt = loadMT();
+    const [Lh, Hh] = PITCH[mtN] || PITCH[1], asp = Hh / (Lh / 2);
+    // as big as the screen allows next to the tactics (stacked under them on a narrow screen)
+    const narrow = sw <= 560, card = c.closest('.card');
+    c.closest('.mtgrid').classList.toggle('narrow', narrow);
+    let ph = narrow ? 260 : Math.max(150, Math.min(340, sh - 170)), pw = ph * asp;
+    const maxW = narrow ? card.clientWidth - 30 : card.clientWidth * 0.52;
+    if (pw > maxW) { pw = maxW; ph = pw / asp; }
+    c.style.width = Math.round(pw) + 'px'; c.style.height = Math.round(ph) + 'px';
+    const w = Math.round(pw), h = Math.round(ph);
+    const r = Math.min(2, devicePixelRatio || 1);
+    if (c.width !== Math.round(w * r)) { c.width = Math.round(w * r); c.height = Math.round(h * r); }
+    const g = c.getContext('2d'); g.setTransform(r, 0, 0, r, 0, 0);
+    const pl = PITCHES[cfg.pitch] || PITCHES[0];
+    for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? pl.b : pl.a; g.fillRect(0, h * i / 6, w, h / 6 + 1); }
+    g.strokeStyle = 'rgba(244,247,242,0.75)'; g.lineWidth = 2;
+    g.strokeRect(1, 1, w - 2, h - 2);
+    g.beginPath(); g.arc(w / 2, 1, w * 0.16, 0, Math.PI); g.stroke(); // centre circle at the halfway line (top)
+    const bw = w * (mtN >= 5 ? 0.56 : 0.46), bh = h * 0.24;
+    g.strokeRect((w - bw) / 2, h - bh, bw, bh);
+    g.fillStyle = 'rgba(244,247,242,0.85)'; g.fillRect(w / 2 - w * 0.12, h - 5, w * 0.24, 5);
+    g.font = '600 9px ' + getComputedStyle(document.body).fontFamily; g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(244,247,242,0.3)';
+    g.fillText('ANGREB', w - 5, h * 0.2); g.fillText('MIDTBANE', w - 5, h * 0.42); g.fillText('FORSVAR', w - 5, h * 0.64);
+    const L = mtLayNow(), pr = Math.max(9, Math.min(15, w * 0.042));
+    L.forEach((q, i) => {
+      const x = q[1] * w, y = (1 - q[0]) * h, big = i === mtDrag;
+      g.beginPath(); g.arc(x, y, big ? pr * 1.3 : pr, 0, Math.PI * 2);
+      g.fillStyle = i === 0 ? '#ffd447' : mt.c1; g.fill();
+      g.lineWidth = 2; g.strokeStyle = i === 0 ? '#23262b' : mt.c2; g.stroke();
+      g.fillStyle = i === 0 ? '#23262b' : (light(mt.c1) ? '#0d1a14' : '#f4f7f2');
+      g.font = `700 ${Math.round(pr * 0.95)}px ` + getComputedStyle(document.body).fontFamily; g.textAlign = 'center';
+      g.fillText(i === 0 ? 'M' : String(i + 1), x, y + 1);
+    });
+  }
+  function mtShow(n, focus, after) {
+    if (!mtBuilt) mtBuild();
+    const mt = loadMT();
+    mtN = mtSizes.includes(n) ? n : mtSizes.includes(cfg.size) ? cfg.size : 5;
+    mtAfter = after || null;
+    $('mtName').value = mt.made ? mt.n : ''; $('mtShort').value = mt.made ? mt.s : '';
+    $('mtC1')._paint(); $('mtC2')._paint();
+    segPaints.forEach(f => f());
+    mtTip(''); mtFrom();
+    $('myteam').hidden = false;
+    requestAnimationFrame(() => { mtDraw(); if (focus === 'lay') $('mtLay').scrollIntoView({ block: 'nearest' }); });
+  }
+  function mtClose() {
+    $('myteam').hidden = true; mtDrag = -1;
+    syncOwn(); paintTeamPickers(); menuColors();
+    if (state === 'menu') menuForm();
+    if (state === 'lobby') { if (mode === 'guest') sendG(); lobbyUI(); }
+    const f = mtAfter; mtAfter = null; if (f) f();
+  }
   function extrasInit() {
     pitchLook();
     teamPicker($('teamsA'), $('teamLblA'), () => (setupMode === 'two' ? 'Hold 1' : 'Dit hold'), () => cfg.team, v => { cfg.team = v; saveCfg(); });
@@ -2690,6 +2978,9 @@ table.st tr.me td { color: var(--gold); }
     $('bPens').onclick = () => { kind = 'pen'; withHelp(() => { kind = 'pen'; startMatch('cpu'); }); };
     $('bTrain').onclick = () => { kind = 'train'; withHelp(() => { kind = 'train'; startMatch('cpu'); }); };
     $('goProf').onclick = profShow; $('profClose').onclick = () => { $('prof').hidden = true; };
+    $('goMine').onclick = () => mtShow(cfg.size);
+    $('setupMine').onclick = () => mtShow(cfg.size, 'lay');
+    $('lobbyMine').onclick = () => mtShow(mode === 'host' ? size : lobbySize);
     $('goShop').onclick = shopShow; $('shopClose').onclick = () => { $('shop').hidden = true; paintTeamPickers(); };
     // sound: unlock audio on the first tap, soft click on menu buttons
     $('wrap').addEventListener('click', e => {
@@ -2743,7 +3034,7 @@ table.st tr.me td { color: var(--gold); }
   let roster = []; // [[peer, slot]] (guests also get [peer, slot, name])
   let hostReady = false, hostInfo = [0, 'Vært'], lobbyLr = [0, 0, 0];
   let gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null;
-  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard() }).catch(() => {}); };
+  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard(), ly: gFm === CUST ? packLay(myLay(lobbySize)) : 0, tc: tacWire(loadMT().tac), tm: teamWire(myCardTeam()) }).catch(() => {}); };
   const netmsg = $('netmsg');
   (async () => {
     const framed = window.top !== window;
@@ -2832,14 +3123,33 @@ table.st tr.me td { color: var(--gold); }
     }
     for (const p of P) if (p.ctrl === 'R') { p.ctrl = 'ai'; p.peer = null; }
     for (const [peer, slot] of roster) { P[slot].ctrl = 'R'; P[slot].peer = peer; }
-    // the first friend on the blue team picks its formation
+    // the first friend on the other team picks its formation and line-up, and brings its own team and tactics
     if (state === 'lobby') {
-      const cap = roster.find(r => P[r[1]] && P[r[1]].team === 1);
+      const ct = 1 - hostTeam();
+      const cap = roster.find(r => P[r[1]] && P[r[1]].team === ct);
       const g = cap && guests.find(x => x.peer === cap[0]);
-      const v = g ? Number(g.presence.fm) | 0 : 0;
-      teamForm[1] = FORMS[size] && FORMS[size][v] ? v : 0;
+      const pr = g ? g.presence : {};
+      const v = Number(pr.fm) | 0;
+      netLay = unpackLay(pr.ly, size);
+      teamForm[ct] = v === CUST ? (netLay ? CUST : 0) : formList(size) && formList(size)[v] ? v : 0;
+      netTac = pr.tc ? cleanTac({ m: pr.tc[0], pr: pr.tc[1], w: pr.tc[2], pt: pr.tc[3] }) : null;
+      netTeam = cleanTeam(pr.tm);
+      teamForm[1 - ct] = myForm(size);
     }
   }
+  // online helpers for your own team: what the host and the other captain bring
+  let netTeam = null, netTac = null, netLay = null, lobbyTeams = [null, null];
+  const hostTeam = () => (P.find(q => q.ctrl === 'L0') || { team: 0 }).team;
+  const capTeam = () => (mode === 'host' ? 1 - hostTeam() : P[hostInfo[0]] ? 1 - P[hostInfo[0]].team : 1);
+  const hex = v => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v) : null);
+  function cleanTeam(a) {
+    if (!Array.isArray(a)) return null;
+    const n = cleanName(a[0]), s = String(a[1] || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase(), c1 = hex(a[2]), c2 = hex(a[3]) || '#f4f7f2';
+    return n && s && c1 ? { n, s, c1, c2 } : null;
+  }
+  function myCardTeam() { const mt = loadMT(); return mt.made ? { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2 } : null; }
+  const teamWire = t => (t ? [t.n, t.s, t.c1, t.c2] : 0);
+  const tacWire = t => [t.m, t.pr, t.w, t.pt];
   function pickSlot(slot) {
     if (state !== 'lobby') return;
     if (mode === 'host') {
@@ -2852,14 +3162,20 @@ table.st tr.me td { color: var(--gold); }
     if (state !== 'lobby') return;
     const isHost = mode === 'host', n = isHost ? size : lobbySize;
     const myT = isHost ? (P.find(q => q.ctrl === 'L0') || { team: 0 }).team : myTeam();
-    const cap = roster.find(r => P[r[1]] && P[r[1]].team === 1);
-    const canPick = isHost || (myT === 1 && cap && cap[0] === myPeer);
+    const ct = capTeam();
+    const cap = roster.find(r => P[r[1]] && P[r[1]].team === ct);
+    const canPick = isHost || (myT === ct && cap && cap[0] === myPeer);
     const ok = myT !== null && formSeg($('lobbyForm'), n, teamForm[myT] | 0, v => {
-      if (isHost) { setMyForm(size, v); teamForm[myT] = v; } else { gFm = v; teamForm[1] = v; sendG(); }
+      if (isHost) { setMyForm(size, v); teamForm[myT] = v; } else { gFm = v; teamForm[ct] = v; sendG(); }
       lobbyUI();
     }, !canPick);
     $('lobbyForm').hidden = $('lobbyFormLbl').hidden = !ok;
-    $('lobbyFormLbl').textContent = canPick ? 'Vælg jeres formation' : 'Jeres formation (vælges af ' + (myT === 0 ? 'værten' : 'holdets første spiller') + ')';
+    $('lobbyFormLbl').textContent = canPick ? 'Vælg jeres formation' : 'Jeres formation (vælges af ' + (myT !== ct ? 'værten' : 'holdets første spiller') + ')';
+    // which teams are playing: your own team if you made one, otherwise the kit colours
+    const tw = [0, 1].map(t => (mode === 'host' ? (t === hostTeam() ? myCardTeam() : netTeam) : lobbyTeams[t]));
+    $('lobbyTeams').textContent = tw[0] || tw[1] ? `${tw[0] ? tw[0].n : KITN[kit][0]} mod ${tw[1] ? tw[1].n : KITN[kit][1]}` : '';
+    $('lobbyTeams').hidden = !(tw[0] || tw[1]);
+    $('lobbyMine').textContent = loadMT().made ? 'Ret mit hold og taktik' : 'Lav dit eget hold';
     const b = $('startOnline');
     if (isHost) {
       const y = roster.length, x = roster.filter(r => lobbyReady.get(r[0])).length;
@@ -2952,7 +3268,7 @@ table.st tr.me td { color: var(--gold); }
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
     };
     if (st === 'e' && stats) o.ss = stats;
-    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, tf: teamForm, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
+    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, tf: teamForm, tm: [0, 1].map(t => teamWire(t === hostTeam() ? myCardTeam() : netTeam)), nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
   }
   function myTeam() { const e = roster.find(r => r[0] === myPeer); return e && P[e[1]] ? P[e[1]].team : null; }
@@ -2966,6 +3282,7 @@ table.st tr.me td { color: var(--gold); }
     for (const p of P) { p.ctrl = 'ai'; p.peer = null; }
     for (const [peer, slot] of roster) if (P[slot]) { P[slot].ctrl = peer === myPeer ? 'ME' : 'RV'; P[slot].peer = peer; }
     if (KITS[s.k]) setKit(Number(s.k));
+    if (Array.isArray(s.tm)) { lobbyTeams = [cleanTeam(s.tm[0]), cleanTeam(s.tm[1])]; netPick(lobbyTeams); }
     if (Array.isArray(s.tf)) teamForm = [Number(s.tf[0]) | 0, Number(s.tf[1]) | 0];
     if (Array.isArray(s.hs)) hostInfo = [Number(s.hs[0]) | 0, cleanName(s.hs[1]) || 'Vært'];
     if (Array.isArray(s.nm)) s.nm.forEach((n, i) => { if (P[i]) P[i].name = cleanName(n); });
@@ -3222,8 +3539,13 @@ table.st tr.me td { color: var(--gold); }
     ctx.fillStyle = 'rgba(9,20,15,0.8)';
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(sw / 2 - bw / 2, y, bw, bh, 8) : ctx.rect(sw / 2 - bw / 2, y, bw, bh); ctx.fill();
     ctx.font = `700 ${fs}px ${col.font}`;
-    ctx.fillStyle = col.home; ctx.fillText(score[0], sw / 2 - bw * 0.37, y + fs * 0.25);
-    ctx.fillStyle = col.away; ctx.fillText(score[1], sw / 2 + bw * 0.37, y + fs * 0.25);
+    // dark kits (black, navy) get a light outline so the score can be read on the dark board
+    const dark = c => { const v = parseInt(c.slice(1), 16); return ((v >> 16) * 299 + ((v >> 8) & 255) * 587 + (v & 255) * 114) / 1000 < 70; };
+    [[col.home, score[0], -1], [col.away, score[1], 1]].forEach(([c, v, sd]) => {
+      const x = sw / 2 + sd * bw * 0.37;
+      if (dark(c)) { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(244,247,242,0.85)'; ctx.strokeText(v, x, y + fs * 0.25); }
+      ctx.fillStyle = c; ctx.fillText(v, x, y + fs * 0.25);
+    });
     const m = Math.floor(clock / 60), s = Math.floor(clock % 60);
     const ss = mode === 'guest' ? soG : soSums();
     ctx.fillStyle = ss ? col.gold : col.chalk;
@@ -3343,7 +3665,7 @@ table.st tr.me td { color: var(--gold); }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish() }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w) }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
