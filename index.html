@@ -384,7 +384,8 @@ table.st tr.me td { color: var(--gold); }
         <div><b class="k">TACKLE</b><span>Uden bolden. En glidende tackling, der sigter mod bolden. Kommer du bagfra, er det frispark.</span></div>
         <div><b class="k">OFFSIDE</b><span>Ved 5 og 11 mod 11. Står modtageren bag forsvaret, når bolden spilles, får modstanderen frispark.</span></div>
         <div><b class="k">HOVED</b><span>Når bolden kommer gennem luften, header spilleren den automatisk. Tæt på mål går den mod mål.</span></div>
-        <div><b class="k">KORT</b><span>Tackler du bagfra, er det frispark, i feltet straffespark. Anden gang er gult kort, tredje gang rødt kort og 40 sekunder udenfor.</span></div>
+        <div><b class="k">KORT</b><span>Tackler du bagfra eller rammer manden langt fra bolden, er det frispark, i feltet straffespark. En hård tackling bagfra eller anden forseelse giver gult kort. Andet gule kort, eller at stoppe en fri mand på vej mod mål, giver rødt kort og tid udenfor.</span></div>
+        <div><b class="k">MÅLMAND</b><span>Målmanden kaster sig selv efter skud. Griber han bolden, styrer du ham: hold UDSPARK for et langt spark (stregen viser, hvor den lander), eller tryk KAST til en medspiller. Står du selv som målmand i feltet, kaster du dig med KAST DIG.</span></div>
         <div><b class="k">STRAFFE</b><span>Sigt med joysticket og tryk SKYD. Som målmand bestemmer joysticket, hvilken vej du kaster dig.</span></div>
         <div><b class="k">SKIFT</b><span>Uden bolden. Skift til den medspiller, der er tættest på bolden.</span></div>
       </div>
@@ -800,7 +801,7 @@ table.st tr.me td { color: var(--gold); }
   const ball = { x: CX, y: CY, z: 0, vz: 0, vx: 0, vy: 0, owner: -1, loose: 0, stealCd: 0, trail: [], lastTeam: -1, lastIdx: -1 };
   let stats = null, matchGoals = [], item = null, itemT = 8, bigT = 0, replay = null, recBuf = [], recT = 0, guard = 0;
   let setp = null; // a set piece being taken: { team, r (how far the other team must stand), t }
-  const newStats = () => ({ sh: [0, 0], pos: [0, 0], pa: [0, 0], tk: [0, 0] });
+  const newStats = () => ({ sh: [0, 0], pos: [0, 0], pa: [0, 0], tk: [0, 0], sv: [0, 0], fo: [0, 0], yc: [0, 0], rc: [0, 0] });
   let P = [];
   let particles = [], shake = 0;
 
@@ -810,7 +811,7 @@ table.st tr.me td { color: var(--gold); }
       P.push({ i: t * n + k, team: t, k, x: 0, y: 0, vx: 0, vy: 0, fx: t ? -1 : 1, fy: 0, ctrl: 'ai', peer: null,
         hold: 0, charging: false, wasA: false, wasB: false, stamina: 1, sprint: false,
         tackle: 0, tdx: 0, tdy: 0, tcd: 0, recover: 0, stun: 0, nopick: 0, swcd: 0, cd: 0, think: 0, plan: null,
-        pending: 0, frozen: 0, superShot: false, turbo: 0, name: '', windup: 0, out: 0, fouls: 0, yc: 0, dive: 0, dvy: 0, recv: 0, pendB: 0, pendQ: null });
+        pending: 0, frozen: 0, superShot: false, turbo: 0, name: '', windup: 0, out: 0, fouls: 0, yc: 0, dive: 0, dvy: 0, dvx: 0, lay: 0, hands: 0, seen: null, willDive: false, recv: 0, pendB: 0, pendQ: null });
   }
   const slotOf = (t, k) => t * size + k;
   function humanSlots(t) { return HUMAN_ORDER[size].map(k => slotOf(t, k)); }
@@ -1064,6 +1065,7 @@ table.st tr.me td { color: var(--gold); }
         say((n ? pick([`Mål! ${n} scorer!`, `Mååål! Og det er ${n}!`, `Mål af ${n}!`]) : `Mål til ${teamIs(t)}!`) + ' ' + scoreLine() + '.', 2);
       } else if (comm.prevBanner === 'Pause' && text === 'Klar') say('Så er vi i gang med anden halvleg', 2);
       else if ((text === 'Målspark' || text === 'Hjørnespark') && now - comm.shotAt < 2500 && comm.missSaid !== comm.shotAt) { comm.missSaid = comm.shotAt; say(pick(['Lige forbi!', 'Tæt på!', 'Uh, det var tæt på!']), 2); }
+      else if ((text === 'Gult kort' || text === 'Rødt kort') && lastCard && mode !== 'guest') say(text === 'Gult kort' ? pick([`Gult kort til ${lastCard}`, `Dommeren giver ${lastCard} et gult kort`]) : pick([`Rødt kort til ${lastCard}! Han er ude.`, `Rødt kort! ${lastCard} må gå af banen.`]), 2);
       else if (SAY[text]) say(SAY[text], 2);
     }
     comm.prevBanner = banner; comm.lastScore0 = score[0];
@@ -1131,7 +1133,7 @@ table.st tr.me td { color: var(--gold); }
     if (m !== 'two') cupMatch = null;
     if (m !== 'host') { makePlayers(matchSize()); assignLocal(); }
     score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
-    for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; }
+    for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; p.lay = 0; p.hands = 0; }
     particles = []; matchNo++;
     stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = []; hlReset(); lastGk = ''; lastGoalTeam = 0;
     if (m !== 'guest') {
@@ -1173,11 +1175,14 @@ table.st tr.me td { color: var(--gold); }
     $('ready').hidden = mode !== 'guest'; $('ready').disabled = false; $('ready').textContent = 'Klar til revanche';
     // stats
     const S = stats || newStats(), tot = (S.pos[0] + S.pos[1]) || 1;
+    const cards = [0, 1].map(t => [(S.yc || [0, 0])[t] ? `${S.yc[t]} gul${S.yc[t] > 1 ? 'e' : 't'}` : '', (S.rc || [0, 0])[t] ? `${S.rc[t]} rød${S.rc[t] > 1 ? 'e' : 't'}` : ''].filter(Boolean).join(', '));
     fillTable($('statsTable'), ['', tn(0), tn(1)], [
       ['Skud', S.sh[0], S.sh[1]],
       ['Boldbesiddelse', Math.round(S.pos[0] / tot * 100) + ' %', Math.round(S.pos[1] / tot * 100) + ' %'],
       ['Afleveringer', S.pa[0], S.pa[1]],
       ['Tacklinger vundet', S.tk[0], S.tk[1]],
+      ...(size > 1 ? [['Redninger', (S.sv || [0, 0])[0], (S.sv || [0, 0])[1]], ['Frispark begået', (S.fo || [0, 0])[0], (S.fo || [0, 0])[1]]] : []),
+      ...(cards.some(Boolean) ? [['Kort', cards[0] || '-', cards[1] || '-']] : []),
     ]);
     // league on this phone
     const teamNames = t => {
@@ -1273,11 +1278,12 @@ table.st tr.me td { color: var(--gold); }
     ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0; ball.fresh = false;
     ball.lastTeam = p.team; ball.lastIdx = p.i;
     p.tackle = 0; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0;
+    if (size > 1 && p.k === 0 && !pen && !so && inBox(p.team, p.x, p.y)) { p.hands = 5; p.think = 0; } // the keeper has it in his hands
     if (prev !== ball.owner) { sfx.trap(); onPossession(p); }
   }
   function release(p, vx, vy, nopick) {
     if (ball.owner === p.i) ball.owner = -1;
-    ball.vx = vx; ball.vy = vy; p.nopick = nopick; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.frozen = 0;
+    ball.vx = vx; ball.vy = vy; p.nopick = nopick; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.frozen = 0; p.hands = 0;
     if (setp) { setp = null; guard = 0.25; } // the set piece is taken: play on
     ball.lastTeam = p.team; ball.lastIdx = p.i;
   }
@@ -1412,23 +1418,105 @@ table.st tr.me td { color: var(--gold); }
     grab(a);
     sfx.win(); shake = Math.max(shake, 3);
   }
+  // ---------- Keeper: dives, saves, kicks out of his hands ----------
+  const isKeeper = p => size > 1 && p.k === 0;
+  const keeperKick = p => isKeeper(p) && ball.owner === p.i && (p.hands > 0 || (p.frozen > 0 && ball.rs === 'goal'));
+  const puntSpeed = pw => [380 + pw * 470, 430 + pw * 150]; // along the ground, up in the air
+  function puntLand(x, y, fx, fy, pw) { // where a kick out of the hands comes down
+    let [v, vz] = puntSpeed(pw), z = 1;
+    const h = 1 / 60;
+    for (let i = 0; i < 240 && z > 0; i++) { vz -= GRAV * h; z += vz * h; v *= Math.pow(0.85, h); x += fx * v * h; y += fy * v * h; }
+    return [Math.max(PL, Math.min(PR, x)), Math.max(PT, Math.min(PB, y))];
+  }
+  function punt(p, hold, ax, ay) {
+    if (ax !== undefined && Math.hypot(ax, ay) > 0.3) { const l = Math.hypot(ax, ay); p.fx = ax / l; p.fy = ay / l; }
+    const pw = Math.min(1, Math.max(0, hold) / MAXCHARGE), [hs, vz] = puntSpeed(pw);
+    const [lx, ly] = puntLand(p.x, p.y, p.fx, p.fy, pw);
+    ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
+    release(p, p.fx * hs, p.fy * hs, 0.4);
+    ball.z = 2; ball.vz = vz; ball.last = { team: p.team, pass: false, punt: true };
+    sfx.kick(pw); if (localHuman(p)) buzz(20);
+    if (stats) stats.pa[p.team]++;
+    if (isHuman(p)) { // you follow the ball: take the teammate nearest to where it lands
+      const ms = P.filter(m => m.team === p.team && m !== p && m.ctrl === 'ai' && on(m));
+      if (ms.length) swapControl(p, ms.reduce((a, b) => (Math.hypot(b.x - lx, b.y - ly) < Math.hypot(a.x - lx, a.y - ly) ? b : a)));
+    }
+  }
+  function keeperPlan(p, dir, out) { // the computer keeper: throw it to a free man close by, or kick it long
+    const foes = P.filter(q => q.team !== p.team && on(q)), mates = P.filter(q => q.team === p.team && q !== p && on(q));
+    if (!mates.length) { out.punt = [dir, 0, MAXCHARGE]; return; }
+    const free = mates.filter(q => !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 100) && Math.hypot(q.x - p.x, q.y - p.y) < 430 && !isOffside(q, p));
+    if (free.length && Math.random() < 0.6) { out.passTo = free.reduce((a, b) => ((b.x - p.x) * dir > (a.x - p.x) * dir ? b : a)); return; }
+    const fwd = mates.reduce((a, b) => ((b.x - p.x) * dir > (a.x - p.x) * dir ? b : a));
+    const dx = fwd.x - p.x, dy = fwd.y - p.y, d = Math.hypot(dx, dy);
+    out.punt = [dx, dy, Math.max(0, Math.min(1, (d - 300) / 520)) * MAXCHARGE];
+  }
+  function shotAt(p) { // a shot on its way into p's goal: when it reaches him and where
+    if (ball.owner >= 0 || !ball.last || ball.last.pass || ball.last.punt || ball.last.team === p.team || ball.z > BAR) return null;
+    const dir = p.team ? -1 : 1, gx = p.team ? PR : PL, vin = -ball.vx * dir; // speed toward his goal
+    if (vin < 260) return null;
+    const t = Math.max(0, (ball.x - p.x) * dir) / vin, tg = Math.max(0, (ball.x - gx) * dir) / vin;
+    if (tg > 1.2) return null;
+    const yg = ball.y + ball.vy * tg;
+    if (Math.abs(yg - CY) > MOUTH + 20) return null; // going wide
+    return { t, y: ball.y + ball.vy * t };
+  }
+  function keeperSkill(p) { return mode === 'cpu' && p.team === 1 ? [0.45, 0.62, 0.78][cfg.diff] || 0.62 : 0.7; }
+  function dive(p, vx, vy) {
+    const l = Math.hypot(vx, vy) || 1;
+    p.dive = 0.36; p.dvx = vx; p.dvy = vy; p.fx = vx / l; p.fy = vy / l; p.tackle = 0; p.windup = 0; p.frozen = 0; p.charging = false; p.hold = 0;
+    sfx.slide(); dust(p.x, p.y);
+  }
+  function keeperWatch(p, dt) { // throws himself at a shot he can't just step into
+    if (p.dive > 0 || p.lay > 0 || p.stun > 0 || p.recover > 0 || ball.owner >= 0 || pen || so || replay) return;
+    const s = shotAt(p);
+    if (!s) return;
+    if (p.seen !== ball.last) { p.seen = ball.last; p.react = 0; p.willDive = Math.random() < keeperSkill(p); p.err = (Math.random() - 0.5) * 100; }
+    p.react += dt;
+    if (!p.willDive || p.react < 0.18 || s.t > 0.4) return;
+    const dy = s.y + p.err - p.y, dir = p.team ? -1 : 1;
+    if (Math.abs(dy) < REACH) return; // straight at him: he just catches it
+    dive(p, dir * 70, Math.sign(dy) * Math.min(400, Math.abs(dy) / Math.max(0.2, s.t)));
+  }
+  function manualDive(p, inp) { // a human keeper presses TACKLE in his box
+    let dx = inp.x, dy = inp.y;
+    if (Math.hypot(dx, dy) < 0.3) { dx = ball.x - p.x; dy = ball.y - p.y; }
+    const l = Math.hypot(dx, dy) || 1;
+    dive(p, dx / l * 450, dy / l * 450);
+  }
+  function parry(p) { // a hard shot at full stretch: palmed away instead of held
+    const dir = p.team ? -1 : 1, s = Math.hypot(ball.vx, ball.vy), side = Math.sign(p.dvy || ball.y - p.y || 1);
+    ball.vx = dir * s * 0.3; ball.vy = side * s * 0.36; ball.vz = 170; ball.z = Math.max(ball.z, 4);
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.4;
+    tone(150, 0.08, 'triangle', 0.14, -60); shake = Math.max(shake, 4);
+  }
   // ---------- Fouls, cards, penalties ----------
   const inBox = (team, x, y) => Math.abs(x - (team ? PR : PL)) < 120 && Math.abs(y - CY) < 150; // team's own penalty area
-  function foul(a, b) {
+  function chanceDenied(a, b) { // b was through on goal: nobody but the keeper between him and the goal
+    if (size < 3) return false;
+    const dir = b.team ? -1 : 1, gx = b.team ? PL : PR, dist = (gx - b.x) * dir;
+    if (dist > 340 || dist < 0 || Math.abs(b.y - CY) > 200 || b.fx * dir < 0.3) return false;
+    return !P.some(q => q.team === a.team && q !== a && on(q) && q.k !== 0 && (gx - q.x) * dir < dist + 10);
+  }
+  let lastCard = '';
+  function foul(a, b, hard) {
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
     let card = '';
+    if (stats) stats.fo[a.team]++;
     if (size > 1) {
       a.fouls++;
-      if (a.fouls === 2) { a.yc = 1; card = 'Gult kort'; }
-      else if (a.fouls >= 3) { card = 'Rødt kort'; sendOff(a); }
+      if (chanceDenied(a, b)) card = 'Rødt kort';                         // stopped a clear chance: straight red
+      else if (hard || a.fouls >= 2) card = a.yc ? 'Rødt kort' : 'Gult kort'; // a hard one, or one too many; a second yellow is red
+      if (card === 'Gult kort') { a.yc = 1; if (stats) stats.yc[a.team]++; }
     }
     if (inBox(a.team, b.x, b.y) && size > 1) startPenalty(b.team);
     else restart('free', b.team, x, y);
-    if (card) flash = { text: card, t: 1.4 };
+    if (card === 'Rødt kort') { sendOff(a); if (stats) stats.rc[a.team]++; }
+    if (card) { flash = { text: card, t: 1.8 }; lastCard = nameOf(a) || ''; }
   }
   function sendOff(p) {
     if (isHuman(p)) { const q = nearestFree(p); if (q) swapControl(p, q); }
-    p.out = 40; p.fouls = 0; p.yc = 0; p.stun = 0; p.tackle = 0; p.windup = 0;
+    p.out = size <= 3 ? 20 : 40; p.fouls = 0; p.yc = 0; p.stun = 0; p.tackle = 0; p.windup = 0;
     if (ball.owner === p.i) ball.owner = -1;
   }
   function startPenalty(team) { // team takes a penalty at the other end
@@ -1465,7 +1553,7 @@ table.st tr.me td { color: var(--gold); }
         const right = 0.3 + (mode === 'cpu' ? cfg.diff : 1) * 0.12;
         d = Math.random() < right ? truth : [-1, 0, 1][Math.floor(Math.random() * 3)];
       }
-      kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * 470;
+      kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * 470; kp.dvx = 0;
     }
     guard = 0; if (so) so.shot = true;
     pen = null;
@@ -1490,14 +1578,18 @@ table.st tr.me td { color: var(--gold); }
   }
   function tackleBody(a, b) {
     if (setp) { a.tackle = 0; a.recover = 0.2; return; } // nobody can take the ball before the set piece is taken
+    if (b.hands > 0) { a.tackle = 0; a.recover = 0.3; return; } // nobody goes through the keeper when he holds it
     const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces, i.e. from behind
     if (ball.owner === b.i && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
     const behind = dot > 0.8 && ball.owner === b.i;
+    // took the man and nowhere near the ball
+    const late = ball.owner !== b.i && Math.hypot(ball.x - b.x, ball.y - b.y) > 90 && dBall(a) > 90;
     a.tackle = 0;
-    if (behind) {
+    if (behind || late) {
       a.stun = 1.1; a.vx = a.vy = 0;              // foul: the tackler goes down
+      b.stun = Math.max(b.stun, 0.5);
       sfx.foul(); if (localHuman(a)) buzz(80);
-      foul(a, b);
+      foul(a, b, behind && b.sprint && Math.hypot(b.vx, b.vy) > MAXV * 1.05); // took down a man running at full speed: a hard foul
       return;
     }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
@@ -1558,6 +1650,11 @@ table.st tr.me td { color: var(--gold); }
     if (o === p && p.frozen > 0 && ball.rs === 'pen') { // penalty: pick a corner
       p.think += dt;
       if (p.think > 1.1) { const ty = CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.3 + Math.random() * 0.45) * (Math.random() < 0.2 ? 0 : 1); out.shoot = 0.2 + Math.random() * 0.5; out.aim = [goalX - p.x, ty - p.y]; }
+      return out;
+    }
+    if (o === p && keeper && (p.hands > 0 || (p.frozen > 0 && ball.rs === 'goal'))) { // keeper with it in his hands, or a goal kick
+      p.think += dt;
+      if (p.think > (p.hands > 0 ? 0.9 : 1.0)) keeperPlan(p, dir, out);
       return out;
     }
     if (o === p && p.frozen > 0) {
@@ -1735,6 +1832,8 @@ table.st tr.me td { color: var(--gold); }
         if (p.out <= 0) { const h = homeOf(p); p.x = h.x; p.y = PT + 30; }
         continue;
       }
+      if (p.lay > 0) p.lay -= dt;
+      if (isKeeper(p)) keeperWatch(p, dt);
       const down = p.stun > 0 || p.recover > 0;
       const inp = down ? ZERO : inputFor(p, dt);
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
@@ -1747,7 +1846,7 @@ table.st tr.me td { color: var(--gold); }
       else p.stamina = Math.min(1, p.stamina + 0.22 * dt);
       const top = MAXV * (p.sprint ? 1.35 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1);
 
-      if (mag > 0.2 && p.tackle <= 0) {
+      if (mag > 0.2 && p.tackle <= 0 && !(p.dive > 0)) {
         const ta = Math.atan2(inp.y, inp.x);
         if (has) { // turn with the ball smoothly so it rolls around your feet
           const ca = Math.atan2(p.fy, p.fx);
@@ -1761,7 +1860,10 @@ table.st tr.me td { color: var(--gold); }
           p.fx = Math.cos(na); p.fy = Math.sin(na);
         } else { p.fx = Math.cos(ta); p.fy = Math.sin(ta); }
       }
-      if (p.dive > 0) { p.dive -= dt; p.vx = 0; p.vy = p.dvy; p.frozen = 0; } // keeper diving at a penalty
+      if (p.dive > 0) { // keeper diving
+        p.dive -= dt; p.vx = p.dvx; p.vy = p.dvy; p.frozen = 0;
+        if (p.dive <= 0) { p.dive = 0; p.lay = 0.5; p.recover = Math.max(p.recover, 0.45); p.vx *= 0.2; p.vy *= 0.2; } // on the ground for a moment
+      }
       else if (p.tackle > 0) {
         const k = 0.45 + 0.55 * (p.tackle / TACKLE_T);
         p.vx = p.tdx * TACKLE_V * k; p.vy = p.tdy * TACKLE_V * k;
@@ -1776,19 +1878,40 @@ table.st tr.me td { color: var(--gold); }
       p.x += p.vx * dt; p.y += p.vy * dt;
       p.x = Math.max(PL + PRAD - 30, Math.min(PR - PRAD + 30, p.x));
       p.y = Math.max(PT + PRAD - 10, Math.min(PB - PRAD + 10, p.y));
+      if (p.hands > 0) { // the keeper with the ball in his hands: stays in his box, and must let go in time
+        if (ball.owner !== p.i) p.hands = 0;
+        else {
+          const gx = p.team ? PR : PL;
+          p.x = Math.max(gx - 112, Math.min(gx + 112, p.x)); p.y = Math.max(CY - 142, Math.min(CY + 142, p.y));
+          p.hands -= dt;
+          if (p.hands <= 0) { p.hands = 0; punt(p, p.charging ? p.hold : MAXCHARGE * 0.6); continue; }
+        }
+      }
 
       if (down) { p.wasA = p.wasB = false; continue; }
       if (p.ctrl === 'ai') {
-        if (has && inp.lob) lob(p, inp.aim[0], inp.aim[1]);
+        if (has && inp.punt) punt(p, inp.punt[2], inp.punt[0], inp.punt[1]);
+        else if (has && inp.lob) lob(p, inp.aim[0], inp.aim[1]);
         else if (has && inp.shoot) shoot(p, inp.shoot, inp.aim[0], inp.aim[1]);
         else if (has && inp.passTo) pass(p, inp.passTo, inp.through);
         else if (!has && inp.tackle && !(p.windup > 0) && p.tcd <= 0) p.windup = 0.35; // a short warning before the slide
-        if (p.windup > 0) { p.windup -= dt; if (p.windup <= 0) { p.windup = 0; if (!has && dBall(p) < 110) startTackle(p); else p.tcd = 0.4; } }
+        if (p.windup > 0) {
+          p.windup -= dt;
+          if (p.windup <= 0) {
+            p.windup = 0;
+            const o = owner(), back = o && o.team !== p.team && ((p.x - o.x) * o.fx + (p.y - o.y) * o.fy) < -8; // he has got behind the man: usually holds back
+            if (!has && dBall(p) < 110 && !(back && Math.random() < 0.85)) startTackle(p); else p.tcd = 0.4;
+          }
+        }
         continue;
       }
       p.windup = 0;
       const aDown = !!inp.a && !p.wasA, bDown = !!inp.b && !p.wasB;
-      if (has) {
+      if (has && keeperKick(p)) { // out of the keeper's hands, or a goal kick: SKYD kicks it long (hold = further), AFLEVER throws/plays it short
+        if (aDown) p.charging = true;
+        if (p.charging) { if (inp.a) p.hold = Math.min(MAXCHARGE, p.hold + dt); else punt(p, p.hold, inp.x, inp.y); }
+        if (bDown && ball.owner === p.i) pass(p, passTarget(p, inp.x, inp.y));
+      } else if (has) {
         if (aDown) { if (p.pending > 0) { p.pending = 0; lob(p); } else p.charging = true; }
         if (p.charging) {
           if (inp.a) p.hold = Math.min(MAXCHARGE, p.hold + dt);
@@ -1803,7 +1926,7 @@ table.st tr.me td { color: var(--gold); }
         if (p.pendB > 0) { p.pendB -= dt; if (p.pendB <= 0 && ball.owner === p.i) pass(p, p.pendQ); }
       } else {
         p.charging = false; p.hold = 0;
-        if (aDown && !(p.frozen > 0)) startTackle(p);
+        if (aDown && !(p.frozen > 0) && !(p.dive > 0)) { if (isKeeper(p) && inBox(p.team, p.x, p.y)) manualDive(p, inp); else startTackle(p); }
         if (bDown && p.swcd <= 0 && !(p.frozen > 0)) manualSwitch(p);
       }
       p.wasA = !!inp.a; p.wasB = !!inp.b;
@@ -1843,6 +1966,11 @@ table.st tr.me td { color: var(--gold); }
         if (d < R) { p.x = ball.x + dx / d * R; p.y = ball.y + dy / d * R; if (p.tackle > 0) p.tackle = 0; }
       }
     }
+    { const k = owner(); if (k && k.hands > 0) for (const p of P) { // keep away from the keeper while he has it
+      if (p.team === k.team || !on(p)) continue;
+      const dx = p.x - k.x, dy = p.y - k.y, d = Math.hypot(dx, dy) || 1;
+      if (d < 85) { p.x = k.x + dx / d * 85; p.y = k.y + dy / d * 85; }
+    } }
     // ball
     ball.stealCd -= dt;
     const o = owner();
@@ -1857,9 +1985,10 @@ table.st tr.me td { color: var(--gold); }
         ball.vx = o.vx; ball.vy = o.vy;
         // tackles and shoulder-to-shoulder steals
         for (const p of P) {
-          if (p.team === o.team || p.stun > 0 || o.frozen > 0 || !on(p)) continue;
+          if (p.team === o.team || p.stun > 0 || o.frozen > 0 || o.hands > 0 || !on(p)) continue;
           const db = dBall(p);
           if (p.tackle > 0 && db < TACKLE_REACH) { tackleWins(p); break; }
+          if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; if (stats) stats.sv[p.team]++; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
           if (p.tackle <= 0 && ball.stealCd <= 0 && facing && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
         }
@@ -1879,7 +2008,7 @@ table.st tr.me td { color: var(--gold); }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && (ball.z < 26 || (keeperCatch(p) && ball.z < 75)) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && (ball.z < 26 || (keeperCatch(p) && ball.z < 75)) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -1890,13 +2019,14 @@ table.st tr.me td { color: var(--gold); }
         const rv = Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
         if (ball.last && ball.last.pass && ball.last.team === p.team) { grab(p); break; }
         if (rv < 760 || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
-          const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
-          if (p.tackle > 0) tackleWins(p); else grab(p);
-          if (save) { flash = { text: 'Redning!', t: 1.0 }; crowd.ooh(); }
+          const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
+          if (save && (p.dive > 0 || dBall(p) > REACH) && sp2 > 700 && Math.random() < 0.8) parry(p); // at full stretch: tipped away
+          else if (p.tackle > 0) tackleWins(p); else grab(p);
+          if (save) { flash = { text: 'Redning!', t: 1.0 }; crowd.ooh(); if (stats) stats.sv[p.team]++; }
           break;
         }
       }
-      if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0)) { // headers
+      if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && ball.last.punt && ball.vz > 0)) { // headers (not while a long kick is still climbing)
         const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
         if (h) header(h);
       }
@@ -1944,7 +2074,7 @@ table.st tr.me td { color: var(--gold); }
     ball.x = x; ball.y = y; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.rs = type; ball.last = null;
     let taker;
     if (type === 'goal' && size > 1) taker = P[slotOf(team, 0)];
-    else taker = P.filter(p => p.team === team && on(p) && !(size > 1 && p.k === 0 && type !== 'goal')).reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a));
+    else { const c = P.filter(p => p.team === team && on(p) && !(size > 1 && p.k === 0 && type !== 'goal')); taker = (c.length ? c : P.filter(p => p.team === team && on(p))).reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a)); }
     // stand just outside the line, facing into the pitch
     let fx = CX - x, fy = CY - y; const l = Math.hypot(fx, fy) || 1; fx /= l; fy /= l;
     if (type === 'throw') { fx = 0; fy = y < CY ? 1 : -1; }
@@ -2817,7 +2947,7 @@ table.st tr.me td { color: var(--gold); }
     const o = {
       m: matchNo, st, z: size, c: Math.ceil(clock * 10), g: golden ? 1 : 0, sc: score, bn: banner, fl: flash ? flash.text : '', sp: setp ? setp.r : 0,
       b: [RND(ball.x), RND(ball.y), ball.owner, RND(ball.z)],
-      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0)]),
+      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0) | (p.dive > 0 || p.lay > 0 ? 32 : 0) | (keeperKick(p) ? 64 : 0)]),
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
       // slow-changing fields go every 15th message (and always in the lobby)
       pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > 12 ? 1 : 0,
@@ -2858,7 +2988,7 @@ table.st tr.me td { color: var(--gold); }
     soG = Array.isArray(s.so) ? s.so.map(v => Number(v) | 0) : null; celeb = Number(s.ce) | 0;
     if (Array.isArray(s.ou)) s.ou.forEach((v, i) => { if (P[i]) { P[i].out = v & 2 ? 1 : 0; P[i].yc = v & 1; } });
     item = Array.isArray(s.pu) ? { type: Object.keys(ITEMS)[Number(s.pu[0]) | 0] || 'super', x: Number(s.pu[1]) || 0, y: Number(s.pu[2]) || 0, t: 1 } : null;
-    if (s.ss && Array.isArray(s.ss.sh)) { const n2 = a => (Array.isArray(a) ? [Number(a[0]) || 0, Number(a[1]) || 0] : [0, 0]); stats = { sh: n2(s.ss.sh), pos: n2(s.ss.pos), pa: n2(s.ss.pa), tk: n2(s.ss.tk) }; }
+    if (s.ss && Array.isArray(s.ss.sh)) { const n2 = a => (Array.isArray(a) ? [Number(a[0]) || 0, Number(a[1]) || 0] : [0, 0]); stats = { sh: n2(s.ss.sh), pos: n2(s.ss.pos), pa: n2(s.ss.pa), tk: n2(s.ss.tk), sv: n2(s.ss.sv), fo: n2(s.ss.fo), yc: n2(s.ss.yc), rc: n2(s.ss.rc) }; }
     const prev = score.slice();
     score = [Number(s.sc && s.sc[0]) || 0, Number(s.sc && s.sc[1]) || 0];
     clock = (Number(s.c) || 0) / 10; golden = !!s.g;
@@ -2920,7 +3050,7 @@ table.st tr.me td { color: var(--gold); }
           p.x += (q[0] - p.x) * k; p.y += (q[1] - p.y) * k;
           p.fx = (Number(q[2]) || 0) / 100; p.fy = (Number(q[3]) || 0) / 100;
           p.hold = (Number(q[4]) || 0) / 100; p.stamina = (Number(q[5]) || 0) / 100;
-          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0; p.windup = f & 16 ? 0.1 : 0;
+          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0; p.windup = f & 16 ? 0.1 : 0; p.lay = f & 32 ? 0.1 : 0; p.hands = f & 64 ? 1 : 0;
           if (p.tackle && Math.random() < 0.5) dust(p.x, p.y);
         });
       }
@@ -2957,7 +3087,7 @@ table.st tr.me td { color: var(--gold); }
   const myPlayers = () => P.filter(isMine);
   function drawPlayer(p) {
     if (p.out > 1e5) return; // training: the missing opponents are not shown
-    const sliding = p.tackle > 0, down = p.stun > 0;
+    const sliding = p.tackle > 0 || p.dive > 0 || p.lay > 0, down = p.stun > 0;
     const hop = banner === 'MÅL!' && P[celeb] === p && !(replay && replay.t >= 0) ? Math.abs(Math.sin(performance.now() / 110)) * 10 : 0;
     ctx.save(); ctx.translate(p.x, p.y - hop);
     if (p.out > 0) ctx.globalAlpha = 0.45;
@@ -2968,7 +3098,7 @@ table.st tr.me td { color: var(--gold); }
     }
     if (p.superShot) { ctx.fillStyle = `rgba(255,140,40,${0.25 + 0.15 * Math.sin(performance.now() / 120)})`; ctx.beginPath(); ctx.arc(0, 0, PRAD + 10, 0, Math.PI * 2); ctx.fill(); }
     if (p.turbo > 0) { ctx.strokeStyle = 'rgba(120,220,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, PRAD + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
-    if (sliding) { ctx.rotate(Math.atan2(p.fy, p.fx)); ctx.scale(1.3, 0.78); }
+    if (sliding) { ctx.rotate(Math.atan2(p.fy, p.fx)); if (p.tackle > 0) ctx.scale(1.3, 0.78); else ctx.scale(1.55, 0.7); } // a slide, or a keeper at full stretch
     ctx.globalAlpha = down || p.out > 0 ? 0.5 : 1;
     ctx.fillStyle = p.team ? col.away : col.home;
     ctx.beginPath(); ctx.arc(0, 0, PRAD, 0, Math.PI * 2); ctx.fill();
@@ -2998,12 +3128,23 @@ table.st tr.me td { color: var(--gold); }
       ctx.fillStyle = p.stamina < 0.25 ? col.home : col.gold; ctx.fillRect(p.x - 20, p.y + PRAD + 6, 40 * p.stamina, 5);
     }
   }
+  function drawKickHint(me, inp) { // where SKYD sends it from the keeper's hands
+    let fx = me.fx, fy = me.fy; const m = Math.hypot(inp.x, inp.y);
+    if (m > 0.3) { fx = inp.x / m; fy = inp.y / m; }
+    const [lx, ly] = puntLand(me.x, me.y, fx, fy, Math.min(1, me.hold / MAXCHARGE));
+    ctx.save(); ctx.strokeStyle = 'rgba(255,212,71,0.7)'; ctx.lineWidth = 3; ctx.setLineDash([6, 8]);
+    ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.quadraticCurveTo((me.x + lx) / 2, (me.y + ly) / 2 - 90, lx, ly); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(lx, ly, 18, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx - 8, ly); ctx.lineTo(lx + 8, ly); ctx.moveTo(lx, ly - 8); ctx.lineTo(lx, ly + 8); ctx.stroke(); ctx.restore();
+  }
   function drawPassHint() {
-    if (size < 2 || mode === 'guest') return;
+    if (size < 2) return;
     for (const me of myPlayers()) {
       if (ball.owner !== me.i) continue;
       const i = me.ctrl === 'L1' ? 1 : 0;
       const inp = localInput(i);
+      if (isKeeper(me) && (mode === 'guest' ? me.hands > 0 : keeperKick(me))) drawKickHint(me, inp);
+      if (mode === 'guest') continue;
       const q = passTarget(me, inp.x, inp.y); if (!q) continue;
       ctx.strokeStyle = 'rgba(255,212,71,0.55)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
@@ -3108,6 +3249,13 @@ table.st tr.me td { color: var(--gold); }
       ctx.font = `700 ${bf}px ${col.font}`; ctx.textBaseline = 'middle';
       ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillText(text, sw / 2 + 3, sh * 0.42 + 3);
       ctx.fillStyle = col.gold; ctx.fillText(text, sw / 2, sh * 0.42);
+      if (text === 'Gult kort' || text === 'Rødt kort') { // the referee holds up the card
+        const ch = bf * 1.25, cw = ch * 0.68;
+        ctx.save(); ctx.translate(sw / 2, sh * 0.42 - bf * 0.6 - ch * 0.55); ctx.rotate(0.12);
+        ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(-cw / 2 + 4, -ch / 2 + 4, cw, ch);
+        ctx.fillStyle = text === 'Gult kort' ? '#ffd447' : '#e5483b'; ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 2; ctx.strokeRect(-cw / 2, -ch / 2, cw, ch); ctx.restore();
+      }
     }
   }
   function drawButton(b, label, on, ring, fill, dim) {
@@ -3136,8 +3284,10 @@ table.st tr.me td { color: var(--gold); }
       const ring = twoSides() ? (side ? col.away : col.home) : (me && me.team ? col.away : col.home);
       const has = me && ball.owner === me.i;
       const ready = me && me.tcd <= 0 && me.recover <= 0;
-      drawButton(aBtn(at), has ? 'SKYD' : 'TACKLE', btn[side].a, ring, me ? Math.min(1, me.hold / MAXCHARGE) : 0, !has && !ready && mode !== 'guest');
-      if (size > 1) drawButton(bBtn(at), has ? 'AFLEVER' : 'SKIFT', btn[side].b, ring, 0, false);
+      const kk = has && isKeeper(me) && (mode === 'guest' ? me.hands > 0 : keeperKick(me)); // the keeper with the ball in his hands
+      const dv = !has && me && isKeeper(me) && inBox(me.team, me.x, me.y);
+      drawButton(aBtn(at), kk ? 'UDSPARK' : has ? 'SKYD' : dv ? 'KAST DIG' : 'TACKLE', btn[side].a, ring, me ? Math.min(1, me.hold / MAXCHARGE) : 0, !has && !ready && mode !== 'guest');
+      if (size > 1) drawButton(bBtn(at), kk ? 'KAST' : has ? 'AFLEVER' : 'SKIFT', btn[side].b, ring, 0, false);
     }
   }
 
@@ -3197,7 +3347,7 @@ table.st tr.me td { color: var(--gold); }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish() }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
