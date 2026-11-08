@@ -142,7 +142,12 @@ button.big small { font: 500 11px/1.2 var(--font); color: var(--muted); letter-s
 .lbl .stars { color: var(--gold); letter-spacing: 0; }
 .full { grid-column: 1 / -1; }
 .profgrid, .shopgrid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; text-align: left; }
-.shopgrid { grid-template-columns: 1fr 1fr 1fr; }
+.shopgrid { grid-template-columns: 1.15fr 1fr 1fr 1fr; }
+.lvrow { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); }
+.lvrow b { font-size: 14px; } .lvrow small { grid-column: 1 / -1; opacity: 0.75; font-size: 11px; }
+.lvbar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.12); overflow: hidden; } .lvbar i { display: block; height: 100%; background: var(--gold); }
+.lvrow button { padding: 4px 10px; min-height: 0; font-size: 12px; }
+.drill { display: flex; align-items: center; gap: 8px; text-align: left; } .drill .st { color: var(--gold); letter-spacing: 1px; white-space: nowrap; } .drill span.nm { flex: 1; }
 .statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .statgrid div { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 4px 8px; font-size: 10px; color: var(--muted); }
 .statgrid b { display: block; font-size: 15px; color: var(--chalk); font-variant-numeric: tabular-nums; }
@@ -262,6 +267,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
         <div class="col"><div class="lbl">Straffesparkskonkurrence</div>
           <p>5 straffe hver mod computeren. Sigt med joysticket og tryk SKYD. Når du står i mål, bestemmer joysticket hvilken vej du kaster dig.</p>
           <button id="bPens" class="go">Start straffe</button></div>
+        <div class="col"><div class="lbl">Udfordringer</div>
+          <p>Klar dem for at få stjerner og mønter.</p>
+          <div class="shoplist" id="drillList"></div></div>
         <div class="col"><div class="lbl">Træningsbane</div>
           <p>Dit hold mod en målmand. Intet ur og ingen modstandere, så du kan øve skud, lob, stikninger og driblinger.</p>
           <button id="bTrain" class="go">Start træning</button></div>
@@ -287,6 +295,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
         <div class="col" id="diffBox"><div class="lbl" id="diffLbl">Niveau</div>
           <div class="seg" id="segDiff" role="group" aria-label="Computerens niveau">
             <button data-v="0">Let</button><button data-v="1">Normal</button><button data-v="2">Svær</button>
+          </div></div>
+        <div class="col" id="serBox"><div class="lbl">Serie</div>
+          <div class="seg" id="segSer" role="group" aria-label="Serie">
+            <button data-v="1">Én kamp</button><button data-v="3">Bedst af 3</button><button data-v="5">Bedst af 5</button>
           </div></div>
         <div class="col" id="kitBox"><div class="lbl">Trøjer</div>
           <div class="seg" id="segKit" role="group" aria-label="Trøjer">
@@ -344,8 +356,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
   <div class="overlay" id="shop" hidden>
     <div class="card wide">
       <div class="top"><button class="alt back" id="shopClose">‹ Tilbage</button><h2>Butik</h2><span class="coins big" data-coins>0</span></div>
-      <p>Du tjener mønter i hver kamp: for at spille, for mål, for sejre og for nye trofæer.</p>
+      <p>Du tjener mønter i hver kamp: for at spille, for mål, for sejre og for nye trofæer. Træning gør dit hold bedre i kampe mod computeren og i sæsonen.</p>
       <div class="shopgrid">
+        <div class="col"><div class="lbl" id="lvLbl">Træn dit hold</div><div class="shoplist" id="shopTrain"></div></div>
         <div class="col"><div class="lbl">Hold</div><div class="shoplist" id="shopTeams"></div></div>
         <div class="col"><div class="lbl">Bolde</div><div class="shoplist" id="shopBalls"></div></div>
         <div class="col"><div class="lbl">Baner</div><div class="shoplist" id="shopPitch"></div></div>
@@ -547,7 +560,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0 };
+  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0 };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   if (![1, 2, 3, 5, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
   function seg(id, key) {
@@ -561,7 +574,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     paint(); segPaints.push(paint);
   }
   const segPaints = [];
-  seg('segSize', 'size'); seg('segMins', 'mins'); seg('segDiff', 'diff'); seg('segKit', 'kit');
+  seg('segSize', 'size'); seg('segMins', 'mins'); seg('segDiff', 'diff'); seg('segKit', 'kit'); seg('segSer', 'ser');
   const saveCfg = () => { try { localStorage.setItem('mf-cfg', JSON.stringify(cfg)); } catch (_) {} };
   function toggle(id, key) {
     const b = $(id), paint = () => { b.setAttribute('aria-pressed', String(!!cfg[key])); b.textContent = cfg[key] ? 'Til' : 'Fra'; };
@@ -1349,7 +1362,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const n = [...new Set(P.filter(p => p.team === t).map(p => (p.ctrl === 'ME' ? myName() : mode === 'guest' ? p.name : nameOf(p))).filter(Boolean))];
       return n.length ? n : ['Computer'];
     };
-    recordMatch([teamNames(0), teamNames(1)], score, matchGoals, win);
+    if (kind !== 'train') recordMatch([teamNames(0), teamNames(1)], score, matchGoals, win);
     if (cupMatch) { cupResult(cupMatch.i, score[0], score[1], win); }
     $('toCup').hidden = !cupMatch; $('again').hidden = $('again').hidden || !!cupMatch;
     afterMatch(win, me, ss);
@@ -1362,10 +1375,44 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (online) { const o = onlineSides(me); const r = rateOnline(o.opps, win === me ? 1 : win < 0 ? 0.5 : 0, score[me]); if (r) lines.push(r); }
     }
     for (const c of chWon) lines.push('Udfordring klaret: ' + c);
+    if (kind !== 'train') for (const l of seriesAfter(win, me)) lines.push(l);
     $('endCh').textContent = lines.join('\n'); $('endCh').hidden = !lines.length;
     $('end').hidden = false;
     sfx.whistle(3);
   }
+  // a series (best of 3 / 5) and the all-time score between the two of you, kept on this phone ('mf-h2h')
+  let series = null, serG = null; // serG: what a guest phone was told by the host
+  const h2hLoad = () => { try { return JSON.parse(localStorage.getItem('mf-h2h') || '{}') || {}; } catch (_) { return {}; } };
+  function seriesAfter(win, me) {
+    const out = [];
+    if (mode !== 'guest') serEnd = null;
+    if (mode === 'guest') {
+      if (serG && serG[0] > 1) { const need = Math.ceil(serG[0] / 2), done = serG[1] >= need || serG[2] >= need; out.push(done ? `${serG[1] > serG[2] ? tn(0) : tn(1)} vinder serien ${Math.max(serG[1], serG[2])}-${Math.min(serG[1], serG[2])}!` : `Serie (bedst af ${serG[0]}): ${tn(0)} ${serG[1]} - ${serG[2]} ${tn(1)}`); }
+      return out;
+    }
+    if (series && kind === null) {
+      series.g++; if (win >= 0) series.w[win]++;
+      const need = Math.ceil(series.n / 2), w = series.w;
+      if (w[0] >= need || w[1] >= need || series.g >= series.n + 4) {
+        const sw = w[0] === w[1] ? -1 : w[0] > w[1] ? 0 : 1;
+        out.push(sw < 0 ? `Serien endte uafgjort ${w[0]}-${w[1]}` : `${tn(sw)} vinder serien ${w[sw]}-${w[1 - sw]}!`);
+        if (mode === 'two' || mode === 'host') { // remember series wins between the two of you
+          const H = h2hLoad(), key = mode === 'two' ? 'sofa' : 'online'; const r = H[key] || { g: 0, w: [0, 0, 0], s: [0, 0] };
+          if (sw >= 0) r.s[sw]++; H[key] = r; try { localStorage.setItem('mf-h2h', JSON.stringify(H)); } catch (_) {}
+        }
+        serEnd = [series.n, w[0], w[1]]; series = null;
+        $('again').textContent = 'Ny serie';
+        if (mode !== 'guest') $('again').onclickSer = true;
+      } else { out.push(`Serie (bedst af ${series.n}): ${tn(0)} ${w[0]} - ${w[1]} ${tn(1)}`); $('again').textContent = `Næste kamp (${series.g + 1})`; serEnd = [series.n, w[0], w[1]]; }
+    }
+    if (mode === 'two') { // all-time on this phone, 2 players on one phone
+      const H = h2hLoad(), r = H.sofa || { g: 0, w: [0, 0, 0], s: [0, 0] };
+      r.g++; r.w[win < 0 ? 2 : win]++; H.sofa = r; try { localStorage.setItem('mf-h2h', JSON.stringify(H)); } catch (_) {}
+      out.push(`Samlet på denne telefon: ${cfg.name || 'Spiller 1'} ${r.w[0]} - ${r.w[1]} Spiller 2 (${r.w[2]} uafgjort)` + (r.s[0] + r.s[1] ? ` · Serier ${r.s[0]}-${r.s[1]}` : ''));
+    }
+    return out;
+  }
+  let serEnd = null; // the series score sent to guests with the end of the match
   function updateAgain() {
     const y = roster.length, x = roster.filter(r => readyMap.get(r[0]) === matchNo).length;
     $('again').textContent = y ? `Revanche (${x}/${y} klar)` : 'Spil igen';
@@ -1384,7 +1431,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (mode === 'host') addRx(P.findIndex(q => q.ctrl === 'L0'), id);
     else if (mode === 'guest') { gRx = [gRx[0] + 1, id]; sendG(); }
   });
-  $('again').onclick = () => startMatch(mode);
+  $('again').onclick = () => {
+    if (kind === 'train' && drillAgain) { startDrill(drillAgain); return; }
+    if (!series && $('again').onclickSer && kind === null) series = { n: cfg.ser, w: [0, 0], g: 0 };
+    $('again').onclickSer = false;
+    startMatch(mode);
+  };
   $('toMenu').onclick = () => toMenu();
 
   const fsBtn = $('fs');
@@ -1461,6 +1513,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         }
       }
     }
+    if (lvOf(p) && !isPen) power *= 1 + 0.02 * lvOf(p).sht;
     if (p.superShot) { power *= 1.6; p.superShot = false; flash = { text: 'Superskud!', t: 0.8 }; shake = Math.max(shake, 8); }
     if (stats) stats.sh[p.team]++;
     ball.gk = isPen ? 'pen' : ball.fresh && ball.rs === 'free' ? 'fk' : 'shot'; ball.fresh = false;
@@ -1534,18 +1587,22 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     const pt = q && ax !== undefined ? [p.x + ax, p.y + ay] : null;
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
-    const hs = ax !== undefined ? Math.max(260, Math.min(600, Math.hypot(ax, ay) / 0.85)) : 540; // crosses land where they're aimed
+    const hs = ax !== undefined ? Math.max(260, Math.min(q ? 760 : 600, Math.hypot(ax, ay) / (q ? 0.73 : 0.85))) : 540; // crosses land where they're aimed (to a man: at head height)
     release(p, p.fx * hs + p.vx * 0.2, p.fy * hs + p.vy * 0.2, 0.35);
     ball.vz = 470; ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
     const gx = p.team ? PL : PR;
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
-    if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; q.recv = 1.6; } // the man it is aimed at runs onto it
+    if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; ball.last.kc = Math.random() < 0.3; ball.last.dw = Math.random() < 0.4; q.recv = 1.6; } // the keeper comes for about a third of them // the man it is aimed at runs onto it
     tone(200, 0.12, 'triangle', 0.12, 120);
   }
   function header(p) {
     const dir = p.team ? -1 : 1, gx = p.team ? PL : PR, near = (gx - p.x) * dir < 430 && (gx - p.x) * dir > 0;
     let tx, ty;
-    if (near) { tx = gx; ty = CY + (Math.random() - 0.5) * MOUTH * 1.2; }
+    if (near) { // head it toward the corner the keeper is furthest from
+      const kp = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
+      const side = kp && Math.abs(kp.y - CY) > 6 ? -Math.sign(kp.y - CY) : (Math.random() < 0.5 ? -1 : 1);
+      tx = gx; ty = CY + side * MOUTH * (0.45 + Math.random() * 0.4) * (Math.random() < 0.15 ? -1 : 1);
+    }
     else {
       const i = p.ctrl === 'L0' ? localInput(0) : p.ctrl === 'L1' ? localInput(1) : p.ctrl === 'R' ? (remoteIn.get(p.peer) || ZERO) : null;
       if (i && Math.hypot(i.x, i.y) > 0.3) { tx = p.x + i.x * 300; ty = p.y + i.y * 300; }
@@ -1554,7 +1611,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = near ? 640 : 500;
     p.fx = dx / d; p.fy = dy / d;
     ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; ball.gk = 'head'; ball.fresh = false;
+    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < 0.45 }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to just under half of them ball.gk = 'head'; ball.fresh = false;
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Hovedstød!', t: 0.7 };
     tone(180, 0.07, 'triangle', 0.12, -60);
@@ -1767,7 +1824,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (ball.rs === 'corner' || (ball.rs === 'free' && (gx - ball.x) * dir < 360)) return { t, dir, gx };
     return null;
   }
-  const BOX_SPOTS = [[62, 0.55], [70, -0.5], [108, 0.05], [92, 1.1], [150, -0.25], [140, 0.6], [100, -1.2]]; // [depth from the goal line, across (x MOUTH), mirrored to the ball's side]
+  const BOX_SPOTS = [[80, 0.55], [88, -0.5], [108, 0.05], [92, 1.1], [150, -0.25], [140, 0.6], [100, -1.2]]; // [depth from the goal line, across (x MOUTH), mirrored to the ball's side]
   function boxRunners(t) { // the attackers who go into the box, forwards first; one or two stay back
     const tk = owner();
     const c = P.filter(q => q.team === t && on(q) && q !== tk && !(q.k === 0));
@@ -2049,6 +2106,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       }
       return;
     }
+    if (drill && state === 'play') drillTick(dt);
     if (!so && !pen && kind !== 'train') {
       clock -= dt;
       if (half === 1 && clock <= matchLen / 2) { half = 2; banner = 'Pause'; pause = 2.6; sfx.whistle(2); return; }
@@ -2085,7 +2143,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (p.turbo > 0) { p.turbo -= dt; p.stamina = 1; }
       if (p.sprint && p.turbo <= 0) p.stamina = Math.max(0, p.stamina - 0.5 * dt);
       else p.stamina = Math.min(1, p.stamina + 0.22 * dt);
-      const top = MAXV * (p.sprint ? 1.35 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1);
+      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? 1.35 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1);
 
       if (mag > 0.2 && p.tackle <= 0 && !(p.dive > 0)) {
         const ta = Math.atan2(inp.y, inp.x);
@@ -2232,7 +2290,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         for (const p of P) {
           if (p.team === o.team || p.stun > 0 || o.frozen > 0 || o.hands > 0 || !on(p)) continue;
           const db = dBall(p);
-          if (p.tackle > 0 && db < TACKLE_REACH) { tackleWins(p); break; }
+          if (p.tackle > 0 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; }
           if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; if (stats) stats.sv[p.team]++; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
           if (p.tackle <= 0 && ball.stealCd <= 0 && facing && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
@@ -2253,7 +2311,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && (ball.z < 26 || (keeperCatch(p) && ball.z < 75)) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -2272,7 +2330,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         }
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
-        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
+        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
         if (h) header(h);
       }
       if (ball.owner < 0 && ball.z < 26) {
@@ -2315,6 +2373,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   function restart(type, team, x, y, label) {
     if (so) { soResult(0); return; } // in a shootout, anything but a goal is a miss
+    if (drill && !drill.setting) { drillResult(false); return; } // a challenge: out of play is a miss
     if (team !== 0 && team !== 1) team = 0;
     ball.x = x; ball.y = y; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.rs = type; ball.last = null;
     let taker;
@@ -2344,6 +2403,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   // A pass to your own side that rolls into your own net is not a goal: the keeper gets it back.
   function scoreOn(side) {
     if (so) { soResult(1); return; }
+    if (drill) { drillResult(side === 1); return; }
     if (ball.last && ball.last.pass && ball.last.team === side && size > 1) { restart('goal', side, (side ? PR - 70 : PL + 70), CY); return; }
     goal(1 - side);
   }
@@ -2619,7 +2679,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const troName = id => (TRO.find(t => t[0] === id) || [0, id])[1];
 
   // profile and coins, shared with other parts of the game: localStorage 'mf-profile'
-  const PROF0 = () => ({ coins: 0, games: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, streak: 0, bestStreak: 0, bigWin: 0, seasons: 0, shootouts: 0, tro: {}, own: [] });
+  const PROF0 = () => ({ coins: 0, games: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, streak: 0, bestStreak: 0, bigWin: 0, seasons: 0, shootouts: 0, tro: {}, own: [], lv: { spd: 0, sht: 0, pas: 0, def: 0 }, xp: 0, lvl: 1 });
+  // training your team: four skills you buy with coins, 0-10 each; they help your side against the computer (not online, so it stays fair)
+  const SKILLS = [['spd', 'Fart', 'Løber hurtigere'], ['sht', 'Skud', 'Hårdere og mere præcise skud'], ['pas', 'Afleveringer', 'Spiller hurtigere og bedre bolde'], ['def', 'Forsvar', 'Vinder flere tacklinger']];
+  const skillPrice = l => 60 + l * 40;
+  function myLv() { const pr = loadProf(); return Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {}); }
+  let lvNow = [null, null]; // skills in play for each side in this match (only your side, only offline)
+  const lvOf = p => lvNow[p.team] || null;
   function loadProf() { try { return Object.assign(PROF0(), JSON.parse(localStorage.getItem('mf-profile') || '{}')); } catch (_) { return PROF0(); } }
   function paintCoins(pr) { const c = (pr || loadProf()).coins; document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = c; }); }
   function saveProf(pr) { try { localStorage.setItem('mf-profile', JSON.stringify(pr)); } catch (_) {} paintCoins(pr); }
@@ -2666,6 +2732,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const f = teamPick[t].str - 3;
       return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
+    lvNow = [null, null];
+    if (m === 'cpu') { // your trained team (always the home side against the computer)
+      const L = myLv(); lvNow[0] = L; const d = tD[0];
+      tD[0] = { spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
+    }
   }
   // online: show the captains' own teams (names, badges, colours); a side without one keeps its kit colour
   function netPick(t) {
@@ -2679,7 +2750,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function applyKind() {
     myTeamNow = mode === 'cpu' || mode === 'host' ? 0 : -1; wasBehind = false;
     if (kind === 'pen') { half = 2; clock = 0.01; } // straight to the shootout
-    if (kind === 'train') { for (const p of P) if (p.team === 1 && p.k !== 0) p.out = 1e9; flash = { text: 'Træning: kun dig og målmanden', t: 2.2 }; }
+    if (kind === 'train') { for (const p of P) if (p.team === 1 && p.k !== 0) p.out = 1e9; flash = { text: drill ? DRILLS[drill.id].txt : 'Træning: kun dig og målmanden', t: 2.2 }; }
   }
 
   function afterMatch(win, me, ss) {
@@ -2716,9 +2787,91 @@ button.small { font-size: 13px; padding: 9px 10px; }
       extra = r.text; $('toSeason').hidden = false; $('again').hidden = true;
     }
     coins += got.length * 50;
+    if (me === 0 || me === 1) { // experience: the team levels up and the club pays a bonus
+      const gf = score[me], won = win === me;
+      pr.xp = (pr.xp || 0) + 20 + gf * 5 + (won ? 25 : 0); pr.lvl = pr.lvl || 1;
+      while (pr.xp >= pr.lvl * 100) { pr.xp -= pr.lvl * 100; pr.lvl++; coins += 40 * pr.lvl; extra = (extra ? extra + ' · ' : '') + `Holdniveau ${pr.lvl}!`; }
+    }
     pr.coins += coins; saveProf(pr);
     rw.textContent = `+${coins} mønter` + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
     rw.hidden = false;
+  }
+
+  // ----- training challenges: a few tries, stars for how many you score ('mf-drills') -----
+  const DRILLS = {
+    shots: { n: 'Skudtræning', tries: 10, stars: [3, 5, 7], txt: '10 skud fra kanten af feltet' },
+    corner: { n: 'Hjørnespark', tries: 8, stars: [2, 4, 6], txt: '8 hjørnespark: læg den på hovedet af en medspiller' },
+    pens: { n: 'Straffespark', tries: 10, stars: [5, 7, 9], txt: '10 straffe mod målmanden' },
+  };
+  let drill = null, drillAgain = null;
+  const drillLoad = () => { try { return JSON.parse(localStorage.getItem('mf-drills') || '{}') || {}; } catch (_) { return {}; } };
+  const starStr = n => '★'.repeat(n) + '☆'.repeat(3 - n);
+  function drillList() {
+    const box = $('drillList'); if (!box) return; box.textContent = '';
+    const D = drillLoad();
+    for (const [id, d] of Object.entries(DRILLS)) {
+      const b = document.createElement('button'); b.className = 'alt drill';
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = d.n;
+      const st = document.createElement('span'); st.className = 'st'; st.textContent = starStr((D[id] || {}).s || 0);
+      b.title = d.txt; b.append(nm, st);
+      b.onclick = () => startDrill(id);
+      box.appendChild(b);
+    }
+  }
+  function startDrill(id) { drillAgain = id; kind = 'train'; withHelp(() => { kind = 'train'; drill = { id, i: 0, goals: 0, wait: 0.6, t: 0, live: false }; startMatch('cpu'); }); }
+  function drillSetup() {
+    const D = DRILLS[drill.id];
+    if (drill.i >= D.tries) { drillEnd(); return; }
+    drill.i++; drill.t = 0; drill.live = true; drill.shot = false;
+    pen = null; guard = 0; setp = null;
+    const me = P.find(q => q.ctrl === 'L0'), kp = P[slotOf(1, 0)];
+    for (const p of P) { p.vx = p.vy = 0; p.tackle = 0; p.stun = 0; p.dive = 0; p.frozen = 0; p.hands = 0; p.charging = false; p.hold = 0; p.recv = 0; }
+    if (kp) { kp.x = PR - 22; kp.y = CY; kp.fx = -1; kp.fy = 0; }
+    if (drill.id === 'shots') {
+      for (const p of P) if (p.team === 0 && p !== me) { const h = homeOf(p); p.x = h.x; p.y = h.y; }
+      me.x = PR - 200 - Math.random() * 110; me.y = CY + (Math.random() - 0.5) * 340; me.fx = 1; me.fy = 0;
+      ball.x = me.x + REACH - 3; ball.y = me.y; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.last = null; ball.rs = null;
+      ball.owner = me.i; ball.lastTeam = 0; ball.lastIdx = me.i; me.nopick = 0; me.wasA = true;
+      flash = { text: `Skud ${drill.i} af ${D.tries}`, t: 0.9 };
+    } else if (drill.id === 'corner') {
+      let n = 0; for (const p of P) if (p.team === 1 && p.k !== 0 && n < 2) { p.out = 0; n++; } // a couple of defenders to beat in the air
+      drill.setting = true; restart('corner', 0, PR, Math.random() < 0.5 ? PT : PB, `Hjørne ${drill.i} af ${D.tries}`); drill.setting = false;
+    } else {
+      startPenalty(0); flash = { text: `Straffe ${drill.i} af ${D.tries}`, t: 0.9 };
+    }
+  }
+  function drillResult(g) {
+    if (!drill || !drill.live) return;
+    drill.live = false; drill.wait = 1.4; pen = null; setp = null;
+    if (g) { drill.goals++; flash = { text: 'MÅL!', t: 1 }; goalFx(0); } else { flash = { text: 'Ingen mål', t: 1 }; crowd.ooh(); }
+    ball.vx *= 0.2; ball.vy *= 0.2;
+  }
+  function drillTick(dt) {
+    if (drill.wait > 0) { drill.wait -= dt; if (drill.wait <= 0) drillSetup(); return; }
+    if (!drill.live) return;
+    drill.t += dt;
+    const o = owner();
+    if (o && o.team === 0 && o.ctrl !== 'L0' && drill.id === 'shots') { drillResult(false); return; } // a teammate picked it up: that try is over
+    if (o && o.team === 1) { drillResult(false); return; } // the keeper has it
+    if (ball.owner < 0) { drill.shot = true; if (Math.hypot(ball.vx, ball.vy) < 40 && ball.z < 2 && drill.t > 1.2) drill.slow = (drill.slow || 0) + dt; else drill.slow = 0; if (drill.slow > 0.8) drillResult(false); }
+    if (drill.t > (drill.id === 'pens' ? 9 : 8)) drillResult(false);
+  }
+  function drillEnd() {
+    const d = drill, D = DRILLS[d.id];
+    const st = D.stars.filter(x => d.goals >= x).length;
+    const all = drillLoad(), old = all[d.id] || { s: 0, b: 0 };
+    const newStars = Math.max(0, st - old.s), coins = newStars * 20 + (st === 3 && old.s < 3 ? 30 : 0);
+    all[d.id] = { s: Math.max(old.s, st), b: Math.max(old.b, d.goals) };
+    try { localStorage.setItem('mf-drills', JSON.stringify(all)); } catch (_) {}
+    if (coins) addCoins(coins);
+    drill = null;
+    finish();
+    $('endTitle').textContent = `${D.n}: ${starStr(st)}`;
+    $('fh').textContent = d.goals; $('fa').textContent = D.tries;
+    $('endMsg').textContent = `Du scorede ${d.goals} af ${D.tries}. ${st < 3 ? `Næste stjerne ved ${D.stars[st]} mål.` : 'Alle tre stjerner!'} Bedste: ${all[d.id].b}.`;
+    const rw = $('endReward'); rw.textContent = coins ? `+${coins} mønter for nye stjerner` : 'Ingen nye stjerner denne gang'; rw.hidden = false;
+    $('again').hidden = false; $('again').textContent = 'Prøv igen';
+    drillList();
   }
 
   // ----- season: you meet the 7 other teams, weakest first -----
@@ -2827,7 +2980,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     $('profName').textContent = cfg.name || 'Din profil';
     const box = $('profStats'); box.textContent = '';
     [['Kampe', pr.games], ['Sejre', pr.w], ['Uafgjort', pr.d], ['Nederlag', pr.l], ['Mål scoret', pr.gf], ['Mål imod', pr.ga],
-     ['Største sejr', pr.bigWin ? '+' + pr.bigWin : '–'], ['Flest sejre i træk', pr.bestStreak], ['Sæsoner vundet', pr.seasons], ['Straffe­konkurrencer vundet', pr.shootouts]]
+     ['Holdniveau', `${pr.lvl || 1} (${pr.xp || 0}/${(pr.lvl || 1) * 100} xp)`], ['Største sejr', pr.bigWin ? '+' + pr.bigWin : '–'], ['Flest sejre i træk', pr.bestStreak], ['Sæsoner vundet', pr.seasons], ['Straffe­konkurrencer vundet', pr.shootouts]]
       .forEach(([k, v]) => { const d = document.createElement('div'); const b = document.createElement('b'); b.textContent = v; d.append(b, k); box.appendChild(d); });
     const tb = $('profTro'); tb.textContent = '';
     let n = 0;
@@ -2864,6 +3017,25 @@ button.small { font-size: 13px; padding: 9px 10px; }
       };
       box.appendChild(b);
     };
+    const TR = $('shopTrain'); TR.textContent = '';
+    const L = Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {});
+    for (const [k, name, desc] of SKILLS) {
+      const r = document.createElement('div'); r.className = 'lvrow';
+      const b = document.createElement('b'); b.textContent = `${name} ${L[k]}/10`;
+      const bt = document.createElement('button'); bt.className = 'alt';
+      const price = skillPrice(L[k]);
+      bt.textContent = L[k] >= 10 ? 'Max' : `● ${price}`; bt.disabled = L[k] >= 10;
+      bt.onclick = () => {
+        const p2 = loadProf(); p2.lv = Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, p2.lv || {});
+        if (p2.coins < price) { bt.textContent = `Mangler ${price - p2.coins}`; return; }
+        if (bt.dataset.sure !== '1') { bt.dataset.sure = '1'; bt.textContent = 'Tryk igen'; return; }
+        p2.coins -= price; p2.lv[k]++; saveProf(p2); sfx.win(); shopShow();
+      };
+      const bar = document.createElement('div'); bar.className = 'lvbar'; const fill = document.createElement('i'); fill.style.width = L[k] * 10 + '%'; bar.appendChild(fill);
+      const sm = document.createElement('small'); sm.textContent = desc;
+      r.append(b, bt, bar, sm); TR.appendChild(r);
+    }
+    $('lvLbl').textContent = `Træn dit hold · Holdniveau ${pr.lvl || 1}`;
     const T = $('shopTeams'), B = $('shopBalls'), Pp = $('shopPitch');
     T.textContent = B.textContent = Pp.textContent = '';
     TEAMS.filter(t => t.price).forEach(t => row(T, 'team:' + t.id, `${t.n} ${'★'.repeat(t.str)}`, t.price, t.c1, cfg.team === t.id, () => { cfg.team = t.id; saveCfg(); menuColors(); }));
@@ -3141,7 +3313,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     $('seasonPlay').onclick = () => { $('season').hidden = true; kind = 'season'; withHelp(() => { kind = 'season'; startMatch('cpu'); }); };
     $('toSeason').onclick = () => { toMenu(); seasonShow(); };
     $('bPens').onclick = () => { kind = 'pen'; withHelp(() => { kind = 'pen'; startMatch('cpu'); }); };
-    $('bTrain').onclick = () => { kind = 'train'; withHelp(() => { kind = 'train'; startMatch('cpu'); }); };
+    $('bTrain').onclick = () => { kind = 'train'; drillAgain = null; drill = null; withHelp(() => { kind = 'train'; startMatch('cpu'); }); };
+    drillList(); $('goPractice').addEventListener('click', drillList);
     $('goProf').onclick = profShow; $('profClose').onclick = () => { $('prof').hidden = true; };
     $('goMine').onclick = () => mtShow(cfg.size);
     $('setupMine').onclick = () => mtShow(cfg.size, 'lay');
@@ -3393,7 +3566,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
   { const hostFn = $('host').onclick;
     $('host').onclick = () => showSetup('host');
     $('setupGo').onclick = () => {
-      kind = null;
+      kind = null; drill = null; drillAgain = null;
+      series = cfg.ser > 1 ? { n: cfg.ser, w: [0, 0], g: 0 } : null;
       if (setupMode === 'host') { page('pgOnline'); hostFn(); }
       else { const m = setupMode; withHelp(() => startMatch(m)); }
     }; }
@@ -3433,6 +3607,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
     };
     if (st === 'e' && stats) o.ss = stats;
+    if (st === 'e' && serEnd) o.sr = serEnd;
     if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, tf: teamForm, tm: [0, 1].map(t => teamWire(t === hostTeam() ? myCardTeam() : netTeam)), nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
   }
@@ -3500,6 +3675,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       }
       gSeenGoal = s.gs[0];
     }
+    serG = Array.isArray(s.sr) ? s.sr.map(v => Number(v) | 0) : null;
     if (s.st === 'e' && state === 'play') finish();
   }
 
@@ -3766,7 +3942,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const ss = mode === 'guest' ? soG : soSums();
     ctx.fillStyle = ss ? col.gold : col.chalk;
     if (kind === 'train' && !ss) ctx.font = `700 ${fs * 0.6}px ${col.font}`;
-    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : kind === 'train' ? 'TRÆNING' : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
+    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : kind === 'train' ? (drill ? `${Math.max(1, drill.i)}/${DRILLS[drill.id].tries} · ${drill.goals} MÅL` : 'TRÆNING') : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
     if (teamPick) { // team badges either side of the score
       ctx.font = `700 ${fs * 0.6}px ${col.font}`;
       for (const t of [0, 1]) {
