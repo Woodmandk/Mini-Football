@@ -41,6 +41,7 @@ body {
 #wrap > .overlay { inset: auto; top: 0; left: 0; width: calc(100% / var(--k, 1)); height: calc(100% / var(--k, 1)); transform: scale(var(--k, 1)); transform-origin: 0 0; }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .overlay {
+  box-sizing: border-box;
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
@@ -49,6 +50,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; }
   background: rgba(5, 12, 9, 0.6);
 }
 .card {
+  box-sizing: border-box;
   background: var(--panel);
   border: 2px solid rgba(244, 247, 242, 0.18);
   border-radius: 14px;
@@ -1519,7 +1521,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const prog = matchLen > 0 && state === 'play' ? Math.max(0, Math.min(1, 1 - clock / matchLen)) : 0.5;
       ctx.fillStyle = `rgba(236,243,252,${0.26 + prog * 0.16})`; ctx.fillRect(PL, PT, L, H);
       ctx.fillStyle = 'rgba(255,255,255,0.16)';
-      for (const [u, v, k] of wxSpots) { ctx.beginPath(); ctx.ellipse(PL + u * L, PT + v * H, 10 + k * 20, 5 + k * 9, u * 3, 0, Math.PI * 2); ctx.fill(); }
+      ctx.beginPath(); for (const [u, v, k] of wxSpots) { const x = PL + u * L, y = PT + v * H, rx = 10 + k * 20; ctx.moveTo(x + rx * Math.cos(u * 3), y + rx * Math.sin(u * 3)); ctx.ellipse(x, y, rx, 5 + k * 9, u * 3, 0, Math.PI * 2); } ctx.fill();
     }
   }
   // ---------- Commentator ----------
@@ -1774,6 +1776,15 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   $('ready').onclick = () => { gRd = seenMatch; sendG(); $('ready').disabled = true; $('ready').textContent = 'Du er klar'; };
   function setPaused(v) { paused = v; $('paused').hidden = !v; clearInput(); }
+  // The phone is locked or you switch app: pause a match against the computer, let go of the sticks, and silence the crowd and commentator
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      clearInput(); keys.clear();
+      if (state === 'play' && (mode === 'cpu' || mode === 'two') && !paused) setPaused(true);
+      try { if (window.speechSynthesis) speechSynthesis.cancel(); busyUntil = 0; } catch (_) {}
+      if (ac && ac.state === 'running') ac.suspend().catch(() => {});
+    } else if (ac && ac.state === 'suspended') ac.resume().catch(() => {});
+  });
   $('pauseBtn').onclick = () => setPaused(true);
   $('resume').onclick = () => setPaused(false);
   $('quit').onclick = () => { setPaused(false); toMenu(); };
@@ -2428,7 +2439,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const out = { x: 0, y: 0, sprint: false };
     let tx = p.x, ty = p.y;
     const go = (x, y, spr) => { tx = x; ty = y; out.sprint = !!spr; };
-    const nearestFoe = foes.reduce((a, b) => (Math.hypot(b.x - p.x, b.y - p.y) < Math.hypot(a.x - p.x, a.y - p.y) ? b : a));
+    const nearestFoe = foes.length ? foes.reduce((a, b) => (Math.hypot(b.x - p.x, b.y - p.y) < Math.hypot(a.x - p.x, a.y - p.y) ? b : a)) : { x: p.x + 9999, y: p.y, fx: 1, fy: 0, windup: 0 }; // nobody left (all sent off): a far-away stand-in
     const foeD = Math.hypot(nearestFoe.x - p.x, nearestFoe.y - p.y);
 
     if ((pen || so) && ball.rs === 'pen' && o !== p) return out; // everyone waits during a penalty
@@ -2601,7 +2612,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           go(m.x + gx / gl * 38 * (1 - k) + (o ? (o.x - m.x) * k * 0.5 : 0), m.y + gy / gl * 38 * (1 - k) + (o ? (o.y - m.y) * k * 0.5 : 0), Math.hypot(m.x - p.x, m.y - p.y) > 160);
         }
         else { const [x, y] = shape(0); go(x, y, Math.hypot(x - p.x, y - p.y) > 220); }
-      } else {
+      } else if (foes.length) {
         // mark the most dangerous free opponent
         const mark = foes.filter(f => f !== o).sort((a, b) => Math.abs(a.x - ownX) - Math.abs(b.x - ownX))[(p.k + 1) % Math.max(1, foes.length - 1)] || foes[0];
         const gx = ownX - mark.x, gy = CY - mark.y, gl = Math.hypot(gx, gy) || 1, k = o ? 0.35 * iq : 0;
@@ -4538,7 +4549,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    hlReset(); leaveNet(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false;
+    hlReset(); leaveNet(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm();
@@ -4879,9 +4890,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const side of [0, 1]) {
       const gx = side ? PR : PL - 40;
       ctx.fillStyle = 'rgba(244,247,242,0.10)'; ctx.fillRect(gx, CY - MOUTH, 40, MOUTH * 2);
-      ctx.strokeStyle = 'rgba(244,247,242,0.28)'; ctx.lineWidth = 1;
-      for (let y = CY - MOUTH; y <= CY + MOUTH; y += 10) { ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx + 40, y); ctx.stroke(); }
-      for (let x = gx; x <= gx + 40; x += 10) { ctx.beginPath(); ctx.moveTo(x, CY - MOUTH); ctx.lineTo(x, CY + MOUTH); ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(244,247,242,0.28)'; ctx.lineWidth = 1; ctx.beginPath(); // the net: one path instead of a stroke per string
+      for (let y = CY - MOUTH; y <= CY + MOUTH; y += 10) { ctx.moveTo(gx, y); ctx.lineTo(gx + 40, y); }
+      for (let x = gx; x <= gx + 40; x += 10) { ctx.moveTo(x, CY - MOUTH); ctx.lineTo(x, CY + MOUTH); }
+      ctx.stroke();
     }
     ctx.strokeStyle = 'rgba(244,247,242,0.85)'; ctx.lineWidth = 3;
     ctx.strokeRect(PL, PT, PR - PL, PB - PT);
@@ -4896,7 +4908,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const myPlayers = () => P.filter(isMine);
   // ---------- Player figures, seen from above: head, shoulders, swinging arms and legs ----------
   const SKIN = ['#f1c7a3', '#e0ac85', '#c68b62', '#9c6644', '#6e4630'], HAIR = ['#2b1d14', '#5a3a22', '#c99a4a', '#1a1a1a', '#8a4a20', '#e2c27a'];
+  const shadeC = new Map(); // shade() is asked for the same few colours every frame: remember them
   function shade(hex, k) { // darker (k < 0) or lighter (k > 0) version of a colour
+    const key = hex + k; let c = shadeC.get(key); if (c) return c;
+    c = shadeRaw(hex, k); if (shadeC.size < 200) shadeC.set(key, c); return c;
+  }
+  function shadeRaw(hex, k) {
     const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
     const f = v => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k);
     return `rgb(${f(r)},${f(g)},${f(b)})`;
