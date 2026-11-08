@@ -112,6 +112,7 @@ table.st th { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase
 table.st td.l, table.st th.l { text-align: left; }
 .tablewrap { overflow-x: auto; max-width: 100%; }
 .cupnames { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 8px 0; }
+.cupnames input { width: 100%; min-width: 0; box-sizing: border-box; }
 #cupScoreRow input { width: 64px; flex: none; text-align: center; }
 #cupNext { font-weight: 700; }
 .roster li.pick { cursor: pointer; text-decoration: underline dotted; }
@@ -126,7 +127,12 @@ table.st td.l, table.st th.l { text-align: left; }
 .namechip span { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .namechip input { padding: 8px 10px; font-size: 15px; }
 .minis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
-.minis button { font-size: 12px; padding: 9px 4px; line-height: 1.15; }
+.minis button { font-size: 13px; padding: 11px 4px; line-height: 1.15; }
+.minis.small { grid-template-columns: repeat(4, 1fr); margin-top: 6px; }
+.minis.small button { font-size: 11px; padding: 7px 2px; opacity: 0.85; }
+.comprow { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.comprow button { font-size: 12px; padding: 7px 12px; }
+#setupGo { position: sticky; bottom: 0; z-index: 2; }
 .bigs { gap: 7px; }
 button.big { font-size: 16px; padding: 9px 14px; text-align: left; display: flex; flex-direction: column; gap: 3px; }
 button.big small { font: 500 11px/1.2 var(--font); color: var(--muted); letter-spacing: 0; }
@@ -184,6 +190,10 @@ button.big small { font: 500 11px/1.2 var(--font); color: var(--muted); letter-s
 .bracket .champ { text-align: center; font-size: 13px; font-weight: 700; }
 .bracket .champ .cup { font-size: 30px; display: block; }
 .seg.how button { font-size: 12px; }
+.mopts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0; }
+.mopts .lbl { margin-bottom: 4px; white-space: nowrap; }
+.mopts .mtip { grid-column: 1 / -1; margin: 0; font-size: 12px; color: var(--muted); }
+.mopts .seg button { font-size: 12px; padding: 7px 4px; }
 .namein.p2 { font-size: 14px; padding: 8px 10px; width: 100%; box-sizing: border-box; }
 .carteam { display: flex; align-items: center; gap: 10px; }
 .carteam .badge { display: inline-grid; place-items: center; width: 44px; height: 38px; border-radius: 6px 6px 45% 45%; font-size: 11px; font-weight: 700; background: var(--c1, #2f9d55); color: var(--c3, #f4f7f2); }
@@ -270,9 +280,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <div class="minis">
             <button id="goMine" class="alt mine">Mit hold</button>
             <button id="goProf" class="alt">Profil og trofæer</button><button id="goShop" class="alt">Butik <span class="coins" data-coins>0</span></button>
-            <button id="bLeague" class="alt">Stilling</button><button id="bCup" class="alt">Turnering</button>
-            <button id="bHelp" class="alt">Sådan spiller du</button><button id="goSet" class="alt">Indstillinger</button>
+          </div>
+          <div class="minis small">
             <button id="bDaily" class="alt">Udfordringer</button><button id="bFriends" class="alt">Venner</button>
+            <button id="bHelp" class="alt">Hjælp</button><button id="goSet" class="alt">Indstillinger</button>
           </div>
         </div>
         <div class="btns bigs">
@@ -299,6 +310,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <p id="seasonSub">7 kampe om pokalen</p>
           <button id="goSeason2" class="go">Sæson ›</button></div>
       </div>
+      <div class="comprow"><span>Med vennerne på én telefon:</span><button id="bCup" class="alt">Venneturnering</button><button id="bLeague" class="alt">Stilling</button></div>
     </div>
 
     <!-- straffe og træning -->
@@ -356,6 +368,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
             <button data-v="2" aria-label="Turkis mod pink"><span class="kit"><i style="background:#17b3a3"></i><i style="background:#e8508f"></i></span></button>
             <button data-v="3" aria-label="Hvid mod sort"><span class="kit"><i style="background:#f1f1ec"></i><i style="background:#23262b"></i></span></button>
           </div></div>
+        <div class="col full mopts" data-mopts></div>
       </div>
       <button id="setupGo" class="go">Start kamp ›</button>
     </div>
@@ -381,14 +394,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
     <div class="card" id="pgSet" hidden>
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Indstillinger</h2><span class="sp"></span></div>
       <div class="setrows">
-        <div><span>Roligt tempo (spillet går lidt langsommere)</span><button id="tCalm" class="sw"></button></div>
-        <div><span>Låst spiller (du styrer kun din egen mand, SKIFT kalder på bolden)</span><button id="tLock" class="sw"></button></div>
         <div><span>Publikum og kommentator</span><button id="tCrowd" class="sw"></button></div>
         <div><span>Test kommentatoren</span><button id="tSay" class="alt">Afspil</button></div>
         <div><span>Vibration ved skud og mål</span><button id="tVib" class="sw"></button></div>
         <div><span>Musik i menuen</span><button id="tMusic" class="sw"></button></div>
         <div><span>Genafspilning af mål</span><button id="tReplay" class="sw"></button></div>
-        <div><span>Power-ups i kampene</span><button id="tPu" class="sw"></button></div>
       </div>
       <button id="fs" class="alt" hidden>Fuld skærm</button>
       <p class="kbd">På computer: WASD styrer, mellemrum er SKYD/TACKLE, F er AFLEVER/SKIFT og Shift spurter.</p>
@@ -462,6 +472,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <div class="lbl" id="koHowLbl">Hvordan spiller I?</div>
           <div class="seg how" id="koHow"></div>
           <input id="koP2" class="namein p2" maxlength="12" placeholder="Medspillerens navn" autocomplete="off" aria-label="Medspillerens navn">
+          <div class="mopts" data-mopts></div>
           <button id="koPlay" class="go">Spil kampen ›</button>
           <button id="koReset" class="alt">Ny pokal</button>
         </div>
@@ -494,6 +505,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <div class="lbl" id="carHowLbl">Hvordan spiller I?</div>
           <div class="seg how" id="carHow"></div>
           <input id="carP2" class="namein p2" maxlength="12" placeholder="Medspillerens navn" autocomplete="off" aria-label="Medspillerens navn">
+          <div class="mopts" data-mopts></div>
           <button id="carPlay" class="go">Spil kampen ›</button>
           <p id="carHist" class="carhist"></p>
           <button id="carReset" class="alt">Ny karriere</button>
@@ -516,6 +528,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       <div class="lbl" id="lobbyFormLbl">Jeres formation</div>
       <div class="seg" id="lobbyForm" role="group" aria-label="Formation"></div>
       <button id="lobbyMine" class="alt small">Lav dit eget hold</button>
+      <div class="mopts" id="lobbyOpts" data-mopts></div>
       <div class="btns">
         <button id="startOnline" hidden>Klar</button>
         <button id="share" class="alt" hidden>Del invitationslink</button>
@@ -696,7 +709,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); if (key === 'crowd' && cfg.crowd) unlockSpeech('Kommentatoren er klar'); if (key === 'vib' && cfg.vib) buzz([40, 60, 40]); };
     paint();
   }
-  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music'); toggle('tVib', 'vib'); toggle('tCalm', 'calm'); toggle('tLock', 'lock');
+  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tMusic', 'music'); toggle('tVib', 'vib'); 
 
   // ---------- Menu pages: forside -> kampopsætning / online / indstillinger ----------
   let setupMode = 'cpu';
@@ -3933,6 +3946,22 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
 
   // ----- little helpers for pickers -----
+  // match options, shown where you start a match (setup, cup, career, online lobby) instead of hidden in the settings
+  const MOPTS = [['lock', 'Styring', ['Skift', 'Låst']], ['calm', 'Tempo', ['Normalt', 'Roligt']], ['pu', 'Power-ups', ['Fra', 'Til']]];
+  function buildOpts() {
+    for (const box of document.querySelectorAll('[data-mopts]')) {
+      box.textContent = '';
+      for (const [key, name, labels] of MOPTS) {
+        const c = document.createElement('div'), l = document.createElement('div'), sg = document.createElement('div');
+        l.className = 'lbl'; l.textContent = name; sg.className = 'seg'; sg.setAttribute('role', 'group'); sg.setAttribute('aria-label', name);
+        c.append(l, sg); box.appendChild(c);
+        mkSeg(sg, [0, 1], labels, () => (key === 'calm' ? cfg.calm !== false : !!cfg[key]) ? 1 : 0, v => { cfg[key] = !!v; saveCfg(); segPaints.forEach(f => f()); });
+      }
+      const tip = document.createElement('p'); tip.className = 'hint mtip'; box.appendChild(tip);
+      const paintTip = () => { tip.textContent = cfg.lock ? 'Låst spiller: du styrer kun din egen mand hele kampen. SKIFT kalder på bolden.' : 'Skift spiller: du skifter selv med SKIFT, og spillet skifter automatisk, når bolden kommer.'; };
+      segPaints.push(paintTip); paintTip();
+    }
+  }
   function mkSeg(el, vals, labels, get, set) {
     el.textContent = '';
     vals.forEach((v, i) => { const b = document.createElement('button'); b.textContent = labels[i]; b.onclick = () => { set(v); paint(); }; el.appendChild(b); });
@@ -4484,6 +4513,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function lobbyUI() {
     if (state !== 'lobby') return;
     const isHost = mode === 'host', n = isHost ? size : lobbySize;
+    $('lobbyOpts').hidden = !isHost; // the host decides how the match is played
     const myT = isHost ? (P.find(q => q.ctrl === 'L0') || { team: 0 }).team : myTeam();
     const ct = capTeam();
     const cap = roster.find(r => P[r[1]] && P[r[1]].team === ct);
@@ -5062,7 +5092,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     render(dt);
     requestAnimationFrame(frame);
   }
-  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); demoReset();
+  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); buildOpts(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
   if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; } }; // only for automated tests
   requestAnimationFrame(frame);
