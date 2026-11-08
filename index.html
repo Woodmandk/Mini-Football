@@ -290,7 +290,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         <div class="col" id="teamBoxB"><div class="lbl" id="teamLblB">Modstander</div><div class="teams" id="teamsB" role="group" aria-label="Modstander"></div></div>
         <div class="col"><div class="lbl">Spillere pr. hold</div>
           <div class="seg" id="segSize" role="group" aria-label="Holdstørrelse">
-            <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="11">11</button>
+            <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="7">7</button><button data-v="11">11</button>
           </div></div>
         <div class="col" id="formBox"><div class="lbl" id="formLbl">Formation <button id="setupMine" class="linkbtn">Taktik og opstilling ›</button></div>
           <div class="seg" id="segForm" role="group" aria-label="Formation"></div></div>
@@ -464,7 +464,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         <div><b class="k">SKYD</b><span>Med bolden. Hold inde for et hårdere skud. Tryk to gange hurtigt for et lob over målmanden.</span></div>
         <div><b class="k">AFLEVER</b><span>Med bolden. Peg med joysticket mod den medspiller, du vil aflevere til. Står han foran dig, lægges bolden ud i hans løb. Hold inde for en hård aflevering (blå ring), hold længe for en høj bold over de andre (gul ring).</span></div>
         <div><b class="k">TACKLE</b><span>Uden bolden. En glidende tackling, der sigter mod bolden. Kommer du bagfra, er det frispark.</span></div>
-        <div><b class="k">OFFSIDE</b><span>Ved 5 og 11 mod 11. Står modtageren bag forsvaret, når bolden spilles, får modstanderen frispark.</span></div>
+        <div><b class="k">OFFSIDE</b><span>Ved 5, 7 og 11 mod 11. Står modtageren bag forsvaret, når bolden spilles, får modstanderen frispark.</span></div>
         <div><b class="k">HOVED</b><span>Når bolden kommer gennem luften, header spilleren den automatisk. Tæt på mål går den mod mål.</span></div>
         <div><b class="k">FRISPARK</b><span>Tæt på mål stiller modstanderen en mur. Et skud fra frisparket løftes over muren. Fælder de en anden mand, mens dit hold har bolden, giver dommeren fordel, og spillet kører videre.</span></div>
         <div><b class="k">KORT</b><span>Tackler du bagfra eller rammer manden langt fra bolden, er det frispark, i feltet straffespark. En hård tackling bagfra eller anden forseelse giver gult kort. Andet gule kort, eller at stoppe en fri mand på vej mod mål, giver rødt kort og tid udenfor.</span></div>
@@ -576,7 +576,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
-  if (![1, 2, 3, 5, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
+  if (![1, 2, 3, 5, 7, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
   function seg(id, key) {
     const el = $(id);
     const paint = () => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.dataset.v) === cfg[key])));
@@ -691,7 +691,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     { id: 'tk', t: 'Vind 4 tacklinger i én kamp', c: 30, ev: 'match', ok: m => m.tk >= 4 },
     { id: 'hard', t: 'Slå computeren på Svær', c: 60, ev: 'match', ok: m => m.win && m.mode === 'cpu' && m.diff >= 2 },
     { id: 'online', t: 'Spil en kamp online', c: 30, ev: 'match', ok: m => m.online },
-    { id: 'team', t: 'Vind med 5 eller 11 spillere pr. hold', c: 40, ev: 'match', ok: m => m.win && m.size >= 5 },
+    { id: 'team', t: 'Vind med 5, 7 eller 11 spillere pr. hold', c: 40, ev: 'match', ok: m => m.win && m.size >= 5 },
     { id: 'm3', t: 'Spil 3 kampe i dag', c: 30, ev: 'match', ok: () => true, need: 3 },
     { id: 'gf3', t: 'Scor 3 mål i én kamp', c: 40, ev: 'match', ok: m => m.gf >= 3 },
   ];
@@ -829,7 +829,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   // ---------- World ----------
   // pitch grows with the team size; all of these are set by setPitch()
   let WW = 1100, WH = 600, PL = 50, PR = 1050, PT = 20, PB = 580, CX = 550, CY = 300, MOUTH = 85, POSTS = [];
-  const PITCH = { 1: [1000, 560], 2: [1000, 560], 3: [1000, 560], 5: [1400, 760], 11: [2200, 1250] };
+  const PITCH = { 1: [1000, 560], 2: [1000, 560], 3: [1000, 560], 5: [1400, 760], 7: [1800, 1000], 11: [2200, 1250] };
   function setPitch(n) {
     const [L, H] = PITCH[n] || PITCH[1];
     WW = L + 100; WH = H + 40; PL = 50; PR = 50 + L; PT = 20; PB = 20 + H; CX = WW / 2; CY = WH / 2;
@@ -845,6 +845,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     2: [[0.24, 0.5], [0.74, 0.5]],
     3: [[0.2, 0.5], [0.7, 0.3], [0.7, 0.7]],
     5: [[0.07, 0.5], [0.36, 0.3], [0.36, 0.7], [0.76, 0.36], [0.76, 0.64]],
+    // 2-3-1: keeper, two at the back, three in midfield, one up front
+    7: [[0.05, 0.5], [0.3, 0.3], [0.3, 0.7], [0.56, 0.18], [0.54, 0.5], [0.56, 0.82], [0.85, 0.5]],
     // 4-4-2: keeper, four at the back, four in midfield, two up front
     11: [[0.04, 0.5], [0.28, 0.14], [0.26, 0.38], [0.26, 0.62], [0.28, 0.86], [0.58, 0.14], [0.55, 0.39], [0.55, 0.61], [0.58, 0.86], [0.86, 0.4], [0.86, 0.6]],
   };
@@ -852,6 +854,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const FORMS = {
     5: [['2-2', FORM[5]], ['1-2-1', [[0.07, 0.5], [0.3, 0.5], [0.56, 0.25], [0.56, 0.75], [0.85, 0.5]]],
         ['3-1', [[0.07, 0.5], [0.32, 0.22], [0.28, 0.5], [0.32, 0.78], [0.8, 0.5]]], ['1-1-2', [[0.07, 0.5], [0.3, 0.5], [0.55, 0.5], [0.84, 0.3], [0.84, 0.7]]]],
+    7: [['2-3-1', FORM[7]], ['3-2-1', [[0.05, 0.5], [0.3, 0.2], [0.27, 0.5], [0.3, 0.8], [0.56, 0.33], [0.56, 0.67], [0.85, 0.5]]],
+        ['3-1-2', [[0.05, 0.5], [0.3, 0.2], [0.27, 0.5], [0.3, 0.8], [0.54, 0.5], [0.84, 0.35], [0.84, 0.65]]], ['2-2-2', [[0.05, 0.5], [0.3, 0.3], [0.3, 0.7], [0.56, 0.3], [0.56, 0.7], [0.84, 0.35], [0.84, 0.65]]]],
     11: [['4-4-2', FORM[11]],
         ['4-3-3', [[0.04, 0.5], [0.28, 0.14], [0.26, 0.38], [0.26, 0.62], [0.28, 0.86], [0.55, 0.3], [0.52, 0.5], [0.55, 0.7], [0.84, 0.18], [0.88, 0.5], [0.84, 0.82]]],
         ['3-5-2', [[0.04, 0.5], [0.26, 0.25], [0.24, 0.5], [0.26, 0.75], [0.56, 0.1], [0.52, 0.32], [0.5, 0.5], [0.52, 0.68], [0.56, 0.9], [0.86, 0.4], [0.86, 0.6]]],
@@ -932,7 +936,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     $('formBox').hidden = !ok;
   }
   $('segSize').addEventListener('click', () => setTimeout(setupVis, 0));
-  const HUMAN_ORDER = { 1: [0], 2: [1, 0], 3: [1, 2, 0], 5: [3, 4, 1, 2, 0], 11: [9, 10, 6, 7, 5, 8, 2, 3, 1, 4, 0] }; // keeper is the last spot a human gets
+  const HUMAN_ORDER = { 1: [0], 2: [1, 0], 3: [1, 2, 0], 5: [3, 4, 1, 2, 0], 7: [6, 4, 3, 5, 1, 2, 0], 11: [9, 10, 6, 7, 5, 8, 2, 3, 1, 4, 0] }; // keeper is the last spot a human gets
   function homeOf(p) {
     const f = formOf(p), half = (PR - PL) / 2;
     return { x: p.team ? PR - f[0] * half : PL + f[0] * half, y: PT + f[1] * (PB - PT) };
@@ -2054,7 +2058,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     // the keeper's own player takes over the keeper
     const kh = P.filter(q => q.team !== team && isHuman(q));
     if (kh.length && !isHuman(kp)) swapControl(kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp);
-    flash = { text: so ? tn(team) + ' skyder' : 'Straffespark', t: 1.4 };
+    flash = { text: so ? tn(team) + ' skyder' : 'Straffespark', t: 2.4 };
     sfx.whistle();
   }
   function penShot(taker) { // the taker struck the ball: the keeper commits to a side
@@ -2075,14 +2079,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const soSums = () => (so ? [so.k[0].reduce((a, b) => a + b, 0), so.k[1].reduce((a, b) => a + b, 0), so.k[0].length, so.k[1].length] : null);
   function startShootout() {
     so = { k: [[], []], turn: 0, shot: false, wait: -1 };
-    ball.owner = -1; banner = ''; pause = 2.2; flash = { text: 'Straffespark-konkurrence', t: 2 }; sfx.whistle(2);
+    ball.owner = -1; banner = ''; pause = 3.5; flash = { text: 'Straffespark-konkurrence', t: 3 }; sfx.whistle(2);
   }
   function soResult(v) {
     if (!so || so.wait < 0) return;
     so.k[so.turn].push(v); so.wait = -1; so.shot = false;
     flash = { text: v ? 'MÅL!' : 'Brændt!', t: 1.2 };
     if (v) { goalFx(so.turn); } else sfx.post();
-    so.turn = 1 - so.turn; pause = 1.8; banner = '';
+    so.turn = 1 - so.turn; pause = 3.2; banner = ''; // time to see what happened and swap round before the next kick
     ball.owner = -1; ball.vx *= 0.2; ball.vy *= 0.2;
   }
   function soDone() {
@@ -2127,7 +2131,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const tk = owner();
     const c = P.filter(q => q.team === t && on(q) && q !== tk && !(q.k === 0));
     c.sort((a, b) => formOf(b)[0] - formOf(a)[0]);
-    const keep = size >= 11 ? 3 : 0;
+    const keep = size >= 11 ? 3 : size >= 7 ? 2 : 0;
     return c.slice(0, Math.max(1, Math.min(BOX_SPOTS.length, c.length - keep)));
   }
   function boxSpot(p) { // where an attacker stands at a corner / free kick near goal
@@ -2239,7 +2243,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if ((pen || so) && ball.rs === 'pen' && o !== p) return out; // everyone waits during a penalty
     if (o === p && p.frozen > 0 && ball.rs === 'pen') { // penalty: pick a corner
       p.think += dt;
-      if (p.think > 1.1) { const ty = CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.3 + Math.random() * 0.45) * (Math.random() < 0.2 ? 0 : 1); out.shoot = 0.2 + Math.random() * 0.5; out.aim = [goalX - p.x, ty - p.y]; }
+      if (p.think > 2.2) { const ty = CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.3 + Math.random() * 0.45) * (Math.random() < 0.2 ? 0 : 1); out.shoot = 0.2 + Math.random() * 0.5; out.aim = [goalX - p.x, ty - p.y]; }
       return out;
     }
     if (o === p && keeper && (p.hands > 0 || (p.frozen > 0 && ball.rs === 'goal'))) { // keeper with it in his hands, or a goal kick
@@ -2468,7 +2472,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       } else if (pause <= 0) {
         if (so) { if (soDone()) { finish(); return; } startPenalty(so.turn); so.wait = 0; so.shot = false; return; }
         if (banner === 'MÅL!') { kickoff(1 - lastGoalTeam); pause = 1.5; banner = 'Klar'; return; }
-        if (banner === 'Pause') { kickoff(1 - kickFirst); pause = 1.0; banner = 'Klar'; return; }
+        if (banner === 'Pause') { kickoff(1 - kickFirst); pause = 1.5; banner = 'Klar'; return; }
         if (banner === 'Klar') sfx.whistle();
         banner = '';
       }
@@ -2477,7 +2481,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (drill && state === 'play') drillTick(dt);
     if (!so && !pen && kind !== 'train') {
       clock -= dt;
-      if (half === 1 && clock <= matchLen / 2) { half = 2; banner = 'Pause'; pause = 2.6; sfx.whistle(2); return; }
+      if (half === 1 && clock <= matchLen / 2) { half = 2; banner = 'Pause'; pause = 4.0; sfx.whistle(2); return; }
       if (clock <= 0) {
         clock = 0;
         if (score[0] === score[1]) { sfx.whistle(2); startShootout(); return; }
@@ -2575,7 +2579,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       }
       p.windup = 0;
       const aDown = !!inp.a && !p.wasA, bDown = !!inp.b && !p.wasB;
-      if (has && setp && setp.t < setp.wait) { p.wasA = !!inp.a; p.wasB = !!inp.b; continue; } // the whistle has only just gone
+      if (has && ((setp && setp.t < setp.wait) || (pen && pen.t < 1.6))) { p.wasA = !!inp.a; p.wasB = !!inp.b; continue; } // the whistle has only just gone
       if (has && keeperKick(p)) { // out of the keeper's hands, or a goal kick: SKYD kicks it long (hold = further), AFLEVER throws/plays it short
         if (aDown) p.charging = true;
         if (p.charging) { if (inp.a) p.hold = Math.min(MAXCHARGE, p.hold + dt); else punt(p, p.hold, inp.x, inp.y); }
@@ -2784,7 +2788,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const kp = size > 1 ? P[slotOf(1 - team, 0)] : null; if (kp && on(kp)) { const dir = team ? -1 : 1; kp.x = (team ? PL : PR) - dir * 28; kp.y = CY + (y - CY) * 0.15; kp.vx = kp.vy = 0; }
     }
     for (const p of P) if (p.team !== team && p.tackle > 0) { p.tackle = 0; p.recover = 0.2; }
-    if (type !== 'kick' && !banner) pause = Math.max(pause, 0.9); // the whistle: everything stops for a moment before it starts again
+    if (type !== 'kick' && !banner) pause = Math.max(pause, 1.2); // the whistle: everything stops for a moment before it starts again
     flash = { text: label || (type === 'throw' ? 'Indkast' : type === 'corner' ? 'Hjørnespark' : type === 'free' ? 'Frispark' : type === 'kick' ? 'Afspark' : 'Målspark'), t: 1.0 };
     sfx.whistle();
   }
@@ -2810,7 +2814,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     lastGk = sp && sp.team === team ? (ball.gk || 'shot') : 'own'; lastGoalTeam = team;
     hlAdd(team, mode === 'host' ? lastScorer : sp && sp.team === team && sp.ctrl === 'L0' ? cfg.name || 'Spiller 1' : sp && sp.team === team && sp.ctrl === 'L1' ? 'Spiller 2' : sn, lastGk);
     if (kind !== 'train' && team === (P.find(q => q.ctrl === 'L0') || { team: 0 }).team) dailyEvent('goal', lastGk);
-    banner = 'MÅL!'; pause = cfg.replay ? 5.4 : 1.8; ball.owner = -1;
+    banner = 'MÅL!'; pause = cfg.replay ? 5.4 : 3.0; ball.owner = -1;
     if (cfg.replay) startReplay();
     goalFx(team);
     ball.vx *= 0.2; ball.vy *= 0.2;
@@ -3660,7 +3664,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     pt: ['Korte afleveringer: mange småafleveringer, færre langskud.', '', 'Lange bolde: flere stikninger frem og skud langt fra.'],
   };
   let mtN = 5, mtAfter = null, mtDrag = -1, mtBuilt = false;
-  const mtSizes = [2, 3, 5, 11];
+  const mtSizes = [2, 3, 5, 7, 11];
   function mtLayNow() { // what the editor shows: your saved line-up for this size, or the chosen formation
     const mt = loadMT();
     if (cleanLay(mt.lay[mtN], mtN)) return mt.lay[mtN];
@@ -3802,7 +3806,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     teamPicker($('teamsB'), $('teamLblB'), () => (setupMode === 'two' ? 'Hold 2' : 'Modstander'), () => cfg.opp, v => { cfg.opp = v; saveCfg(); });
     const sv = { size: cfg.size, mins: cfg.mins, diff: cfg.diff };
     teamPicker($('seasonTeams'), $('seasonTeamLbl'), () => 'Vælg dit hold', () => cfg.team, v => { cfg.team = v; saveCfg(); });
-    mkSeg($('seasonSize'), [1, 2, 3, 5, 11], ['1', '2', '3', '5', '11'], () => sv.size, v => { sv.size = v; });
+    mkSeg($('seasonSize'), [1, 2, 3, 5, 7, 11], ['1', '2', '3', '5', '7', '11'], () => sv.size, v => { sv.size = v; });
     mkSeg($('seasonMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => sv.mins, v => { sv.mins = v; });
     mkSeg($('seasonDiff'), [0, 1, 2, 3], DIFFN, () => sv.diff, v => { sv.diff = v; });
     $('goSeason').onclick = seasonShow;
@@ -4119,7 +4123,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
 
   function applyState(s) {
     if (!s || !Array.isArray(s.p) || !Array.isArray(s.b)) return;
-    const z = [1, 2, 3, 5, 11].includes(Number(s.z)) ? Number(s.z) : 1;
+    const z = [1, 2, 3, 5, 7, 11].includes(Number(s.z)) ? Number(s.z) : 1;
     if (P.length !== z * 2) makePlayers(z);
     lobbySize = z;
     // the first time we learn the match size: bring the formation and own line-up for that size
