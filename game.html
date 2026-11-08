@@ -317,6 +317,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Indstillinger</h2><span class="sp"></span></div>
       <div class="setrows">
         <div><span>Publikum og kommentator</span><button id="tCrowd" class="sw"></button></div>
+        <div><span>Test kommentatoren</span><button id="tSay" class="alt">Afspil</button></div>
         <div><span>Musik i menuen</span><button id="tMusic" class="sw"></button></div>
         <div><span>Genafspilning af mål</span><button id="tReplay" class="sw"></button></div>
         <div><span>Power-ups i kampene</span><button id="tPu" class="sw"></button></div>
@@ -1123,17 +1124,25 @@ button.small { font-size: 13px; padding: 9px 10px; }
   let voice = null, busyUntil = 0, speechUnlocked = false;
   function findVoice() { try { const vs = speechSynthesis.getVoices(); voice = vs.find(x => /^da/i.test(x.lang)) || vs.find(x => /^(nb|no|sv)/i.test(x.lang)) || null; } catch (_) {} }
   if (window.speechSynthesis) { findVoice(); try { speechSynthesis.addEventListener('voiceschanged', findVoice); } catch (_) {} }
+  const keepUtt = []; // Chrome drops an utterance that gets garbage-collected before it is spoken, so hold on to them
+  let caption = null; // the line is also shown on screen, so it's clear the commentator is talking even with the sound off
   function speakNow(text) {
+    caption = { text, t: 2.6 };
     const u = new SpeechSynthesisUtterance(text); u.rate = 1.1; u.volume = 1;
-    if (voice) { u.voice = voice; u.lang = voice.lang; } // no Danish voice on the phone: let it use its own default so it still talks
-    if (speechSynthesis.paused) speechSynthesis.resume();
+    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'da-DK';
+    keepUtt.push(u); if (keepUtt.length > 6) keepUtt.shift();
+    u.onerror = e => { if (e && e.error === 'language-unavailable' && u.lang) { try { const v = new SpeechSynthesisUtterance(text); keepUtt.push(v); speechSynthesis.speak(v); } catch (_) {} } }; // no Danish installed: try the default voice
+    try { speechSynthesis.resume(); } catch (_) {}
     speechSynthesis.speak(u);
     busyUntil = performance.now() + 400 + text.length * 70; // don't trust .speaking: some phones never reset it
   }
   function unlockSpeech(text) {
     if (!window.speechSynthesis || !cfg.crowd) return;
-    try { speechSynthesis.cancel(); speakNow(text || (speechUnlocked ? '' : 'Velkommen til kampen')); speechUnlocked = true; } catch (_) {}
+    const t = text || (speechUnlocked ? '' : 'Velkommen til kampen'); if (!t) return;
+    try { if (performance.now() < busyUntil) speechSynthesis.cancel(); speakNow(t); speechUnlocked = true; } catch (_) {}
   }
+  $('tSay').onclick = () => { if (!cfg.crowd) { cfg.crowd = true; saveCfg(); $('tCrowd').setAttribute('aria-pressed', 'true'); } findVoice(); unlockSpeech('Kommentatoren virker. God kamp!'); };
+  setInterval(() => { try { if (window.speechSynthesis && speechSynthesis.speaking) speechSynthesis.resume(); } catch (_) {} }, 5000); // Chrome can stall long speech
   function say(text, prio) { // prio 1: needs a quiet moment, 1.5: soon after the last line, 2: interrupts
     if (!text || !cfg.crowd || !window.speechSynthesis) return;
     const now = performance.now();
@@ -3531,6 +3540,16 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const p of P) { ctx.fillStyle = isMine(p) ? col.gold : (p.team ? col.away : col.home); ctx.beginPath(); ctx.arc(x0 + p.x * k, y0 + p.y * k, isMine(p) ? 3.5 : 2.5, 0, Math.PI * 2); ctx.fill(); }
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x0 + ball.x * k, y0 + ball.y * k, 2.5, 0, Math.PI * 2); ctx.fill();
   }
+  function drawCaption(dt) {
+    if (!caption || !cfg.crowd) return;
+    caption.t -= dt; if (caption.t <= 0) { caption = null; return; }
+    ctx.globalAlpha = Math.min(1, caption.t * 2);
+    ctx.font = `600 ${Math.max(13, Math.min(17, sh * 0.04))}px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    const w = ctx.measureText(caption.text).width + 44, y = Math.max(78, sh * 0.2);
+    ctx.fillStyle = 'rgba(9,20,15,0.7)'; ctx.fillRect(sw / 2 - w / 2, y - 24, w, 26);
+    ctx.fillStyle = col.chalk; ctx.fillText('🎙 ' + caption.text, sw / 2, y);
+    ctx.globalAlpha = 1;
+  }
   function drawHUD() {
     const fs = Math.max(16, Math.min(26, sh * 0.055));
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
@@ -3634,6 +3653,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (state === 'play' && !saved) drawOffscreen();
     if (state === 'play' && sc * WW > sw + 2) drawMinimap();
     if (state === 'play' || state === 'end') drawHUD();
+    if (state === 'play') drawCaption(dt);
     if (saved && state === 'hl') hlCaption();
     else if (saved) {
       ctx.font = `700 ${Math.max(16, Math.min(24, sh * 0.05))}px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
