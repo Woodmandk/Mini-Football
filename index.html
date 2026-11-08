@@ -343,6 +343,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Indstillinger</h2><span class="sp"></span></div>
       <div class="setrows">
         <div><span>Roligt tempo (spillet går lidt langsommere)</span><button id="tCalm" class="sw"></button></div>
+        <div><span>Låst spiller (du styrer kun din egen mand, SKIFT kalder på bolden)</span><button id="tLock" class="sw"></button></div>
         <div><span>Publikum og kommentator</span><button id="tCrowd" class="sw"></button></div>
         <div><span>Test kommentatoren</span><button id="tSay" class="alt">Afspil</button></div>
         <div><span>Vibration ved skud og mål</span><button id="tVib" class="sw"></button></div>
@@ -573,7 +574,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true };
+  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, lock: false };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
   if (![1, 2, 3, 5, 7, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
@@ -595,7 +596,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); if (key === 'crowd' && cfg.crowd) unlockSpeech('Kommentatoren er klar'); if (key === 'vib' && cfg.vib) buzz([40, 60, 40]); };
     paint();
   }
-  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music'); toggle('tVib', 'vib'); toggle('tCalm', 'calm');
+  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music'); toggle('tVib', 'vib'); toggle('tCalm', 'calm'); toggle('tLock', 'lock');
 
   // ---------- Menu pages: forside -> kampopsætning / online / indstillinger ----------
   let setupMode = 'cpu';
@@ -1707,8 +1708,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
   });
 
   // ---------- Control switching ----------
-  function swapControl(h, q) {
+  function swapControl(h, q, force) {
     if (!h || !q || h === q || q.ctrl !== 'ai' || !isHuman(h)) return;
+    if (cfg.lock && size > 1 && !force) return; // locked player (as in FIFA): you keep your own man the whole match
     q.ctrl = h.ctrl; q.peer = h.peer; h.ctrl = 'ai'; h.peer = null;
     q.wasA = h.wasA; q.wasB = h.wasB; h.wasA = h.wasB = false;
     h.charging = false; h.hold = 0; q.charging = false; q.hold = 0; q.swcd = 0.4; q.windup = 0;
@@ -1892,12 +1894,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
     autoSwitchTo(1 - p.team, tx, ty, 50); // the other side: take the man nearest where the pass is going
   }
   // chip over the keeper: two quick taps on SKYD
-  function lob(p, ax, ay, q) {
+  function lob(p, ax, ay, q, lp) {
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     const pt = q && ax !== undefined ? [p.x + ax, p.y + ay] : null;
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
-    const hs = ax !== undefined ? Math.max(260, Math.min(q ? 1000 : 600, Math.hypot(ax, ay) / (q ? 0.73 : 0.85))) : 540; // crosses land where they're aimed (to a man: at head height)
-    release(p, p.fx * hs + p.vx * 0.2, p.fy * hs + p.vy * 0.2, 0.35);
+    const hs = ax !== undefined ? Math.max(260, Math.min(q ? 1000 : 600, Math.hypot(ax, ay) / (lp ? 0.8 : q ? 0.73 : 0.85))) : 540; // a high pass comes down at his chest // crosses land where they're aimed (to a man: at head height)
+    release(p, p.fx * hs + (lp ? 0 : p.vx * 0.2), p.fy * hs + (lp ? 0 : p.vy * 0.2), 0.35);
     ball.vz = 470; ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
     const gx = p.team ? PL : PR;
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
@@ -2045,7 +2047,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (card) { flash = { text: card, t: 1.8 }; lastCard = nameOf(a) || ''; }
   }
   function sendOff(p) {
-    if (isHuman(p)) { const q = nearestFree(p); if (q) swapControl(p, q); }
+    if (isHuman(p)) { const q = nearestFree(p); if (q) swapControl(p, q, true); }
     p.out = size <= 3 ? 20 : 40; p.fouls = 0; p.yc = 0; p.stun = 0; p.tackle = 0; p.windup = 0;
     if (ball.owner === p.i) ball.owner = -1;
   }
@@ -2067,14 +2069,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
     taker.x = ball.x - dir * (REACH - 3); taker.y = CY; taker.fx = dir; taker.fy = 0; taker.think = 0;
     // a human on the team takes it
     const hs = P.filter(q => q.team === team && isHuman(q));
-    if (hs.length && !isHuman(taker)) swapControl(hs[0], taker);
+    if (hs.length && !isHuman(taker)) swapControl(hs[0], taker, true);
     ball.owner = taker.i; ball.lastTeam = team; ball.lastIdx = ball.owner;
     taker.frozen = 99; guard = 99; pen.kp = kp.i; pen.tk = ball.owner;
     // the keeper's own player takes over the keeper
     const kh = P.filter(q => q.team !== team && isHuman(q));
     if (kh.length && !isHuman(kp)) {
       const ks = kh.slice().sort((a, b) => (a.ctrl + (a.peer || '')).localeCompare(b.ctrl + (b.peer || '')));
-      swapControl(so ? ks[so.k[team].length % ks.length] : kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp); // in a shootout they take turns in goal too
+      swapControl(so ? ks[so.k[team].length % ks.length] : kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp, true); // in a shootout they take turns in goal too
     }
     flash = { text: so ? tn(team) + ' skyder' : 'Straffespark', t: 2.4 };
     sfx.whistle();
@@ -2214,6 +2216,26 @@ button.small { font-size: 13px; padding: 9px 10px; }
     return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
   }
   // the best mate to pass to: free of markers, a clear lane, and further up the pitch
+  function laneGap(x0, y0, x1, y1, foes) { // how close the nearest opponent is to the line from (x0,y0) to (x1,y1)
+    const vx = x1 - x0, vy = y1 - y0, r2 = vx * vx + vy * vy || 1;
+    let m = 1e9;
+    for (const f of foes) { const t = Math.max(0, Math.min(1, ((f.x - x0) * vx + (f.y - y0) * vy) / r2)); m = Math.min(m, Math.hypot(x0 + vx * t - f.x, y0 + vy * t - f.y)); }
+    return m;
+  }
+  function shotChance(p, goalX, foes, d, size) { // a clear shot at goal from here? returns the aim and power, or null
+    const gd = Math.hypot(goalX - p.x, CY - p.y), maxD = size <= 3 ? 520 : 400;
+    if (gd > maxD || Math.abs(goalX - p.x) < 25) return null;
+    let best = null;
+    for (const k of [-0.72, -0.4, 0, 0.4, 0.72]) {
+      const ty = CY + k * MOUTH, gap = laneGap(p.x, p.y, goalX, ty, foes);
+      if (gap > 26 && (!best || gap > best.gap)) best = { ty, gap };
+    }
+    if (!best) return null;
+    // the further out, the bigger the gap he wants (a keeper can still get across)
+    if (gd > 220 && best.gap < 26 + (gd - 220) * 0.12) return null;
+    const err = (Math.random() - 0.5) * 2 * d.aimErr * 0.6, a = Math.atan2(best.ty - p.y, goalX - p.x) + err;
+    return { gap: best.gap, aim: [Math.cos(a), Math.sin(a)], pw: gd > 300 ? MAXCHARGE * 0.9 : gd > 160 ? MAXCHARGE * 0.6 : MAXCHARGE * 0.35 };
+  }
   function bestPass(p, list, foes, dir) {
     let best = null, bs = -1e9;
     for (const q of list) {
@@ -2300,7 +2322,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const sinceWon = wonAt[p.team] - clock;
       const ahead = mates.filter(q => q !== p && q.k !== 0 && (q.x - p.x) * dir > 140 && !isOffside(q, p) && !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 55));
       const range = [300, 340, 400][T.pt] + (sty === 'angreb' ? 60 : sty === 'kort' ? -50 : 0);
-      if (!keeper && size >= 3 && wide && p.think > 0.4 && Math.random() < (sty === 'kant' ? 3.5 : 1.6) * dt) { out.cross = true; out.aim = [goalX - dir * 115 - p.x, CY - p.y]; } // cross to a man in the box
+      // a real chance: a clear line to a corner of the goal (or an empty net) is always taken, not left to chance
+      const chance = !keeper && toGoal > 0 && !(p.frozen > 0) ? shotChance(p, goalX, foes, d, size) : null;
+      const tapIn = !keeper && !chance && toGoal > 0 && toGoal < 330 && size > 1 && p.think > d.react && Math.random() < (0.4 + iq) * 3 * dt
+        ? mates.find(q => q !== p && q.k !== 0 && !isOffside(q, p) && (goalX - q.x) * dir < toGoal + 40 && laneGap(p.x, p.y, q.x, q.y, foes) > 30 && shotChance(q, goalX, foes, d, size)) : null;
+      if (chance && p.think > d.react * 0.7 && (chance.gap > 60 || Math.random() < (0.3 + iq) * 4 * dt)) { out.shoot = chance.pw; out.aim = chance.aim; } // an open goal always, a corner chance more often the cleverer he is
+      else if (tapIn) { out.passTo = tapIn; } // square it to the man with the open goal
+      else if (!keeper && size >= 3 && wide && p.think > 0.4 && Math.random() < (sty === 'kant' ? 3.5 : 1.6) * dt) { out.cross = true; out.aim = [goalX - dir * 115 - p.x, CY - p.y]; } // cross to a man in the box
       else if (keeper && p.think > 0.6) { out.passTo = passTarget(p, dir, 0) || null; if (!out.passTo) { out.shoot = MAXCHARGE; out.aim = [dir, 0]; } }
       else if (!keeper && sty === 'mur' && size >= 3 && fromOwn < Lp * 0.33 && foeD < 100 && p.think > 0.25 && !p.plan.cl) {
         // the wall: no messing about at the back, it goes long
@@ -2444,7 +2472,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const L = ball.last;
     let tx = ball.x, ty = ball.y, spr = false;
     const v2 = ball.vx * ball.vx + ball.vy * ball.vy;
-    if (L.pt && dBall(p) > 110) { tx = L.pt[0]; ty = L.pt[1]; spr = true; }
+    if (L.pt && (dBall(p) > 110 || (L.lp && ball.z > 20))) { tx = L.pt[0]; ty = L.pt[1]; spr = true; } // a high pass: wait where it comes down
     else if (v2 > 900) {
       const t = Math.max(0, ((p.x - ball.x) * ball.vx + (p.y - ball.y) * ball.vy) / v2);
       tx = ball.x + ball.vx * t * 0.6; ty = ball.y + ball.vy * t * 0.6;
@@ -2630,7 +2658,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
                 // held: always to a teammate, further out the longer you hold, with more pace on it. Along the ground unless
                 // an opponent stands in the way of a long one, then it is lifted over him onto the same man
                 const pw = Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP));
-                if (q && hb >= PASS_HIGH && laneBlocked(p, q)) { lob(p, q.x + q.vx * 0.5 - p.x, q.y + q.vy * 0.5 - p.y, q); if (stats) stats.pa[p.team]++; }
+                if (q && hb >= PASS_HIGH && laneBlocked(p, q)) { lob(p, q.x + q.vx * 0.4 - p.x, q.y + q.vy * 0.4 - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
                 else if (q) pass(p, q, false, pw);
               }
             }
@@ -2640,7 +2668,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
       } else {
         p.charging = false; p.hold = 0; p.chB = false; p.holdB = 0;
         if (aDown && !(p.frozen > 0) && !(p.dive > 0)) { if (isKeeper(p) && inBox(p.team, p.x, p.y)) manualDive(p, inp); else startTackle(p); }
-        if (bDown && p.swcd <= 0 && !(p.frozen > 0)) manualSwitch(p);
+        if (bDown && p.swcd <= 0 && !(p.frozen > 0)) {
+          const o = owner();
+          if (cfg.lock && size > 1) { if (o && o.team === p.team && o.ctrl === 'ai' && !(o.frozen > 0) && !(o.hands > 0) && !setp) { pass(o, p); p.swcd = 0.6; } } // locked: SKIFT calls for the ball
+          else manualSwitch(p);
+        }
       }
       p.wasA = !!inp.a; p.wasB = !!inp.b;
     }
@@ -2721,7 +2753,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 12) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 12 + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -2739,8 +2771,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
           break;
         }
       }
+      if (ball.owner < 0 && ball.last && ball.last.pass && ball.last.lp && ball.vz <= 0 && ball.z < 75) { // a high pass coming down: the man it is meant for takes it on his chest
+        const q = P[ball.last.to];
+        if (q && on(q) && q.stun <= 0 && dBall(q) < REACH + 26) grab(q);
+      }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
-        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
+        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.i === ball.last.to) && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
         if (h) header(h);
       }
       if (ball.owner < 0 && ball.z < 26) {
@@ -4607,7 +4643,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j) => lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j]), sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
