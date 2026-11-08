@@ -129,6 +129,7 @@ table.st td.l, table.st th.l { text-align: left; }
 .minis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .minis button { font-size: 13px; padding: 11px 4px; line-height: 1.15; }
 .minis.small { grid-template-columns: repeat(4, 1fr); margin-top: 6px; }
+.minis.four { grid-template-columns: 1fr 1fr; }
 .minis.small button { font-size: 11px; padding: 7px 2px; opacity: 0.85; }
 .comprow { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
 .comprow button { font-size: 12px; padding: 7px 12px; }
@@ -220,7 +221,7 @@ button.sw { min-width: 70px; padding: 9px 12px; font-size: 13px; background: tra
 button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); border-color: var(--chalk); }
 .kbd { font-size: 12px; }
 @media (hover: none) { .kbd { display: none; } }
-#wrap.n560 :is(.home, .ow, .ow.three, .profgrid, .shopgrid, .seasonview) { grid-template-columns: 1fr; }
+#wrap.n560 :is(.home, .sqgrid, .ow, .ow.three, .profgrid, .shopgrid, .seasonview) { grid-template-columns: 1fr; }
 .chl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; text-align: left; }
 .chl li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.3); font-size: 15px; }
 .chl li.done { outline: 2px solid var(--gold); }
@@ -236,6 +237,20 @@ table.st tr.me td { color: var(--gold); }
 #rotate { display: none; font-size: 13px; color: var(--gold); }
 /* your own team */
 .minis button.mine { border-color: var(--gold); color: var(--gold); }
+.tp.big { font-size: 16px; font-weight: 700; color: #7fe0a0; flex: 0 0 92px; text-align: right; }
+.sqgrid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; text-align: left; align-items: start; }
+.sqlist { display: flex; flex-direction: column; gap: 3px; }
+.sqrow { display: flex; align-items: center; gap: 8px; padding: 4px 8px; font-size: 13px; text-align: left; min-height: 0; }
+.sqrow.sel { border-color: var(--gold); } .sqrow.bench { opacity: 0.6; }
+.sqrow .pos { font-size: 10px; width: 24px; color: var(--muted); } .sqrow .nm { flex: 1; }
+.ovr { font-weight: 800; min-width: 26px; text-align: center; border-radius: 5px; padding: 1px 4px; font-size: 12px; }
+.ovr.bronze, .sqcard.bronze { background: #8a5a35; color: #fff; } .ovr.silver, .sqcard.silver { background: #9aa4ad; color: #14181c; }
+.ovr.gold, .sqcard.gold { background: #e3b23c; color: #1a1408; } .ovr.elite, .sqcard.elite { background: linear-gradient(135deg, #2b1a5c, #7b3fe4); color: #ffe27a; }
+.sqcard { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; }
+.sqcard .o { display: flex; flex-direction: column; align-items: center; line-height: 1; } .sqcard .o b { font-size: 30px; } .sqcard .o span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
+.sqcard .namein { flex: 1; min-width: 0; font-size: 15px; padding: 6px 8px; background: rgba(0,0,0,0.25); color: inherit; }
+.sqstats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sqnote { font-size: 12px; color: var(--muted); margin: 0; }
 .linkbtn { font: 500 11px/1 var(--font); letter-spacing: 0.04em; text-transform: none; padding: 2px 4px; margin-left: 6px; border: 0; background: none; color: var(--gold); text-decoration: underline; }
 button.small { font-size: 13px; padding: 9px 10px; }
 #lobbyTeams { font-size: 15px; }
@@ -277,8 +292,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <h1><span class="r">Mini</span><br><span class="b">Football</span></h1>
           <label class="namechip"><span>Du spiller som</span>
             <input id="name" class="namein" maxlength="12" placeholder="Skriv dit navn" autocomplete="off" aria-label="Dit navn"></label>
-          <div class="minis">
-            <button id="goMine" class="alt mine">Mit hold</button>
+          <div class="minis four">
+            <button id="goMine" class="alt mine">Mit hold</button><button id="goSquad" class="alt mine">Trup og træning</button>
             <button id="goProf" class="alt">Profil og trofæer</button><button id="goShop" class="alt">Butik <span class="coins" data-coins>0</span></button>
           </div>
           <div class="minis small">
@@ -291,7 +306,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <button id="goSeason" class="big alt">Karriere og turneringer<small id="compSub">Karriere, co-op-pokal og sæson</small></button>
           <button id="goOnline" class="big alt">Online med venner<small>Opret kamp eller deltag med kode</small></button>
           <button id="bTwo" class="big alt">2 på én telefon<small>Mod hinanden eller sammen mod computeren</small></button>
-          <button id="goPractice" class="big alt">Straffe og træning<small>Øv dig uden pres</small></button>
+          <button id="goPractice" class="big alt">Træning og færdighedsspil<small>Færdighedsspil, straffe og træningsbane</small></button>
         </div>
       </div>
     </div>
@@ -315,13 +330,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
 
     <!-- straffe og træning -->
     <div class="card wide" id="pgPractice" hidden>
-      <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Straffe og træning</h2><span class="sp"></span></div>
+      <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Træning og færdighedsspil</h2><span class="sp"></span></div>
       <div class="ow">
         <div class="col"><div class="lbl">Straffesparkskonkurrence</div>
           <p>5 straffe hver mod computeren. Sigt med joysticket og tryk SKYD. Når du står i mål, bestemmer joysticket hvilken vej du kaster dig.</p>
           <button id="bPens" class="go">Start straffe</button></div>
-        <div class="col"><div class="lbl">Udfordringer</div>
-          <p>Klar dem for at få stjerner og mønter.</p>
+        <div class="col"><div class="lbl">Færdighedsspil</div>
+          <p>5 niveauer i hver. Stjerner giver træningspoint (TP) og låser næste niveau op.</p>
           <div class="shoplist" id="drillList"></div></div>
         <div class="col"><div class="lbl">Træningsbane</div>
           <p>Dit hold mod en målmand. Intet ur og ingen modstandere, så du kan øve skud, lob, stikninger og driblinger.</p>
@@ -418,12 +433,29 @@ button.small { font-size: 13px; padding: 9px 10px; }
   <div class="overlay" id="shop" hidden>
     <div class="card wide">
       <div class="top"><button class="alt back" id="shopClose">‹ Tilbage</button><h2>Butik</h2><span class="coins big" data-coins>0</span></div>
-      <p>Du tjener mønter i hver kamp: for at spille, for mål, for sejre og for nye trofæer. Træning gør dit hold bedre i kampe mod computeren og i sæsonen.</p>
+      <p>Du tjener mønter i hver kamp: for at spille, for mål, for sejre og for nye trofæer. Træningspoint (TP) bruger du på at træne dine spillere i Trup og træning. De gør holdet bedre mod computeren.</p>
       <div class="shopgrid">
         <div class="col"><div class="lbl" id="lvLbl">Træn dit hold</div><div class="shoplist" id="shopTrain"></div></div>
         <div class="col"><div class="lbl">Hold</div><div class="shoplist" id="shopTeams"></div></div>
         <div class="col"><div class="lbl">Bolde</div><div class="shoplist" id="shopBalls"></div></div>
         <div class="col"><div class="lbl">Baner</div><div class="shoplist" id="shopPitch"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="squad" hidden>
+    <div class="card wide">
+      <div class="top"><button class="alt back" id="sqClose">‹ Tilbage</button><h2>Trup og træning</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+      <div class="sqgrid">
+        <div class="sqlist" id="sqList"></div>
+        <div class="col">
+          <div class="sqcard" id="sqCard"><div class="o"><b id="sqOvr">60</b><span id="sqPos">Angreb</span></div>
+            <input id="sqName" class="namein" maxlength="16" aria-label="Spillerens navn" autocomplete="off"></div>
+          <div class="sqstats" id="sqStats"></div>
+          <p class="sqnote"><b id="sqTeam"></b> · <span id="sqXI"></span></p>
+          <p class="sqnote">Træningspoint (TP) får du i færdighedsspil og kampe, eller i butikken.</p>
+          <button id="sqDrills" class="go">Færdighedsspil ›</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1755,7 +1787,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     else if (mode === 'guest') { gRx = [gRx[0] + 1, id]; sendG(); }
   });
   $('again').onclick = () => {
-    if (kind === 'train' && drillAgain) { startDrill(drillAgain); return; }
+    if (kind === 'train' && drillAgain) { startDrill(...drillAgain); return; }
     if (comp) { compNext(); return; }
     if (!series && $('again').onclickSer && kind === null) series = { n: cfg.ser, w: [0, 0], g: 0 };
     $('again').onclickSer = false;
@@ -1801,7 +1833,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const press = (...ids) => { for (const id of ids) { const b = $(id); if (b && !b.hidden && b.offsetParent) { b.click(); return true; } } return false; };
     if (typing()) { document.activeElement.blur(); return true; }
     // the overlays from the top down (later in the page lies on top)
-    const OV = [['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
+    const OV = [['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
       ['help', 'helpOk'], ['myteam', 'mtClose'], ['lobby', 'cancel'], ['season', 'seasonClose'], ['shop', 'shopClose'], ['prof', 'profClose']];
     if (state === 'hl') return press('hlClose') || true;
     for (const [ov, ...bs] of OV) if (shown(ov)) { if (!press(...bs)) $(ov).hidden = true; return true; }
@@ -2207,7 +2239,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (isHuman(kp)) { const i = kp.ctrl === 'L0' ? localInput(0) : kp.ctrl === 'L1' ? localInput(1) : (remoteIn.get(kp.peer) || ZERO); d = Math.abs(i.y) > 0.3 ? Math.sign(i.y) : 0; }
       else {
         const truth = Math.abs(taker.fy) < 0.08 ? 0 : Math.sign(taker.fy);
-        const right = 0.3 + (mode === 'cpu' ? Math.min(2.5, matchDiff()) : 1) * 0.12 + (drill && drill.id === 'pens' ? drill.i * 0.035 : 0); // in the penalty challenge he gets better every kick
+        const right = 0.3 + (mode === 'cpu' ? Math.min(2.5, matchDiff()) : 1) * 0.12 + (drill && drill.id === 'pens' ? drill.i * 0.035 + (drill.lv - 1) * 0.04 : 0); // in the penalty challenge he gets better every kick
         d = Math.random() < right ? truth : [-1, 0, 1][Math.floor(Math.random() * 3)];
       }
       kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * 470; kp.dvx = 0;
@@ -3256,8 +3288,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const SKILLS = [['spd', 'Fart', 'Løber hurtigere'], ['sht', 'Skud', 'Hårdere og mere præcise skud'], ['pas', 'Afleveringer', 'Spiller hurtigere og bedre bolde'], ['def', 'Forsvar', 'Vinder flere tacklinger']];
   const skillPrice = l => 60 + l * 40;
   function myLv() { const pr = loadProf(); return Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {}); }
-  let lvNow = [null, null]; // skills in play for each side in this match (only your side, only offline)
-  const lvOf = p => lvNow[p.team] || null;
+  const lvOf = p => p.lv || null; // a player's trained skills in this match (only your squad, only against the computer)
   function loadProf() { try { return Object.assign(PROF0(), JSON.parse(localStorage.getItem('mf-profile') || '{}')); } catch (_) { return PROF0(); } }
   function paintCoins(pr) { const c = (pr || loadProf()).coins; document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = c; }); }
   function saveProf(pr) { try { localStorage.setItem('mf-profile', JSON.stringify(pr)); } catch (_) {} paintCoins(pr); }
@@ -3270,7 +3301,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const seasonSaveS = v => { try { localStorage.setItem('mf-season', JSON.stringify(v)); } catch (_) {} };
   function matchSize() { if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : cfg.size; }
   function matchMins() { if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
-  function matchDiff() { if (comp) return comp.diff; if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
+  function matchDiff() { if (drill) return DRILL_DIFF[(drill.lv || 1) - 1]; if (comp) return comp.diff; if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
   const tn = t => (teamPick ? teamPick[t].n : KITN[kit][t]);
   const aiD = t => tD[t] || DIFF[1];
   function rgbDist(a, b) { const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16); return Math.hypot((x >> 16) - (y >> 16), ((x >> 8) & 255) - ((y >> 8) & 255), (x & 255) - (y & 255)); }
@@ -3306,9 +3337,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const f = teamPick[t].str - 3;
       return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
-    lvNow = [null, null];
-    if (m === 'cpu' || (comp && m === 'host')) { // your trained team (always the home side against the computer)
-      const L = myLv(); lvNow[0] = L; const d = tD[0];
+    for (const p of P) p.lv = null;
+    if (m === 'cpu' || (comp && m === 'host')) { // your trained squad (always the home side against the computer): every player plays at his own rating
+      const L = squadToPitch(); const d = tD[0];
       tD[0] = { spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
     }
   }
@@ -3370,7 +3401,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
       while (pr.xp >= pr.lvl * 100) { pr.xp -= pr.lvl * 100; pr.lvl++; coins += 40 * pr.lvl; extra = (extra ? extra + ' · ' : '') + `Holdniveau ${pr.lvl}!`; }
     }
     pr.coins += coins; saveProf(pr);
-    rw.textContent = `+${coins} mønter` + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
+    let tp = 0;
+    if ((me === 0 || me === 1) && kind !== 'pen') { tp = 4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0); addTP(tp); }
+    rw.textContent = `+${coins} mønter` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
     rw.hidden = false;
   }
 
@@ -3389,26 +3422,32 @@ button.small { font-size: 13px; padding: 9px 10px; }
   let drill = null, drillAgain = null;
   const drillLoad = () => { try { return JSON.parse(localStorage.getItem('mf-drills') || '{}') || {}; } catch (_) { return {}; } };
   const starStr = n => '★'.repeat(n) + '☆'.repeat(3 - n);
+  // skill games: every drill has 5 levels; a star on a level opens the next one, which is harder (keeper, defenders, time)
+  const DRILL_MAX = 5, DRILL_DIFF = [0, 1, 1, 2, 3];
+  const drillLv = (D, id) => Math.max(1, Math.min(DRILL_MAX, (D[id] || {}).lv || ((D[id] || {}).s ? 2 : 1))); // stars from before levels open level 2
+  const drillStars = (D, id, lv) => ((D[id] || {}).st || {})[lv] || (lv === 1 ? (D[id] || {}).s || 0 : 0);
+  function drillStarsNeed(d, lv) { return d.time ? d.stars.map(x => Math.round(x * (1 - 0.07 * (lv - 1)))) : d.stars; }
   function drillList() {
     const box = $('drillList'); if (!box) return; box.textContent = '';
     const D = drillLoad();
     for (const [id, d] of Object.entries(DRILLS)) {
+      const lv = drillLv(D, id);
       const b = document.createElement('button'); b.className = 'alt drill';
-      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = d.n;
-      const st = document.createElement('span'); st.className = 'st'; st.textContent = starStr((D[id] || {}).s || 0);
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${d.n} · niveau ${lv}/${DRILL_MAX}`;
+      const st = document.createElement('span'); st.className = 'st'; st.textContent = starStr(drillStars(D, id, lv));
       b.title = d.txt; b.append(nm, st);
-      b.onclick = () => startDrill(id);
+      b.onclick = () => startDrill(id, lv);
       box.appendChild(b);
     }
   }
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-  function startDrill(id) {
-    drillAgain = id; kind = 'train';
+  function startDrill(id, lv) {
+    lv = Math.max(1, Math.min(drillLv(drillLoad(), id), lv || DRILL_MAX)); drillAgain = [id, lv]; kind = 'train';
     withHelp(() => {
       kind = 'train';
       // a fresh mix of situations each run (no two in a row the same)
       const order = shuffle(SHOT_SC.map(x => x[0])).concat(shuffle(SHOT_SC.map(x => x[0])));
-      drill = { id, i: 0, goals: 0, wait: 0.6, t: 0, live: false, order, gate: 0, gates: null, time: 0 };
+      drill = { id, lv, i: 0, goals: 0, wait: 0.6, t: 0, live: false, order, gate: 0, gates: null, time: 0 };
       startMatch('cpu');
     });
   }
@@ -3424,7 +3463,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (let i = 0; i < n; i++) {
       const x = x0 + (x1 - x0) * (i / (n - 1)) + (Math.random() - 0.5) * 40;
       const y = CY + (i % 2 ? 1 : -1) * (90 + Math.random() * 110) * (Math.random() < 0.2 ? -1 : 1);
-      g.push({ x, y: Math.max(PT + 70, Math.min(PB - 70, y)), w: 46 });
+      g.push({ x, y: Math.max(PT + 70, Math.min(PB - 70, y)), w: 46 - 3 * ((drill && drill.lv) || 1) + 3 }); // narrower gates on higher levels
     }
     return g;
   }
@@ -3465,7 +3504,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       me.wasA = true;
       flash = { text: `${drill.i}/${D.tries}: ${scName(sc)}`, t: 1.4 };
     } else if (drill.id === 'corner') {
-      drillFoes(Math.min(3, 1 + Math.floor((drill.i - 1) / 3))); // 1, 1, 1, 2, 2, 2, 3, 3 defenders
+      drillFoes(Math.min(4, 1 + Math.floor((drill.i - 1) / 3) + Math.floor((drill.lv - 1) / 2))); // 1, 1, 1, 2, 2, 2, 3, 3 defenders, more on higher levels
       drill.setting = true; restart('corner', 0, PR, drill.i % 2 ? PT : PB, `Hjørne ${drill.i} af ${D.tries}`); drill.setting = false;
     } else if (drill.id === 'pens') {
       drillFoes(0);
@@ -3477,7 +3516,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       drill.gates = makeGates(); drill.gate = 0; drill.time = 0;
       me.x = CX - 200; me.y = CY; me.fx = 1; me.fy = 0; giveBall(me); me.wasA = true;
       drill.prev = [me.x, me.y];
-      flash = { text: 'Gennem portene og scor!', t: 1.4 };
+      flash = { text: `Niveau ${drill.lv}: gennem portene og scor!`, t: 1.4 };
     }
   }
   function drillResult(g) {
@@ -3538,27 +3577,33 @@ button.small { font-size: 13px; padding: 9px 10px; }
     });
   }
   function drillEnd() {
-    const d = drill, D = DRILLS[d.id];
+    const d = drill, D = DRILLS[d.id], lv = d.lv || 1, need = drillStarsNeed(D, lv);
     const timed = !!D.time, score = timed ? (d.goals ? d.time : 999) : d.goals;
-    const st = timed ? D.stars.filter(x => score <= x).length : D.stars.filter(x => score >= x).length;
+    const st = timed ? need.filter(x => score <= x).length : need.filter(x => score >= x).length;
     const all = drillLoad(), old = all[d.id] || { s: 0, b: timed ? 999 : 0 };
-    const newStars = Math.max(0, st - old.s), coins = newStars * 20 + (st === 3 && old.s < 3 ? 30 : 0);
+    const was = drillStars(all, d.id, lv);
+    const newStars = Math.max(0, st - was), coins = newStars * 20 + (st === 3 && was < 3 ? 30 : 0);
+    const tp = newStars * 6 * lv + st * 2; // training points: a lot for new stars, a little for every star
     const best = timed ? Math.min(old.b || 999, score) : Math.max(old.b || 0, score);
-    all[d.id] = { s: Math.max(old.s, st), b: best };
+    const opened = st >= 1 && lv === drillLv(all, d.id) && lv < DRILL_MAX;
+    all[d.id] = { s: Math.max(old.s || 0, lv === 1 ? st : 0), b: best, lv: Math.max(drillLv(all, d.id), opened ? lv + 1 : 1), st: Object.assign({}, old.st, { [lv]: Math.max(was, st) }) };
     try { localStorage.setItem('mf-drills', JSON.stringify(all)); } catch (_) {}
     if (coins) addCoins(coins);
+    if (tp) addTP(tp);
     drill = null;
     finish();
-    $('endTitle').textContent = `${D.n}: ${starStr(st)}`;
+    $('endTitle').textContent = `${D.n} niveau ${lv}: ${starStr(st)}`;
+    const Dn = Object.assign({}, D, { stars: need });
     if (timed) {
       $('fh').textContent = score < 999 ? score.toFixed(1) : '–'; $('fa').textContent = 's';
-      $('endMsg').textContent = (score < 999 ? `Din tid: ${score.toFixed(1)} sekunder. ` : 'Du nåede det ikke inden for tiden. ') + (st < 3 ? `Næste stjerne under ${D.stars[st]} s.` : 'Alle tre stjerner!') + (best < 999 ? ` Bedste: ${best.toFixed(1)} s.` : '');
+      $('endMsg').textContent = (score < 999 ? `Din tid: ${score.toFixed(1)} sekunder. ` : 'Du nåede det ikke inden for tiden. ') + (st < 3 ? `Næste stjerne under ${Dn.stars[st]} s.` : 'Alle tre stjerner!') + (best < 999 ? ` Bedste: ${best.toFixed(1)} s.` : '');
     } else {
       $('fh').textContent = d.goals; $('fa').textContent = D.tries;
-      $('endMsg').textContent = `Du scorede ${d.goals} af ${D.tries}. ${st < 3 ? `Næste stjerne ved ${D.stars[st]} mål.` : 'Alle tre stjerner!'} Bedste: ${best}.`;
+      $('endMsg').textContent = `Du scorede ${d.goals} af ${D.tries}. ${st < 3 ? `Næste stjerne ved ${Dn.stars[st]} mål.` : 'Alle tre stjerner!'} Bedste: ${best}.`;
     }
-    const rw = $('endReward'); rw.textContent = coins ? `+${coins} mønter for nye stjerner` : 'Ingen nye stjerner denne gang'; rw.hidden = false;
-    $('again').hidden = false; $('again').textContent = 'Prøv igen';
+    const rw = $('endReward'); rw.textContent = (tp ? `+${tp} TP` : '') + (coins ? ` · +${coins} mønter for nye stjerner` : '') + (opened ? ` · Niveau ${lv + 1} er låst op!` : '') || 'Ingen stjerner denne gang'; rw.hidden = false;
+    $('again').hidden = false; $('again').textContent = opened ? `Niveau ${lv + 1} ›` : 'Prøv igen';
+    drillAgain = [d.id, opened ? lv + 1 : lv];
     drillList();
   }
 
@@ -3779,7 +3824,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const o = TEAMS[koOpp(K)];
       $('koNextLbl').textContent = KO_RN[K.r];
       $('koNext').textContent = `${TEAMS[K.me].n} mod ${o.n}`;
-      $('koMsg').textContent = `${o.n}: ${'★'.repeat(o.str)}${'☆'.repeat(5 - o.str)}${o.sty ? ' · ' + STYLES[o.sty].n : ''}. ${K.size} mod ${K.size}, ${K.mins} min, ${DIFFN[K.diff]}.`;
+      $('koMsg').textContent = `${o.n}: ${'★'.repeat(o.str)}${'☆'.repeat(5 - o.str)}${o.sty ? ' · ' + STYLES[o.sty].n : ''}. ${K.size} mod ${K.size}, ${K.mins} min, ${DIFFN[K.diff]}. Rating: jer ${teamOvr(K.size)}, dem ${strOvr(o.str)}.`;
     }
     $('koPlay').hidden = $('koHow').hidden = $('koHowLbl').hidden = done;
     $('koP2').hidden = done || K.how !== 0;
@@ -3894,7 +3939,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const o = carTeam(C.divs[C.div][carOpp(C)]);
       $('carNextLbl').textContent = `Runde ${C.S.r + 1} af 7`;
       $('carNext').textContent = `${T.n} mod ${o.n}`;
-      $('carMsg').textContent = `${o.n}: ${'★'.repeat(o.str)}${'☆'.repeat(5 - o.str)} · ${STYLES[o.sty] ? STYLES[o.sty].n : ''}. ${C.size} mod ${C.size}, ${C.mins} min, ${DIVS[C.div].n.toLowerCase().startsWith('super') ? 'Superliga' : 'niveau'}: ${DIFFN[carDiff(C)]}. Bestyrelsens mål: ${G[0].toLowerCase()}.`;
+      $('carMsg').textContent = `${o.n}: ${'★'.repeat(o.str)}${'☆'.repeat(5 - o.str)} · ${STYLES[o.sty] ? STYLES[o.sty].n : ''}. ${C.size} mod ${C.size}, ${C.mins} min, ${DIVS[C.div].n.toLowerCase().startsWith('super') ? 'Superliga' : 'niveau'}: ${DIFFN[carDiff(C)]}. Bestyrelsens mål: ${G[0].toLowerCase()}. Rating: jer ${teamOvr(C.size)}, dem ${strOvr(o.str)}.`;
       $('carPlay').textContent = 'Spil kampen ›';
     }
     $('carHow').hidden = $('carHowLbl').hidden = over; $('carP2').hidden = over || C.how !== 0;
@@ -3988,6 +4033,99 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   function paintTeamPickers() { for (const id of ['teamsA', 'teamsB', 'seasonTeams', 'koTeams']) if ($(id)._paint) $(id)._paint(); }
 
+  // ----- your squad, as in the big mobile football games: 11 named players with a rating (OVR) you train up ('mf-squad') -----
+  // stats 40-99: spd Fart, sht Skud, pas Aflevering, def Forsvar (for the keeper: reflexes). Training costs træningspoint (TP).
+  const POS = { MV: 'Målmand', FO: 'Forsvar', MB: 'Midtbane', AN: 'Angreb' };
+  const OVRW = { MV: { spd: 0.1, sht: 0.05, pas: 0.25, def: 0.6 }, FO: { spd: 0.2, sht: 0.05, pas: 0.2, def: 0.55 }, MB: { spd: 0.2, sht: 0.2, pas: 0.45, def: 0.15 }, AN: { spd: 0.3, sht: 0.5, pas: 0.15, def: 0.05 } };
+  const FIRSTN = ['Mads', 'Oliver', 'Emil', 'Noah', 'Lucas', 'Viktor', 'Magnus', 'Frederik', 'Anton', 'Malthe', 'Elias', 'Oscar', 'Villads', 'Johan', 'Carl', 'Alfred', 'Storm', 'Aksel', 'Theo', 'Valdemar'];
+  const LASTN = ['Holm', 'Krogh', 'Bech', 'Lund', 'Dahl', 'Juul', 'Vang', 'Friis', 'Bak', 'Kjær', 'Brink', 'Skov', 'Ravn', 'Hede', 'Toft', 'Mølgaard', 'Lykke', 'Strand', 'Thorup', 'Bonde'];
+  const SQ_POS = ['MV', 'FO', 'FO', 'FO', 'FO', 'MB', 'MB', 'MB', 'AN', 'AN', 'AN'];
+  const ovr = p => Math.round(SKILLS.reduce((s, [k]) => s + p[k] * OVRW[p.pos][k], 0));
+  const statLv = v => Math.max(0, Math.min(11, (v - 50) / 4.5)); // a stat as the old 0-10 training level the match uses
+  const tpPrice = v => 3 + Math.max(0, Math.floor((v - 45) / 5));
+  const ovrTier = o => (o >= 85 ? 'elite' : o >= 75 ? 'gold' : o >= 65 ? 'silver' : 'bronze');
+  const strOvr = str => 50 + str * 6; // the computer teams' rating, from their stars
+  function squadLoad() {
+    let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
+    if (S && Array.isArray(S.pl) && S.pl.length === 11) return S;
+    // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
+    const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
+    const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
+    S = { tp: 20, pl: SQ_POS.map((pos, i) => {
+      const b = base[pos], j = () => Math.floor(Math.random() * 7) - 3, p = { n: `${fn[i]} ${ln[i]}`, pos };
+      SKILLS.forEach(([k], x) => { p[k] = Math.max(40, Math.min(99, b[x] + j() + Math.round((old[k] || 0) * 4.5))); });
+      return p;
+    }) };
+    squadSave(S); return S;
+  }
+  function squadSave(S) { try { localStorage.setItem('mf-squad', JSON.stringify(S)); } catch (_) {} }
+  function addTP(n) { const S = squadLoad(); S.tp = Math.max(0, (S.tp || 0) + (n | 0)); squadSave(S); paintTP(S); return S.tp; }
+  function paintTP(S) { const t = (S || squadLoad()).tp; document.querySelectorAll('[data-tp]').forEach(e => { e.textContent = t; }); }
+  // the line-up for n a side: the keeper plus the best-rated outfield players, back to front
+  function squadXI(n, S) {
+    S = S || squadLoad();
+    const gk = S.pl[0], out = S.pl.slice(1).map((p, i) => ({ p, i: i + 1 })).sort((a, b) => ovr(b.p) - ovr(a.p)).slice(0, Math.max(0, n - 1));
+    const ord = { FO: 0, MB: 1, AN: 2 };
+    out.sort((a, b) => ord[a.p.pos] - ord[b.p.pos] || a.i - b.i);
+    return n === 1 ? [{ p: out.length ? out[0].p : gk, i: 1 }] : [{ p: gk, i: 0 }, ...out];
+  }
+  const teamOvr = n => { const xi = squadXI(n); return Math.round(xi.reduce((s, x) => s + ovr(x.p), 0) / xi.length); };
+  function squadToPitch() { // your players take their places: keeper in goal, defenders at the back, forwards up front
+    for (const p of P) p.lv = null;
+    const xi = squadXI(size), mine = P.filter(p => p.team === 0);
+    const gk = size > 1 ? mine.find(p => p.k === 0) : null;
+    const field = mine.filter(p => p !== gk).sort((a, b) => homeOf(a).x - homeOf(b).x);
+    const list = size > 1 ? xi.slice(1) : xi;
+    if (gk) { gk.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(xi[0].p[k])])); gk.sq = xi[0].p.n; }
+    field.forEach((p, j) => { const s = list[j] && list[j].p; if (s) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k])])); p.sq = s.n; } });
+    const avg = { spd: 0, sht: 0, pas: 0, def: 0 };
+    for (const [k] of SKILLS) avg[k] = xi.reduce((s, x) => s + statLv(x.p[k]), 0) / xi.length;
+    return avg;
+  }
+  let sqSel = 1;
+  function squadShow() {
+    const S = squadLoad(), n = Math.max(1, cfg.size), xi = squadXI(n, S), inXI = new Set(xi.map(x => x.i));
+    const L = $('sqList'); L.textContent = '';
+    S.pl.forEach((p, i) => {
+      const b = document.createElement('button'); b.className = 'alt sqrow' + (i === sqSel ? ' sel' : '');
+      const ps = document.createElement('span'); ps.className = 'pos'; ps.textContent = p.pos;
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.n;
+      const o = document.createElement('span'); o.className = 'ovr ' + ovrTier(ovr(p)); o.textContent = ovr(p);
+      if (!inXI.has(i)) b.classList.add('bench');
+      b.append(ps, nm, o); b.onclick = () => { sqSel = i; squadShow(); };
+      L.appendChild(b);
+    });
+    const p = S.pl[sqSel], o = ovr(p);
+    const card = $('sqCard'); card.className = 'sqcard ' + ovrTier(o);
+    $('sqOvr').textContent = o; $('sqPos').textContent = POS[p.pos];
+    $('sqName').value = p.n;
+    const box = $('sqStats'); box.textContent = '';
+    for (const [k, name] of SKILLS) {
+      const v = p[k], price = tpPrice(v), r = document.createElement('div'); r.className = 'lvrow';
+      const b = document.createElement('b'); b.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflekser' : k === 'pas' ? 'Aflevering' : name} ${v}`;
+      const bt = document.createElement('button'); bt.className = 'alt';
+      bt.textContent = v >= 99 ? 'Max' : `+1 · ${price} TP`; bt.disabled = v >= 99;
+      bt.onclick = () => {
+        const S2 = squadLoad(), q = S2.pl[sqSel];
+        if (S2.tp < price) { bt.textContent = `Mangler ${price - S2.tp} TP`; return; }
+        S2.tp -= price; q[k] = Math.min(99, q[k] + 1); squadSave(S2); sfx.win(); squadShow();
+      };
+      const bar = document.createElement('div'); bar.className = 'lvbar'; const f = document.createElement('i'); f.style.width = Math.round((v - 40) / 59 * 100) + '%'; bar.appendChild(f);
+      r.append(b, bt, bar); box.appendChild(r);
+    }
+    $('sqTeam').textContent = `Holdets rating ${teamOvr(n)} (${n} mod ${n})`;
+    $('sqXI').textContent = inXI.has(sqSel) ? `Starter ved ${n} mod ${n}.` : `På bænken ved ${n} mod ${n}. De bedste spillere starter automatisk.`;
+    paintTP(S); paintCoins();
+    $('squad').hidden = false;
+  }
+  function squadInit() {
+    $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } squadShow(); });
+    $('sqClose').onclick = () => { $('squad').hidden = true; };
+    $('goSquad').onclick = squadShow;
+    $('sqDrills').onclick = () => { $('squad').hidden = true; page('pgPractice'); drillList(); };
+    paintTP();
+  }
+
   // ----- profile page -----
   function profShow() {
     const pr = loadProf();
@@ -4032,24 +4170,20 @@ button.small { font-size: 13px; padding: 9px 10px; }
       box.appendChild(b);
     };
     const TR = $('shopTrain'); TR.textContent = '';
-    const L = Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {});
-    for (const [k, name, desc] of SKILLS) {
-      const r = document.createElement('div'); r.className = 'lvrow';
-      const b = document.createElement('b'); b.textContent = `${name} ${L[k]}/10`;
-      const bt = document.createElement('button'); bt.className = 'alt';
-      const price = skillPrice(L[k]);
-      bt.textContent = L[k] >= 10 ? 'Max' : `● ${price}`; bt.disabled = L[k] >= 10;
-      bt.onclick = () => {
-        const p2 = loadProf(); p2.lv = Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, p2.lv || {});
-        if (p2.coins < price) { bt.textContent = `Mangler ${price - p2.coins}`; return; }
-        if (bt.dataset.sure !== '1') { bt.dataset.sure = '1'; bt.textContent = 'Tryk igen'; return; }
-        p2.coins -= price; p2.lv[k]++; saveProf(p2); sfx.win(); shopShow();
+    const sqB = document.createElement('button'); sqB.className = 'alt'; sqB.innerHTML = '<span class="nm">Trup og træning</span><span class="pr">›</span>';
+    sqB.onclick = () => { $('shop').hidden = true; squadShow(); }; TR.appendChild(sqB);
+    for (const [n, price] of [[25, 100], [60, 220], [150, 500]]) { // træningspoint for coins
+      const b = document.createElement('button'); const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${n} træningspoint`;
+      const pp = document.createElement('span'); pp.className = 'pr'; pp.textContent = `● ${price}`; b.append(nm, pp);
+      b.onclick = () => {
+        const p2 = loadProf();
+        if (p2.coins < price) { pp.textContent = `Mangler ${price - p2.coins}`; return; }
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; pp.textContent = 'Tryk igen'; return; }
+        p2.coins -= price; saveProf(p2); addTP(n); sfx.win(); shopShow();
       };
-      const bar = document.createElement('div'); bar.className = 'lvbar'; const fill = document.createElement('i'); fill.style.width = L[k] * 10 + '%'; bar.appendChild(fill);
-      const sm = document.createElement('small'); sm.textContent = desc;
-      r.append(b, bt, bar, sm); TR.appendChild(r);
+      TR.appendChild(b);
     }
-    $('lvLbl').textContent = `Træn dit hold · Holdniveau ${pr.lvl || 1}`;
+    $('lvLbl').textContent = `Træning · Du har ${squadLoad().tp} TP · Holdets rating ${teamOvr(Math.max(1, cfg.size))}`;
     const T = $('shopTeams'), B = $('shopBalls'), Pp = $('shopPitch');
     T.textContent = B.textContent = Pp.textContent = '';
     TEAMS.filter(t => t.price).forEach(t => row(T, 'team:' + t.id, `${t.n} ${'★'.repeat(t.str)}`, t.price, t.c1, cfg.team === t.id, () => { cfg.team = t.id; saveCfg(); menuColors(); }));
@@ -5092,9 +5226,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
     render(dt);
     requestAnimationFrame(frame);
   }
-  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); buildOpts(); demoReset();
+  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
