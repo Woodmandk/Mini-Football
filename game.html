@@ -1801,7 +1801,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (pw > 0.8) shake = Math.max(shake, 5);
     if (localHuman(p)) buzz(Math.round(18 + pw * 32));
   }
-  function passTarget(p, dx, dy) {
+  function passTarget(p, dx, dy, reach = 0) { // reach 0..1: the longer AFLEVER is held, the further away the man it picks (as in FIFA)
     const mates = P.filter(q => q.team === p.team && q !== p && on(q));
     if (!mates.length) return null;
     let l = Math.hypot(dx, dy);
@@ -1811,7 +1811,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const q of mates) {
       const vx = q.x - p.x, vy = q.y - p.y, d = Math.hypot(vx, vy) || 1;
       const cos = (vx * dx + vy * dy) / d;
-      const s = cos * 1.6 - d / 1100 - (isOffside(q, p) ? 0.6 : 0) - (cos < 0.2 ? 1 : 0);
+      const s = cos * 2.6 - d / 1800 + reach * d / 500 - (isOffside(q, p) ? 0.6 : 0) - (cos < 0.2 ? 1 : 0);
       if (s > bs) { bs = s; best = q; }
     }
     return best;
@@ -1833,6 +1833,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const dir = team ? -1 : 1;
     const xs = P.filter(f => f.team !== team).map(f => f.x * dir).sort((a, b) => b - a);
     return Math.max(CX * dir, xs[1]) * dir;
+  }
+  // Two people on one team (as in FIFA co-op): the pass goes to the man the OTHER person controls, the passer keeps his own and runs on
+  function handOver(p, q) {
+    if (!isHuman(p) || isHuman(q)) return;
+    const others = P.filter(h => h.team === p.team && h !== p && isHuman(h));
+    if (others.length) swapControl(others.reduce((a, b) => (Math.hypot(b.x - q.x, b.y - q.y) < Math.hypot(a.x - q.x, a.y - q.y) ? b : a)), q);
+    else swapControl(p, q);
   }
   function pass(p, q, through, hard, sx, sy) {
     if (!q || (ball.rs === 'pen' && p.frozen > 0 && (pen || so))) return; // no passing at a penalty
@@ -1861,7 +1868,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (stats) stats.pa[p.team]++;
     ball.gk = 'pass'; ball.fresh = false;
     if (hard) sfx.kick(hard * 0.6); else sfx.pass();
-    if (isHuman(p)) swapControl(p, q);
+    handOver(p, q);
     autoSwitchTo(1 - p.team, tx, ty, 50); // the other side: take the man nearest where the pass is going
   }
   // chip over the keeper: two quick taps on SKYD
@@ -2593,8 +2600,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
                 if (q) pass(p, q, size > 1 && (q.x - p.x) * dir > 90 && !isOffside(q, p), 0, inp.x, inp.y);
               } else {
                 p.pendB = 0;
-                const q = passTarget(p, inp.x, inp.y);
-                if (q && hb >= PASS_HIGH) { lob(p, q.x + q.vx * 0.5 - p.x, q.y + q.vy * 0.5 - p.y, q); if (stats) stats.pa[p.team]++; if (isHuman(p)) swapControl(p, q); }
+                const q = passTarget(p, inp.x, inp.y, Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)));
+                if (q && hb >= PASS_HIGH) { lob(p, q.x + q.vx * 0.5 - p.x, q.y + q.vy * 0.5 - p.y, q); if (stats) stats.pa[p.team]++; handOver(p, q); }
                 else if (q) pass(p, q, false, (hb - PASS_TAP) / (PASS_HIGH - PASS_TAP));
               }
             }
@@ -4336,6 +4343,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ctx.beginPath(); ctx.arc(lx, ly, 18, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(lx - 8, ly); ctx.lineTo(lx + 8, ly); ctx.moveTo(lx, ly - 8); ctx.lineTo(lx, ly + 8); ctx.stroke(); ctx.restore();
   }
+  const hintAt = [0, 0];
   function drawPassHint() {
     if (size < 2) return;
     for (const me of myPlayers()) {
@@ -4343,9 +4351,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const i = me.ctrl === 'L1' ? 1 : 0;
       const inp = localInput(i);
       if (isKeeper(me) && (mode === 'guest' ? me.hands > 0 : keeperKick(me))) drawKickHint(me, inp);
-      if (mode === 'guest') continue;
-      const q = passTarget(me, inp.x, inp.y); if (!q) continue;
-      ctx.strokeStyle = 'rgba(255,212,71,0.55)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
+      if (mode === 'guest' && me.hands > 0) continue;
+      // how long AFLEVER has been held (kept here so a guest sees it too): the line reaches further and turns blue (hard) or gold (high)
+      const now = performance.now();
+      if (inp.b) { if (!hintAt[i]) hintAt[i] = now; } else hintAt[i] = 0;
+      const hb = hintAt[i] ? (now - hintAt[i]) / 1000 * (cfg.calm && kind !== 'train' ? 0.8 : 1) : 0; // in game time, like the hold itself
+      const q = passTarget(me, inp.x, inp.y, hb > PASS_TAP ? Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)) : 0); if (!q) continue;
+      ctx.strokeStyle = hb >= PASS_HIGH ? 'rgba(255,212,71,0.9)' : hb > PASS_TAP ? 'rgba(127,211,255,0.9)' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
       ctx.beginPath(); ctx.arc(q.x, q.y, PRAD + 6, 0, Math.PI * 2); ctx.stroke();
     }
