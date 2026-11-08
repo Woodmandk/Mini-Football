@@ -2043,7 +2043,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ball.x = gx - dir * 105; ball.y = CY; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.last = null; ball.rs = 'pen'; ball.loose = 0; ball.fresh = true;
     const kp = size > 1 ? P[slotOf(1 - team, 0)] : P.find(q => q.team !== team);
     const ours = P.filter(q => q.team === team && on(q));
-    let taker = ours.find(q => isHuman(q)) || ours.reduce((a, b) => (formOf(b)[0] > formOf(a)[0] ? b : a));
+    // the people on the team take turns (in a shootout everyone gets a kick, not just the host)
+    const people = ours.filter(q => isHuman(q)).sort((a, b) => (a.ctrl + (a.peer || '')).localeCompare(b.ctrl + (b.peer || '')));
+    const turn = so ? so.k[team].length : 0;
+    let taker = people.length ? people[turn % people.length] : ours.reduce((a, b) => (formOf(b)[0] > formOf(a)[0] ? b : a));
     for (const p of P) {
       p.vx = p.vy = 0; p.tackle = 0; p.stun = 0; p.windup = 0; p.recover = 0; p.dive = 0; p.frozen = 0; p.charging = false; p.hold = 0;
       if (on(p) && Math.abs(p.x - gx) < 280) { p.x = gx - dir * (290 + Math.random() * 90); p.y = Math.max(PT + 30, Math.min(PB - 30, p.y)); }
@@ -2057,7 +2060,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
     taker.frozen = 99; guard = 99; pen.kp = kp.i; pen.tk = ball.owner;
     // the keeper's own player takes over the keeper
     const kh = P.filter(q => q.team !== team && isHuman(q));
-    if (kh.length && !isHuman(kp)) swapControl(kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp);
+    if (kh.length && !isHuman(kp)) {
+      const ks = kh.slice().sort((a, b) => (a.ctrl + (a.peer || '')).localeCompare(b.ctrl + (b.peer || '')));
+      swapControl(so ? ks[so.k[team].length % ks.length] : kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp); // in a shootout they take turns in goal too
+    }
     flash = { text: so ? tn(team) + ' skyder' : 'Straffespark', t: 2.4 };
     sfx.whistle();
   }
