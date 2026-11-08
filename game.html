@@ -311,7 +311,7 @@ table.st td.l, table.st th.l { text-align: left; }
   const saveCfg = () => { try { localStorage.setItem('mf-cfg', JSON.stringify(cfg)); } catch (_) {} };
   function toggle(id, key) {
     const b = $(id), paint = () => b.setAttribute('aria-pressed', String(!!cfg[key]));
-    b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); };
+    b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); if (key === 'crowd' && cfg.crowd) unlockSpeech('Kommentatoren er klar'); };
     paint();
   }
   toggle('tReplay', 'replay'); toggle('tPu', 'pu'); toggle('tCrowd', 'crowd');
@@ -530,7 +530,7 @@ table.st td.l, table.st th.l { text-align: left; }
   }
   function onStart(e) {
     if (state !== 'play' || paused) return;
-    e.preventDefault(); audioOn();
+    e.preventDefault(); audioOn(); if (!speechUnlocked) unlockSpeech();
     if (replay) { skipReplay(); return; }
     for (const t of e.changedTouches) {
       const { x, y } = pt(t);
@@ -667,15 +667,29 @@ table.st td.l, table.st th.l { text-align: left; }
     'Frispark': 'Frispark', 'Hjørnespark': 'Hjørnespark', 'Golden goal': '' };
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const comm = { last: 0, text: '', owner: -1, team: -1, shotAt: 0, missSaid: 0, alone: -1, prevClock: 999, prevBanner: '' };
+  // Phones only let a page talk after the player has tapped something, so the first line is spoken from a tap.
+  let voice = null, busyUntil = 0, speechUnlocked = false;
+  function findVoice() { try { const vs = speechSynthesis.getVoices(); voice = vs.find(x => /^da/i.test(x.lang)) || vs.find(x => /^(nb|no|sv)/i.test(x.lang)) || null; } catch (_) {} }
+  if (window.speechSynthesis) { findVoice(); try { speechSynthesis.addEventListener('voiceschanged', findVoice); } catch (_) {} }
+  function speakNow(text) {
+    const u = new SpeechSynthesisUtterance(text); u.lang = 'da-DK'; u.rate = 1.1; u.volume = 1;
+    if (voice) u.voice = voice;
+    if (speechSynthesis.paused) speechSynthesis.resume();
+    speechSynthesis.speak(u);
+    busyUntil = performance.now() + 400 + text.length * 70; // don't trust .speaking: some phones never reset it
+  }
+  function unlockSpeech(text) {
+    if (!window.speechSynthesis || !cfg.crowd) return;
+    try { speechSynthesis.cancel(); speakNow(text || (speechUnlocked ? '' : 'Velkommen til kampen')); speechUnlocked = true; } catch (_) {}
+  }
   function say(text, prio) { // prio 1: needs a quiet moment, 1.5: soon after the last line, 2: interrupts
     if (!text || !cfg.crowd || !window.speechSynthesis) return;
     const now = performance.now();
-    if (prio < 2 && (speechSynthesis.speaking || now - comm.last < (prio >= 1.5 ? 1200 : 4500))) return;
+    if (prio < 2 && (now < busyUntil || now - comm.last < (prio >= 1.5 ? 1200 : 4500))) return;
     try {
-      if (prio >= 2) speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text); u.lang = 'da-DK'; u.rate = 1.12; u.volume = 0.9;
-      const v = speechSynthesis.getVoices().find(x => /^da/i.test(x.lang)); if (v) u.voice = v;
-      speechSynthesis.speak(u); comm.last = now;
+      if (prio >= 2 && now < busyUntil) { speechSynthesis.cancel(); setTimeout(() => { try { speakNow(text); } catch (_) {} }, 60); }
+      else speakNow(text);
+      comm.last = now;
     } catch (_) {}
   }
   const whoIs = p => (mode === 'guest' ? (p.ctrl === 'ME' ? myName() : p.name) : nameOf(p)) || KITN[kit][p.team];
@@ -777,6 +791,7 @@ table.st td.l, table.st th.l { text-align: left; }
     $('rxbar').hidden = !(m === 'host' || m === 'guest');
     readyMap.clear();
     kickoff(); pause = 2.4; banner = '3'; resetCommentary();
+    if (!speechUnlocked) unlockSpeech();
     clearInput();
     for (const id of ['menu', 'end', 'lobby', 'paused']) $(id).hidden = true;
     $('again').hidden = false;
@@ -1859,7 +1874,7 @@ table.st td.l, table.st th.l { text-align: left; }
   }
 
   $('host').onclick = async () => {
-    audioOn();
+    audioOn(); unlockSpeech();
     const code = String(1000 + Math.floor(Math.random() * 9000));
     netmsg.textContent = 'Opretter kamp…';
     try { net = await room.join('mf-' + code, 'h'); } catch (e) { netmsg.textContent = 'Kunne ikke oprette kampen. Prøv igen.'; return; }
@@ -1893,7 +1908,7 @@ table.st td.l, table.st th.l { text-align: left; }
   { const m = /^#(\d{4})$/.exec(location.hash); if (m) { $('code').value = m[1]; netmsg.dataset.invite = '1'; if (!$('join').disabled) netmsg.textContent = 'Du er inviteret. Tryk Deltag.'; } }
 
   $('join').onclick = async () => {
-    audioOn();
+    audioOn(); unlockSpeech();
     const code = ($('code').value || '').replace(/\D/g, '');
     if (code.length !== 4) { netmsg.textContent = 'Koden har 4 cifre.'; return; }
     netmsg.textContent = 'Forbinder…';
