@@ -122,12 +122,48 @@ table.st td.l, table.st th.l { text-align: left; }
 .namechip { display: flex; align-items: center; gap: 8px; }
 .namechip span { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .namechip input { padding: 8px 10px; font-size: 15px; }
-.minis { display: flex; gap: 6px; }
-.minis button { flex: 1; font-size: 12px; padding: 10px 4px; line-height: 1.15; }
-.minis #goSet { flex: 0 0 44px; font-size: 18px; }
-.bigs { gap: 10px; }
-button.big { font-size: 18px; padding: 15px 14px; text-align: left; display: flex; flex-direction: column; gap: 5px; }
-button.big small { font: 500 12px/1.2 var(--font); color: var(--muted); letter-spacing: 0; }
+.minis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.minis button { font-size: 12px; padding: 9px 4px; line-height: 1.15; }
+.bigs { gap: 7px; }
+button.big { font-size: 16px; padding: 9px 14px; text-align: left; display: flex; flex-direction: column; gap: 3px; }
+button.big small { font: 500 11px/1.2 var(--font); color: var(--muted); letter-spacing: 0; }
+#menu { background: rgba(5, 12, 9, 0.35); }
+.overlay:not(#menu) .card { background: #0b1711; }
+#pgHome { background: rgba(9, 20, 15, 0.7); }
+.coins { color: var(--gold); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.coins::before { content: "● "; }
+.coins.big { font-size: 18px; font-weight: 700; flex: 0 0 92px; text-align: right; }
+.teams { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
+.teams button { padding: 7px 0 9px; font-size: 10px; border-width: 2px; border-color: transparent; border-radius: 6px 6px 45% 45%; background: var(--c1); color: var(--c3); position: relative; }
+.teams button[aria-pressed="true"] { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
+.teams button.lock { opacity: 0.35; }
+.teams button.lock::after { content: "🔒"; position: absolute; top: -6px; right: -4px; font-size: 10px; }
+.teams button.taken { opacity: 0.3; }
+.lbl .stars { color: var(--gold); letter-spacing: 0; }
+.full { grid-column: 1 / -1; }
+.profgrid, .shopgrid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; text-align: left; }
+.shopgrid { grid-template-columns: 1fr 1fr 1fr; }
+.statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.statgrid div { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 4px 8px; font-size: 10px; color: var(--muted); }
+.statgrid b { display: block; font-size: 15px; color: var(--chalk); font-variant-numeric: tabular-nums; }
+.trogrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+.trogrid div { background: rgba(0,0,0,0.3); border-radius: 8px; padding: 6px 7px; font-size: 10px; line-height: 1.25; color: var(--muted); opacity: 0.5; }
+.trogrid div.got { opacity: 1; outline: 1px solid var(--gold); }
+.trogrid b { display: block; font-size: 12px; color: var(--chalk); }
+.trogrid div.got b { color: var(--gold); }
+.shoplist { display: flex; flex-direction: column; gap: 6px; }
+.shoplist button { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; padding: 9px 10px; background: transparent; border-color: rgba(244,247,242,0.35); text-align: left; }
+.shoplist button .sw2 { width: 16px; height: 16px; border-radius: 50%; flex: none; border: 1px solid rgba(255,255,255,0.6); }
+.shoplist button .nm { flex: 1; }
+.shoplist button .pr { color: var(--gold); font-size: 12px; }
+.shoplist button.sel { border-color: var(--gold); }
+.shoplist button.sel .pr { color: var(--chalk); }
+.seasonview { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; text-align: left; align-items: start; }
+.seasonview table.st { font-size: 12px; }
+.seasonview table.st td, .seasonview table.st th { padding: 3px 5px; }
+.seasonview tr.me td { color: var(--gold); font-weight: 700; }
+.vs { font-size: 18px; font-weight: 700; }
+.reward { color: var(--gold); font-weight: 700; }
 button.big:not(.alt) small { color: #d8f0df; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .top h2 { margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 0.05em; }
@@ -146,7 +182,7 @@ button.sw { min-width: 70px; padding: 9px 12px; font-size: 13px; background: tra
 button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); border-color: var(--chalk); }
 .kbd { font-size: 12px; }
 @media (hover: none) { .kbd { display: none; } }
-@media (max-width: 560px) { .home, .ow { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .home, .ow, .profgrid, .shopgrid, .seasonview { grid-template-columns: 1fr; } }
 #rotate { display: none; font-size: 13px; color: var(--gold); }
 @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
 </style>
@@ -164,14 +200,31 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
           <label class="namechip"><span>Du spiller som</span>
             <input id="name" class="namein" maxlength="12" placeholder="Skriv dit navn" autocomplete="off" aria-label="Dit navn"></label>
           <div class="minis">
-            <button id="bHelp" class="alt">Sådan spiller du</button><button id="bLeague" class="alt">Stilling</button><button id="bCup" class="alt">Turnering</button><button id="goSet" class="alt" aria-label="Indstillinger">⚙</button>
+            <button id="goProf" class="alt">Profil og trofæer</button><button id="goShop" class="alt">Butik <span class="coins" data-coins>0</span></button>
+            <button id="bLeague" class="alt">Stilling</button><button id="bCup" class="alt">Turnering</button>
+            <button id="bHelp" class="alt">Sådan spiller du</button><button id="goSet" class="alt">Indstillinger</button>
           </div>
         </div>
         <div class="btns bigs">
-          <button id="bCpu" class="big">Mod computeren<small>Spil mod telefonen</small></button>
+          <button id="bCpu" class="big">Hurtig kamp<small>Mod computeren</small></button>
+          <button id="goSeason" class="big alt">Sæson<small id="seasonSub">7 kampe om pokalen</small></button>
           <button id="goOnline" class="big alt">Online med venner<small>Opret kamp eller deltag med kode</small></button>
           <button id="bTwo" class="big alt">2 på én telefon<small>Del skærmen med en ven</small></button>
+          <button id="goPractice" class="big alt">Straffe og træning<small>Øv dig uden pres</small></button>
         </div>
+      </div>
+    </div>
+
+    <!-- straffe og træning -->
+    <div class="card wide" id="pgPractice" hidden>
+      <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Straffe og træning</h2><span class="sp"></span></div>
+      <div class="ow">
+        <div class="col"><div class="lbl">Straffesparkskonkurrence</div>
+          <p>5 straffe hver mod computeren. Sigt med joysticket og tryk SKYD. Når du står i mål, bestemmer joysticket hvilken vej du kaster dig.</p>
+          <button id="bPens" class="go">Start straffe</button></div>
+        <div class="col"><div class="lbl">Træningsbane</div>
+          <p>Dit hold mod en målmand. Intet ur og ingen modstandere, så du kan øve skud, lob, stikninger og driblinger.</p>
+          <button id="bTrain" class="go">Start træning</button></div>
       </div>
     </div>
 
@@ -179,6 +232,8 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     <div class="card wide" id="pgSetup" hidden>
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2 id="setupTitle">Mod computeren</h2><span class="sp"></span></div>
       <div class="setup">
+        <div class="col" id="teamBoxA"><div class="lbl" id="teamLblA">Dit hold</div><div class="teams" id="teamsA" role="group" aria-label="Dit hold"></div></div>
+        <div class="col" id="teamBoxB"><div class="lbl" id="teamLblB">Modstander</div><div class="teams" id="teamsB" role="group" aria-label="Modstander"></div></div>
         <div class="col"><div class="lbl">Spillere pr. hold</div>
           <div class="seg" id="segSize" role="group" aria-label="Holdstørrelse">
             <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="11">11</button>
@@ -193,16 +248,12 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
           <div class="seg" id="segDiff" role="group" aria-label="Computerens niveau">
             <button data-v="0">Let</button><button data-v="1">Normal</button><button data-v="2">Svær</button>
           </div></div>
-        <div class="col"><div class="lbl">Trøjer</div>
+        <div class="col" id="kitBox"><div class="lbl">Trøjer</div>
           <div class="seg" id="segKit" role="group" aria-label="Trøjer">
             <button data-v="0" aria-label="Rød mod blå"><span class="kit"><i style="background:#e5483b"></i><i style="background:#2f7ff0"></i></span></button>
             <button data-v="1" aria-label="Orange mod lilla"><span class="kit"><i style="background:#f2992e"></i><i style="background:#8a5cf0"></i></span></button>
             <button data-v="2" aria-label="Turkis mod pink"><span class="kit"><i style="background:#17b3a3"></i><i style="background:#e8508f"></i></span></button>
             <button data-v="3" aria-label="Hvid mod sort"><span class="kit"><i style="background:#f1f1ec"></i><i style="background:#23262b"></i></span></button>
-          </div></div>
-        <div class="col"><div class="lbl">Power-ups</div>
-          <div class="seg" id="segPu" role="group" aria-label="Power-ups">
-            <button data-v="0">Fra</button><button data-v="1">Til</button>
           </div></div>
       </div>
       <button id="setupGo" class="go">Start kamp ›</button>
@@ -230,10 +281,58 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Indstillinger</h2><span class="sp"></span></div>
       <div class="setrows">
         <div><span>Publikum og kommentator</span><button id="tCrowd" class="sw"></button></div>
+        <div><span>Musik i menuen</span><button id="tMusic" class="sw"></button></div>
         <div><span>Genafspilning af mål</span><button id="tReplay" class="sw"></button></div>
+        <div><span>Power-ups i kampene</span><button id="tPu" class="sw"></button></div>
       </div>
       <button id="fs" class="alt" hidden>Fuld skærm</button>
       <p class="kbd">På computer: WASD styrer, mellemrum er SKYD/TACKLE, F er AFLEVER/SKIFT og Shift spurter.</p>
+    </div>
+  </div>
+
+  <div class="overlay" id="prof" hidden>
+    <div class="card wide">
+      <div class="top"><button class="alt back" id="profClose">‹ Tilbage</button><h2 id="profName">Profil</h2><span class="coins big" data-coins>0</span></div>
+      <div class="profgrid">
+        <div class="col"><div class="lbl">Din statistik</div><div class="statgrid" id="profStats"></div></div>
+        <div class="col"><div class="lbl" id="troLbl">Trofæer</div><div class="trogrid" id="profTro"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="shop" hidden>
+    <div class="card wide">
+      <div class="top"><button class="alt back" id="shopClose">‹ Tilbage</button><h2>Butik</h2><span class="coins big" data-coins>0</span></div>
+      <p>Du tjener mønter i hver kamp: for at spille, for mål, for sejre og for nye trofæer.</p>
+      <div class="shopgrid">
+        <div class="col"><div class="lbl">Hold</div><div class="shoplist" id="shopTeams"></div></div>
+        <div class="col"><div class="lbl">Bolde</div><div class="shoplist" id="shopBalls"></div></div>
+        <div class="col"><div class="lbl">Baner</div><div class="shoplist" id="shopPitch"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="season" hidden>
+    <div class="card wide">
+      <div class="top"><button class="alt back" id="seasonClose">‹ Tilbage</button><h2>Sæson</h2><span class="sp"></span></div>
+      <div id="seasonSetup" class="setup">
+        <div class="col full"><div class="lbl" id="seasonTeamLbl">Vælg dit hold</div><div class="teams" id="seasonTeams" role="group" aria-label="Dit hold"></div></div>
+        <div class="col"><div class="lbl">Spillere pr. hold</div><div class="seg" id="seasonSize"></div></div>
+        <div class="col"><div class="lbl">Kamplængde</div><div class="seg" id="seasonMins"></div></div>
+        <div class="col"><div class="lbl">Niveau</div><div class="seg" id="seasonDiff"></div></div>
+        <div class="col"><p>Du møder de 7 andre hold én gang, fra det svageste til det stærkeste. Flest point vinder pokalen.</p></div>
+        <button id="seasonStart" class="go full">Start sæsonen ›</button>
+      </div>
+      <div id="seasonView" class="seasonview" hidden>
+        <div class="tablewrap"><table class="st" id="seasonTable"></table></div>
+        <div class="col">
+          <div class="lbl" id="seasonNextLbl">Næste kamp</div>
+          <div class="vs" id="seasonNext"></div>
+          <p id="seasonMsg"></p>
+          <button id="seasonPlay" class="go">Spil kampen ›</button>
+          <button id="seasonReset" class="alt">Ny sæson</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -334,11 +433,13 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       <h1 id="endTitle">Slut</h1>
       <div class="final"><span class="h" id="fh">0</span> – <span class="a" id="fa">0</span></div>
       <p id="endMsg"></p>
+      <p id="endReward" class="reward" hidden></p>
       <div class="tablewrap"><table class="st" id="statsTable"></table></div>
       <div class="btns">
         <button id="again">Spil igen</button>
         <button id="ready" hidden>Klar til revanche</button>
         <button id="toCup" hidden>Tilbage til turneringen</button>
+        <button id="toSeason" hidden>Tilbage til sæsonen</button>
         <button id="toMenu" class="alt">Til menuen</button>
       </div>
     </div>
@@ -352,7 +453,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true };
+  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0 };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   if (![1, 2, 3, 5, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
   function seg(id, key) {
@@ -363,8 +464,9 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       cfg[key] = Number(b.dataset.v); paint();
       try { localStorage.setItem('mf-cfg', JSON.stringify(cfg)); } catch (_) {}
     });
-    paint();
+    paint(); segPaints.push(paint);
   }
+  const segPaints = [];
   seg('segSize', 'size'); seg('segMins', 'mins'); seg('segDiff', 'diff'); seg('segKit', 'kit');
   const saveCfg = () => { try { localStorage.setItem('mf-cfg', JSON.stringify(cfg)); } catch (_) {} };
   function toggle(id, key) {
@@ -372,29 +474,30 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); if (key === 'crowd' && cfg.crowd) unlockSpeech('Kommentatoren er klar'); };
     paint();
   }
-  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd');
-  { const el = $('segPu'), paint = () => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.v === '1') === !!cfg.pu)));
-    el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; cfg.pu = b.dataset.v === '1'; paint(); saveCfg(); });
-    paint(); }
+  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music');
 
   // ---------- Menu pages: forside -> kampopsætning / online / indstillinger ----------
   let setupMode = 'cpu';
-  const PAGES = ['pgHome', 'pgSetup', 'pgOnline', 'pgSet'];
+  const PAGES = ['pgHome', 'pgSetup', 'pgOnline', 'pgSet', 'pgPractice'];
   function page(id) { for (const k of PAGES) $(k).hidden = k !== id; }
   function setupVis() {
     $('diffBox').hidden = setupMode === 'two' && cfg.size === 1;
     $('diffLbl').textContent = setupMode === 'cpu' ? 'Niveau' : 'Computerspillere';
+    $('teamBoxA').hidden = $('teamBoxB').hidden = setupMode === 'host';
+    $('kitBox').hidden = setupMode !== 'host';
+    paintTeamPickers();
     menuForm();
   }
   function showSetup(m) {
     setupMode = m;
     $('setupTitle').textContent = { cpu: 'Mod computeren', two: '2 på én telefon', host: 'Opret online kamp' }[m];
     $('setupGo').textContent = m === 'host' ? 'Opret kamp ›' : 'Start kamp ›';
-    setupVis(); page('pgSetup');
+    segPaints.forEach(f => f()); setupVis(); page('pgSetup');
   }
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => page(b.closest('#pgSetup') && setupMode === 'host' ? 'pgOnline' : 'pgHome'));
   $('goOnline').onclick = () => page('pgOnline');
   $('goSet').onclick = () => page('pgSet');
+  $('goPractice').onclick = () => page('pgPractice');
   const cleanName = v => String(v || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 12);
   $('name').value = cfg.name || '';
   $('name').addEventListener('input', () => { cfg.name = cleanName($('name').value); saveCfg(); });
@@ -772,8 +875,8 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       comm.last = now;
     } catch (_) {}
   }
-  const whoIs = p => (mode === 'guest' ? (p.ctrl === 'ME' ? myName() : p.name) : nameOf(p)) || KITN[kit][p.team];
-  const teamIs = t => KITN[kit][t];
+  const whoIs = p => (mode === 'guest' ? (p.ctrl === 'ME' ? myName() : p.name) : nameOf(p)) || tn(p.team);
+  const teamIs = t => tn(t);
   function scoreLine() {
     if (score[0] === score[1]) return score[0] ? `Det står ${score[0]} mod ${score[1]}` : 'Stadig ingen mål';
     const t = score[0] > score[1] ? 0 : 1;
@@ -858,8 +961,8 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   function startMatch(m) {
     mode = m;
     if (m !== 'two') cupMatch = null;
-    if (m !== 'host') { makePlayers(cfg.size); assignLocal(); }
-    score = [0, 0]; clock = cfg.mins * 60; matchLen = clock; half = 1; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
+    if (m !== 'host') { makePlayers(matchSize()); assignLocal(); }
+    score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
     for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; }
     particles = []; matchNo++;
     stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = [];
@@ -867,6 +970,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       setKit(cfg.kit);
       if (m !== 'host') teamForm = [myForm(size), m === 'two' ? myForm(size) : (FORMS[size] ? Math.floor(Math.random() * FORMS[size].length) : 0)];
     }
+    applyTeams(m);
     hostReady = false; $('ready').hidden = true; rxList = [];
     $('rxbar').hidden = !(m === 'host' || m === 'guest');
     readyMap.clear();
@@ -877,6 +981,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     $('again').hidden = false;
     $('pauseBtn').hidden = !(m === 'cpu' || m === 'two');
     state = 'play';
+    applyKind();
     updateCamera(0, true);
     audioOn(); sfx.beep();
   }
@@ -889,7 +994,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const win = ws[0] === ws[1] ? -1 : ws[0] > ws[1] ? 0 : 1;
     if (win < 0) t.textContent = 'Uafgjort';
     else if (cupMatch) t.textContent = cupMatch.n[win] + ' vinder';
-    else if (mode === 'two' || me === null) t.textContent = KITN[kit][win] + ' vinder';
+    else if (mode === 'two' || me === null) t.textContent = tn(win) + ' vinder';
     else if (mode === 'cpu' && size === 1) t.textContent = win === 0 ? 'Du vandt' : 'Computeren vandt';
     else t.textContent = win === me ? 'I vandt' : (mode === 'cpu' ? 'Computeren vandt' : 'I tabte');
     $('fh').textContent = score[0]; $('fa').textContent = score[1];
@@ -900,7 +1005,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     $('ready').hidden = mode !== 'guest'; $('ready').disabled = false; $('ready').textContent = 'Klar til revanche';
     // stats
     const S = stats || newStats(), tot = (S.pos[0] + S.pos[1]) || 1;
-    fillTable($('statsTable'), ['', KITN[kit][0], KITN[kit][1]], [
+    fillTable($('statsTable'), ['', tn(0), tn(1)], [
       ['Skud', S.sh[0], S.sh[1]],
       ['Boldbesiddelse', Math.round(S.pos[0] / tot * 100) + ' %', Math.round(S.pos[1] / tot * 100) + ' %'],
       ['Afleveringer', S.pa[0], S.pa[1]],
@@ -916,6 +1021,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     recordMatch([teamNames(0), teamNames(1)], score, matchGoals, win);
     if (cupMatch) { cupResult(cupMatch.i, score[0], score[1], win); }
     $('toCup').hidden = !cupMatch; $('again').hidden = $('again').hidden || !!cupMatch;
+    afterMatch(win, me, ss);
     $('end').hidden = false;
     sfx.whistle(3);
   }
@@ -1039,7 +1145,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   }
   // offside (5 and 11 a side): past the second-last opponent, in their half, ahead of the ball
   function isOffside(q, p) {
-    if (size < 5 || !q || p.frozen > 0) return false;
+    if (size < 5 || !q || p.frozen > 0 || kind === 'train') return false;
     const dir = q.team ? -1 : 1;
     if ((q.x - CX) * dir <= 0 || (q.x - ball.x) * dir <= 0) return false;
     const foes = P.filter(f => f.team !== q.team).map(f => f.x * dir).sort((a, b) => b - a);
@@ -1163,7 +1269,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     // the keeper's own player takes over the keeper
     const kh = P.filter(q => q.team !== team && isHuman(q));
     if (kh.length && !isHuman(kp)) swapControl(kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp);
-    flash = { text: so ? KITN[kit][team] + ' skyder' : 'Straffespark', t: 1.4 };
+    flash = { text: so ? tn(team) + ' skyder' : 'Straffespark', t: 1.4 };
     sfx.whistle();
   }
   function penShot(taker) { // the taker struck the ball: the keeper commits to a side
@@ -1251,7 +1357,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     }
   }
   function aiInput(p, dt) {
-    const d = DIFF[mode === 'cpu' ? cfg.diff : 1];
+    const d = aiD(p.team);
     const dir = p.team ? -1 : 1;
     const goalX = dir > 0 ? PR : PL, ownX = dir > 0 ? PL : PR;
     const o = owner();
@@ -1413,7 +1519,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       }
       return;
     }
-    if (!so && !pen) {
+    if (!so && !pen && kind !== 'train') {
       clock -= dt;
       if (half === 1 && clock <= matchLen / 2) { half = 2; banner = 'Pause'; pause = 2.6; sfx.whistle(2); return; }
       if (clock <= 0) {
@@ -1782,6 +1888,390 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     $('cup').hidden = false;
   }
 
+
+  // ---------- Teams, profile, coins, shop, season, practice and the living menu ----------
+  function light(hex) { const v = parseInt(hex.slice(1), 16); return ((v >> 16) * 299 + ((v >> 8) & 255) * 587 + (v & 255) * 114) / 1000 > 150; }
+  const TEAMS = [
+    { n: 'Røde Tyre', s: 'TYR', c1: '#e5483b', c2: '#f4f7f2', str: 3 },
+    { n: 'Havnens Hajer', s: 'HAJ', c1: '#2f7ff0', c2: '#f4f7f2', str: 3 },
+    { n: 'Ildfuglene', s: 'ILD', c1: '#f2992e', c2: '#23262b', str: 2 },
+    { n: 'Stormen', s: 'STM', c1: '#8a5cf0', c2: '#f4f7f2', str: 4 },
+    { n: 'Nordlys', s: 'NRD', c1: '#17b3a3', c2: '#23262b', str: 2 },
+    { n: 'Flamingo IF', s: 'FLA', c1: '#e8508f', c2: '#f4f7f2', str: 1 },
+    { n: 'Kongerne', s: 'KNG', c1: '#f1f1ec', c2: '#23262b', str: 4 },
+    { n: 'Natravnene', s: 'RAV', c1: '#23262b', c2: '#f1f1ec', str: 3 },
+    { n: 'Guldørnene', s: 'GLD', c1: '#ffd447', c2: '#23262b', str: 5, price: 250 },
+    { n: 'Isbjørnene', s: 'ISB', c1: '#a9d8ff', c2: '#1f3a7a', str: 5, price: 250 },
+  ];
+  TEAMS.forEach((t, i) => { t.id = i; t.c3 = light(t.c1) ? '#0d1a14' : '#f4f7f2'; });
+  const BALLS = [
+    { n: 'Klassisk', c: '#ffffff', d: '#1a1a1a', tr: '255,255,255', p: 0 },
+    { n: 'Retro', c: '#c98b4f', d: '#5a3214', tr: '230,190,140', p: 80 },
+    { n: 'Guld', c: '#ffd447', d: '#8a6a00', tr: '255,212,71', p: 120 },
+    { n: 'Ildkugle', c: '#ff7a2e', d: '#7a1c00', tr: '255,120,40', fire: true, p: 180 },
+  ];
+  const PITCHES = [
+    { n: 'Flodlys', a: '#2f7d46', b: '#2a7140', p: 0 },
+    { n: 'Dagslys', a: '#4a9d57', b: '#43914f', p: 100 },
+    { n: 'Indendørs', a: '#2d5f9a', b: '#295790', p: 150 },
+    { n: 'Strand', a: '#cdb26e', b: '#c4a964', p: 150 },
+  ];
+  const TRO = [
+    ['first', 'Første sejr', 'Vind en kamp'], ['hat', 'Hattrick', 'Score 3 mål i én kamp'], ['clean', 'Buret lukket', 'Vind uden at lukke mål ind'],
+    ['big', 'Kæmpesejr', 'Vind med 5 mål'], ['hard', 'Mester', 'Slå computeren på Svær'], ['streak', 'I form', 'Vind 3 kampe i træk'],
+    ['comeback', 'Comeback', 'Vind efter at have været bagud'], ['online', 'Online-debut', 'Spil en online kamp'], ['sofa', 'Sofakamp', 'Spil 2 på én telefon'],
+    ['eleven', 'Fuldt hold', 'Spil 11 mod 11'], ['pens', 'Is i maven', 'Vind en straffesparks­konkurrence'], ['season', 'Sæsonmester', 'Vind en sæson'],
+    ['games10', 'Stamgæst', 'Spil 10 kampe'], ['goals50', 'Målmaskine', 'Score 50 mål i alt'], ['shop', 'Shopaholic', 'Køb noget i butikken'],
+  ];
+  const troName = id => (TRO.find(t => t[0] === id) || [0, id])[1];
+
+  // profile and coins, shared with other parts of the game: localStorage 'mf-profile'
+  const PROF0 = () => ({ coins: 0, games: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, streak: 0, bestStreak: 0, bigWin: 0, seasons: 0, shootouts: 0, tro: {}, own: [] });
+  function loadProf() { try { return Object.assign(PROF0(), JSON.parse(localStorage.getItem('mf-profile') || '{}')); } catch (_) { return PROF0(); } }
+  function paintCoins(pr) { const c = (pr || loadProf()).coins; document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = c; }); }
+  function saveProf(pr) { try { localStorage.setItem('mf-profile', JSON.stringify(pr)); } catch (_) {} paintCoins(pr); }
+  function addCoins(n, why) { const pr = loadProf(); pr.coins = Math.max(0, pr.coins + (n | 0)); saveProf(pr); return pr.coins; }
+  const teamOpen = (i, pr) => !!TEAMS[i] && (!TEAMS[i].price || (pr || loadProf()).own.includes('team:' + i));
+
+  // which kind of match: null (normal), 'season', 'pen' (penalty contest), 'train' (training ground)
+  let kind = null, teamPick = null, tD = [DIFF[1], DIFF[1]], myTeamNow = -1, wasBehind = false;
+  const seasonLoad = () => { try { return JSON.parse(localStorage.getItem('mf-season') || 'null'); } catch (_) { return null; } };
+  const seasonSaveS = v => { try { localStorage.setItem('mf-season', JSON.stringify(v)); } catch (_) {} };
+  function matchSize() { if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : cfg.size; }
+  function matchMins() { if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
+  function matchDiff() { if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
+  const tn = t => (teamPick ? teamPick[t].n : KITN[kit][t]);
+  const aiD = t => tD[t] || DIFF[1];
+  function rgbDist(a, b) { const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16); return Math.hypot((x >> 16) - (y >> 16), ((x >> 8) & 255) - ((y >> 8) & 255), (x & 255) - (y & 255)); }
+  function kitColors(A, B) { // the away side wears its second kit if the colours clash
+    let a = B.c1; if (A === B || rgbDist(A.c1, a) < 120) a = B.c2; if (rgbDist(A.c1, a) < 120) a = '#ffd447';
+    return [A.c1, a];
+  }
+  function applyTeams(m) {
+    teamPick = null;
+    if (m === 'cpu' || m === 'two') {
+      let a = teamOpen(cfg.team) ? cfg.team : 1, b = teamOpen(cfg.opp) ? cfg.opp : 0;
+      if (kind === 'season') { const S = seasonLoad(); if (S) { a = S.me; b = seasonOpp(S); } }
+      const A = TEAMS[a], B = TEAMS[b], [h, w] = kitColors(A, B);
+      col.home = h; col.away = w;
+      teamPick = [A, Object.assign({}, B, { c1: w, c3: light(w) ? '#0d1a14' : '#f4f7f2' })];
+    }
+    const base = DIFF[mode === 'cpu' ? matchDiff() : 1];
+    tD = [0, 1].map(t => {
+      if (!teamPick) return base;
+      const f = teamPick[t].str - 3;
+      return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
+    });
+  }
+  function applyKind() {
+    myTeamNow = mode === 'cpu' || mode === 'host' ? 0 : -1; wasBehind = false;
+    if (kind === 'pen') { half = 2; clock = 0.01; } // straight to the shootout
+    if (kind === 'train') { for (const p of P) if (p.team === 1 && p.k !== 0) p.out = 1e9; flash = { text: 'Træning: kun dig og målmanden', t: 2.2 }; }
+  }
+
+  function afterMatch(win, me, ss) {
+    const rw = $('endReward'); rw.hidden = true; $('toSeason').hidden = true;
+    $('fh').style.color = col.home; $('fa').style.color = col.away;
+    if (kind === 'train') return;
+    const pr = loadProf(), got = [];
+    const give = id => { if (!pr.tro[id]) { pr.tro[id] = new Date().toISOString().slice(0, 10); got.push(id); } };
+    let coins = 0, extra = '';
+    if (mode === 'two') { give('sofa'); coins = 10; }
+    else if (me === 0 || me === 1) {
+      const gf = score[me], ga = score[1 - me], won = win === me, lost = win === 1 - me;
+      pr.games++; pr.gf += gf; pr.ga += ga;
+      if (won) pr.w++; else if (lost) pr.l++; else pr.d++;
+      pr.streak = won ? pr.streak + 1 : 0; pr.bestStreak = Math.max(pr.bestStreak, pr.streak);
+      if (won) pr.bigWin = Math.max(pr.bigWin, gf - ga);
+      coins = kind === 'pen' ? 10 + (won ? 15 : 0) : 10 + Math.min(30, gf * 5) + (won ? 20 + (mode === 'cpu' && matchDiff() === 2 ? 10 : 0) : win < 0 ? 5 : 0);
+      if (won) give('first');
+      if (gf >= 3) give('hat');
+      if (won && ga === 0 && kind !== 'pen') give('clean');
+      if (gf - ga >= 5) give('big');
+      if (won && mode === 'cpu' && matchDiff() === 2) give('hard');
+      if (pr.streak >= 3) give('streak');
+      if (won && wasBehind) give('comeback');
+      if (mode === 'host' || mode === 'guest') give('online');
+      if (ss && won) { pr.shootouts++; give('pens'); }
+      if (pr.games >= 10) give('games10');
+      if (pr.gf >= 50) give('goals50');
+    }
+    if (size === 11 && kind !== 'pen') give('eleven');
+    if (kind === 'season') {
+      const r = seasonRecord(score[0], score[1]);
+      if (r.champ) { pr.seasons++; give('season'); coins += 100; }
+      extra = r.text; $('toSeason').hidden = false; $('again').hidden = true;
+    }
+    coins += got.length * 50;
+    pr.coins += coins; saveProf(pr);
+    rw.textContent = `+${coins} mønter` + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
+    rw.hidden = false;
+  }
+
+  // ----- season: you meet the 7 other teams, weakest first -----
+  function seasonNew(me, sz, mins, diff) {
+    let pool = TEAMS.filter(t => t.id !== me && !t.price);
+    if (pool.length > 7) pool = pool.sort((a, b) => a.str - b.str).slice(1);
+    const ids = [me, ...pool.map(t => t.id)];
+    const t = ids.slice(), rounds = [];
+    for (let r = 0; r < 7; r++) { const g = []; for (let i = 0; i < 4; i++) g.push([t[i], t[7 - i]]); rounds.push(g); t.splice(1, 0, t.pop()); }
+    const oppIn = g => { const m = g.find(x => x.includes(me)); return m[0] === me ? m[1] : m[0]; };
+    rounds.sort((x, y) => TEAMS[oppIn(x)].str - TEAMS[oppIn(y)].str || Math.random() - 0.5);
+    const tab = {}; ids.forEach(i => { tab[i] = { k: 0, v: 0, u: 0, t: 0, f: 0, m: 0 }; });
+    seasonSaveS({ me, size: sz, mins, diff, ids, rounds, r: 0, tab, done: false });
+  }
+  function seasonOpp(S) { const g = S.rounds[Math.min(S.r, 6)].find(x => x.includes(S.me)); return g[0] === S.me ? g[1] : g[0]; }
+  function seasonRows(S) {
+    return S.ids.map(i => { const r = S.tab[i]; return { i, n: TEAMS[i].n, r, p: r.v * 3 + r.u, gd: r.f - r.m }; })
+      .sort((a, b) => b.p - a.p || b.gd - a.gd || b.r.f - a.r.f || (a.i === S.me ? -1 : b.i === S.me ? 1 : 0));
+  }
+  function seasonApply(S, a, b, ga, gb) {
+    const A = S.tab[a], B = S.tab[b]; A.k++; B.k++; A.f += ga; A.m += gb; B.f += gb; B.m += ga;
+    if (ga > gb) { A.v++; B.t++; } else if (ga < gb) { B.v++; A.t++; } else { A.u++; B.u++; }
+  }
+  function poisson(l) { let k = 0, p = Math.exp(-l), s = p; const u = Math.random(); while (u > s && k < 8) { k++; p *= l / k; s += p; } return k; }
+  function seasonRecord(gMe, gOpp) {
+    const S = seasonLoad(); if (!S || S.done) return { text: '' };
+    const opp = seasonOpp(S);
+    seasonApply(S, S.me, opp, gMe, gOpp);
+    for (const [a, b] of S.rounds[S.r]) {
+      if (a === S.me || b === S.me) continue;
+      const d = TEAMS[a].str - TEAMS[b].str;
+      seasonApply(S, a, b, poisson(Math.max(0.4, 1.4 + d * 0.3)), poisson(Math.max(0.4, 1.4 - d * 0.3)));
+    }
+    S.r++;
+    if (S.r >= 7) {
+      S.done = true; seasonSaveS(S);
+      const rank = seasonRows(S).findIndex(x => x.i === S.me) + 1;
+      return rank === 1 ? { champ: true, text: 'Du vandt sæsonen og pokalen!' } : { text: `Sæsonen er slut. I blev nr. ${rank}.` };
+    }
+    seasonSaveS(S);
+    return { text: `Runde ${S.r} af 7 er spillet.` };
+  }
+  function seasonShow() {
+    const S = seasonLoad();
+    $('seasonSetup').hidden = !!S; $('seasonView').hidden = !S;
+    $('seasonReset').textContent = 'Ny sæson'; $('seasonReset').dataset.sure = '';
+    if (!S) { $('seasonTeams')._paint(); segPaints.forEach(f => f()); }
+    else {
+      const rows = seasonRows(S);
+      fillTable($('seasonTable'), ['#', 'Hold', 'K', 'V', 'U', 'T', 'Mål', 'P'], []);
+      const tbl = $('seasonTable'); while (tbl.rows.length > 1) tbl.deleteRow(1);
+      rows.forEach((x, n) => {
+        const tr = tbl.insertRow(); if (x.i === S.me) tr.className = 'me';
+        [n + 1, x.n, x.r.k, x.r.v, x.r.u, x.r.t, `${x.r.f}-${x.r.m}`, x.p].forEach((v, j) => { const td = tr.insertCell(); td.textContent = v; if (j === 1) td.className = 'l'; });
+      });
+      if (S.done) {
+        const rank = rows.findIndex(x => x.i === S.me) + 1;
+        $('seasonNextLbl').textContent = 'Sæsonen er slut';
+        $('seasonNext').textContent = rank === 1 ? 'Mestre! 🏆' : `Nr. ${rank} af 8`;
+        $('seasonMsg').textContent = rank === 1 ? `${TEAMS[S.me].n} vandt pokalen.` : `${rows[0].n} vandt pokalen. Prøv igen med en ny sæson.`;
+        $('seasonPlay').hidden = true;
+      } else {
+        const o = TEAMS[seasonOpp(S)];
+        $('seasonNextLbl').textContent = `Runde ${S.r + 1} af 7`;
+        $('seasonNext').textContent = `${TEAMS[S.me].n} mod ${o.n}`;
+        $('seasonMsg').textContent = `${o.n}: ${'★'.repeat(o.str)}${'☆'.repeat(5 - o.str)}. ${S.size} mod ${S.size}, ${S.mins} min.`;
+        $('seasonPlay').hidden = false;
+      }
+    }
+    $('season').hidden = false;
+  }
+  function seasonSub() {
+    const S = seasonLoad();
+    $('seasonSub').textContent = !S ? '7 kampe om pokalen' : S.done ? 'Sæsonen er slut. Start en ny' : `Runde ${S.r + 1} af 7: mod ${TEAMS[seasonOpp(S)].n}`;
+  }
+
+  // ----- little helpers for pickers -----
+  function mkSeg(el, vals, labels, get, set) {
+    el.textContent = '';
+    vals.forEach((v, i) => { const b = document.createElement('button'); b.textContent = labels[i]; b.onclick = () => { set(v); paint(); }; el.appendChild(b); });
+    const paint = () => [...el.children].forEach((b, i) => b.setAttribute('aria-pressed', String(vals[i] === get())));
+    segPaints.push(paint); paint();
+  }
+  function teamPicker(el, lbl, title, get, set) {
+    el.textContent = '';
+    const paint = () => {
+      const pr = loadProf();
+      [...el.children].forEach((b, i) => { b.setAttribute('aria-pressed', String(i === get())); b.classList.toggle('lock', !teamOpen(i, pr)); });
+      const t = TEAMS[get()] || TEAMS[0];
+      lbl.textContent = `${title()}: ${t.n} `;
+      const st = document.createElement('span'); st.className = 'stars'; st.textContent = '★'.repeat(t.str) + '☆'.repeat(5 - t.str); lbl.appendChild(st);
+    };
+    TEAMS.forEach(t => {
+      const b = document.createElement('button'); b.textContent = t.s; b.setAttribute('aria-label', t.n);
+      b.style.setProperty('--c1', t.c1); b.style.setProperty('--c3', t.c3);
+      b.onclick = () => { if (!teamOpen(t.id)) { lbl.textContent = `${t.n} er låst. Køb holdet i Butik for ${t.price} mønter.`; return; } set(t.id); paint(); menuColors(); };
+      el.appendChild(b);
+    });
+    el._paint = paint; paint();
+  }
+  function paintTeamPickers() { for (const id of ['teamsA', 'teamsB', 'seasonTeams']) if ($(id)._paint) $(id)._paint(); }
+
+  // ----- profile page -----
+  function profShow() {
+    const pr = loadProf();
+    $('profName').textContent = cfg.name || 'Din profil';
+    const box = $('profStats'); box.textContent = '';
+    [['Kampe', pr.games], ['Sejre', pr.w], ['Uafgjort', pr.d], ['Nederlag', pr.l], ['Mål scoret', pr.gf], ['Mål imod', pr.ga],
+     ['Største sejr', pr.bigWin ? '+' + pr.bigWin : '–'], ['Flest sejre i træk', pr.bestStreak], ['Sæsoner vundet', pr.seasons], ['Straffe­konkurrencer vundet', pr.shootouts]]
+      .forEach(([k, v]) => { const d = document.createElement('div'); const b = document.createElement('b'); b.textContent = v; d.append(b, k); box.appendChild(d); });
+    const tb = $('profTro'); tb.textContent = '';
+    let n = 0;
+    for (const [id, name, desc] of TRO) {
+      const d = document.createElement('div'), b = document.createElement('b');
+      b.textContent = (pr.tro[id] ? '🏆 ' : '') + name; d.append(b, desc);
+      if (pr.tro[id]) { d.className = 'got'; n++; }
+      tb.appendChild(d);
+    }
+    $('troLbl').textContent = `Trofæer (${n} af ${TRO.length}) · 50 mønter for hvert nyt`;
+    paintCoins(pr);
+    $('prof').hidden = false;
+  }
+
+  // ----- shop -----
+  function shopShow() {
+    const pr = loadProf();
+    const row = (box, key, name, price, color, isSel, use) => {
+      const owned = !price || pr.own.includes(key);
+      const b = document.createElement('button');
+      const sw = document.createElement('span'); sw.className = 'sw2'; sw.style.background = color;
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = name;
+      const pt = document.createElement('span'); pt.className = 'pr';
+      pt.textContent = isSel ? 'Valgt' : owned ? 'Brug' : `● ${price}`;
+      if (isSel) b.className = 'sel';
+      b.append(sw, nm, pt);
+      b.onclick = () => {
+        if (owned) { use(); shopShow(); return; }
+        if (pr.coins < price) { pt.textContent = `Mangler ${price - pr.coins}`; return; }
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; pt.textContent = 'Tryk igen: køb'; return; }
+        const p2 = loadProf(); p2.coins -= price; p2.own.push(key);
+        if (!p2.tro.shop) { p2.tro.shop = new Date().toISOString().slice(0, 10); p2.coins += 50; }
+        saveProf(p2); use(); shopShow();
+      };
+      box.appendChild(b);
+    };
+    const T = $('shopTeams'), B = $('shopBalls'), Pp = $('shopPitch');
+    T.textContent = B.textContent = Pp.textContent = '';
+    TEAMS.filter(t => t.price).forEach(t => row(T, 'team:' + t.id, `${t.n} ${'★'.repeat(t.str)}`, t.price, t.c1, cfg.team === t.id, () => { cfg.team = t.id; saveCfg(); menuColors(); }));
+    BALLS.forEach((x, i) => row(B, 'ball:' + i, x.n, x.p, x.c, cfg.ball === i, () => { cfg.ball = i; saveCfg(); }));
+    PITCHES.forEach((x, i) => row(Pp, 'pitch:' + i, x.n, x.p, x.a, cfg.pitch === i, () => { cfg.pitch = i; saveCfg(); pitchLook(); }));
+    paintCoins(pr);
+    $('shop').hidden = false;
+  }
+  function pitchLook() { const x = PITCHES[cfg.pitch] || PITCHES[0]; col.a = x.a; col.b = x.b; }
+  function menuColors() {
+    const A = TEAMS[teamOpen(cfg.team) ? cfg.team : 1], B = TEAMS[teamOpen(cfg.opp) ? cfg.opp : 0];
+    if (state === 'menu') { const [h, w] = kitColors(A, B); col.home = h; col.away = w; }
+  }
+
+  // ----- the menu comes alive: a little match plays itself behind it -----
+  const demo = { own: -1, to: -1, t: 0 };
+  function demoReset() {
+    makePlayers(5); teamForm = [0, 0]; kickoff();
+    demo.own = slotOf(0, 3); demo.to = -1; demo.t = 1.2;
+    menuColors(); seasonSub();
+  }
+  function demoTick(dt) {
+    if (P.length !== 10) return;
+    const now = performance.now() / 1000;
+    const o = demo.own >= 0 ? P[demo.own] : null;
+    if (o) {
+      ball.x = o.x + o.fx * (REACH - 4); ball.y = o.y + o.fy * (REACH - 4); ball.vx = ball.vy = 0;
+      demo.t -= dt;
+      if (demo.t <= 0) {
+        const dir = o.team ? -1 : 1, mates = P.filter(q => q !== o && q.k !== 0 && q.team === o.team && (q.x - o.x) * dir > -150);
+        const pool = Math.random() < 0.25 || !mates.length ? P.filter(q => q.team !== o.team && q.k !== 0) : mates;
+        const q = pool[Math.floor(Math.random() * pool.length)];
+        const d = Math.hypot(q.x - ball.x, q.y - ball.y) || 1;
+        ball.vx = (q.x - ball.x) / d * 520; ball.vy = (q.y - ball.y) / d * 520;
+        demo.to = q.i; demo.own = -1;
+      }
+    } else {
+      ball.x += ball.vx * dt; ball.y += ball.vy * dt;
+      const f = Math.pow(0.55, dt); ball.vx *= f; ball.vy *= f;
+      ball.x = Math.max(PL + 15, Math.min(PR - 15, ball.x)); ball.y = Math.max(PT + 15, Math.min(PB - 15, ball.y));
+      const q = P[demo.to];
+      if (q && Math.hypot(q.x - ball.x, q.y - ball.y) < REACH + 6) { demo.own = q.i; demo.to = -1; demo.t = 0.9 + Math.random() * 1.5; }
+      else if (!q) demo.to = P.reduce((a, b) => (Math.hypot(b.x - ball.x, b.y - ball.y) < Math.hypot(a.x - ball.x, a.y - ball.y) ? b : a)).i;
+    }
+    const shift = (ball.x - CX) * 0.35;
+    for (const p of P) {
+      const h = homeOf(p);
+      let tx = h.x + shift + Math.sin(now * 0.6 + p.i) * 30, ty = h.y + (ball.y - CY) * 0.25 + Math.cos(now * 0.5 + p.i * 1.7) * 25, sp = 110;
+      if (p.k === 0) { tx = h.x; ty = h.y + (ball.y - CY) * 0.2; }
+      if (p.i === demo.own) { tx = p.x + (p.team ? -1 : 1) * 60; ty = p.y + Math.sin(now * 1.1 + p.i) * 50; sp = 95; }
+      if (p.i === demo.to) { tx = ball.x; ty = ball.y; sp = 170; }
+      tx = Math.max(PL + 40, Math.min(PR - 40, tx)); ty = Math.max(PT + 30, Math.min(PB - 30, ty));
+      const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+      if (d > 3) { const v = Math.min(sp, d * 3); p.x += dx / d * v * dt; p.y += dy / d * v * dt; }
+      if (p.i === demo.own) { p.fx = p.team ? -1 : 1; p.fy = 0; }
+      else { const bx = ball.x - p.x, by = ball.y - p.y, bd = Math.hypot(bx, by) || 1; p.fx = bx / bd; p.fy = by / bd; }
+    }
+  }
+
+  // ----- menu music: a soft loop while you are in the menus -----
+  const music = (() => {
+    let nextT = 0, stepI = 0, g = null;
+    const prog = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
+    const hz = n => 440 * Math.pow(2, (n - 69) / 12);
+    function note(f, t, d, type, vol) {
+      const o = ac.createOscillator(), e = ac.createGain();
+      o.type = type; o.frequency.value = f;
+      e.gain.setValueAtTime(0.0001, t); e.gain.linearRampToValueAtTime(vol, t + 0.01); e.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(e).connect(g); o.start(t); o.stop(t + d + 0.05);
+    }
+    return {
+      tick() {
+        const want = cfg.music && state === 'menu' && ac && ac.state === 'running' && !document.hidden;
+        if (!want) { if (g && ac) g.gain.setTargetAtTime(0, ac.currentTime, 0.15); nextT = 0; return; }
+        if (!g) { g = ac.createGain(); g.gain.value = 0; g.connect(ac.destination); }
+        g.gain.setTargetAtTime(0.6, ac.currentTime, 0.4);
+        const now = ac.currentTime; if (nextT < now) nextT = now + 0.05;
+        while (nextT < now + 0.25) {
+          const ch = prog[Math.floor(stepI / 8) % 4], s8 = stepI % 8;
+          if (s8 % 4 === 0) note(hz(ch[0] - 12), nextT, 0.6, 'triangle', 0.1);
+          note(hz(ch[[0, 1, 2, 1, 0, 2, 1, 2][s8]] + 12), nextT, 0.17, 'square', 0.016);
+          if (s8 === 3 || s8 === 7) note(hz(ch[2] + 24), nextT, 0.12, 'sine', 0.025);
+          stepI++; nextT += 0.19;
+        }
+      },
+    };
+  })();
+
+  function extrasInit() {
+    pitchLook();
+    teamPicker($('teamsA'), $('teamLblA'), () => (setupMode === 'two' ? 'Hold 1' : 'Dit hold'), () => cfg.team, v => { cfg.team = v; saveCfg(); });
+    teamPicker($('teamsB'), $('teamLblB'), () => (setupMode === 'two' ? 'Hold 2' : 'Modstander'), () => cfg.opp, v => { cfg.opp = v; saveCfg(); });
+    const sv = { size: cfg.size, mins: cfg.mins, diff: cfg.diff };
+    teamPicker($('seasonTeams'), $('seasonTeamLbl'), () => 'Vælg dit hold', () => cfg.team, v => { cfg.team = v; saveCfg(); });
+    mkSeg($('seasonSize'), [1, 2, 3, 5, 11], ['1', '2', '3', '5', '11'], () => sv.size, v => { sv.size = v; });
+    mkSeg($('seasonMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => sv.mins, v => { sv.mins = v; });
+    mkSeg($('seasonDiff'), [0, 1, 2], ['Let', 'Normal', 'Svær'], () => sv.diff, v => { sv.diff = v; });
+    $('goSeason').onclick = seasonShow;
+    $('seasonClose').onclick = () => { $('season').hidden = true; seasonSub(); };
+    $('seasonStart').onclick = () => { seasonNew(teamOpen(cfg.team) ? cfg.team : 1, sv.size, sv.mins, sv.diff); seasonShow(); seasonSub(); };
+    $('seasonReset').onclick = () => {
+      const b = $('seasonReset');
+      if (!b.dataset.sure && !(seasonLoad() || {}).done) { b.dataset.sure = '1'; b.textContent = 'Tryk igen for at starte forfra'; return; }
+      try { localStorage.removeItem('mf-season'); } catch (_) {}
+      seasonShow(); seasonSub();
+    };
+    $('seasonPlay').onclick = () => { $('season').hidden = true; kind = 'season'; withHelp(() => { kind = 'season'; startMatch('cpu'); }); };
+    $('toSeason').onclick = () => { toMenu(); seasonShow(); };
+    $('bPens').onclick = () => { kind = 'pen'; withHelp(() => { kind = 'pen'; startMatch('cpu'); }); };
+    $('bTrain').onclick = () => { kind = 'train'; withHelp(() => { kind = 'train'; startMatch('cpu'); }); };
+    $('goProf').onclick = profShow; $('profClose').onclick = () => { $('prof').hidden = true; };
+    $('goShop').onclick = shopShow; $('shopClose').onclick = () => { $('shop').hidden = true; paintTeamPickers(); };
+    // sound: unlock audio on the first tap, soft click on menu buttons
+    $('wrap').addEventListener('click', e => {
+      if (state === 'play') return;
+      audioOn();
+      if (e.target.closest('button')) tone(560, 0.04, 'triangle', 0.05, 80);
+    }, true);
+    paintCoins();
+  }
+
   // ---------- Online ----------
   // Same shape as the claude.ai room, built on PeerJS (WebRTC) for the plain web link.
   function peerRoom() {
@@ -1843,7 +2333,8 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     names.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    leaveNet(); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null;
+    leaveNet(); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null;
+    demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm();
     page(text ? 'pgOnline' : 'pgHome');
@@ -1991,6 +2482,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   { const hostFn = $('host').onclick;
     $('host').onclick = () => showSetup('host');
     $('setupGo').onclick = () => {
+      kind = null;
       if (setupMode === 'host') { page('pgOnline'); hostFn(); }
       else { const m = setupMode; withHelp(() => startMatch(m)); }
     }; }
@@ -2153,6 +2645,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   const isMine = p => p.ctrl === 'L0' || p.ctrl === 'L1' || p.ctrl === 'ME';
   const myPlayers = () => P.filter(isMine);
   function drawPlayer(p) {
+    if (p.out > 1e5) return; // training: the missing opponents are not shown
     const sliding = p.tackle > 0, down = p.stun > 0;
     const hop = banner === 'MÅL!' && P[celeb] === p && !(replay && replay.t >= 0) ? Math.abs(Math.sin(performance.now() / 110)) * 10 : 0;
     ctx.save(); ctx.translate(p.x, p.y - hop);
@@ -2210,12 +2703,13 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const sp = Math.hypot(ball.vx, ball.vy);
     if (sp > 450 && ball.owner < 0) { ball.trail.push([ball.x, ball.y]); if (ball.trail.length > 8) ball.trail.shift(); }
     else if (ball.trail.length) ball.trail.shift();
-    ball.trail.forEach(([x, y], i) => { ctx.fillStyle = `rgba(255,255,255,${(i + 1) / 40})`; ctx.beginPath(); ctx.arc(x, y, BRAD * (0.5 + i / 16), 0, Math.PI * 2); ctx.fill(); });
+    const BL = BALLS[cfg.ball] || BALLS[0];
+    ball.trail.forEach(([x, y], i) => { ctx.fillStyle = `rgba(${BL.tr},${(i + 1) / (BL.fire ? 18 : 40)})`; ctx.beginPath(); ctx.arc(x, y, BRAD * (0.5 + i / 16), 0, Math.PI * 2); ctx.fill(); });
     const z = Math.max(0, ball.z || 0), r = BRAD * (1 + z / 220), by = ball.y - z * 0.6;
     ctx.fillStyle = `rgba(0,0,0,${0.3 / (1 + z / 80)})`; ctx.beginPath(); ctx.ellipse(ball.x + 3, ball.y + 5, BRAD, BRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, by, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.arc(ball.x, by, 4 * r / BRAD, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = BL.c; ctx.beginPath(); ctx.arc(ball.x, by, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = BL.d; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = BL.d; ctx.beginPath(); ctx.arc(ball.x, by, 4 * r / BRAD, 0, Math.PI * 2); ctx.fill();
   }
   function drawItem() {
     if (!item) return;
@@ -2278,7 +2772,17 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const m = Math.floor(clock / 60), s = Math.floor(clock % 60);
     const ss = mode === 'guest' ? soG : soSums();
     ctx.fillStyle = ss ? col.gold : col.chalk;
-    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
+    if (kind === 'train' && !ss) ctx.font = `700 ${fs * 0.6}px ${col.font}`;
+    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : kind === 'train' ? 'TRÆNING' : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
+    if (teamPick) { // team badges either side of the score
+      ctx.font = `700 ${fs * 0.6}px ${col.font}`;
+      for (const t of [0, 1]) {
+        const x = sw / 2 + (t ? 1 : -1) * (bw / 2 + fs * 1.3), w = fs * 2.3;
+        ctx.fillStyle = t ? col.away : col.home; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - w / 2, y + fs * 0.15, w, bh - fs * 0.3, 6) : ctx.rect(x - w / 2, y + fs * 0.15, w, bh - fs * 0.3); ctx.fill();
+        ctx.fillStyle = teamPick[t].c3; ctx.fillText(teamPick[t].s, x, y + fs * 0.42);
+      }
+      ctx.font = `700 ${fs}px ${col.font}`;
+    }
     const text = (replay && replay.t >= 0) ? '' : banner || (flash ? flash.text : '');
     if (text) {
       const big = /^[123]$/.test(text);
@@ -2362,13 +2866,16 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
     for (const r of rxList) r.t -= dt; rxList = rxList.filter(r => r.t > 0); rxCd -= dt;
     crowd.update(dt);
+    if (state === 'menu') demoTick(dt);
+    music.tick();
+    if (state === 'play' && myTeamNow >= 0 && score[1 - myTeamNow] > score[myTeamNow]) wasBehind = true;
     commentary();
     render(dt);
     requestAnimationFrame(frame);
   }
-  makePlayers(cfg.size); kickoff(); menuForm(); cupInit();
+  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, end: (a, b) => { score = [a, b]; half = 2; clock = 0.01; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
