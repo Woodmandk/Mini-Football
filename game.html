@@ -833,8 +833,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
     POSTS = [[PL, CY - MOUTH], [PL, CY + MOUTH], [PR, CY - MOUTH], [PR, CY + MOUTH]];
   }
   setPitch(1);
-  const PRAD = 22, POSTR = 6, BAR = 62, GRAV = 1100;
-  let BRAD = 12, REACH = PRAD + BRAD; // the ball can grow with the power-up
+  const PRAD = 13, POSTR = 6, BAR = 62, GRAV = 1100, FIG = PRAD / 22; // players and ball drawn small so the pitch looks tidy (FIG scales the figure drawing)
+  const BALL_R = 7, BALL_BIG = 12;
+  let BRAD = BALL_R, REACH = PRAD + BRAD; // the ball can grow with the power-up
   // formations as [share of own half from the goal line, share of pitch height]; index 0 is the keeper
   const FORM = {
     1: [[0.56, 0.5]],
@@ -939,8 +940,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   const MAXV = 218, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7, PASS_TAP = 0.16, PASS_HIGH = 0.45;
   const TACKLE_T = 0.38, TACKLE_V = 550;
-  let TACKLE_REACH = REACH + 16;
-  function setBallSize(big) { BRAD = big ? 20 : 12; REACH = PRAD + BRAD; TACKLE_REACH = REACH + 16; }
+  let TACKLE_REACH = REACH + 24;
+  function setBallSize(big) { BRAD = big ? BALL_BIG : BALL_R; REACH = PRAD + BRAD; TACKLE_REACH = REACH + 24; }
 
   let mode = null;          // 'cpu' | 'two' | 'host' | 'guest'
   let state = 'menu';       // 'menu' | 'lobby' | 'play' | 'end'
@@ -2702,7 +2703,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 12) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -4111,7 +4112,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0) | (p.dive > 0 || p.lay > 0 ? 32 : 0) | (keeperKick(p) ? 64 : 0)]),
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
       // slow-changing fields go every 15th message (and always in the lobby)
-      pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > 12 ? 1 : 0,
+      pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > BALL_R ? 1 : 0,
       gs: [goalSeq, lastScorer, lastGk, lastGoalTeam], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
       rx: rxOut.filter(r => now - r[3] < 3000).map(r => [r[0], r[1], r[2]]),
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
@@ -4150,7 +4151,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       }
       return;
     }
-    const big = !!s.bb; if (big !== (BRAD > 12)) setBallSize(big);
+    const big = !!s.bb; if (big !== (BRAD > BALL_R)) setBallSize(big);
     soG = Array.isArray(s.so) ? s.so.map(v => Number(v) | 0) : null; celeb = Number(s.ce) | 0;
     if (Array.isArray(s.ou)) s.ou.forEach((v, i) => { if (P[i]) { P[i].out = v & 2 ? 1 : 0; P[i].yc = v & 1; } });
     item = Array.isArray(s.pu) ? { type: Object.keys(ITEMS)[Number(s.pu[0]) | 0] || 'super', x: Number(s.pu[1]) || 0, y: Number(s.pu[2]) || 0, t: 1 } : null;
@@ -4307,20 +4308,20 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const hop = banner === 'MÅL!' && P[celeb] === p && !(replay && replay.t >= 0) ? Math.abs(Math.sin(performance.now() / 110)) * 10 : 0;
     ctx.save(); ctx.translate(p.x, p.y - hop);
     if (p.out > 0) ctx.globalAlpha = 0.45;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4, 6, PRAD, PRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4 * FIG, 6 * FIG, PRAD, PRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
     if (p.hold > 0.05) {
-      ctx.strokeStyle = col.gold; ctx.lineWidth = 5;
+      ctx.strokeStyle = col.gold; ctx.lineWidth = 3.5;
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.hold / MAXCHARGE)); ctx.stroke();
     }
     if (p.holdB > PASS_TAP * 0.6) { // AFLEVER held: blue = hard pass, gold = a high ball
       const hi = p.holdB >= PASS_HIGH;
-      ctx.strokeStyle = hi ? col.gold : '#7fd3ff'; ctx.lineWidth = 5;
+      ctx.strokeStyle = hi ? col.gold : '#7fd3ff'; ctx.lineWidth = 3.5;
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.holdB / MAXCHARGE)); ctx.stroke();
       ctx.fillStyle = hi ? col.gold : '#7fd3ff'; ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.fillText(hi ? 'HØJ' : 'HÅRD', 0, -PRAD - 14);
     }
     if (p.superShot) { ctx.fillStyle = `rgba(255,140,40,${0.25 + 0.15 * Math.sin(performance.now() / 120)})`; ctx.beginPath(); ctx.arc(0, 0, PRAD + 10, 0, Math.PI * 2); ctx.fill(); }
     if (p.turbo > 0) { ctx.strokeStyle = 'rgba(120,220,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, PRAD + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
-    drawFigure(p, sliding, down);
+    ctx.save(); ctx.scale(FIG, FIG); drawFigure(p, sliding, down); ctx.restore();
     ctx.globalAlpha = 1;
     ctx.restore();
     if (p.yc || p.out > 0) { ctx.fillStyle = p.out > 0 ? '#e5483b' : '#ffd447'; ctx.fillRect(p.x + PRAD - 4, p.y - PRAD - 2, 9, 13); }
@@ -4387,10 +4388,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (wx === 2 && BL === BALLS[0] && state !== 'menu') BL = { c: '#ff8a1f', d: '#5a2200', tr: '255,150,60' }; // an orange winter ball, so it shows up in the snow
     ball.trail.forEach(([x, y], i) => { ctx.fillStyle = `rgba(${BL.tr},${(i + 1) / (BL.fire ? 18 : 40)})`; ctx.beginPath(); ctx.arc(x, y, BRAD * (0.5 + i / 16), 0, Math.PI * 2); ctx.fill(); });
     const z = Math.max(0, ball.z || 0), r = BRAD * (1 + z / 220), by = ball.y - z * 0.6;
-    ctx.fillStyle = `rgba(0,0,0,${0.3 / (1 + z / 80)})`; ctx.beginPath(); ctx.ellipse(ball.x + 3, ball.y + 5, BRAD, BRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = `rgba(0,0,0,${0.3 / (1 + z / 80)})`; ctx.beginPath(); ctx.ellipse(ball.x + 2, ball.y + 3, BRAD, BRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = BL.c; ctx.beginPath(); ctx.arc(ball.x, by, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = BL.d; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = BL.d; ctx.beginPath(); ctx.arc(ball.x, by, 4 * r / BRAD, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = BL.d; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.fillStyle = BL.d; ctx.beginPath(); ctx.arc(ball.x, by, r * 0.34, 0, Math.PI * 2); ctx.fill();
   }
   function drawItem() {
     if (!item) return;
