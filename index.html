@@ -300,6 +300,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <div class="seg" id="segSer" role="group" aria-label="Serie">
             <button data-v="1">Én kamp</button><button data-v="3">Bedst af 3</button><button data-v="5">Bedst af 5</button>
           </div></div>
+        <div class="col" id="wxBox"><div class="lbl">Vejr</div>
+          <div class="seg" id="segWx" role="group" aria-label="Vejr">
+            <button data-v="0">Sol</button><button data-v="1">Regn</button><button data-v="2">Sne</button><button data-v="3">Tilfældigt</button>
+          </div></div>
+        <div class="col" id="todBox"><div class="lbl">Tidspunkt</div>
+          <div class="seg" id="segTod" role="group" aria-label="Tidspunkt">
+            <button data-v="0">Dag</button><button data-v="1">Aften</button><button data-v="2">Tilfældigt</button>
+          </div></div>
         <div class="col" id="kitBox"><div class="lbl">Trøjer</div>
           <div class="seg" id="segKit" role="group" aria-label="Trøjer">
             <button data-v="0" aria-label="Rød mod blå"><span class="kit"><i style="background:#e5483b"></i><i style="background:#2f7ff0"></i></span></button>
@@ -334,6 +342,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       <div class="setrows">
         <div><span>Publikum og kommentator</span><button id="tCrowd" class="sw"></button></div>
         <div><span>Test kommentatoren</span><button id="tSay" class="alt">Afspil</button></div>
+        <div><span>Vibration ved skud og mål</span><button id="tVib" class="sw"></button></div>
         <div><span>Musik i menuen</span><button id="tMusic" class="sw"></button></div>
         <div><span>Genafspilning af mål</span><button id="tReplay" class="sw"></button></div>
         <div><span>Power-ups i kampene</span><button id="tPu" class="sw"></button></div>
@@ -560,7 +569,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0 };
+  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, tod: 0, vib: true };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   if (![1, 2, 3, 5, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
   function seg(id, key) {
@@ -574,14 +583,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
     paint(); segPaints.push(paint);
   }
   const segPaints = [];
-  seg('segSize', 'size'); seg('segMins', 'mins'); seg('segDiff', 'diff'); seg('segKit', 'kit'); seg('segSer', 'ser');
+  seg('segSize', 'size'); seg('segMins', 'mins'); seg('segDiff', 'diff'); seg('segKit', 'kit'); seg('segSer', 'ser'); seg('segWx', 'wx'); seg('segTod', 'tod');
   const saveCfg = () => { try { localStorage.setItem('mf-cfg', JSON.stringify(cfg)); } catch (_) {} };
   function toggle(id, key) {
     const b = $(id), paint = () => { b.setAttribute('aria-pressed', String(!!cfg[key])); b.textContent = cfg[key] ? 'Til' : 'Fra'; };
-    b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); if (key === 'crowd' && cfg.crowd) unlockSpeech('Kommentatoren er klar'); };
+    b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); if (key === 'crowd' && cfg.crowd) unlockSpeech('Kommentatoren er klar'); if (key === 'vib' && cfg.vib) buzz([40, 60, 40]); };
     paint();
   }
-  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music');
+  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music'); toggle('tVib', 'vib');
 
   // ---------- Menu pages: forside -> kampopsætning / online / indstillinger ----------
   let setupMode = 'cpu';
@@ -1139,6 +1148,35 @@ button.small { font-size: 13px; padding: 9px 10px; }
     beep: () => tone(880, 0.08, 'square', 0.05),
     thud: () => { noise(0.12, 0.3, 'lowpass', 300, 1, 80); tone(70, 0.12, 'sine', 0.15, -20); },
   };
+  // a crowd singing: a handful of slightly out-of-tune voices (some an octave up) through a vowel-shaped filter
+  function voices(f0, f1, d, vol, at = 0, form = 700, n = 7) {
+    if (!ac) return;
+    try {
+      const t = ac.currentTime + at, bp = ac.createBiquadFilter(), lp = ac.createBiquadFilter(), g = ac.createGain();
+      bp.type = 'bandpass'; bp.frequency.value = form; bp.Q.value = 1.1; lp.type = 'lowpass'; lp.frequency.value = 2400;
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + Math.min(0.09, d * 0.3)); g.gain.setValueAtTime(vol, t + d * 0.65); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      bp.connect(lp).connect(g).connect(ac.destination);
+      for (let i = 0; i < n; i++) {
+        const o = ac.createOscillator(), k = (1 + (Math.random() - 0.5) * 0.08) * (i % 3 === 2 ? 2 : 1), s0 = t + Math.random() * 0.05;
+        o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 * k, s0); o.frequency.linearRampToValueAtTime(f1 * k, t + d);
+        o.connect(bp); o.start(s0); o.stop(t + d + 0.05);
+      }
+      noise(d, vol * 0.7, 'bandpass', form * 1.4, 0.7, 0, at); // breath of the whole stand
+    } catch (_) {}
+  }
+  function horn(at = 0) { // an air horn in the stands
+    if (!ac) return;
+    const t = ac.currentTime + at;
+    [233, 294, 349].forEach(f => { const o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter(); o.type = 'sawtooth'; o.frequency.value = f; lp.type = 'lowpass'; lp.frequency.value = 1600; g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.022, t + 0.04); g.gain.setValueAtTime(0.022, t + 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.85); o.connect(lp).connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.9); });
+  }
+  function drum(at = 0) { if (!ac) return; const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.25); g.gain.setValueAtTime(0.16, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.32); noise(0.06, 0.08, 'lowpass', 400, 1, 0, at); }
+  function whistleAt(at) { // a fan whistling through his fingers
+    if (!ac) return;
+    const t = ac.currentTime + at, o = ac.createOscillator(), g = ac.createGain(), f = 2200 + Math.random() * 700;
+    o.type = 'sine'; o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f * 1.25, t + 0.12); o.frequency.linearRampToValueAtTime(f * 0.9, t + 0.5);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.018, t + 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.6);
+  }
   // crowd: looping filtered noise that swells near the goals and roars on a goal
   const crowd = (() => {
     let g = null, flt = null, swell = 0, last = -1;
@@ -1160,6 +1198,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (!g) return;
         swell = Math.max(0, swell - dt / 2.5);
         if (on && (this.clapT = (this.clapT || 9) - dt) <= 0) { this.clapT = 12 + Math.random() * 14; this.claps(3 + Math.floor(Math.random() * 2)); } // the stands clap along now and then
+        if (on && !banner && (this.chantT = (this.chantT || 20) - dt) <= 0) { this.chantT = 22 + Math.random() * 18; this.chant(); } // and sing
         const near = Math.max(0, 1 - Math.min(Math.abs(ball.x - PL), Math.abs(PR - ball.x)) / 320);
         const target = on ? 0.025 + near * 0.035 + swell * 0.2 : 0;
         if (Math.abs(target - last) < 0.002) return; // nothing audible changed
@@ -1167,16 +1206,131 @@ button.small { font-size: 13px; padding: 9px 10px; }
         g.gain.setTargetAtTime(target, ac.currentTime, 0.15);
         flt.frequency.setTargetAtTime(600 + swell * 500 + near * 150, ac.currentTime, 0.2);
       },
-      cheer() { swell = 1; if (g && ac) for (let i = 0; i < 26; i++) noise(0.05, 0.05 + Math.random() * 0.05, 'bandpass', 1500 + Math.random() * 1500, 1.5, 0, 0.3 + Math.random() * 2.2); }, // the roar plus applause
-      ooh() { swell = Math.max(swell, 0.5); },
+      cheer(mine = true) { // the roar plus applause; your own fans sing and blow the horn
+        swell = 1; if (!g || !ac) return;
+        for (let i = 0; i < 26; i++) noise(0.05, 0.05 + Math.random() * 0.05, 'bandpass', 1500 + Math.random() * 1500, 1.5, 0, 0.3 + Math.random() * 2.2);
+        voices(260, 390, 1.7, mine ? 0.07 : 0.04, 0.05, 850, 10); // "jaaaa!"
+        if (mine) { horn(0.4); horn(1.25); this.chantT = Math.min(this.chantT || 9, 3.5); }
+      },
+      ooh(post) { // a near miss: a gasp that sinks into a groan
+        swell = Math.max(swell, 0.5); if (!g || !ac || !cfg.crowd) return;
+        if (post) voices(170, 290, 0.45, 0.05, 0, 420, 8);
+        voices(250, 150, 1.3, 0.065, post ? 0.4 : 0, 560, 9);
+      },
+      save() { this.ooh(); this.claps(2); },
+      boo(loud) { // a foul: boos, and a few whistles when it was against us
+        if (!g || !ac || !cfg.crowd) return;
+        voices(128, 112, 1.4, loud ? 0.06 : 0.035, 0.1, 360, 9);
+        if (loud) for (let i = 0; i < 3; i++) whistleAt(0.15 + Math.random() * 0.6);
+      },
+      chant() { // "Ba-ne-bold!" clap clap clap, twice
+        if (!g || !ac || !cfg.crowd) return;
+        for (const r of [0, 2.3]) {
+          voices(196, 196, 0.24, 0.05, r, 800, 9); voices(196, 190, 0.24, 0.05, r + 0.3, 520, 9); voices(262, 250, 0.55, 0.06, r + 0.6, 460, 9);
+          for (let i = 0; i < 3; i++) for (let k = 0; k < 8; k++) noise(0.04, 0.035 + Math.random() * 0.03, 'bandpass', 1400 + Math.random() * 1200, 1.2, 0, r + 1.3 + i * 0.3 + Math.random() * 0.03);
+        }
+        drum(0); drum(0.6); drum(2.3); drum(2.9);
+      },
       claps(n = 3) { if (!g || !ac || !cfg.crowd) return; for (let i = 0; i < n; i++) for (let k = 0; k < 8; k++) noise(0.04, 0.03 + Math.random() * 0.03, 'bandpass', 1400 + Math.random() * 1200, 1.2, 0, i * 0.5 + Math.random() * 0.04); }, // clap, clap, clap
     };
   })();
+  // ---------- Weather and floodlights ----------
+  // 0 sun, 1 rain (the ball skids on, players slide), 2 snow (the ball dies quickly, bounces less); night = an evening match under the lights
+  let wx = 0, night = false, wxIntro = '';
+  const WXP = [{ damp: 0.55, bounce: 0.42, grip: 1, pass: 1 }, { damp: 0.7, bounce: 0.5, grip: 0.72, pass: 0.94 }, { damp: 0.38, bounce: 0.2, grip: 0.84, pass: 1.1 }];
+  const WX = () => WXP[wx] || WXP[0];
+  const WX_NAME = w => [night ? 'Aftenkamp' : '', night ? 'Aften og regn' : 'Regnvejr', night ? 'Aften og sne' : 'Snevejr'][w];
+  function setWeather(w, n) { wx = [0, 1, 2].includes(w) ? w : 0; night = !!n; }
+  function pickWeather() { // from the match settings; practice is always a sunny day
+    if (kind === 'train' || drill) { setWeather(0, false); wxIntro = ''; return; }
+    setWeather(cfg.wx === 3 ? Math.floor(Math.random() * 3) : cfg.wx, cfg.tod === 2 ? Math.random() < 0.5 : cfg.tod === 1);
+    wxIntro = WX_NAME(wx);
+  }
+  function splash(x, y) { for (let i = 0; i < 6; i++) { const a = Math.random() * Math.PI * 2, v = 40 + Math.random() * 90; particles.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 0.3, c: 'rgba(200,225,255,0.75)' }); } }
+  const wxSound = (() => { // rain hissing on the pitch, or a cold wind in the snow
+    let src = null, g = null, flt = null, cur = -1, gust = 0;
+    return {
+      update(dt) {
+        const want = cfg.crowd && state === 'play' && !paused && ac ? wx : 0;
+        if (want !== cur) {
+          cur = want;
+          if (g) { try { g.gain.setTargetAtTime(0, ac.currentTime, 0.3); const s0 = src; setTimeout(() => { try { s0.stop(); } catch (_) {} }, 1500); } catch (_) {} g = src = null; }
+          if (!want) return;
+          try {
+            const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
+            for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (want === 1 && Math.random() < 0.002 ? 3 : 1); // rain: a few louder drops in the hiss
+            src = ac.createBufferSource(); src.buffer = buf; src.loop = true;
+            flt = ac.createBiquadFilter(); flt.type = want === 1 ? 'highpass' : 'lowpass'; flt.frequency.value = want === 1 ? 1400 : 420; flt.Q.value = want === 1 ? 0.5 : 1.6;
+            g = ac.createGain(); g.gain.value = 0; g.gain.setTargetAtTime(want === 1 ? 0.05 : 0.03, ac.currentTime, 0.8);
+            src.connect(flt).connect(g).connect(ac.destination); src.start();
+          } catch (_) { g = src = null; }
+        }
+        if (g && cur === 2 && (gust -= dt) <= 0) { gust = 1.5 + Math.random() * 2.5; try { const v = 0.015 + Math.random() * 0.045; g.gain.setTargetAtTime(v, ac.currentTime, 0.9); flt.frequency.setTargetAtTime(300 + v * 6000, ac.currentTime, 0.9); } catch (_) {} } // gusts
+      },
+    };
+  })();
+  // falling rain and snow, in screen space so it looks the same whatever the zoom
+  const sky = { drops: [], kind: -1 };
+  function drawSky(dt) {
+    const w = state === 'play' || state === 'end' ? wx : 0;
+    if (!w) return;
+    if (sky.kind !== w) { sky.kind = w; sky.drops = Array.from({ length: w === 1 ? 170 : 120 }, () => ({ x: Math.random(), y: Math.random(), v: 0.6 + Math.random() * 0.6, r: 1 + Math.random() * 2.2, ph: Math.random() * 6 })); }
+    const still = paused || replay;
+    ctx.save(); ctx.beginPath();
+    for (const d of sky.drops) {
+      if (!still) {
+        if (w === 1) { d.y += dt * d.v * 1.9; d.x -= dt * d.v * 0.35; } else { d.y += dt * d.v * 0.16; d.x += Math.sin((d.ph += dt * 1.3)) * dt * 0.03 - dt * 0.02; }
+        if (d.y > 1.02) { d.y -= 1.04; d.x = Math.random() * 1.1; } if (d.x < -0.02) d.x += 1.04; if (d.x > 1.02) d.x -= 1.04;
+      }
+      const x = d.x * sw, y = d.y * sh;
+      if (w === 1) { ctx.moveTo(x, y); ctx.lineTo(x + 3.5 * d.v, y - 15 * d.v); } else { ctx.moveTo(x + d.r, y); ctx.arc(x, y, d.r, 0, Math.PI * 2); }
+    }
+    if (w === 1) { ctx.strokeStyle = 'rgba(200,218,240,0.38)'; ctx.lineWidth = 1.2; ctx.stroke(); } else { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fill(); }
+    ctx.restore();
+  }
+  // the ground: a darker, wet pitch with puddles, or a white layer of snow that gets thicker through the match
+  const wxSpots = Array.from({ length: 70 }, (_, i) => { const r = n => (Math.sin(i * 12.9898 + n * 78.233) * 43758.5453) % 1; const a = Math.abs(r(1)), b = Math.abs(r(2)), c = Math.abs(r(3)); return [0.05 + a * 0.9, 0.06 + b * 0.88, 0.4 + c * 0.9]; });
+  function drawGround() {
+    if (state === 'menu' || !wx) return;
+    const L = PR - PL, H = PB - PT;
+    if (wx === 1) {
+      ctx.fillStyle = 'rgba(8,28,44,0.2)'; ctx.fillRect(PL, PT, L, H);
+      const t = performance.now() / 1000;
+      wxSpots.slice(0, 10).forEach(([u, v, k], i) => {
+        const x = PL + u * L, y = PT + v * H, rx = 26 + k * 34, ry = rx * 0.45;
+        ctx.fillStyle = 'rgba(150,185,215,0.16)'; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+        const f = (t * 0.9 + i * 0.37) % 1; // rain drops rippling in the puddle
+        ctx.strokeStyle = `rgba(225,238,255,${0.3 * (1 - f)})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.ellipse(x + (k - 0.8) * rx * 0.6, y, 3 + f * 12, (3 + f * 12) * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+      });
+    } else {
+      const prog = matchLen > 0 && state === 'play' ? Math.max(0, Math.min(1, 1 - clock / matchLen)) : 0.5;
+      ctx.fillStyle = `rgba(236,243,252,${0.26 + prog * 0.16})`; ctx.fillRect(PL, PT, L, H);
+      ctx.fillStyle = 'rgba(255,255,255,0.16)';
+      for (const [u, v, k] of wxSpots) { ctx.beginPath(); ctx.ellipse(PL + u * L, PT + v * H, 10 + k * 20, 5 + k * 9, u * 3, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
+  function drawLights() { // an evening match: dark all round, four floodlight masts throwing light onto the pitch
+    if (state === 'menu' || !night) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#56638a'; ctx.fillRect(-400, -400, WW + 800, WH + 800);
+    ctx.globalCompositeOperation = 'lighter';
+    const R = Math.max(PR - PL, PB - PT) * 0.62, M = [[PL - 34, PT - 14], [PR + 34, PT - 14], [PL - 34, PB + 14], [PR + 34, PB + 14]];
+    for (const [x, y] of M) { const g = ctx.createRadialGradient(x, y, 0, x, y, R); g.addColorStop(0, 'rgba(255,246,220,0.34)'); g.addColorStop(0.5, 'rgba(255,246,220,0.12)'); g.addColorStop(1, 'rgba(255,246,220,0)'); ctx.fillStyle = g; ctx.fillRect(x - R, y - R, R * 2, R * 2); }
+    ctx.globalCompositeOperation = 'source-over';
+    for (const [x, y] of M) {
+      ctx.fillStyle = '#1b2230'; ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fffbe8'; ctx.fillRect(x - 9, y - 4, 18, 8);
+      const h = ctx.createRadialGradient(x, y, 0, x, y, 34); h.addColorStop(0, 'rgba(255,250,225,0.7)'); h.addColorStop(1, 'rgba(255,250,225,0)'); ctx.fillStyle = h; ctx.fillRect(x - 34, y - 34, 68, 68);
+    }
+    ctx.restore();
+  }
   // ---------- Commentator ----------
   // The phone's own Danish voice talks through the match: big moments always, small ones when there's room.
   const SAY = { 'Redning!': 'Hvilken redning!', 'Straffespark': 'Straffespark!', 'Pause': 'Så er der pause', 'Gult kort': 'Gult kort', 'Rødt kort': 'Rødt kort! Han er ude.',
     'Offside': 'Offside!', 'Brændt!': 'Brændt!', 'Hovedstød!': 'Hovedstød!', 'Straffespark-konkurrence': 'Det skal afgøres på straffespark!', 'Superskud!': 'Superskud!',
-    'Frispark': 'Frispark', 'Hjørnespark': 'Hjørnespark', 'Golden goal': '' };
+    'Frispark': 'Frispark', 'Hjørnespark': 'Hjørnespark', 'Golden goal': '',
+    'Regnvejr': 'Det regner. Bolden glider hurtigt på det våde græs.', 'Snevejr': 'Der ligger sne på banen. Bolden går hurtigt i stå.', 'Aftenkamp': 'God aften, og velkommen til kampen under lyset.',
+    'Aften og regn': 'Aftenkamp i regnvejr. Bolden glider hurtigt.', 'Aften og sne': 'Aftenkamp i sneen. Bolden går hurtigt i stå.' };
   const pick = a => a[Math.floor(Math.random() * a.length)];
   const comm = { last: 0, text: '', owner: -1, team: -1, shotAt: 0, missSaid: 0, alone: -1, prevClock: 999, prevBanner: '' };
   // Phones only let a page talk after the player has tapped something, so the first line is spoken from a tap.
@@ -1280,8 +1434,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
     tone(id === 1 ? 300 : 700, 0.08, 'sine', 0.05, id === 1 ? -100 : 200);
     if (mode === 'host') { rxOut.push([++rxSeq, i, id, performance.now()]); if (rxOut.length > 6) rxOut.shift(); }
   }
-  function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} }
+  function buzz(ms) { if (!cfg.vib) return; try { navigator.vibrate && navigator.vibrate(ms); } catch (_) {} }
   const localHuman = p => p.ctrl === 'L0' || p.ctrl === 'L1';
+  function localTeam() { if (mode === 'guest') return myTeam(); const p = P.find(q => q.ctrl === 'L0'); return p ? p.team : 0; } // the team the person holding this phone plays for
   function burst(x, y, color, n = 60) {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, s = 120 + Math.random() * 420;
@@ -1306,6 +1461,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = []; hlReset(); lastGk = ''; lastGoalTeam = 0;
     if (m !== 'guest') {
       setKit(cfg.kit);
+      pickWeather();
       if (m !== 'host') {
         teamForm = [myForm(size), m === 'two' ? myForm(size) : (FORMS[size] ? Math.floor(Math.random() * FORMS[size].length) : 0)];
         teamLay = [myLay(size), m === 'two' ? myLay(size) : null];
@@ -1524,7 +1680,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (isPen) penShot(p);
     sfx.kick(pw);
     if (pw > 0.8) shake = Math.max(shake, 5);
-    if (localHuman(p)) buzz(pw > 0.8 ? 30 : 15);
+    if (localHuman(p)) buzz(Math.round(18 + pw * 32));
   }
   function passTarget(p, dx, dy) {
     const mates = P.filter(q => q.team === p.team && q !== p && on(q));
@@ -1570,7 +1726,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     }
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1;
     p.fx = dx / d; p.fy = dy / d;
-    let speed = (through ? Math.max(420, Math.min(1000, d * 0.62 + 170)) : Math.max(430, Math.min(980, d * 1.5 + 220))) * 0.93;
+    let speed = (through ? Math.max(420, Math.min(1000, d * 0.62 + 170)) : Math.max(430, Math.min(980, d * 1.5 + 220))) * 0.93 * WX().pass;
     const toKeeper = size > 1 && q.k === 0;
     if (toKeeper) speed = Math.min(speed, 560); // gentle back-pass
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
@@ -1630,7 +1786,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     // clean tackle: the tackler takes the ball, it never flies off
     const o = owner();
     if (o && o !== a) { o.stun = 0.55; o.nopick = 0.5; o.vx *= 0.3; o.vy *= 0.3; if (localHuman(o)) buzz(50); }
-    a.tackle = 0; a.recover = 0.1; a.vx *= 0.4; a.vy *= 0.4;
+    a.tackle = 0; a.recover = 0.1; a.vx *= 0.4; a.vy *= 0.4; if (localHuman(a) && o) buzz(25);
     if (stats) stats.tk[a.team]++;
     grab(a);
     sfx.win(); shake = Math.max(shake, 3);
@@ -1720,6 +1876,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
     let card = '';
     if (stats) stats.fo[a.team]++;
+    crowd.boo(a.team !== localTeam());
     if (size > 1) {
       a.fouls++;
       if (chanceDenied(a, b)) card = 'Rødt kort';                         // stopped a clear chance: straight red
@@ -2096,7 +2253,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (/^[123]$/.test(banner)) {
         const n = Math.ceil(pause / 0.8);
         if (n !== Math.ceil(was / 0.8) && n > 0) { banner = String(n); sfx.beep(); }
-        if (pause <= 0) { banner = ''; sfx.whistle(); }
+        if (pause <= 0) { banner = ''; sfx.whistle(); if (wxIntro) { flash = { text: wxIntro, t: 2.2 }; wxIntro = ''; } }
       } else if (pause <= 0) {
         if (so) { if (soDone()) { finish(); return; } startPenalty(so.turn); so.wait = 0; so.shot = false; return; }
         if (banner === 'MÅL!') { kickoff(); pause = 1.0; banner = 'Klar'; return; }
@@ -2171,7 +2328,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       } else if (p.stun > 0) { p.vx *= 0.85; p.vy *= 0.85; }
       else if (p.frozen > 0) { p.frozen -= dt; p.vx = p.vy = 0; if (p.frozen <= 0 && has && p.ctrl === 'ai') p.frozen = 0.01; }
       else {
-        const t = Math.min(1, (p.ctrl === 'ai' ? ACC_AI : ACC) * dt); // the computer has more momentum: no instant turns
+        const t = Math.min(1, (p.ctrl === 'ai' ? ACC_AI : ACC) * WX().grip * dt); // the computer has more momentum: no instant turns; a wet or snowy pitch is slippery
         p.vx += (inp.x * top - p.vx) * t; p.vy += (inp.y * top - p.vy) * t;
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
@@ -2291,7 +2448,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           if (p.team === o.team || p.stun > 0 || o.frozen > 0 || o.hands > 0 || !on(p)) continue;
           const db = dBall(p);
           if (p.tackle > 0 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; }
-          if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; if (stats) stats.sv[p.team]++; break; }
+          if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
           if (p.tackle <= 0 && ball.stealCd <= 0 && facing && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
         }
@@ -2301,10 +2458,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ball.loose += dt;
       if (ball.z > 0 || ball.vz > 0) {
         ball.vz -= GRAV * dt; ball.z += ball.vz * dt;
-        if (ball.z <= 0) { ball.z = 0; if (ball.vz < -160) { ball.vz = -ball.vz * 0.42; tone(110, 0.05, 'triangle', 0.05); } else ball.vz = 0; }
+        if (ball.z <= 0) { ball.z = 0; if (ball.vz < -160) { ball.vz = -ball.vz * WX().bounce; if (wx === 1 && ball.vz > 60) splash(ball.x, ball.y); tone(110, 0.05, 'triangle', 0.05); } else ball.vz = 0; }
       }
       const air = ball.z > 2;
-      const damp = Math.pow(air ? 0.85 : BALL_DAMP, dt);
+      const damp = Math.pow(air ? 0.85 : WX().damp, dt); // rain: the ball skids on, snow: it dies in the snow
       ball.vx *= damp; ball.vy *= damp;
       const sp = Math.hypot(ball.vx, ball.vy);
       if (sp > 1500) { ball.vx *= 1500 / sp; ball.vy *= 1500 / sp; }
@@ -2325,7 +2482,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
           if (save && (p.dive > 0 || dBall(p) > REACH) && sp2 > 700 && Math.random() < 0.8) parry(p); // at full stretch: tipped away
           else if (p.tackle > 0) tackleWins(p); else grab(p);
-          if (save) { flash = { text: 'Redning!', t: 1.0 }; crowd.ooh(); if (stats) stats.sv[p.team]++; }
+          if (save) { flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; }
           break;
         }
       }
@@ -2353,7 +2510,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const dx = ball.x - px, dy = ball.y - py, d = Math.hypot(dx, dy), m = BRAD + POSTR;
       if (d < m && d > 0 && ball.z < BAR) {
         const nx = dx / d, ny = dy / d; ball.x = px + nx * m; ball.y = py + ny * m;
-        if (ball.owner < 0) { const rv = ball.vx * nx + ball.vy * ny; if (rv < 0) { ball.vx -= 1.7 * rv * nx; ball.vy -= 1.7 * rv * ny; sfx.post(); shake = Math.max(shake, 4); crowd.ooh(); } }
+        if (ball.owner < 0) { const rv = ball.vx * nx + ball.vy * ny; if (rv < 0) { ball.vx -= 1.7 * rv * nx; ball.vy -= 1.7 * rv * ny; sfx.post(); shake = Math.max(shake, 4); crowd.ooh(true); buzz([30, 40, 30]); } }
       }
     }
     if (ball.owner >= 0) return;
@@ -2364,7 +2521,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (!over) continue;
       const inMouth = Math.abs(ball.y - CY) < MOUTH - POSTR;
       if (inMouth && ball.z < BAR) { scoreOn(side); return; }
-      if (inMouth) crowd.ooh(); // over the bar
+      if (inMouth || (Math.abs(ball.y - CY) < MOUTH * 2.4 && ball.last && !ball.last.pass && Math.hypot(ball.vx, ball.vy) > 380)) crowd.ooh(); // over the bar or just wide
       const gx = side ? PR : PL, top = ball.y < CY;
       if (ball.lastTeam === side) restart('corner', 1 - side, gx, top ? PT : PB);
       else restart('goal', side, gx + (side ? -70 : 70), CY + (top ? -50 : 50));
@@ -2429,7 +2586,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   function goalFx(team) {
     burst(team ? PL : PR, CY, team ? col.away : col.home);
-    shake = 10; sfx.goal(); buzz([60, 40, 120]); crowd.cheer();
+    const mine = mode === 'two' || team === localTeam();
+    shake = 10; sfx.goal(); buzz(mine ? [90, 60, 90, 60, 260] : [220]); crowd.cheer(mine);
   }
   let lastScorer = '', goalSeq = 0;
   // who is behind a player: your own name, a friend's, or nobody (computer)
@@ -3501,7 +3659,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    hlReset(); leaveNet(); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null;
+    hlReset(); leaveNet(); setWeather(0, false); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null;
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm();
@@ -3719,7 +3877,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     };
     if (st === 'e' && stats) o.ss = stats;
     if (st === 'e' && serEnd) o.sr = serEnd;
-    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, tf: teamForm, tm: [0, 1].map(t => teamWire(t === hostTeam() ? myCardTeam() : netTeam)), nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
+    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx: wx + (night ? 4 : 0), tf: teamForm, tm: [0, 1].map(t => teamWire(t === hostTeam() ? myCardTeam() : netTeam)), nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
   }
   function myTeam() { const e = roster.find(r => r[0] === myPeer); return e && P[e[1]] ? P[e[1]].team : null; }
@@ -3735,6 +3893,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const p of P) { p.ctrl = 'ai'; p.peer = null; }
     for (const [peer, slot] of roster) if (P[slot]) { P[slot].ctrl = peer === myPeer ? 'ME' : 'RV'; P[slot].peer = peer; }
     if (KITS[s.k]) setKit(Number(s.k));
+    if (s.wx !== undefined) { const w = Number(s.wx) | 0; setWeather(w & 3, w & 4); }
     if (Array.isArray(s.tm)) { lobbyTeams = [cleanTeam(s.tm[0]), cleanTeam(s.tm[1])]; netPick(lobbyTeams); }
     if (Array.isArray(s.tf)) teamForm = [Number(s.tf[0]) | 0, Number(s.tf[1]) | 0];
     if (Array.isArray(s.hs)) hostInfo = [Number(s.hs[0]) | 0, cleanName(s.hs[1]) || 'Vært'];
@@ -3764,7 +3923,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const fl = typeof s.fl === 'string' ? s.fl.slice(0, 14) : '';
     if (fl && !flash) { flash = { text: fl, t: 0.9 }; sfx.foul(); }
     spR = Math.max(0, Math.min(200, Number(s.sp) || 0));
-    const no = Number(s.b[2]); ball.owner = Number.isInteger(no) && no >= 0 && no < P.length ? no : -1;
+    const no = Number(s.b[2]), had = P[ball.owner]; ball.owner = Number.isInteger(no) && no >= 0 && no < P.length ? no : -1;
+    if (had && had.ctrl === 'ME' && ball.owner < 0 && state === 'play') buzz(22); // the ball left your feet: a kick
     tgt = s;
     if (s.st === 'p' && (state !== 'play' || s.m !== seenMatch)) {
       seenMatch = s.m; state = 'play'; particles = []; resetCommentary();
@@ -3834,6 +3994,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ctx.fillStyle = col.night; ctx.fillRect(-400, -400, WW + 800, WH + 800);
     const stripes = 10, w = (PR - PL) / stripes;
     for (let i = 0; i < stripes; i++) { ctx.fillStyle = i % 2 ? col.a : col.b; ctx.fillRect(PL + i * w, PT, w + 1, PB - PT); }
+    drawGround();
     for (const side of [0, 1]) {
       const gx = side ? PR : PL - 40;
       ctx.fillStyle = 'rgba(244,247,242,0.10)'; ctx.fillRect(gx, CY - MOUTH, 40, MOUTH * 2);
@@ -3970,7 +4131,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const sp = Math.hypot(ball.vx, ball.vy);
     if (sp > 450 && ball.owner < 0) { ball.trail.push([ball.x, ball.y]); if (ball.trail.length > 8) ball.trail.shift(); }
     else if (ball.trail.length) ball.trail.shift();
-    const BL = BALLS[cfg.ball] || BALLS[0];
+    let BL = BALLS[cfg.ball] || BALLS[0];
+    if (wx === 2 && BL === BALLS[0] && state !== 'menu') BL = { c: '#ff8a1f', d: '#5a2200', tr: '255,150,60' }; // an orange winter ball, so it shows up in the snow
     ball.trail.forEach(([x, y], i) => { ctx.fillStyle = `rgba(${BL.tr},${(i + 1) / (BL.fire ? 18 : 40)})`; ctx.beginPath(); ctx.arc(x, y, BRAD * (0.5 + i / 16), 0, Math.PI * 2); ctx.fill(); });
     const z = Math.max(0, ball.z || 0), r = BRAD * (1 + z / 220), by = ball.y - z * 0.6;
     ctx.fillStyle = `rgba(0,0,0,${0.3 / (1 + z / 80)})`; ctx.beginPath(); ctx.ellipse(ball.x + 3, ball.y + 5, BRAD, BRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
@@ -4135,8 +4297,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const p of P) if (p.stun <= 0) drawPlayer(p);
     drawBall(); // after the players so a lob is seen flying over them
     drawParticles();
+    drawLights();
     if (!saved) drawRx();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawSky(dt);
     if (state === 'play' && !saved) drawOffscreen();
     if (state === 'play' && sc * WW > sw + 2) drawMinimap();
     if (state === 'play' || state === 'end') drawHUD();
@@ -4162,7 +4326,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     hlTick(dt);
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
     for (const r of rxList) r.t -= dt; rxList = rxList.filter(r => r.t > 0); rxCd -= dt;
-    crowd.update(dt);
+    crowd.update(dt); wxSound.update(dt);
     if (state === 'menu') demoTick(dt);
     music.tick();
     if (state === 'play' && myTeamNow >= 0 && score[1 - myTeamNow] > score[myTeamNow]) wasBehind = true;
@@ -4172,7 +4336,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w) }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), wx: (w, n) => { if (w !== undefined) setWeather(w, n); return { wx, night, damp: WX().damp }; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
