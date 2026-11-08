@@ -342,6 +342,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     <div class="card" id="pgSet" hidden>
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Indstillinger</h2><span class="sp"></span></div>
       <div class="setrows">
+        <div><span>Roligt tempo (spillet går lidt langsommere)</span><button id="tCalm" class="sw"></button></div>
         <div><span>Publikum og kommentator</span><button id="tCrowd" class="sw"></button></div>
         <div><span>Test kommentatoren</span><button id="tSay" class="alt">Afspil</button></div>
         <div><span>Vibration ved skud og mål</span><button id="tVib" class="sw"></button></div>
@@ -461,7 +462,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       <div class="help">
         <div><b class="k">JOYSTICK</b><span>Sæt tommelfingeren hvor som helst i venstre side og styr. Træk langt ud for at spurte.</span></div>
         <div><b class="k">SKYD</b><span>Med bolden. Hold inde for et hårdere skud. Tryk to gange hurtigt for et lob over målmanden.</span></div>
-        <div><b class="k">AFLEVER</b><span>Med bolden. Peg med joysticket mod den medspiller, du vil aflevere til. Tryk to gange hurtigt for en stikning frem i løbet (peg fremad, så løber den den vej). Hold inde for en hård aflevering (blå ring), hold længe for en høj bold over de andre (gul ring).</span></div>
+        <div><b class="k">AFLEVER</b><span>Med bolden. Peg med joysticket mod den medspiller, du vil aflevere til. Står han foran dig, lægges bolden ud i hans løb. Hold inde for en hård aflevering (blå ring), hold længe for en høj bold over de andre (gul ring).</span></div>
         <div><b class="k">TACKLE</b><span>Uden bolden. En glidende tackling, der sigter mod bolden. Kommer du bagfra, er det frispark.</span></div>
         <div><b class="k">OFFSIDE</b><span>Ved 5 og 11 mod 11. Står modtageren bag forsvaret, når bolden spilles, får modstanderen frispark.</span></div>
         <div><b class="k">HOVED</b><span>Når bolden kommer gennem luften, header spilleren den automatisk. Tæt på mål går den mod mål.</span></div>
@@ -572,7 +573,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true };
+  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
   if (![1, 2, 3, 5, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
@@ -594,7 +595,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     b.onclick = () => { cfg[key] = !cfg[key]; paint(); saveCfg(); if (key === 'crowd' && cfg.crowd) unlockSpeech('Kommentatoren er klar'); if (key === 'vib' && cfg.vib) buzz([40, 60, 40]); };
     paint();
   }
-  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music'); toggle('tVib', 'vib');
+  toggle('tReplay', 'replay'); toggle('tCrowd', 'crowd'); toggle('tPu', 'pu'); toggle('tMusic', 'music'); toggle('tVib', 'vib'); toggle('tCalm', 'calm');
 
   // ---------- Menu pages: forside -> kampopsætning / online / indstillinger ----------
   let setupMode = 'cpu';
@@ -2013,7 +2014,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (card === 'Gult kort') { a.yc = 1; if (stats) stats.yc[a.team]++; }
     }
     // advantage (like a real referee): if the fouled side still has the ball, play on instead of killing their attack
-    const o = owner(), adv = o && o.team === b.team && o !== b && !(o.stun > 0) && !setp && !pen && !so;
+    const o = owner(), adv = o && o.team === b.team && !(o.stun > 0) && !setp && !pen && !so;
     if (adv) { flash = { text: 'Fordel!', t: 1.2 }; a.recover = Math.max(a.recover, 0.6); }
     else if (inBox(a.team, b.x, b.y) && size > 1) startPenalty(b.team);
     else restart('free', b.team, x, y);
@@ -2093,7 +2094,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     a.tackle = 0;
     if (behind || late) {
       a.stun = 1.1; a.vx = a.vy = 0;              // foul: the tackler goes down
-      b.stun = Math.max(b.stun, 0.5);
+      const o = owner();
+      if (!(o && o.team === b.team && !setp)) b.stun = Math.max(b.stun, 0.5); // his team keeps the ball: he stays on his feet and plays on (advantage)
       sfx.foul(); if (localHuman(a)) buzz(80);
       foul(a, b, behind && b.sprint && Math.hypot(b.vx, b.vy) > MAXV * 1.05); // took down a man running at full speed: a hard foul
       return;
@@ -2458,7 +2460,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         }
       } else if (pause <= 0) {
         if (so) { if (soDone()) { finish(); return; } startPenalty(so.turn); so.wait = 0; so.shot = false; return; }
-        if (banner === 'MÅL!') { kickoff(1 - lastGoalTeam); pause = 1.0; banner = 'Klar'; return; }
+        if (banner === 'MÅL!') { kickoff(1 - lastGoalTeam); pause = 1.5; banner = 'Klar'; return; }
         if (banner === 'Pause') { kickoff(1 - kickFirst); pause = 1.0; banner = 'Klar'; return; }
         if (banner === 'Klar') sfx.whistle();
         banner = '';
@@ -2590,13 +2592,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
             p.chB = false;
             const hb = p.holdB; p.holdB = 0;
             if (ball.owner === p.i) {
-              if (hb < PASS_TAP) {
-                if (p.pendB > 0) { p.pendB = 0; pass(p, p.pendQ || passTarget(p, inp.x, inp.y), size > 1, 0, inp.x, inp.y); }
-                else { p.pendQ = passTarget(p, inp.x, inp.y); p.pendB = 0.26; } // wait a moment: a second tap makes it a through ball
+              if (hb < PASS_TAP) { // straight away: to feet, or into his path if he is ahead of you (a through ball)
+                const q = passTarget(p, inp.x, inp.y), dir = p.team ? -1 : 1;
+                if (q) pass(p, q, size > 1 && (q.x - p.x) * dir > 90 && !isOffside(q, p), 0, inp.x, inp.y);
               } else {
                 p.pendB = 0;
                 const q = passTarget(p, inp.x, inp.y);
-                if (q && hb >= PASS_HIGH) lob(p, q.x + q.vx * 0.5 - p.x, q.y + q.vy * 0.5 - p.y, q);
+                if (q && hb >= PASS_HIGH) { lob(p, q.x + q.vx * 0.5 - p.x, q.y + q.vy * 0.5 - p.y, q); if (stats) stats.pa[p.team]++; if (isHuman(p)) swapControl(p, q); }
                 else if (q) pass(p, q, false, (hb - PASS_TAP) / (PASS_HIGH - PASS_TAP));
               }
             }
@@ -2775,6 +2777,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const kp = size > 1 ? P[slotOf(1 - team, 0)] : null; if (kp && on(kp)) { const dir = team ? -1 : 1; kp.x = (team ? PL : PR) - dir * 28; kp.y = CY + (y - CY) * 0.15; kp.vx = kp.vy = 0; }
     }
     for (const p of P) if (p.team !== team && p.tackle > 0) { p.tackle = 0; p.recover = 0.2; }
+    if (type !== 'kick' && !banner) pause = Math.max(pause, 0.9); // the whistle: everything stops for a moment before it starts again
     flash = { text: label || (type === 'throw' ? 'Indkast' : type === 'corner' ? 'Hjørnespark' : type === 'free' ? 'Frispark' : type === 'kick' ? 'Afspark' : 'Målspark'), t: 1.0 };
     sfx.whistle();
   }
@@ -4552,7 +4555,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const DT = 1 / 120;
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
-    while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT); acc -= DT; }
+    while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT * (cfg.calm && kind !== 'train' ? 0.8 : 1)); acc -= DT; } // calm tempo: the whole match runs a fifth slower
     netTick(now, dt);
     hlTick(dt);
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
