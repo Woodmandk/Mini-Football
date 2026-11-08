@@ -1791,7 +1791,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
     release(p, p.fx * power + p.vx * 0.25, p.fy * power + p.vy * 0.25, 0.3);
     ball.last = { team: p.team, pass: false };
     if (pw > 0.75 && !isPen) ball.vz = 140; // a hard shot rises a little
-    if (ball.gk === 'fk' && Math.abs((p.team ? PL : PR) - p.x) < 480) { ball.vz = 330 + pw * 40; ball.last.fk = true; } // a free kick at goal: up over the wall and down again under the bar
+    if (ball.gk === 'fk' && Math.abs((p.team ? PL : PR) - p.x) < 480) { // a free kick at goal: curled up over the wall, a fair pace so the keeper has a chance
+      const gx = p.team ? PL : PR, sp = Math.min(560 + pw * 260, Math.hypot(ball.vx, ball.vy)), k = sp / (Math.hypot(ball.vx, ball.vy) || 1);
+      ball.vx *= k; ball.vy *= k;
+      // how high it is when it reaches the goal: a soft one dips under the bar, a full-power one usually flies over
+      const t = Math.abs(gx - ball.x) / Math.max(1, Math.abs(ball.vx)), h = 26 + pw * 52 + (Math.random() - 0.4) * 26;
+      ball.vz = Math.max(250, Math.min(560, (h + GRAV / 2 * t * t) / Math.max(0.15, t)));
+      ball.last.fk = true;
+    }
     if (isPen) penShot(p);
     sfx.kick(pw);
     if (pw > 0.8) shake = Math.max(shake, 5);
@@ -1889,7 +1896,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = near ? 640 : 500;
     p.fx = dx / d; p.fy = dy / d;
     ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < 0.45 }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to just under half of them ball.gk = 'head'; ball.fresh = false;
+    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < 0.7 }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them ball.gk = 'head'; ball.fresh = false;
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Hovedstød!', t: 0.7 };
     tone(180, 0.07, 'triangle', 0.12, -60);
@@ -1947,7 +1954,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     out.punt = [dx, dy, Math.max(0, Math.min(1, (d - 300) / 520)) * MAXCHARGE];
   }
   function shotAt(p) { // a shot on its way into p's goal: when it reaches him and where
-    if (ball.owner >= 0 || !ball.last || ball.last.pass || ball.last.punt || ball.last.team === p.team || ball.z > BAR) return null;
+    if (ball.owner >= 0 || !ball.last || (ball.last.pass && !ball.last.cross) || ball.last.punt || ball.last.team === p.team || ball.z > BAR + 10) return null; // a cross dropping in counts too
     const dir = p.team ? -1 : 1, gx = p.team ? PR : PL, vin = -ball.vx * dir; // speed toward his goal
     if (vin < 260) return null;
     const t = Math.max(0, (ball.x - p.x) * dir) / vin, tg = Math.max(0, (ball.x - gx) * dir) / vin;
@@ -1966,9 +1973,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (p.dive > 0 || p.lay > 0 || p.stun > 0 || p.recover > 0 || ball.owner >= 0 || pen || so || replay) return;
     const s = shotAt(p);
     if (!s) return;
-    if (p.seen !== ball.last) { p.seen = ball.last; p.react = 0; p.willDive = Math.random() < keeperSkill(p); p.err = (Math.random() - 0.5) * 100; }
+    if (p.seen !== ball.last) { p.seen = ball.last; p.react = 0; p.willDive = Math.random() < keeperSkill(p) + (ball.last.fk || ball.z > 20 ? 0.15 : 0); p.err = (Math.random() - 0.5) * 100; }
     p.react += dt;
-    if (!p.willDive || p.react < 0.18 || s.t > 0.4) return;
+    if (!p.willDive || p.react < (ball.last.fk ? 0.08 : 0.18) || s.t > (ball.last.fk || ball.z > 20 ? 0.55 : 0.4)) return; // at a free kick he is set and ready
     const dy = s.y + p.err - p.y, dir = p.team ? -1 : 1;
     if (Math.abs(dy) < REACH) return; // straight at him: he just catches it
     dive(p, dir * 70, Math.sign(dy) * Math.min(400, Math.abs(dy) / Math.max(0.2, s.t)));
@@ -2235,7 +2242,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       // taking a throw-in, corner or goal kick
       p.think += dt;
       if (p.think > (ball.rs === 'corner' || ball.rs === 'free' ? 2.4 : ball.rs === 'kick' ? 0.9 : 1.6)) {
-        if (ball.rs === 'free' && boxPiece() && Math.abs(goalX - p.x) < 430 && Math.random() < 0.55) { out.shoot = MAXCHARGE * (0.55 + Math.random() * 0.45); out.aim = [goalX - p.x, CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.45 + Math.random() * 0.3) - p.y]; } // straight at goal, over the wall
+        if (ball.rs === 'free' && boxPiece() && Math.abs(goalX - p.x) < 430 && Math.random() < 0.55) { out.shoot = MAXCHARGE * (0.2 + Math.random() * 0.5); out.aim = [goalX - p.x, CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.45 + Math.random() * 0.3) - p.y]; } // straight at goal, over the wall
         else if (ball.rs === 'corner' || (boxPiece() && Math.random() < 0.5)) { out.cross = true; out.aim = [goalX - dir * 100 - p.x, CY - p.y]; }
         else { const q = passTarget(p, dir, (CY - p.y) / 300); if (q) out.passTo = q; else { out.shoot = 0.5; out.aim = [dir, 0]; } }
       }
@@ -2680,7 +2687,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 3) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
