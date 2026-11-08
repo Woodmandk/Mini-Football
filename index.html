@@ -905,8 +905,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const f = formOf(p), half = (PR - PL) / 2;
     return { x: p.team ? PR - f[0] * half : PL + f[0] * half, y: PT + f[1] * (PB - PT) };
   }
-  const MAXV = 245, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7;
-  const TACKLE_T = 0.38, TACKLE_V = 600;
+  const MAXV = 218, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7;
+  const TACKLE_T = 0.38, TACKLE_V = 550;
   let TACKLE_REACH = REACH + 16;
   function setBallSize(big) { BRAD = big ? 20 : 12; REACH = PRAD + BRAD; TACKLE_REACH = REACH + 16; }
 
@@ -1039,7 +1039,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (d > STICK_R * 1.6) { s.ox = x - dx / d * STICK_R * 1.6; s.oy = y - dy / d * STICK_R * 1.6; } // the stick follows a finger that wanders off
     if (d < STICK_R * DEAD) { s.dx = s.dy = 0; return; }
     const m = Math.min(1, (d / STICK_R - DEAD) / (1 - DEAD));
-    const mm = d > STICK_R * 1.05 ? 1 : Math.min(0.95, m); // past the ring = full stick (sprint)
+    const mm = d > STICK_R * 1.5 ? 1 : Math.min(0.95, m); // well past the ring (the dashed circle) = sprint; normal running otherwise
     s.dx = dx / d * mm; s.dy = dy / d * mm;
   }
   function grabStick(i, t) {
@@ -1500,7 +1500,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function shoot(p, hold, ax, ay) {
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     const pw = Math.min(1, hold / MAXCHARGE);
-    let power = 640 + pw * 620;
+    let power = 600 + pw * 580;
     const isPen = ball.rs === 'pen' && p.frozen > 0 && (pen || so);
     if (isPen) power = 470 + pw * 280;
     { // aim help: a shot roughly at goal is pulled toward the goal mouth
@@ -1570,7 +1570,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     }
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1;
     p.fx = dx / d; p.fy = dy / d;
-    let speed = through ? Math.max(420, Math.min(1000, d * 0.62 + 170)) : Math.max(430, Math.min(980, d * 1.5 + 220));
+    let speed = (through ? Math.max(420, Math.min(1000, d * 0.62 + 170)) : Math.max(430, Math.min(980, d * 1.5 + 220))) * 0.93;
     const toKeeper = size > 1 && q.k === 0;
     if (toKeeper) speed = Math.min(speed, 560); // gentle back-pass
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
@@ -1767,7 +1767,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (isHuman(kp)) { const i = kp.ctrl === 'L0' ? localInput(0) : kp.ctrl === 'L1' ? localInput(1) : (remoteIn.get(kp.peer) || ZERO); d = Math.abs(i.y) > 0.3 ? Math.sign(i.y) : 0; }
       else {
         const truth = Math.abs(taker.fy) < 0.08 ? 0 : Math.sign(taker.fy);
-        const right = 0.3 + (mode === 'cpu' ? cfg.diff : 1) * 0.12;
+        const right = 0.3 + (mode === 'cpu' ? cfg.diff : 1) * 0.12 + (drill && drill.id === 'pens' ? drill.i * 0.035 : 0); // in the penalty challenge he gets better every kick
         d = Math.random() < right ? truth : [-1, 0, 1][Math.floor(Math.random() * 3)];
       }
       kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * 470; kp.dvx = 0;
@@ -2797,12 +2797,18 @@ button.small { font-size: 13px; padding: 9px 10px; }
     rw.hidden = false;
   }
 
-  // ----- training challenges: a few tries, stars for how many you score ('mf-drills') -----
+  // ----- training challenges: every try is a new situation, stars for how well you do ('mf-drills') -----
   const DRILLS = {
-    shots: { n: 'Skudtræning', tries: 10, stars: [3, 5, 7], txt: '10 skud fra kanten af feltet' },
-    corner: { n: 'Hjørnespark', tries: 8, stars: [2, 4, 6], txt: '8 hjørnespark: læg den på hovedet af en medspiller' },
-    pens: { n: 'Straffespark', tries: 10, stars: [5, 7, 9], txt: '10 straffe mod målmanden' },
+    shots: { n: 'Afslutninger', tries: 10, stars: [3, 5, 7], txt: '10 forskellige afslutninger: fri skud, indlæg, en forsvarer i ryggen, alene mod keeperen' },
+    corner: { n: 'Hjørnespark', tries: 8, stars: [2, 4, 6], txt: '8 hjørnespark: læg den på hovedet af en medspiller. Flere forsvarere for hver gang' },
+    pens: { n: 'Straffespark', tries: 10, stars: [5, 7, 9], txt: '10 straffe. Målmanden bliver bedre for hvert spark' },
+    cones: { n: 'Dribling', tries: 1, stars: [32, 24, 18], time: true, txt: 'Drible gennem portene i rækkefølge og scor. Hurtigst muligt' },
   };
+  // the shooting situations, mixed differently every time you play
+  const SHOT_SC = [
+    ['still', 'Fri skudchance'], ['cross', 'Indlæg: løb ind og afslut'], ['chase', 'Forsvarer i ryggen: skyd hurtigt'],
+    ['angle', 'Spidsvinkel'], ['oneone', 'Alene mod keeperen'], ['wall', 'Forbi forsvareren'], ['volley', 'Aflevering fra midten'],
+  ];
   let drill = null, drillAgain = null;
   const drillLoad = () => { try { return JSON.parse(localStorage.getItem('mf-drills') || '{}') || {}; } catch (_) { return {}; } };
   const starStr = n => '★'.repeat(n) + '☆'.repeat(3 - n);
@@ -2818,31 +2824,93 @@ button.small { font-size: 13px; padding: 9px 10px; }
       box.appendChild(b);
     }
   }
-  function startDrill(id) { drillAgain = id; kind = 'train'; withHelp(() => { kind = 'train'; drill = { id, i: 0, goals: 0, wait: 0.6, t: 0, live: false }; startMatch('cpu'); }); }
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function startDrill(id) {
+    drillAgain = id; kind = 'train';
+    withHelp(() => {
+      kind = 'train';
+      // a fresh mix of situations each run (no two in a row the same)
+      const order = shuffle(SHOT_SC.map(x => x[0])).concat(shuffle(SHOT_SC.map(x => x[0])));
+      drill = { id, i: 0, goals: 0, wait: 0.6, t: 0, live: false, order, gate: 0, gates: null, time: 0 };
+      startMatch('cpu');
+    });
+  }
+  const scName = id => (SHOT_SC.find(x => x[0] === id) || [0, ''])[1];
+  function drillFoes(n) { // bring n defenders onto the pitch for this try, the rest stay off
+    let k = 0;
+    for (const p of P) if (p.team === 1 && p.k !== 0) { p.out = k < n ? 0 : 1e9; if (k < n) { p.vx = p.vy = 0; p.tackle = 0; p.stun = 0; p.tcd = 0.6; } k++; }
+    return P.filter(p => p.team === 1 && p.k !== 0 && !(p.out > 0));
+  }
+  function giveBall(p) { ball.x = p.x + p.fx * (REACH - 3); ball.y = p.y + p.fy * (REACH - 3); ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.last = null; ball.rs = null; ball.owner = p.i; ball.lastTeam = p.team; ball.lastIdx = p.i; p.nopick = 0; }
+  function makeGates() { // 6 gates zig-zagging toward goal, different every run
+    const g = [], n = 6, x0 = CX - 80, x1 = PR - 230;
+    for (let i = 0; i < n; i++) {
+      const x = x0 + (x1 - x0) * (i / (n - 1)) + (Math.random() - 0.5) * 40;
+      const y = CY + (i % 2 ? 1 : -1) * (90 + Math.random() * 110) * (Math.random() < 0.2 ? -1 : 1);
+      g.push({ x, y: Math.max(PT + 70, Math.min(PB - 70, y)), w: 46 });
+    }
+    return g;
+  }
   function drillSetup() {
     const D = DRILLS[drill.id];
     if (drill.i >= D.tries) { drillEnd(); return; }
-    drill.i++; drill.t = 0; drill.live = true; drill.shot = false;
+    drill.i++; drill.t = 0; drill.live = true; drill.shot = false; drill.touched = false; drill.slow = 0;
     pen = null; guard = 0; setp = null;
     const me = P.find(q => q.ctrl === 'L0'), kp = P[slotOf(1, 0)];
-    for (const p of P) { p.vx = p.vy = 0; p.tackle = 0; p.stun = 0; p.dive = 0; p.frozen = 0; p.hands = 0; p.charging = false; p.hold = 0; p.recv = 0; }
-    if (kp) { kp.x = PR - 22; kp.y = CY; kp.fx = -1; kp.fy = 0; }
+    for (const p of P) { p.vx = p.vy = 0; p.tackle = 0; p.stun = 0; p.dive = 0; p.frozen = 0; p.hands = 0; p.charging = false; p.hold = 0; p.recv = 0; p.windup = 0; }
+    if (kp) { kp.out = 0; kp.x = PR - 22; kp.y = CY; kp.fx = -1; kp.fy = 0; }
+    const mates = P.filter(p => p.team === 0 && p !== me && p.k !== 0);
+    for (const p of P) if (p.team === 0 && p !== me) { const h = homeOf(p); p.x = h.x; p.y = h.y; }
+    const rnd = (a, b) => a + Math.random() * (b - a);
     if (drill.id === 'shots') {
-      for (const p of P) if (p.team === 0 && p !== me) { const h = homeOf(p); p.x = h.x; p.y = h.y; }
-      me.x = PR - 200 - Math.random() * 110; me.y = CY + (Math.random() - 0.5) * 340; me.fx = 1; me.fy = 0;
-      ball.x = me.x + REACH - 3; ball.y = me.y; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.last = null; ball.rs = null;
-      ball.owner = me.i; ball.lastTeam = 0; ball.lastIdx = me.i; me.nopick = 0; me.wasA = true;
-      flash = { text: `Skud ${drill.i} af ${D.tries}`, t: 0.9 };
+      const sc = drill.order[drill.i - 1]; drill.sc = sc;
+      drillFoes(0);
+      me.fx = 1; me.fy = 0;
+      if (sc === 'still') { me.x = PR - rnd(200, 310); me.y = CY + rnd(-170, 170); giveBall(me); }
+      else if (sc === 'angle') { me.x = PR - rnd(70, 130); me.y = CY + (Math.random() < 0.5 ? -1 : 1) * rnd(170, 230); me.fx = 0.4; me.fy = me.y > CY ? -0.9 : 0.9; giveBall(me); }
+      else if (sc === 'chase') { // a defender comes from behind: get your shot off
+        me.x = PR - rnd(360, 430); me.y = CY + rnd(-120, 120); giveBall(me);
+        const [d] = drillFoes(1); d.x = me.x - 110; d.y = me.y + rnd(-40, 40); d.fx = 1; d.fy = 0;
+      } else if (sc === 'oneone') { // through on goal from the halfway line, the keeper comes out
+        me.x = CX + rnd(0, 80); me.y = CY + rnd(-150, 150); giveBall(me);
+        const [d] = drillFoes(1); d.x = me.x - 160; d.y = me.y + (me.y > CY ? -90 : 90);
+      } else if (sc === 'wall') { // a defender stands between you and goal
+        me.x = PR - rnd(330, 400); me.y = CY + rnd(-100, 100); giveBall(me);
+        const [d] = drillFoes(1); d.x = me.x + 120; d.y = me.y + rnd(-20, 20); d.fx = -1; d.fy = 0;
+      } else { // cross / volley: a teammate plays it to you, you run onto it
+        const q = mates[0] || me;
+        if (sc === 'cross') { q.x = PR - rnd(120, 200); q.y = Math.random() < 0.5 ? PT + 50 : PB - 50; me.x = PR - rnd(250, 320); me.y = CY + rnd(-60, 60); }
+        else { q.x = PR - rnd(420, 500); q.y = CY + rnd(-60, 60); me.x = PR - rnd(260, 320); me.y = CY + (Math.random() < 0.5 ? -1 : 1) * rnd(110, 180); }
+        const [d] = drillFoes(sc === 'cross' ? 1 : 0); if (d) { d.x = me.x + 60; d.y = me.y + 40; }
+        q.fx = me.x - q.x; q.fy = me.y - q.y; const l = Math.hypot(q.fx, q.fy); q.fx /= l; q.fy /= l;
+        giveBall(q); drill.feed = { q: q.i, t: 0.7, cross: sc === 'cross' };
+      }
+      me.wasA = true;
+      flash = { text: `${drill.i}/${D.tries}: ${scName(sc)}`, t: 1.4 };
     } else if (drill.id === 'corner') {
-      let n = 0; for (const p of P) if (p.team === 1 && p.k !== 0 && n < 2) { p.out = 0; n++; } // a couple of defenders to beat in the air
-      drill.setting = true; restart('corner', 0, PR, Math.random() < 0.5 ? PT : PB, `Hjørne ${drill.i} af ${D.tries}`); drill.setting = false;
-    } else {
-      startPenalty(0); flash = { text: `Straffe ${drill.i} af ${D.tries}`, t: 0.9 };
+      drillFoes(Math.min(3, 1 + Math.floor((drill.i - 1) / 3))); // 1, 1, 1, 2, 2, 2, 3, 3 defenders
+      drill.setting = true; restart('corner', 0, PR, drill.i % 2 ? PT : PB, `Hjørne ${drill.i} af ${D.tries}`); drill.setting = false;
+    } else if (drill.id === 'pens') {
+      drillFoes(0);
+      startPenalty(0);
+      if (kp && drill.i % 3 === 0) kp.y = CY + (Math.random() < 0.5 ? -1 : 1) * 22; // sometimes he leaves one side a bit open... or does he?
+      flash = { text: `Straffe ${drill.i} af ${D.tries}`, t: 0.9 };
+    } else if (drill.id === 'cones') {
+      drillFoes(0);
+      drill.gates = makeGates(); drill.gate = 0; drill.time = 0;
+      me.x = CX - 200; me.y = CY; me.fx = 1; me.fy = 0; giveBall(me); me.wasA = true;
+      drill.prev = [me.x, me.y];
+      flash = { text: 'Gennem portene og scor!', t: 1.4 };
     }
   }
   function drillResult(g) {
     if (!drill || !drill.live) return;
-    drill.live = false; drill.wait = 1.4; pen = null; setp = null;
+    if (drill.id === 'cones') { // only a goal after the last gate ends it; anything else: carry on
+      if (g && drill.gate >= drill.gates.length) { drill.live = false; drill.wait = 1.2; drill.goals = 1; flash = { text: `${drill.time.toFixed(1)} s`, t: 1.4 }; goalFx(0); }
+      else { const me = P.find(q => q.ctrl === 'L0'); giveBall(me); flash = { text: g ? 'Tag alle portene først' : 'Hent bolden', t: 1 }; }
+      return;
+    }
+    drill.live = false; drill.wait = 1.4; pen = null; setp = null; drill.feed = null;
     if (g) { drill.goals++; flash = { text: 'MÅL!', t: 1 }; goalFx(0); } else { flash = { text: 'Ingen mål', t: 1 }; crowd.ooh(); }
     ball.vx *= 0.2; ball.vy *= 0.2;
   }
@@ -2850,25 +2918,68 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (drill.wait > 0) { drill.wait -= dt; if (drill.wait <= 0) drillSetup(); return; }
     if (!drill.live) return;
     drill.t += dt;
-    const o = owner();
-    if (o && o.team === 0 && o.ctrl !== 'L0' && drill.id === 'shots') { drillResult(false); return; } // a teammate picked it up: that try is over
-    if (o && o.team === 1) { drillResult(false); return; } // the keeper has it
+    const o = owner(), me = P.find(q => q.ctrl === 'L0');
+    if (drill.id === 'cones') {
+      drill.time += dt;
+      const g = drill.gates[drill.gate];
+      if (g && me) { // crossed the line between this gate's two cones?
+        const [px, py] = drill.prev, dx = me.x - px;
+        if (Math.sign(px - g.x) !== Math.sign(me.x - g.x) && dx > 0) {
+          const t = (g.x - px) / dx, y = py + (me.y - py) * t;
+          if (Math.abs(y - g.y) < g.w) { if (o === me) { drill.gate++; sfx.win(); if (drill.gate === drill.gates.length) flash = { text: 'Scor nu!', t: 1 }; } else flash = { text: 'Med bolden!', t: 0.8 }; }
+        }
+        drill.prev = [me.x, me.y];
+      } else if (me) drill.prev = [me.x, me.y];
+      if (o && o !== me && me) { giveBall(me); flash = { text: 'Bolden tilbage', t: 0.8 }; } // the keeper or a mate got it: give it back, the clock keeps running
+      if (drill.time > 45) { drill.live = false; drill.wait = 1; drill.goals = 0; flash = { text: 'Tiden er gået', t: 1.2 }; }
+      return;
+    }
+    if (drill.feed) { // the teammate plays it in after a moment
+      const q = P[drill.feed.q];
+      drill.feed.t -= dt;
+      if (drill.feed.t <= 0 && q && ball.owner === q.i) { if (drill.feed.cross) lob(q, me.x + 20 - q.x, me.y - q.y, me); else pass(q, me); drill.feed = null; }
+      return;
+    }
+    if (o === me) drill.touched = true;
+    if (o && o.team === 0 && o !== me && drill.id === 'shots') { drillResult(false); return; } // a teammate picked it up: that try is over
+    if (o && o.team === 1) { drillResult(false); return; } // the keeper or a defender has it
     if (ball.owner < 0) { drill.shot = true; if (Math.hypot(ball.vx, ball.vy) < 40 && ball.z < 2 && drill.t > 1.2) drill.slow = (drill.slow || 0) + dt; else drill.slow = 0; if (drill.slow > 0.8) drillResult(false); }
     if (drill.t > (drill.id === 'pens' ? 9 : 8)) drillResult(false);
   }
+  function drawCones() {
+    if (!drill || drill.id !== 'cones' || !drill.gates) return;
+    drill.gates.forEach((g, i) => {
+      const done = i < drill.gate, next = i === drill.gate;
+      if (next) { ctx.save(); ctx.strokeStyle = 'rgba(255,212,71,0.55)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.moveTo(g.x, g.y - g.w); ctx.lineTo(g.x, g.y + g.w); ctx.stroke(); ctx.restore(); }
+      for (const s of [-1, 1]) {
+        const y = g.y + s * g.w;
+        ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(g.x + 2, y + 3, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = done ? '#4fbf6a' : next ? '#ff8a1f' : '#c9c9c0'; ctx.beginPath(); ctx.arc(g.x, y, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath(); ctx.arc(g.x, y, 3, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = `700 13px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), g.x, g.y);
+    });
+  }
   function drillEnd() {
     const d = drill, D = DRILLS[d.id];
-    const st = D.stars.filter(x => d.goals >= x).length;
-    const all = drillLoad(), old = all[d.id] || { s: 0, b: 0 };
+    const timed = !!D.time, score = timed ? (d.goals ? d.time : 999) : d.goals;
+    const st = timed ? D.stars.filter(x => score <= x).length : D.stars.filter(x => score >= x).length;
+    const all = drillLoad(), old = all[d.id] || { s: 0, b: timed ? 999 : 0 };
     const newStars = Math.max(0, st - old.s), coins = newStars * 20 + (st === 3 && old.s < 3 ? 30 : 0);
-    all[d.id] = { s: Math.max(old.s, st), b: Math.max(old.b, d.goals) };
+    const best = timed ? Math.min(old.b || 999, score) : Math.max(old.b || 0, score);
+    all[d.id] = { s: Math.max(old.s, st), b: best };
     try { localStorage.setItem('mf-drills', JSON.stringify(all)); } catch (_) {}
     if (coins) addCoins(coins);
     drill = null;
     finish();
     $('endTitle').textContent = `${D.n}: ${starStr(st)}`;
-    $('fh').textContent = d.goals; $('fa').textContent = D.tries;
-    $('endMsg').textContent = `Du scorede ${d.goals} af ${D.tries}. ${st < 3 ? `Næste stjerne ved ${D.stars[st]} mål.` : 'Alle tre stjerner!'} Bedste: ${all[d.id].b}.`;
+    if (timed) {
+      $('fh').textContent = score < 999 ? score.toFixed(1) : '–'; $('fa').textContent = 's';
+      $('endMsg').textContent = (score < 999 ? `Din tid: ${score.toFixed(1)} sekunder. ` : 'Du nåede det ikke inden for tiden. ') + (st < 3 ? `Næste stjerne under ${D.stars[st]} s.` : 'Alle tre stjerner!') + (best < 999 ? ` Bedste: ${best.toFixed(1)} s.` : '');
+    } else {
+      $('fh').textContent = d.goals; $('fa').textContent = D.tries;
+      $('endMsg').textContent = `Du scorede ${d.goals} af ${D.tries}. ${st < 3 ? `Næste stjerne ved ${D.stars[st]} mål.` : 'Alle tre stjerner!'} Bedste: ${best}.`;
+    }
     const rw = $('endReward'); rw.textContent = coins ? `+${coins} mønter for nye stjerner` : 'Ingen nye stjerner denne gang'; rw.hidden = false;
     $('again').hidden = false; $('again').textContent = 'Prøv igen';
     drillList();
@@ -3942,7 +4053,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const ss = mode === 'guest' ? soG : soSums();
     ctx.fillStyle = ss ? col.gold : col.chalk;
     if (kind === 'train' && !ss) ctx.font = `700 ${fs * 0.6}px ${col.font}`;
-    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : kind === 'train' ? (drill ? `${Math.max(1, drill.i)}/${DRILLS[drill.id].tries} · ${drill.goals} MÅL` : 'TRÆNING') : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
+    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : kind === 'train' ? (drill ? (drill.id === 'cones' ? `PORT ${drill.gate}/6 · ${drill.time.toFixed(1)} S` : `${Math.max(1, drill.i)}/${DRILLS[drill.id].tries} · ${drill.goals} MÅL`) : 'TRÆNING') : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
     if (teamPick) { // team badges either side of the score
       ctx.font = `700 ${fs * 0.6}px ${col.font}`;
       for (const t of [0, 1]) {
@@ -3985,6 +4096,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (!on) { ctx.strokeStyle = 'rgba(244,247,242,0.16)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(h.x, h.y, STICK_R * 0.7, 0, Math.PI * 2); ctx.stroke(); return; }
       ctx.fillStyle = 'rgba(244,247,242,0.1)'; ctx.beginPath(); ctx.arc(h.x, h.y, STICK_R, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = m > 0.97 ? col.gold : 'rgba(244,247,242,0.3)'; ctx.lineWidth = m > 0.97 ? 4 : 2; ctx.stroke();
+      ctx.save(); ctx.setLineDash([5, 7]); ctx.strokeStyle = m > 0.97 ? col.gold : 'rgba(244,247,242,0.18)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(h.x, h.y, STICK_R * 1.5, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); // the sprint zone
       ctx.fillStyle = 'rgba(244,247,242,0.45)'; ctx.beginPath(); ctx.arc(h.x + s.dx * STICK_R, h.y + s.dy * STICK_R, 20, 0, Math.PI * 2); ctx.fill();
     });
     const sides = twoSides() ? [0, 1] : [0];
@@ -4016,7 +4128,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const jx = shake ? (Math.random() - 0.5) * shake : 0, jy = shake ? (Math.random() - 0.5) * shake : 0;
     ctx.setTransform(dpr * sc, 0, 0, dpr * sc, dpr * (ox + jx), dpr * (oy + jy));
     drawPitch();
-    if (!saved) { drawItem(); drawSetPiece(); if (!shootoutOn()) drawPassHint(); }
+    if (!saved) { drawItem(); drawSetPiece(); drawCones(); if (!shootoutOn()) drawPassHint(); }
     for (const p of P) if (p.stun > 0) drawPlayer(p);
     for (const p of P) if (p.stun <= 0) drawPlayer(p);
     drawBall(); // after the players so a lob is seen flying over them
