@@ -1086,17 +1086,45 @@ button.small { font-size: 13px; padding: 9px 10px; }
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
     o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d);
   }
+  let noiseBuf = null;
+  function noise(d, vol, type, f, q = 1, f2 = 0, at = 0) { // a burst of filtered noise: thuds, swishes, scrapes
+    if (!ac) return;
+    try {
+      if (!noiseBuf) { const n = ac.sampleRate; noiseBuf = ac.createBuffer(1, n, n); const c = noiseBuf.getChannelData(0); for (let i = 0; i < n; i++) c[i] = Math.random() * 2 - 1; }
+      const t = ac.currentTime + at, src = ac.createBufferSource(), flt = ac.createBiquadFilter(), g = ac.createGain();
+      src.buffer = noiseBuf; flt.type = type; flt.frequency.setValueAtTime(f, t); flt.Q.value = q;
+      if (f2) flt.frequency.exponentialRampToValueAtTime(f2, t + d);
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + Math.min(0.01, d / 4)); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      src.connect(flt).connect(g).connect(ac.destination); src.start(t, Math.random() * 0.5); src.stop(t + d + 0.02);
+    } catch (_) {}
+  }
+  function ring(fs, d, vol) { // a metal clang: a few out-of-tune partials that ring out
+    if (!ac) return;
+    const t = ac.currentTime;
+    fs.forEach((f, i) => { const o = ac.createOscillator(), g = ac.createGain(); o.type = 'sine'; o.frequency.value = f; g.gain.setValueAtTime(vol / (i + 1), t); g.gain.exponentialRampToValueAtTime(0.0001, t + d / (1 + i * 0.3)); o.connect(g).connect(ac.destination); o.start(t); o.stop(t + d); });
+  }
+  function trill(d, vol, at = 0) { // a referee's whistle: a high note with the pea rattling inside
+    if (!ac) return;
+    const t = ac.currentTime + at, o = ac.createOscillator(), lfo = ac.createOscillator(), lg = ac.createGain(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = 2950; lfo.frequency.value = 38; lg.gain.value = 120;
+    lfo.connect(lg).connect(o.frequency);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.02); g.gain.setValueAtTime(vol, t + d - 0.05); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    o.connect(g).connect(ac.destination); o.start(t); lfo.start(t); o.stop(t + d + 0.02); lfo.stop(t + d + 0.02);
+    noise(d, vol * 0.25, 'bandpass', 3000, 4, 0, at); // breath
+  }
   const sfx = {
-    kick: p => tone(150 + p * 120, 0.09, 'triangle', 0.14, -80),
-    pass: () => tone(260, 0.06, 'triangle', 0.1, -60),
-    trap: () => tone(120, 0.05, 'triangle', 0.06),
-    slide: () => tone(90, 0.16, 'sawtooth', 0.04, -40),
-    win: () => tone(330, 0.09, 'square', 0.05, 200),
-    foul: () => { tone(2100, 0.15, 'sine', 0.07); setTimeout(() => tone(1700, 0.2, 'sine', 0.07), 160); },
-    post: () => tone(1200, 0.12, 'square', 0.05, -500),
-    whistle: (n = 1) => { for (let i = 0; i < n; i++) setTimeout(() => tone(2100, 0.22, 'sine', 0.07, 150), i * 280); },
-    goal: () => [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.25, 'square', 0.06), i * 110)),
+    kick: p => { noise(0.07, 0.35 + p * 0.25, 'lowpass', 900 + p * 500, 1, 200); tone(110 + p * 40, 0.08, 'sine', 0.22, -60); },
+    pass: () => { noise(0.05, 0.25, 'lowpass', 800, 1, 250); tone(140, 0.06, 'sine', 0.14, -50); },
+    trap: () => noise(0.05, 0.14, 'lowpass', 500, 1, 150),
+    slide: () => noise(0.32, 0.12, 'bandpass', 1400, 0.7, 500),
+    win: () => { noise(0.08, 0.2, 'lowpass', 600, 1, 150); tone(330, 0.07, 'triangle', 0.04, 160); },
+    foul: () => { trill(0.18, 0.06); trill(0.35, 0.06, 0.24); },
+    post: () => { ring([1210, 1745, 2630, 3470], 0.9, 0.09); noise(0.05, 0.3, 'highpass', 2000); },
+    net: () => noise(0.45, 0.22, 'highpass', 1800, 0.7, 5000),
+    whistle: (n = 1) => { for (let i = 0; i < n; i++) trill(n > 2 && i === n - 1 ? 0.7 : 0.3, 0.07, i * 0.42); },
+    goal: () => { sfx.net(); [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, 0.25, 'triangle', 0.07), 250 + i * 110)); },
     beep: () => tone(880, 0.08, 'square', 0.05),
+    thud: () => { noise(0.12, 0.3, 'lowpass', 300, 1, 80); tone(70, 0.12, 'sine', 0.15, -20); },
   };
   // crowd: looping filtered noise that swells near the goals and roars on a goal
   const crowd = (() => {
@@ -1118,6 +1146,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (on) start();
         if (!g) return;
         swell = Math.max(0, swell - dt / 2.5);
+        if (on && (this.clapT = (this.clapT || 9) - dt) <= 0) { this.clapT = 12 + Math.random() * 14; this.claps(3 + Math.floor(Math.random() * 2)); } // the stands clap along now and then
         const near = Math.max(0, 1 - Math.min(Math.abs(ball.x - PL), Math.abs(PR - ball.x)) / 320);
         const target = on ? 0.025 + near * 0.035 + swell * 0.2 : 0;
         if (Math.abs(target - last) < 0.002) return; // nothing audible changed
@@ -1125,8 +1154,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
         g.gain.setTargetAtTime(target, ac.currentTime, 0.15);
         flt.frequency.setTargetAtTime(600 + swell * 500 + near * 150, ac.currentTime, 0.2);
       },
-      cheer() { swell = 1; },
+      cheer() { swell = 1; if (g && ac) for (let i = 0; i < 26; i++) noise(0.05, 0.05 + Math.random() * 0.05, 'bandpass', 1500 + Math.random() * 1500, 1.5, 0, 0.3 + Math.random() * 2.2); }, // the roar plus applause
       ooh() { swell = Math.max(swell, 0.5); },
+      claps(n = 3) { if (!g || !ac || !cfg.crowd) return; for (let i = 0; i < n; i++) for (let k = 0; k < 8; k++) noise(0.04, 0.03 + Math.random() * 0.03, 'bandpass', 1400 + Math.random() * 1200, 1.2, 0, i * 0.5 + Math.random() * 0.04); }, // clap, clap, clap
     };
   })();
   // ---------- Commentator ----------
@@ -1725,7 +1755,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
     if (ball.owner === b.i) { tackleWins(a); return; } // got the man with the ball: you win it
     a.recover = 0.2;
-    tone(70, 0.18, 'square', 0.1, -30); shake = Math.max(shake, 5);
+    sfx.thud(); shake = Math.max(shake, 5);
     if (localHuman(b)) buzz(60);
   }
   let flash = null;
@@ -2896,7 +2926,21 @@ button.small { font-size: 13px; padding: 9px 10px; }
   // ----- menu music: a soft loop while you are in the menus -----
   const music = (() => {
     let nextT = 0, stepI = 0, g = null;
-    const prog = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]];
+    // C - G - Am - F, 16th notes at 112 bpm, a 4-bar loop with a tune over the top
+    const prog = [[48, 52, 55], [43, 47, 50], [45, 48, 52], [41, 45, 48]];
+    const TUNE = [ // per bar, 8 eighth notes (0 = rest), in MIDI
+      [72, 0, 72, 74, 76, 0, 74, 72], [71, 0, 67, 0, 74, 72, 71, 0],
+      [69, 0, 72, 0, 76, 0, 79, 77], [76, 0, 74, 72, 74, 0, 0, 0],
+      [72, 0, 72, 74, 76, 0, 79, 0], [79, 77, 76, 74, 74, 0, 71, 0],
+      [72, 0, 76, 0, 81, 0, 79, 76], [77, 0, 76, 0, 74, 0, 72, 0]];
+    function drum(kind, t) {
+      if (kind === 'k') { const o = ac.createOscillator(), e = ac.createGain(); o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12); e.gain.setValueAtTime(0.32, t); e.gain.exponentialRampToValueAtTime(0.0001, t + 0.16); o.connect(e).connect(g); o.start(t); o.stop(t + 0.2); return; }
+      const src = ac.createBufferSource(), f = ac.createBiquadFilter(), e = ac.createGain();
+      src.buffer = noiseBuf; f.type = kind === 's' ? 'bandpass' : 'highpass'; f.frequency.value = kind === 's' ? 1800 : 7000; f.Q.value = 0.8;
+      const d = kind === 's' ? 0.14 : 0.04, v = kind === 's' ? 0.16 : 0.05;
+      e.gain.setValueAtTime(v, t); e.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      src.connect(f).connect(e).connect(g); src.start(t, Math.random() * 0.5); src.stop(t + d + 0.02);
+    }
     const hz = n => 440 * Math.pow(2, (n - 69) / 12);
     function note(f, t, d, type, vol) {
       const o = ac.createOscillator(), e = ac.createGain();
@@ -2906,17 +2950,25 @@ button.small { font-size: 13px; padding: 9px 10px; }
     }
     return {
       tick() {
-        const want = cfg.music && state === 'menu' && ac && ac.state === 'running' && !document.hidden;
+        const want = cfg.music && (state === 'menu' || state === 'lobby') && ac && ac.state === 'running' && !document.hidden;
         if (!want) { if (g && ac) g.gain.setTargetAtTime(0, ac.currentTime, 0.15); nextT = 0; return; }
         if (!g) { g = ac.createGain(); g.gain.value = 0; g.connect(ac.destination); }
-        g.gain.setTargetAtTime(0.6, ac.currentTime, 0.4);
-        const now = ac.currentTime; if (nextT < now) nextT = now + 0.05;
-        while (nextT < now + 0.25) {
-          const ch = prog[Math.floor(stepI / 8) % 4], s8 = stepI % 8;
-          if (s8 % 4 === 0) note(hz(ch[0] - 12), nextT, 0.6, 'triangle', 0.1);
-          note(hz(ch[[0, 1, 2, 1, 0, 2, 1, 2][s8]] + 12), nextT, 0.17, 'square', 0.016);
-          if (s8 === 3 || s8 === 7) note(hz(ch[2] + 24), nextT, 0.12, 'sine', 0.025);
-          stepI++; nextT += 0.19;
+        if (!noiseBuf) noise(0.01, 0.0001, 'lowpass', 100); // makes the shared noise buffer
+        g.gain.setTargetAtTime(0.55, ac.currentTime, 0.4);
+        const now = ac.currentTime, ST = 60 / 112 / 4; if (nextT < now) nextT = now + 0.05;
+        while (nextT < now + 0.3) {
+          const bar = Math.floor(stepI / 16), s = stepI % 16, ch = prog[bar % 4];
+          // drums: kick on 1 and 3 (and a push before 3), snare on 2 and 4, hi-hats on the 8ths
+          if (s === 0 || s === 8 || s === 6) drum('k', nextT);
+          if (s === 4 || s === 12) drum('s', nextT);
+          if (s % 2 === 0) drum('h', nextT);
+          // bass: root, octave bounce
+          if (s % 4 === 0) note(hz(ch[0] - 12 + (s === 8 ? 12 : 0)), nextT, ST * 3.5, 'triangle', 0.16);
+          // chords: short stabs on the off-beats
+          if (s % 4 === 2) ch.forEach(n => note(hz(n + 12), nextT, ST * 1.6, 'sawtooth', 0.012));
+          // the tune
+          if (s % 2 === 0) { const n = TUNE[bar % 8][s / 2]; if (n) note(hz(n), nextT, ST * 1.9, 'square', 0.02); }
+          stepI++; nextT += ST;
         }
       },
     };
@@ -3511,6 +3563,52 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   const isMine = p => p.ctrl === 'L0' || p.ctrl === 'L1' || p.ctrl === 'ME';
   const myPlayers = () => P.filter(isMine);
+  // ---------- Player figures, seen from above: head, shoulders, swinging arms and legs ----------
+  const SKIN = ['#f1c7a3', '#e0ac85', '#c68b62', '#9c6644', '#6e4630'], HAIR = ['#2b1d14', '#5a3a22', '#c99a4a', '#1a1a1a', '#8a4a20', '#e2c27a'];
+  function shade(hex, k) { // darker (k < 0) or lighter (k > 0) version of a colour
+    const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    const f = v => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k);
+    return `rgb(${f(r)},${f(g)},${f(b)})`;
+  }
+  function drawFigure(p, sliding, down) {
+    // the run cycle comes from how far he moved since the last frame, so it also works for online guests and replays
+    const mv = p.lx === undefined ? 0 : Math.min(30, Math.hypot(p.x - p.lx, p.y - p.ly)); p.lx = p.x; p.ly = p.y;
+    p.ph = (p.ph || 0) + mv * 0.17;
+    p.amp = (p.amp || 0) + (Math.min(1, mv / 2.6) - (p.amp || 0)) * 0.25;
+    const sw = Math.sin(p.ph) * p.amp, keeper = size > 1 && p.k === 0;
+    const kitC = p.team ? col.away : col.home;
+    const shirt = keeper ? (p.team ? '#ffd447' : '#9be23a') : kitC;
+    const light = parseInt(shirt.slice(1, 3), 16) + parseInt(shirt.slice(3, 5), 16) + parseInt(shirt.slice(5, 7), 16) > 560;
+    const sock = light ? '#2a2f36' : '#f4f4ef', skin = SKIN[(p.i * 7 + 3) % SKIN.length], hair = HAIR[(p.i * 5 + 1) % HAIR.length];
+    // a disc on the grass in the team colour keeps him easy to spot, gold for the one you control
+    ctx.globalAlpha = down || p.out > 0 ? 0.2 : 0.3;
+    ctx.fillStyle = kitC; ctx.beginPath(); ctx.ellipse(0, 3, PRAD - 2, PRAD - 5, 0, 0, Math.PI * 2); ctx.fill();
+    if (isMine(p)) { ctx.globalAlpha = 1; ctx.lineWidth = 3; ctx.strokeStyle = col.gold; ctx.beginPath(); ctx.ellipse(0, 3, PRAD + 1, PRAD - 2, 0, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.globalAlpha = down || p.out > 0 ? 0.55 : 1;
+    ctx.rotate(Math.atan2(p.fy, p.fx));
+    ctx.scale(1.22, 1.22);
+    if (sliding) ctx.scale(1.15, 0.9);
+    ctx.lineCap = 'round';
+    // legs (sliding: both out in front)
+    for (const s of [-1, 1]) {
+      const fx = sliding ? 15 + (s > 0 ? 3 : -2) : -1 + sw * 11 * s, fy = s * (sliding ? 5 : 6.5);
+      ctx.strokeStyle = sock; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(-2, s * 6); ctx.lineTo(fx, fy); ctx.stroke();
+      ctx.fillStyle = '#15171a'; ctx.beginPath(); ctx.arc(fx + 1.5, fy, 3.4, 0, Math.PI * 2); ctx.fill();
+    }
+    // arms swing against the legs; a keeper at full stretch reaches out
+    for (const s of [-1, 1]) {
+      const hx = sliding ? (p.dive > 0 ? 6 : -9) : -sw * 8 * s + 1, hy = s * (sliding && p.dive > 0 ? 21 : 16.5);
+      ctx.strokeStyle = keeper ? shirt : skin; ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(0, s * 11); ctx.lineTo(hx, hy); ctx.stroke();
+      ctx.fillStyle = keeper ? '#f4f4ef' : skin; ctx.beginPath(); ctx.arc(hx, hy, keeper ? 3.8 : 3, 0, Math.PI * 2); ctx.fill(); // keepers wear gloves
+    }
+    // shoulders / shirt
+    ctx.fillStyle = shirt; ctx.beginPath(); ctx.ellipse(-1.5, 0, 9.5, 14.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = shade(shirt.startsWith('#') ? shirt : '#888888', -0.35); ctx.stroke();
+    if (keeper) { ctx.strokeStyle = kitC; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(-1, -13); ctx.lineTo(-1, 13); ctx.stroke(); } // keeper: a stripe in the team colour
+    // head with hair on the back
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(1.5, 0, 5.8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = hair; ctx.beginPath(); ctx.ellipse(-0.3, 0, 4.4, 5.6, 0, 0, Math.PI * 2); ctx.fill();
+  }
   function drawPlayer(p) {
     if (p.out > 1e5) return; // training: the missing opponents are not shown
     if (shootoutOn() && state === 'play' && Math.abs(p.x - soGoal()) > 240) return; // shootout: only the taker and the keeper
@@ -3525,15 +3623,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
     }
     if (p.superShot) { ctx.fillStyle = `rgba(255,140,40,${0.25 + 0.15 * Math.sin(performance.now() / 120)})`; ctx.beginPath(); ctx.arc(0, 0, PRAD + 10, 0, Math.PI * 2); ctx.fill(); }
     if (p.turbo > 0) { ctx.strokeStyle = 'rgba(120,220,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, PRAD + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
-    if (sliding) { ctx.rotate(Math.atan2(p.fy, p.fx)); if (p.tackle > 0) ctx.scale(1.3, 0.78); else ctx.scale(1.55, 0.7); } // a slide, or a keeper at full stretch
-    ctx.globalAlpha = down || p.out > 0 ? 0.5 : 1;
-    ctx.fillStyle = p.team ? col.away : col.home;
-    ctx.beginPath(); ctx.arc(0, 0, PRAD, 0, Math.PI * 2); ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = isMine(p) ? col.gold : col.chalk; ctx.stroke();
+    drawFigure(p, sliding, down);
     ctx.globalAlpha = 1;
     ctx.restore();
-    if (!sliding) { ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(p.x + p.fx * (PRAD - 7), p.y + p.fy * (PRAD - 7), 4, 0, Math.PI * 2); ctx.fill(); }
-    if (size > 1 && p.k === 0 && !sliding) { ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = `700 13px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('M', p.x, p.y + 1); }
     if (p.yc || p.out > 0) { ctx.fillStyle = p.out > 0 ? '#e5483b' : '#ffd447'; ctx.fillRect(p.x + PRAD - 4, p.y - PRAD - 2, 9, 13); }
     if (p.windup > 0 && !down) { // about to slide in: show it
       ctx.font = `700 22px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
