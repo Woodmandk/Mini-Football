@@ -183,6 +183,18 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
 .kbd { font-size: 12px; }
 @media (hover: none) { .kbd { display: none; } }
 @media (max-width: 560px) { .home, .ow, .profgrid, .shopgrid, .seasonview { grid-template-columns: 1fr; } }
+.chl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.chl li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.3); font-size: 15px; }
+.chl li.done { outline: 2px solid var(--gold); }
+.chl .rw { color: var(--gold); font-weight: 700; white-space: nowrap; }
+.chl .bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: rgba(244,247,242,0.15); overflow: hidden; }
+.chl .bar i { display: block; height: 100%; background: var(--gold); }
+.chl small { color: var(--muted); font-size: 12px; }
+.h1s { font-size: clamp(22px, 4.6vw, 30px); }
+.endch { color: var(--gold); white-space: pre-line; }
+.hlrow { display: flex; gap: 8px; } .hlrow button { flex: 1; }
+.hlclose { position: absolute; top: calc(8px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); padding: 8px 12px; font-size: 13px; background: rgba(9,20,15,0.7); border-color: rgba(244,247,242,0.4); }
+table.st tr.me td { color: var(--gold); }
 #rotate { display: none; font-size: 13px; color: var(--gold); }
 @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
 </style>
@@ -190,6 +202,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
 <div id="wrap">
   <canvas id="c" aria-label="Fodboldbane"></canvas>
   <button id="pauseBtn" class="pausebtn" hidden aria-label="Pause">II</button>
+  <button id="hlClose" class="hlclose" hidden>Luk ✕</button>
 
   <div class="overlay" id="menu">
     <!-- forside: vælg hvad du vil spille -->
@@ -203,6 +216,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
             <button id="goProf" class="alt">Profil og trofæer</button><button id="goShop" class="alt">Butik <span class="coins" data-coins>0</span></button>
             <button id="bLeague" class="alt">Stilling</button><button id="bCup" class="alt">Turnering</button>
             <button id="bHelp" class="alt">Sådan spiller du</button><button id="goSet" class="alt">Indstillinger</button>
+            <button id="bDaily" class="alt">Udfordringer</button><button id="bFriends" class="alt">Venner</button>
           </div>
         </div>
         <div class="btns bigs">
@@ -392,6 +406,26 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     </div>
   </div>
 
+  <div class="overlay" id="daily" hidden>
+    <div class="card">
+      <h1 class="h1s">Dagens udfordringer</h1>
+      <p id="dailyInfo"></p>
+      <ul class="chl" id="dailyList"></ul>
+      <p id="dailyBonus"></p>
+      <div class="btns"><button id="dailyClose">Luk</button></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="friends" hidden>
+    <div class="card">
+      <h1>Venner</h1>
+      <p>Alle du har spillet online med. Ranglisten bygger på rating: du vinder flere point for at slå en, der er bedre end dig. Dine venners tal er fra sidste gang, I spillede.</p>
+      <div class="tablewrap"><table class="st" id="friendsTable"></table></div>
+      <p id="friendsEmpty" hidden>Ingen venner endnu. Spil en online-kamp med en ven, så kommer de på listen.</p>
+      <div class="btns"><button id="friendsClose">Luk</button></div>
+    </div>
+  </div>
+
   <div class="overlay" id="cup" hidden>
     <div class="card">
       <h1>Turnering</h1>
@@ -434,9 +468,11 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       <div class="final"><span class="h" id="fh">0</span> – <span class="a" id="fa">0</span></div>
       <p id="endMsg"></p>
       <p id="endReward" class="reward" hidden></p>
+      <p id="endCh" class="endch" hidden></p>
       <div class="tablewrap"><table class="st" id="statsTable"></table></div>
       <div class="btns">
         <button id="again">Spil igen</button>
+        <div class="hlrow" id="hlRow" hidden><button id="hlBtn" class="alt">Se målene</button><button id="hlRec" class="alt">Lav video</button><button id="hlShare" hidden>Del video</button><button id="hlSave" class="alt" hidden>Gem video</button></div>
         <button id="ready" hidden>Klar til revanche</button>
         <button id="toCup" hidden>Tilbage til turneringen</button>
         <button id="toSeason" hidden>Tilbage til sæsonen</button>
@@ -556,6 +592,136 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     try { localStorage.removeItem('mf-league'); } catch (_) {}
     showLeague();
   };
+  // ---------- Daily challenges (3 new ones every day, the same for everybody on the same date) ----------
+  // ev 'goal': your team scores (k = kind of goal), ev 'match': checked when a match ends, need = how many today
+  const CHALLENGES = [
+    { id: 'head', t: 'Scor med et hovedstød', c: 40, ev: 'goal', k: ['head'] },
+    { id: 'lob', t: 'Scor på et lob over målmanden', c: 40, ev: 'goal', k: ['lob'] },
+    { id: 'set', t: 'Scor på frispark eller straffe', c: 50, ev: 'goal', k: ['fk', 'pen'] },
+    { id: 'g5', t: 'Scor 5 mål i dag', c: 40, ev: 'goal', need: 5 },
+    { id: 'win', t: 'Vind en kamp', c: 30, ev: 'match', ok: m => m.win },
+    { id: 'big', t: 'Vind med 3 mål eller mere', c: 50, ev: 'match', ok: m => m.win && m.gf - m.ga >= 3 },
+    { id: 'clean', t: 'Hold målet rent en hel kamp', c: 40, ev: 'match', ok: m => m.ga === 0 },
+    { id: 'pass', t: 'Lav 15 afleveringer i én kamp', c: 30, ev: 'match', ok: m => m.pa >= 15 },
+    { id: 'tk', t: 'Vind 4 tacklinger i én kamp', c: 30, ev: 'match', ok: m => m.tk >= 4 },
+    { id: 'hard', t: 'Slå computeren på Svær', c: 60, ev: 'match', ok: m => m.win && m.mode === 'cpu' && m.diff === 2 },
+    { id: 'online', t: 'Spil en kamp online', c: 30, ev: 'match', ok: m => m.online },
+    { id: 'team', t: 'Vind med 5 eller 11 spillere pr. hold', c: 40, ev: 'match', ok: m => m.win && m.size >= 5 },
+    { id: 'm3', t: 'Spil 3 kampe i dag', c: 30, ev: 'match', ok: () => true, need: 3 },
+    { id: 'gf3', t: 'Scor 3 mål i én kamp', c: 40, ev: 'match', ok: m => m.gf >= 3 },
+  ];
+  const DAILY_BONUS = 50;
+  const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  function dailyPick(day) { // three different challenges, picked from the date
+    let h = 2166136261; for (const ch of day) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+    const idx = CHALLENGES.map((_, i) => i), out = [];
+    while (out.length < 3) { h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0; h = (h + 0x9e3779b9) >>> 0; out.push(idx.splice(h % idx.length, 1)[0]); }
+    return out.map(i => CHALLENGES[i]);
+  }
+  function loadDaily() {
+    const d = today();
+    let D = null; try { D = JSON.parse(localStorage.getItem('mf-daily') || 'null'); } catch (_) {}
+    if (!D || D.d !== d) D = { d, p: {}, done: {}, bonus: 0 };
+    return D;
+  }
+  const saveDaily = D => { try { localStorage.setItem('mf-daily', JSON.stringify(D)); } catch (_) {} };
+  let chWon = []; // challenges finished during this match, shown on the end screen
+  function dailyEvent(ev, data) {
+    const D = loadDaily(), list = dailyPick(D.d);
+    for (const ch of list) {
+      if (ch.ev !== ev || D.done[ch.id]) continue;
+      if (ev === 'goal' && ch.k && !ch.k.includes(data)) continue;
+      if (ev === 'match' && !ch.ok(data)) continue;
+      D.p[ch.id] = (D.p[ch.id] || 0) + 1;
+      if (D.p[ch.id] >= (ch.need || 1)) { D.done[ch.id] = 1; addCoins(ch.c, 'udfordring'); chWon.push(`${ch.t} +${ch.c}`); if (state === 'play') flash = { text: 'Udfordring klaret!', t: 1.2 }; }
+    }
+    if (!D.bonus && list.every(ch => D.done[ch.id])) { D.bonus = 1; addCoins(DAILY_BONUS, 'udfordringer'); chWon.push(`Alle dagens udfordringer +${DAILY_BONUS}`); }
+    saveDaily(D);
+  }
+  function showDaily() {
+    const D = loadDaily(), list = dailyPick(D.d), ul = $('dailyList');
+    ul.textContent = '';
+    for (const ch of list) {
+      const li = document.createElement('li'), need = ch.need || 1, have = Math.min(need, D.p[ch.id] || 0);
+      if (D.done[ch.id]) li.className = 'done';
+      const a = document.createElement('span'); a.textContent = (D.done[ch.id] ? '✓ ' : '') + ch.t;
+      const b = document.createElement('span'); b.className = 'rw'; b.textContent = `+${ch.c}`;
+      const bar = document.createElement('div'); bar.className = 'bar'; const i = document.createElement('i'); i.style.width = (have / need * 100) + '%'; bar.appendChild(i);
+      li.append(a, b, bar);
+      if (need > 1) { const s = document.createElement('small'); s.textContent = `${have} af ${need}`; li.appendChild(s); }
+      ul.appendChild(li);
+    }
+    const n = new Date(), mid = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1), left = Math.max(0, mid - n), h = Math.floor(left / 3600000), m = Math.floor(left / 60000) % 60;
+    $('dailyInfo').innerHTML = `Klar dem for at få mønter. Du har <b data-coins>${loadProf().coins || 0}</b> mønter. Nye udfordringer om ${h} t ${m} min.`;
+    $('dailyBonus').textContent = D.bonus ? `Du har klaret alle tre i dag og fået ${DAILY_BONUS} ekstra.` : `Klar alle tre for ${DAILY_BONUS} ekstra mønter.`;
+    $('daily').hidden = false;
+  }
+  $('bDaily').onclick = showDaily;
+  $('dailyClose').onclick = () => { $('daily').hidden = true; };
+
+  // ---------- Friends and rating (no server: phones swap their numbers when you play online) ----------
+  let meCache = null;
+  function loadMe() {
+    if (meCache) return { ...meCache };
+    let M = null; try { M = JSON.parse(localStorage.getItem('mf-me') || 'null'); } catch (_) {}
+    if (!M || typeof M.id !== 'string' || !/^[a-z0-9]{6,20}$/.test(M.id)) { M = { id: (Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)).replace(/[^a-z0-9]/g, '0'), r: 1000, w: 0, d: 0, l: 0, g: 0 }; saveMe(M); }
+    meCache = { ...M }; return M;
+  }
+  function saveMe(M) { meCache = { ...M }; try { localStorage.setItem('mf-me', JSON.stringify(M)); } catch (_) {} }
+  const loadFriends = () => { try { return JSON.parse(localStorage.getItem('mf-friends') || '{}') || {}; } catch (_) { return {}; } };
+  const saveFriends = F => { try { localStorage.setItem('mf-friends', JSON.stringify(F)); } catch (_) {} };
+  const myCard = () => { const M = loadMe(); return [M.id, cfg.name || '', Math.round(M.r), M.w, M.d, M.l, M.g]; }; // what other phones get to see
+  function readCard(c) {
+    if (!Array.isArray(c) || typeof c[0] !== 'string' || !/^[a-z0-9]{6,20}$/.test(c[0])) return null;
+    const n = v => Math.max(0, Math.min(99999, Number(v) | 0));
+    return { id: c[0], n: cleanName(c[1]), r: n(c[2]) || 1000, w: n(c[3]), d: n(c[4]), l: n(c[5]), g: n(c[6]) };
+  }
+  const netCards = new Map(); // peer -> card, for everyone in this online game ('host' = the host)
+  function seeCard(peer, raw) {
+    const c = readCard(raw); if (!c) return;
+    const key = JSON.stringify(c), old = netCards.get(peer);
+    if (old && old.key === key) return;
+    netCards.set(peer, { ...c, key, card: [c.id, c.n, c.r, c.w, c.d, c.l, c.g] }); noteFriend(c);
+  }
+  function noteFriend(c) {
+    if (!c || c.id === loadMe().id) return;
+    const F = loadFriends(), f = F[c.id] || { h: [0, 0, 0] };
+    Object.assign(f, { n: c.n || f.n || 'Ven', r: c.r, w: c.w, d: c.d, l: c.l, g: c.g, at: Date.now() });
+    F[c.id] = f; saveFriends(F);
+  }
+  // after an online match: rating (Elo) against the humans on the other team, and head-to-head per friend
+  function onlineSides(me) { // the other humans in this online game, as their cards, split by team
+    const mates = [], opps = [], myId = loadMe().id;
+    const add = (peer, slot) => { const c = netCards.get(peer), p = P[slot]; if (!c || !p || c.id === myId) return; (p.team === me ? mates : opps).push(c); };
+    if (mode === 'host') for (const r of roster) add(r[0], r[1]);
+    else { add('host', hostInfo[0]); for (const r of roster) if (r[0] !== myPeer) add(r[0], r[1]); }
+    return { mates, opps };
+  }
+  function rateOnline(opps, res, gf) {
+    if (!opps.length) return '';
+    const M = loadMe();
+    const avg = opps.reduce((a, c) => a + c.r, 0) / opps.length;
+    const exp = 1 / (1 + Math.pow(10, (avg - M.r) / 400)), dr = Math.round(32 * (res - exp));
+    M.r = Math.max(100, M.r + dr); if (res === 1) M.w++; else if (res === 0) M.l++; else M.d++;
+    M.g += gf; saveMe(M);
+    const F = loadFriends();
+    for (const c of opps) { const f = F[c.id]; if (f) { f.h = f.h || [0, 0, 0]; f.h[res === 1 ? 0 : res === 0 ? 2 : 1]++; } }
+    saveFriends(F);
+    return `Din rating: ${M.r} (${dr >= 0 ? '+' : ''}${dr}).`;
+  }
+  function showFriends() {
+    const M = loadMe(), F = loadFriends();
+    const rows = Object.values(F).map(f => ({ ...f, me: false })); rows.push({ n: (cfg.name || 'Dig') + ' (dig)', r: Math.round(M.r), w: M.w, d: M.d, l: M.l, g: M.g, me: true });
+    rows.sort((a, b) => b.r - a.r);
+    const tbl = $('friendsTable');
+    fillTable(tbl, ['#', 'Navn', 'Rating', 'V-U-T', 'Mål', 'Du mod dem'], rows.map((f, i) => [i + 1, f.n, f.r, `${f.w}-${f.d}-${f.l}`, f.g, f.me ? '' : `${(f.h || [0])[0]}-${(f.h || [0, 0])[1]}-${(f.h || [0, 0, 0])[2]}`]));
+    tbl.rows[0].cells[0].className = ''; tbl.rows[0].cells[1].className = 'l';
+    [...tbl.rows].slice(1).forEach((r, i) => { if (rows[i] && rows[i].me) r.className = 'me'; r.cells[1].className = 'l'; r.cells[0].className = ''; });
+    $('friendsEmpty').hidden = rows.length > 1;
+    $('friends').hidden = false;
+  }
+  $('bFriends').onclick = showFriends;
+  $('friendsClose').onclick = () => { $('friends').hidden = true; };
   // per-second rates for AI decisions
   const DIFF = [
     { spd: 0.74, shoot: 0.9, pass: 0.8, tackle: 0.8, aimErr: 0.22, react: 0.5 },
@@ -682,7 +848,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   function updateCamera(dt, snap) {
     const full = Math.min(sw / WW, sh / WH);
     const zoomed = Math.min(sw / 760, sh / 440);
-    sc = ((mode === 'two' && size <= 3) || state !== 'play') ? full : Math.max(full, zoomed);
+    sc = ((mode === 'two' && size <= 3) || (state !== 'play' && state !== 'hl')) ? full : Math.max(full, zoomed);
     const vw = sw / sc, vh = sh / sc;
     const k = snap ? 1 : 1 - Math.pow(0.02, dt);
     camX += (ball.x - camX) * k; camY += (ball.y - camY) * k;
@@ -713,6 +879,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     for (const v of btnTouches.values()) btn[v.side][v.type] = true;
   }
   function onStart(e) {
+    if (state === 'hl') { e.preventDefault(); if (hlp && !hlp.rec) hlNext(); return; }
     if (state !== 'play' || paused) return;
     e.preventDefault(); audioOn(); if (!speechUnlocked) unlockSpeech();
     if (replay) { skipReplay(); return; }
@@ -966,7 +1133,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
     for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; }
     particles = []; matchNo++;
-    stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = [];
+    stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = []; hlReset(); lastGk = ''; lastGoalTeam = 0;
     if (m !== 'guest') {
       setKit(cfg.kit);
       if (m !== 'host') teamForm = [myForm(size), m === 'two' ? myForm(size) : (FORMS[size] ? Math.floor(Math.random() * FORMS[size].length) : 0)];
@@ -1023,6 +1190,16 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     if (cupMatch) { cupResult(cupMatch.i, score[0], score[1], win); }
     $('toCup').hidden = !cupMatch; $('again').hidden = $('again').hidden || !!cupMatch;
     afterMatch(win, me, ss);
+    $('hlRow').hidden = !hlClips.length; hlOutShow(false);
+    $('hlBtn').textContent = `Se målene (${hlClips.length})`;
+    const lines = [];
+    if (me !== null && me !== undefined) {
+      const online = mode === 'host' || mode === 'guest';
+      if (kind !== 'train' && kind !== 'pen') dailyEvent('match', { win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], mode, diff: matchDiff(), size, online });
+      if (online) { const o = onlineSides(me); const r = rateOnline(o.opps, win === me ? 1 : win < 0 ? 0.5 : 0, score[me]); if (r) lines.push(r); }
+    }
+    for (const c of chWon) lines.push('Udfordring klaret: ' + c);
+    $('endCh').textContent = lines.join('\n'); $('endCh').hidden = !lines.length;
     $('end').hidden = false;
     sfx.whistle(3);
   }
@@ -1093,7 +1270,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     }
     for (const q of P) q.recv = 0;
     setp = null;
-    ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0;
+    ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0; ball.fresh = false;
     ball.lastTeam = p.team; ball.lastIdx = p.i;
     p.tackle = 0; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0;
     if (prev !== ball.owner) { sfx.trap(); onPossession(p); }
@@ -1122,6 +1299,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     }
     if (p.superShot) { power *= 1.6; p.superShot = false; flash = { text: 'Superskud!', t: 0.8 }; shake = Math.max(shake, 8); }
     if (stats) stats.sh[p.team]++;
+    ball.gk = isPen ? 'pen' : ball.fresh && ball.rs === 'free' ? 'fk' : 'shot'; ball.fresh = false;
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     release(p, p.fx * power + p.vx * 0.25, p.fy * power + p.vy * 0.25, 0.3);
     ball.last = { team: p.team, pass: false };
@@ -1183,6 +1361,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     ball.last = { team: p.team, pass: true, to: q.i, off, pt };
     q.recv = 1.8; // the receiver runs to meet the ball by himself for a moment
     if (stats) stats.pa[p.team]++;
+    ball.gk = 'pass'; ball.fresh = false;
     sfx.pass();
     if (isHuman(p)) swapControl(p, q);
   }
@@ -1192,7 +1371,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     const hs = ax !== undefined ? Math.max(260, Math.min(600, Math.hypot(ax, ay) / 0.85)) : 540; // crosses land where they're aimed
     release(p, p.fx * hs + p.vx * 0.2, p.fy * hs + p.vy * 0.2, 0.35);
-    ball.vz = 470; ball.last = { team: p.team, pass: false };
+    ball.vz = 470; ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
     const gx = p.team ? PL : PR;
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
     tone(200, 0.12, 'triangle', 0.12, 120);
@@ -1209,7 +1388,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = near ? 640 : 500;
     p.fx = dx / d; p.fy = dy / d;
     ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3;
+    ball.last = { team: p.team, pass: false }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; ball.gk = 'head'; ball.fresh = false;
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Hovedstød!', t: 0.7 };
     tone(180, 0.07, 'triangle', 0.12, -60);
@@ -1255,7 +1434,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   function startPenalty(team) { // team takes a penalty at the other end
     const dir = team ? -1 : 1, gx = team ? PL : PR;
     pen = { team, t: 0 };
-    ball.x = gx - dir * 105; ball.y = CY; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.last = null; ball.rs = 'pen'; ball.loose = 0;
+    ball.x = gx - dir * 105; ball.y = CY; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.last = null; ball.rs = 'pen'; ball.loose = 0; ball.fresh = true;
     const kp = size > 1 ? P[slotOf(1 - team, 0)] : P.find(q => q.team !== team);
     const ours = P.filter(q => q.team === team && on(q));
     let taker = ours.find(q => isHuman(q)) || ours.reduce((a, b) => (formOf(b)[0] > formOf(a)[0] ? b : a));
@@ -1775,7 +1954,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const hs = P.filter(q => q.team === team && isHuman(q));
     if (hs.length && taker.ctrl === 'ai') swapControl(hs.reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a)), taker);
     ball.owner = taker.i; ball.loose = 0; ball.lastTeam = team; ball.lastIdx = ball.owner;
-    taker.frozen = 99; guard = 0; taker.charging = false; taker.hold = 0; taker.pending = 0; taker.pendB = 0; taker.wasA = taker.wasB = true; // a button still held from before doesn't kick it
+    taker.frozen = 99; guard = 0; ball.fresh = true; taker.charging = false; taker.hold = 0; taker.pending = 0; taker.pendB = 0; taker.wasA = taker.wasB = true; // a button still held from before doesn't kick it
     setp = { team, t: 0, r: type === 'throw' ? 70 : 110 };
     for (const p of P) if (p.team !== team && p.tackle > 0) { p.tackle = 0; p.recover = 0.2; }
     flash = { text: label || (type === 'throw' ? 'Indkast' : type === 'corner' ? 'Hjørnespark' : type === 'free' ? 'Frispark' : 'Målspark'), t: 1.0 };
@@ -1799,6 +1978,9 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const sn = scorerName(team); lastScorer = scorerName(team, true) || ''; goalSeq++;
     const sp = P[ball.lastIdx]; celeb = sp && sp.team === team ? ball.lastIdx : -1;
     if (sn) matchGoals.push(sn);
+    lastGk = sp && sp.team === team ? (ball.gk || 'shot') : 'own'; lastGoalTeam = team;
+    hlAdd(team, mode === 'host' ? lastScorer : sp && sp.team === team && sp.ctrl === 'L0' ? cfg.name || 'Spiller 1' : sp && sp.team === team && sp.ctrl === 'L1' ? 'Spiller 2' : sn, lastGk);
+    if (kind !== 'train' && team === (P.find(q => q.ctrl === 'L0') || { team: 0 }).team) dailyEvent('goal', lastGk);
     banner = 'MÅL!'; pause = cfg.replay ? 5.4 : 1.8; ball.owner = -1;
     if (cfg.replay) startReplay();
     goalFx(team);
@@ -1848,9 +2030,104 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   function record(dt) {
     recT += dt; if (recT < 1 / 30) return; recT = 0;
     recBuf.push({ b: [ball.x, ball.y, ball.z], p: P.map(p => [p.x, p.y, p.fx, p.fy, p.tackle > 0 ? 1 : 0]) });
-    if (recBuf.length > 66) recBuf.shift();
+    if (recBuf.length > 120) recBuf.shift(); // 4 s: the goal replay uses the last 2.2 s, the highlights all of it
   }
-  function startReplay() { if (recBuf.length > 10) replay = { frames: recBuf.slice(), t: -0.9 }; }
+  function startReplay() { if (recBuf.length > 10) replay = { frames: recBuf.slice(-66), t: -0.9 }; }
+
+  // ---------- Highlights: every goal of the match, played back after the final whistle, can be saved as a video ----------
+  let hlClips = [], hlp = null, hlRecorder = null, hlVideo = null, lastGk = '', lastGoalTeam = 0;
+  const GK_NAME = { head: 'Hovedstød', lob: 'Lob', pen: 'Straffespark', fk: 'Frispark', corner: 'Direkte på hjørnespark', own: 'Selvmål' };
+  function hlAdd(team, name, k) {
+    if (recBuf.length < 10 || hlClips.length >= 12) return;
+    const min = Math.max(1, Math.min(90, Math.ceil((matchLen - clock) / (matchLen || 1) * 90)));
+    hlClips.push({ f: recBuf.slice(), team, n: name || '', k: k || '', m: min, s: score.slice() });
+  }
+  function hlStart(rec) {
+    if (!hlClips.length) return;
+    hlp = { i: 0, t: -0.4, intro: 2.2, outro: 0, rec: !!rec };
+    state = 'hl'; replay = null; $('end').hidden = true; $('hlClose').hidden = false; $('rxbar').hidden = true;
+    updateCamera(0, true);
+    if (rec) hlRecStart();
+  }
+  function hlNext() { if (!hlp) return; if (hlp.intro > 0) { hlp.intro = 0; return; } if (hlp.i < hlClips.length) { hlp.i++; hlp.t = -0.4; if (hlp.i >= hlClips.length) hlp.outro = 2.4; } }
+  function hlTick(dt) {
+    if (!hlp || state !== 'hl') return;
+    if (hlp.intro > 0) { hlp.intro -= dt; return; }
+    if (hlp.i >= hlClips.length) { hlp.outro -= dt; if (hlp.outro <= 0) hlEnd(); return; }
+    hlp.t += hlp.t < 0 ? dt : dt * 0.75;
+    if (hlp.t * 30 >= hlClips[hlp.i].f.length + 18) hlNext(); // hold the last picture a moment
+  }
+  function hlFrame() {
+    if (!hlp || state !== 'hl') return null;
+    const c = hlClips[Math.min(hlp.i, hlClips.length - 1)];
+    const k = hlp.intro > 0 ? 0 : hlp.i >= hlClips.length ? c.f.length - 1 : Math.floor(Math.max(0, hlp.t) * 30);
+    return c.f[Math.max(0, Math.min(c.f.length - 1, k))];
+  }
+  function hlEnd(cancel) {
+    const rec = hlp && hlp.rec; hlp = null; $('hlClose').hidden = true;
+    if (rec) hlRecStop(cancel);
+    if (state === 'hl' && !cancel) { state = 'end'; $('end').hidden = false; $('rxbar').hidden = mode !== 'host' && mode !== 'guest'; if (mode === 'host') updateAgain(); }
+  }
+  function hlCaption() {
+    const big = Math.max(18, Math.min(34, sh * 0.075)), small = Math.max(13, Math.min(18, sh * 0.042));
+    const kc = t => (t ? col.away : col.home);
+    ctx.textAlign = 'center';
+    if (hlp.intro > 0 || hlp.i >= hlClips.length) { // title card
+      ctx.fillStyle = 'rgba(5,12,9,0.72)'; ctx.fillRect(0, 0, sw, sh);
+      ctx.textBaseline = 'middle';
+      ctx.font = `700 ${small}px ${col.font}`; ctx.fillStyle = col.gold;
+      ctx.fillText(hlp.intro > 0 ? 'HØJDEPUNKTER' : 'SLUT', sw / 2, sh / 2 - big * 1.3);
+      ctx.font = `700 ${big * 1.5}px ${col.font}`;
+      const a = `${tn(0)} ${score[0]}`, b = `${score[1]} ${tn(1)}`, gap = big * 0.9;
+      ctx.textAlign = 'right'; ctx.fillStyle = kc(0); ctx.fillText(a, sw / 2 - gap / 2, sh / 2);
+      ctx.textAlign = 'center'; ctx.fillStyle = col.chalk; ctx.fillText('–', sw / 2, sh / 2);
+      ctx.textAlign = 'left'; ctx.fillStyle = kc(1); ctx.fillText(b, sw / 2 + gap / 2, sh / 2);
+      ctx.textAlign = 'center'; ctx.font = `600 ${small}px ${col.font}`; ctx.fillStyle = 'rgba(244,247,242,0.8)';
+      ctx.fillText(hlp.intro > 0 ? `${hlClips.length} ${hlClips.length === 1 ? 'mål' : 'mål'}` : 'Mini Football', sw / 2, sh / 2 + big * 1.4);
+      return;
+    }
+    const c = hlClips[hlp.i];
+    ctx.fillStyle = 'rgba(5,12,9,0.55)'; ctx.fillRect(0, 0, sw, big * 2.5);
+    ctx.textBaseline = 'middle'; ctx.font = `700 ${big}px ${col.font}`; ctx.fillStyle = kc(c.team);
+    ctx.fillText(`MÅL!  ${c.s[0]} – ${c.s[1]}`, sw / 2, big * 0.85);
+    ctx.font = `600 ${small}px ${col.font}`; ctx.fillStyle = col.chalk;
+    ctx.fillText([c.n || tn(c.team), `${c.m}'`, GK_NAME[c.k]].filter(Boolean).join('  ·  '), sw / 2, big * 1.85);
+    ctx.textBaseline = 'bottom'; ctx.font = `600 12px ${col.font}`; ctx.fillStyle = 'rgba(244,247,242,0.7)';
+    ctx.textAlign = 'left'; ctx.fillText(`Mål ${hlp.i + 1} af ${hlClips.length}`, 14, sh - 12);
+    ctx.textAlign = 'right'; ctx.fillText(hlp.rec ? 'Mini Football' : 'Tryk for næste mål', sw - 14, sh - 12);
+  }
+  function hlRecStart() {
+    hlVideo = null; hlOutShow(false);
+    try {
+      const stream = cv.captureStream(30);
+      const types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm'];
+      const type = types.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || '';
+      const chunks = [], r = new MediaRecorder(stream, type ? { mimeType: type, videoBitsPerSecond: 5e6 } : undefined);
+      r.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+      r.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (r.cancelled) return;
+        const mt = r.mimeType || type || 'video/webm', blob = new Blob(chunks, { type: mt.split(';')[0] });
+        if (!blob.size) return;
+        hlVideo = new File([blob], 'mini-football-maal.' + (mt.includes('mp4') ? 'mp4' : 'webm'), { type: blob.type });
+        let can = false; try { can = !!(navigator.canShare && navigator.canShare({ files: [hlVideo] })); } catch (_) {}
+        hlOutShow(true, can);
+      };
+      r.start(500); hlRecorder = r;
+    } catch (_) { hlRecorder = null; $('endCh').hidden = false; $('endCh').textContent = 'Telefonen kan ikke optage video her, men du kan stadig se højdepunkterne.'; }
+  }
+  function hlOutShow(on, can) { $('hlRec').hidden = on || !(window.MediaRecorder && cv.captureStream); $('hlShare').hidden = !on || !can; $('hlSave').hidden = !on; }
+  function hlRecStop(cancel) { const r = hlRecorder; hlRecorder = null; if (!r) return; r.cancelled = !!cancel; try { r.stop(); } catch (_) {} }
+  $('hlBtn').onclick = () => hlStart(false);
+  $('hlRec').onclick = () => hlStart(true);
+  $('hlClose').onclick = () => hlEnd();
+  $('hlShare').onclick = () => { if (hlVideo && navigator.share) navigator.share({ files: [hlVideo], title: 'Mini Football', text: 'Se mine mål i Mini Football!' }).catch(() => {}); };
+  $('hlSave').onclick = () => {
+    if (!hlVideo) return;
+    const a = document.createElement('a'), u = URL.createObjectURL(hlVideo);
+    a.href = u; a.download = hlVideo.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
+  };
+  function hlReset() { if (hlp) hlEnd(true); hlClips = []; hlVideo = null; chWon = []; hlOutShow(false); $('hlRow').hidden = true; }
 
   // ---------- Tournament (on this phone) ----------
   const cupLoad = () => { try { return JSON.parse(localStorage.getItem('mf-cup') || 'null'); } catch (_) { return null; } };
@@ -2340,7 +2617,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   let roster = []; // [[peer, slot]] (guests also get [peer, slot, name])
   let hostReady = false, hostInfo = [0, 'Vært'], lobbyLr = [0, 0, 0];
   let gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null;
-  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs }).catch(() => {}); };
+  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard() }).catch(() => {}); };
   const netmsg = $('netmsg');
   (async () => {
     const framed = window.top !== window;
@@ -2355,10 +2632,10 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   function leaveNet() {
     if (net) { try { net.leave(); } catch (_) {} }
     net = null; tgt = null; roster = []; remoteIn.clear(); lostAt = 0; myPeer = null;
-    names.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
+    names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    leaveNet(); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null;
+    hlReset(); leaveNet(); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null;
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm();
@@ -2398,9 +2675,11 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const guests = peers.filter(p => !p.sameTab && p.presence && p.presence.r === 'g');
     const live = new Set(guests.map(g => g.peer));
     roster = roster.filter(r => live.has(r[0]));
+    for (const k of netCards.keys()) if (!live.has(k)) netCards.delete(k);
     for (const g of guests) {
       const pr = g.presence;
       names.set(g.peer, cleanName(pr.n));
+      seeCard(g.peer, pr.pf);
       if (pr.rd !== undefined) readyMap.set(g.peer, Number(pr.rd));
       lobbyReady.set(g.peer, !!pr.lr);
       if (state === 'lobby' && Number.isInteger(pr.ws) && P[pr.ws] && P[pr.ws].ctrl === 'ai' && !roster.some(r => r[1] === pr.ws)) {
@@ -2542,12 +2821,12 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
       // slow-changing fields go every 15th message (and always in the lobby)
       pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > 12 ? 1 : 0,
-      gs: [goalSeq, lastScorer], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
+      gs: [goalSeq, lastScorer, lastGk, lastGoalTeam], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
       rx: rxOut.filter(r => now - r[3] < 3000).map(r => [r[0], r[1], r[2]]),
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
     };
     if (st === 'e' && stats) o.ss = stats;
-    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, tf: teamForm, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'] });
+    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, tf: teamForm, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
   }
   function myTeam() { const e = roster.find(r => r[0] === myPeer); return e && P[e[1]] ? P[e[1]].team : null; }
@@ -2564,6 +2843,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     if (Array.isArray(s.tf)) teamForm = [Number(s.tf[0]) | 0, Number(s.tf[1]) | 0];
     if (Array.isArray(s.hs)) hostInfo = [Number(s.hs[0]) | 0, cleanName(s.hs[1]) || 'Vært'];
     if (Array.isArray(s.nm)) s.nm.forEach((n, i) => { if (P[i]) P[i].name = cleanName(n); });
+    if (Array.isArray(s.pf)) for (const e of s.pf.slice(0, 24)) if (Array.isArray(e) && typeof e[0] === 'string' && e[0] !== myPeer) seeCard(e[0], e.slice(1));
     if (Array.isArray(s.lr)) lobbyLr = s.lr.map(v => Number(v) | 0);
     if (Array.isArray(s.rx)) for (const r of s.rx) { if (Array.isArray(r) && Number(r[0]) > rxGuestSeen) { rxGuestSeen = Number(r[0]); if (state === 'play' || state === 'end') addRx(Number(r[1]) | 0, Number(r[2]) | 0); } }
     if (s.st === 'l') {
@@ -2592,7 +2872,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     tgt = s;
     if (s.st === 'p' && (state !== 'play' || s.m !== seenMatch)) {
       seenMatch = s.m; state = 'play'; particles = []; resetCommentary();
-      stats = newStats(); matchGoals = []; replay = null; recBuf = []; rxList = []; gLr = 0; gRd = -1; sendG();
+      stats = newStats(); matchGoals = []; replay = null; recBuf = []; rxList = []; gLr = 0; gRd = -1; sendG(); hlReset(); matchLen = Math.max(1, clock);
       gSeenGoal = Array.isArray(s.gs) ? s.gs[0] : null;
       $('ready').hidden = true; $('rxbar').hidden = false;
       for (const id of ['lobby', 'end', 'menu']) $(id).hidden = true;
@@ -2604,7 +2884,12 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
       if (s.rp) startReplay();
     }
     if (Array.isArray(s.gs) && s.gs[0] !== gSeenGoal) {
-      if (gSeenGoal !== null) { const n = cleanName(s.gs[1]); if (n) matchGoals.push(n); }
+      if (gSeenGoal !== null) {
+        const n = cleanName(s.gs[1]), k = GK_NAME[s.gs[2]] !== undefined || ['shot', 'pass'].includes(s.gs[2]) ? s.gs[2] : 'shot', t = s.gs[3] ? 1 : 0;
+        if (n) matchGoals.push(n);
+        hlAdd(t, n, k);
+        if (t === myTeam()) dailyEvent('goal', k);
+      }
       gSeenGoal = s.gs[0];
     }
     if (s.st === 'e' && state === 'play') finish();
@@ -2615,7 +2900,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     if (mode === 'guest' && lostAt && now - lostAt > 5000) { toMenu('Forbindelsen til værten blev afbrudt.'); return; }
     if (mode === 'host' && now - lastSend > 33) {
       lastSend = now;
-      const st = state === 'lobby' ? 'l' : state === 'end' ? 'e' : 'p';
+      const st = state === 'lobby' ? 'l' : state === 'end' || state === 'hl' ? 'e' : 'p';
       net.presence({ r: 'h', s: pack(st) }).catch(() => {});
     }
     if (mode === 'guest') {
@@ -2858,13 +3143,13 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
 
   function render(dt) {
     let saved = null; // during a replay, show the recorded frame and put the live state back afterwards
-    if (replay && replay.t >= 0 && state === 'play') {
-      const fr = replay.frames[Math.min(replay.frames.length - 1, Math.floor(replay.t * 30))];
+    const fr = replay && replay.t >= 0 && state === 'play' ? replay.frames[Math.min(replay.frames.length - 1, Math.floor(replay.t * 30))] : hlFrame();
+    if (fr) {
       saved = { b: [ball.x, ball.y, ball.z, ball.owner], p: P.map(p => [p.x, p.y, p.fx, p.fy, p.tackle, p.stun]) };
       ball.x = fr.b[0]; ball.y = fr.b[1]; ball.z = fr.b[2]; ball.owner = -1;
       fr.p.forEach((q, i) => { const p = P[i]; if (!p) return; p.x = q[0]; p.y = q[1]; p.fx = q[2]; p.fy = q[3]; p.tackle = q[4] ? 0.1 : 0; p.stun = 0; });
     }
-    if (state === 'play' || state === 'end') updateCamera(dt, false);
+    if (state === 'play' || state === 'end' || state === 'hl') updateCamera(dt, false);
     else { sc = Math.min(sw / WW, sh / WH); ox = (sw - WW * sc) / 2; oy = (sh - WH * sc) / 2; }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = col.night; ctx.fillRect(0, 0, sw, sh);
@@ -2881,10 +3166,13 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     if (state === 'play' && !saved) drawOffscreen();
     if (state === 'play' && sc * WW > sw + 2) drawMinimap();
     if (state === 'play' || state === 'end') drawHUD();
-    if (saved) {
+    if (saved && state === 'hl') hlCaption();
+    else if (saved) {
       ctx.font = `700 ${Math.max(16, Math.min(24, sh * 0.05))}px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
       ctx.fillStyle = col.gold; ctx.fillText('GENTAGELSE', sw / 2, sh - 34);
       ctx.font = `600 13px ${col.font}`; ctx.fillStyle = 'rgba(244,247,242,0.75)'; ctx.fillText('Tryk for at springe over', sw / 2, sh - 14);
+    }
+    if (saved) {
       ball.x = saved.b[0]; ball.y = saved.b[1]; ball.z = saved.b[2]; ball.owner = saved.b[3];
       saved.p.forEach((q, i) => { const p = P[i]; p.x = q[0]; p.y = q[1]; p.fx = q[2]; p.fy = q[3]; p.tackle = q[4]; p.stun = q[5]; });
     } else if (state === 'play' && !paused) drawControls();
@@ -2896,6 +3184,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
     while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT); acc -= DT; }
     netTick(now, dt);
+    hlTick(dt);
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
     for (const r of rxList) r.t -= dt; rxList = rxList.filter(r => r.t > 0); rxCd -= dt;
     crowd.update(dt);
@@ -2908,7 +3197,7 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), end: (a, b) => { score = [a, b]; half = 2; clock = 0.01; } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
