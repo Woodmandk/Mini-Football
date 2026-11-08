@@ -1704,6 +1704,25 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const f = freeMates(h); if (!f.length) return null;
     return f.reduce((a, b) => (dBall(b) < dBall(a) ? b : a));
   }
+  // Auto-switch: hand each human on this team the teammate best placed for (x, y), if he is clearly closer
+  function autoSwitchTo(team, x, y, margin) {
+    for (const h of P.filter(q => q.team === team && isHuman(q))) {
+      if (h.swcd > 0 || h.charging || (size > 1 && h.k === 0 && h.hands > 0)) continue;
+      const f = freeMates(h).filter(q => !(size > 1 && q.k === 0) && !(q.stun > 0)); if (!f.length) continue;
+      const dq = q => Math.hypot(q.x - x, q.y - y), q = f.reduce((a, b) => (dq(b) < dq(a) ? b : a));
+      if (dq(q) + margin < dq(h)) { swapControl(h, q); q.swcd = 0.8; }
+    }
+  }
+  function defendSwitch(o) { // they have it: take the man who can get goal-side of the ball carrier quickest
+    const t = 1 - o.team, ownX = t ? PR : PL;
+    const cost = q => Math.hypot(q.x - o.x, q.y - o.y) + ((q.x - o.x) * (t ? -1 : 1) > 0 ? 130 : 0) + (q.stun > 0 ? 200 : 0); // behind the play costs
+    for (const h of P.filter(q => q.team === t && isHuman(q))) {
+      if (h.swcd > 0 || h.charging || (size > 1 && h.k === 0)) continue;
+      const f = freeMates(h).filter(q => !(size > 1 && q.k === 0)); if (!f.length) continue;
+      const q = f.reduce((a, b) => (cost(b) < cost(a) ? b : a));
+      if (cost(q) + 150 < cost(h) && Math.abs(o.x - ownX) < Math.abs(h.x - ownX) + 400) { swapControl(h, q); q.swcd = 1.3; }
+    }
+  }
   function manualSwitch(h) { const q = nearestFree(h); if (q) swapControl(h, q); }
   function onPossession(o) {
     // Your team got the ball: you take the player who has it.
@@ -1823,6 +1842,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ball.gk = 'pass'; ball.fresh = false;
     sfx.pass();
     if (isHuman(p)) swapControl(p, q);
+    autoSwitchTo(1 - p.team, tx, ty, 50); // the other side: take the man nearest where the pass is going
   }
   // chip over the keeper: two quick taps on SKYD
   function lob(p, ax, ay, q) {
@@ -2122,9 +2142,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
       : 0.08 + u0 * 0.9 + (ub - 1) * (0.25 + 0.45 * u0) + push * 2; // without: drop back as a compact block
     if (!weHave && teamSty[p.team] === 'kontra' && u0 > 0.8) u = Math.max(u, 0.95); // the counter team leaves a striker up, ready to go
     u = Math.max(0.1, Math.min(1.85, u));
+    if (!weHave) { // like a real team: only the back line drops into the box, midfield holds the edge of it, the forwards stay up for the counter
+      const floor = u0 < 0.4 ? 92 : u0 < 0.7 ? 185 : Math.max(280, half * 0.5);
+      u = Math.max(u, floor / half);
+    }
     let x = ownX + dir * u * half;
     if (weHave) { const ol = offsideLine(p.team); x = dir > 0 ? Math.min(x, ol - 10) : Math.max(x, ol + 10); } // stay onside
-    const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1 : 0.82) * [0.74, 1, 1.18][T.w] + (ball.y - CY) * 0.3;
+    const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1 : 0.88) * [0.8, 1, 1.18][T.w] + (ball.y - CY) * 0.22;
     return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
   }
   // the best mate to pass to: free of markers, a clear lane, and further up the pitch
@@ -2260,7 +2284,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
         const h = homeOf(p);
         const x = h.x + (ball.x - CX) * 0.55 + dir * (push + (T.m - 1) * 0.05 - (!weHave && teamSty[p.team] === 'mur' ? 0.06 : 0)) * L;
         const y = CY + (h.y - CY) * [0.75, 1, 1.15][T.w] + (ball.y - CY) * 0.25;
-        return [Math.max(PL + 40, Math.min(PR - 40, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
+        const deep = weHave ? 40 : 120 + (h.x - (dir > 0 ? PL : PR)) * dir * 0.25; // small teams: don't all stand on the goal line
+        return [dir > 0 ? Math.max(PL + deep, Math.min(PR - 40, x)) : Math.min(PR - deep, Math.max(PL + 40, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
       })();
       const byBall = size >= 3 ? mates.filter(q => q !== chaser && !(q.k === 0)).sort((a, b) => dBall(a) - dBall(b)) : [];
       const second = byBall[0] || null;
@@ -2647,10 +2672,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
         }
       }
       // a loose ball nobody is chasing: hand the nearest teammate to each human
-      if (ball.loose > 1.2) {
-        for (const h of P.filter(isHuman)) { if (h.swcd > 0) continue; const q = nearestFree(h); if (q && dBall(q) + 110 < dBall(h)) swapControl(h, q); }
-      }
-    }
+      if (ball.loose > 0.45 && !setp) { const bx = ball.x + ball.vx * 0.35, by = ball.y + ball.vy * 0.35; for (const t of [0, 1]) if (!(ball.last && ball.last.pass && ball.last.team === t && ball.loose < 1.6)) autoSwitchTo(t, bx, by, 70); }
+    } else if (!setp && size > 1 && !(pen || so)) defendSwitch(owner());
     for (const [px, py] of POSTS) {
       const dx = ball.x - px, dy = ball.y - py, d = Math.hypot(dx, dy), m = BRAD + POSTR;
       if (d < m && d > 0 && ball.z < BAR) {
