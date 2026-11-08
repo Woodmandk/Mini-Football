@@ -676,8 +676,8 @@ table.st td.l, table.st th.l { text-align: left; }
   function findVoice() { try { const vs = speechSynthesis.getVoices(); voice = vs.find(x => /^da/i.test(x.lang)) || vs.find(x => /^(nb|no|sv)/i.test(x.lang)) || null; } catch (_) {} }
   if (window.speechSynthesis) { findVoice(); try { speechSynthesis.addEventListener('voiceschanged', findVoice); } catch (_) {} }
   function speakNow(text) {
-    const u = new SpeechSynthesisUtterance(text); u.lang = 'da-DK'; u.rate = 1.1; u.volume = 1;
-    if (voice) u.voice = voice;
+    const u = new SpeechSynthesisUtterance(text); u.rate = 1.1; u.volume = 1;
+    if (voice) { u.voice = voice; u.lang = voice.lang; } // no Danish voice on the phone: let it use its own default so it still talks
     if (speechSynthesis.paused) speechSynthesis.resume();
     speechSynthesis.speak(u);
     busyUntil = performance.now() + 400 + text.length * 70; // don't trust .speaking: some phones never reset it
