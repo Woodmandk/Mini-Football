@@ -3478,7 +3478,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   let room = null, net = null, lastSend = 0, lostAt = 0, sentIn = '', myPeer = null, seenMatch = -1, tgt = null, lobbySize = 1;
   let roster = []; // [[peer, slot]] (guests also get [peer, slot, name])
   let hostReady = false, hostInfo = [0, 'Vært'], lobbyLr = [0, 0, 0];
-  let gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null;
+  let gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null, gZ = 0;
   const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard(), ly: gFm === CUST ? packLay(myLay(lobbySize)) : 0, tc: tacWire(loadMT().tac), tm: teamWire(myCardTeam()) }).catch(() => {}); };
   const netmsg = $('netmsg');
   (async () => {
@@ -3589,7 +3589,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const hex = v => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v) : null);
   function cleanTeam(a) {
     if (!Array.isArray(a)) return null;
-    const n = cleanName(a[0]), s = String(a[1] || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase(), c1 = hex(a[2]), c2 = hex(a[3]) || '#f4f7f2';
+    const n = String(a[0] || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 16), s = String(a[1] || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase(), c1 = hex(a[2]), c2 = hex(a[3]) || '#f4f7f2';
     return n && s && c1 ? { n, s, c1, c2 } : null;
   }
   function myCardTeam() { const mt = loadMT(); return mt.made ? { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2 } : null; }
@@ -3685,7 +3685,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (code.length !== 4) { netmsg.textContent = 'Koden har 4 cifre.'; return; }
     netmsg.textContent = 'Forbinder…';
     try { net = await room.join('mf-' + code, 'g'); } catch (e) { netmsg.textContent = 'Kunne ikke finde kampen. Tjek koden, og at værten har trykket Opret kamp.'; return; }
-    mode = 'guest'; state = 'lobby'; seenMatch = -1; tgt = null; gIn = [0, 0, 0, 0]; gRx = [0, 0]; gRd = -1; gLr = 0; gWs = -1; gFm = myForm(cfg.size); rxGuestSeen = 0;
+    mode = 'guest'; state = 'lobby'; seenMatch = -1; tgt = null; gIn = [0, 0, 0, 0]; gRx = [0, 0]; gRd = -1; gLr = 0; gWs = -1; gFm = myForm(cfg.size); gZ = 0; rxGuestSeen = 0;
     $('menu').hidden = true; $('lobby').hidden = false; $('startOnline').hidden = true; $('share').hidden = true;
     $('lobbyCode').textContent = code; $('lobbyMsg').textContent = 'Forbundet. Venter på at værten starter kampen…';
     $('rosterR').textContent = ''; $('rosterB').textContent = ''; $('rosterR').dataset.key = '';
@@ -3725,6 +3725,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const z = [1, 2, 3, 5, 11].includes(Number(s.z)) ? Number(s.z) : 1;
     if (P.length !== z * 2) makePlayers(z);
     lobbySize = z;
+    // the first time we learn the match size: bring the formation and own line-up for that size
+    if (mode === 'guest' && gZ !== z) { gZ = z; gFm = myForm(z); sendG(); }
     roster = Array.isArray(s.ro) ? s.ro.filter(r => Array.isArray(r) && typeof r[0] === 'string').map(r => [r[0], Number(r[1]) | 0, cleanName(r[2]), r[3] ? 1 : 0]) : [];
     for (const p of P) { p.ctrl = 'ai'; p.peer = null; }
     for (const [peer, slot] of roster) if (P[slot]) { P[slot].ctrl = peer === myPeer ? 'ME' : 'RV'; P[slot].peer = peer; }
