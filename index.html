@@ -242,6 +242,16 @@ table.st tr.me td { color: var(--gold); }
 /* your own team */
 .minis button.mine { border-color: var(--gold); color: var(--gold); }
 .tp.big { font-size: 16px; font-weight: 700; color: #7fe0a0; flex: 0 0 92px; text-align: right; }
+.pk { width: 170px; margin: 6px auto 10px; border-radius: 14px; padding: 12px 10px; text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,0.5); animation: pkin 0.7s ease-out; }
+.pk .o { font-size: 40px; font-weight: 700; line-height: 1; } .pk .ps { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
+.pk .n { font-size: 16px; font-weight: 700; margin: 6px 0 2px; } .pk .nt { font-size: 11px; opacity: 0.85; }
+.pk .st { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; font-size: 12px; margin-top: 8px; text-align: left; }
+.pk.event { background: linear-gradient(135deg, #0d4d3a, #20b37a); color: #fff7c2; }
+.bronze.pk { background: #8a5a35; color: #fff; } .silver.pk { background: #9aa4ad; color: #14181c; } .gold.pk { background: #e3b23c; color: #1a1408; } .elite.pk { background: linear-gradient(135deg, #2b1a5c, #7b3fe4); color: #ffe27a; }
+@keyframes pkin { 0% { transform: rotateY(90deg) scale(0.6); opacity: 0; } 60% { transform: rotateY(-10deg) scale(1.05); opacity: 1; } 100% { transform: none; } }
+.nat { font-size: 10px; padding: 1px 4px; border-radius: 4px; background: rgba(255,255,255,0.15); margin-left: 4px; }
+.evbox { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(32,179,122,0.15); border: 1px solid rgba(32,179,122,0.5); font-size: 12px; }
+.evbox b { font-size: 13px; } .evbox div { display: flex; justify-content: space-between; gap: 8px; }
 .sqgrid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; text-align: left; align-items: start; }
 .sqlist { display: flex; flex-direction: column; gap: 3px; }
 .sublist { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin: 4px 0 10px; }
@@ -469,11 +479,21 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <div class="sqcard" id="sqCard"><div class="o"><b id="sqOvr">60</b><span id="sqPos">Angreb</span></div>
             <input id="sqName" class="namein" maxlength="16" aria-label="Spillerens navn" autocomplete="off"></div>
           <div class="sqstats" id="sqStats"></div>
-          <p class="sqnote"><b id="sqTeam"></b> · <span id="sqXI"></span></p>
+          <p class="sqnote"><b id="sqTeam"></b> · <span id="sqChem"></span> · <span id="sqXI"></span></p>
           <p class="sqnote">Træningspoint (TP) får du i færdighedsspil og kampe, eller i butikken.</p>
           <button id="sqDrills" class="go">Færdighedsspil ›</button>
+          <div class="evbox" id="evBox"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="packOv" hidden>
+    <div class="card">
+      <h2 id="pkTitle">Ny spiller!</h2>
+      <div id="pkCard" class="pk"></div>
+      <p class="sqnote" id="pkNote"></p>
+      <div class="btns"><button id="pkKeep">Behold</button><button id="pkSell" class="alt">Sælg</button></div>
     </div>
   </div>
 
@@ -1785,6 +1805,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (me !== null && me !== undefined) {
       const online = mode === 'host' || mode === 'guest';
       if (kind !== 'train' && kind !== 'pen' && kind !== 'test') dailyEvent('match', { win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], mode, diff: matchDiff(), size, online });
+      if (kind !== 'train' && kind !== 'pen' && kind !== 'test' && mode !== 'two') for (const l of evMatch({ win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], diff: matchDiff() })) lines.push(l);
       if (online) { const o = onlineSides(me); const r = rateOnline(o.opps, win === me ? 1 : win < 0 ? 0.5 : 0, score[me]); if (r) lines.push(r); }
     }
     for (const c of chWon) lines.push('Udfordring klaret: ' + c);
@@ -3787,8 +3808,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; }
     if (m === 'cpu' || (comp && m === 'host')) cpuRatings(1); // the computer's players each have their own rating too
     if (m === 'cpu' || (comp && m === 'host')) { // your trained squad (always the home side against the computer): every player plays at his own rating
-      const L = squadToPitch(); const d = tD[0];
+      const L = squadToPitch(); const d = tD[0], ck = (chemOf(size).v - 50) / 50; // kemi: a team that knows each other plays a little better
       tD[0] = { spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
+      tD[0].pass *= 1 + 0.06 * ck; tD[0].tackle *= 1 + 0.04 * ck; tD[0].react *= 1 - 0.06 * ck;
     }
   }
   // online: show the captains' own teams (names, badges, colours); a side without one keeps its kit colour
@@ -4497,12 +4519,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const strOvr = str => 50 + str * 6; // the computer teams' rating, from their stars
   function squadLoad() {
     let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
-    if (S && Array.isArray(S.pl) && S.pl.length === 11) return S;
+    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) if (!p.nat) p.nat = 'DK'; return S; }
     // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
     const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
     const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
     S = { tp: 20, pl: SQ_POS.map((pos, i) => {
-      const b = base[pos], j = () => Math.floor(Math.random() * 7) - 3, p = { n: `${fn[i]} ${ln[i]}`, pos };
+      const b = base[pos], j = () => Math.floor(Math.random() * 7) - 3, p = { n: `${fn[i]} ${ln[i]}`, pos, nat: 'DK' };
       SKILLS.forEach(([k], x) => { p[k] = Math.max(40, Math.min(99, b[x] + j() + Math.round((old[k] || 0) * 4.5))); });
       return p;
     }) };
@@ -4568,6 +4590,98 @@ button.small { font-size: 13px; padding: 9px 10px; }
     squadSave(S);
     return ups;
   }
+  // ---------- player cards, kemi and the weekly event (as in FC Mobile) ----------
+  const NATS = { DK: 'Danmark', SE: 'Sverige', NO: 'Norge', DE: 'Tyskland', NL: 'Holland', ES: 'Spanien', BR: 'Brasilien', FR: 'Frankrig' };
+  const NATN = { DK: [FIRSTN, LASTN], SE: [['Erik', 'Gustav', 'Nils', 'Linus', 'Albin'], ['Berg', 'Lindqvist', 'Holmberg', 'Sjöberg']], NO: [['Ola', 'Sindre', 'Håkon', 'Eirik'], ['Haugen', 'Solberg', 'Bakken', 'Strand']],
+    DE: [['Jonas', 'Leon', 'Felix', 'Lukas'], ['Becker', 'Wolf', 'Krause', 'Brandt']], NL: [['Daan', 'Sem', 'Ruben', 'Bram'], ['de Vries', 'Bakker', 'Visser', 'Smit']],
+    ES: [['Pablo', 'Javi', 'Diego', 'Iker'], ['Ruiz', 'Navarro', 'Ortega', 'Molina']], BR: [['Rafa', 'Thiago', 'Bruno', 'Caio'], ['Costa', 'Souza', 'Lima', 'Rocha']], FR: [['Hugo', 'Théo', 'Louis', 'Enzo'], ['Dubois', 'Lefèvre', 'Moreau', 'Girard']] };
+  const SQ_MAX = 18; // 11 plus a bench of 7
+  const pk1 = a => a[Math.floor(Math.random() * a.length)];
+  // kemi 0-100: players from the same country who start together know each other (each man: 0-3 points, like FIFA)
+  function chemOf(n, S) {
+    S = S || squadLoad(); const xi = squadXI(Math.max(1, n), S), cnt = {};
+    for (const x of xi) cnt[x.p.nat || 'DK'] = (cnt[x.p.nat || 'DK'] || 0) + 1;
+    const pts = xi.map(x => { const f = cnt[x.p.nat || 'DK'] / xi.length; return (f >= 0.3 ? 1 : 0) + (f >= 0.5 ? 1 : 0) + (f >= 0.7 ? 1 : 0); });
+    return { v: Math.round(pts.reduce((a, b) => a + b, 0) / (3 * xi.length) * 100), pts, xi };
+  }
+  function makeCard(lo, hi, opt) { // a new player card: a position, a country, stats around a rating
+    opt = opt || {};
+    const pos = opt.pos || pk1(['MV', 'FO', 'FO', 'FO', 'MB', 'MB', 'MB', 'AN', 'AN', 'AN']);
+    const nat = opt.nat || (Math.random() < 0.35 ? 'DK' : pk1(Object.keys(NATS)));
+    const t = lo + Math.floor(Math.random() * (hi - lo + 1)), nm = NATN[nat] || NATN.DK, p = { n: `${pk1(nm[0])} ${pk1(nm[1])}`, pos, nat };
+    for (const [k] of SKILLS) p[k] = Math.max(40, Math.min(99, t + POSB[pos][k] + Math.floor(Math.random() * 7) - 3));
+    for (let i = 0; i < 6 && ovr(p) !== t; i++) { const d = t - ovr(p); for (const [k] of SKILLS) p[k] = Math.max(40, Math.min(99, p[k] + d)); } // land on the rating the pack promised
+    if (opt.ev) p.ev = opt.ev;
+    return p;
+  }
+  const PACKS = [['Bronzepakke', 150, 50, 63], ['Sølvpakke', 350, 62, 72], ['Guldpakke', 800, 70, 80]];
+  function cardHTML(el, p) {
+    const o = ovr(p); el.className = 'pk ' + (p.ev ? 'event' : ovrTier(o)); el.textContent = '';
+    const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; el.appendChild(d); return d; };
+    add('o', o); add('ps', POS[p.pos]); add('n', p.n); add('nt', (NATS[p.nat] || 'Danmark') + (p.ev ? ' · ' + p.ev : ''));
+    const st = add('st', '');
+    for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflekser' : name} ${p[k]}`; st.appendChild(d); }
+  }
+  function showCard(p, title, after) { // the reveal: keep him (on the bench, or in place of your weakest) or sell him for coins
+    const S = squadLoad(), full = S.pl.length >= SQ_MAX, worth = Math.round(ovr(p) * 2);
+    const worst = full ? S.pl.map((q, i) => ({ q, i })).filter(x => x.i > 0 && (x.q.pos === 'MV') === (p.pos === 'MV')).sort((a, b) => ovr(a.q) - ovr(b.q))[0] : null;
+    $('pkTitle').textContent = title; cardHTML($('pkCard'), p);
+    $('pkNote').textContent = full ? (worst ? `Truppen er fuld (${SQ_MAX}). Behold ham i stedet for ${worst.q.n} (${ovr(worst.q)}).` : 'Truppen er fuld.') : `Han kommer i truppen (${S.pl.length + 1}/${SQ_MAX}). De bedste starter automatisk.`;
+    $('pkKeep').textContent = full ? 'Erstat' : 'Behold'; $('pkKeep').disabled = full && !worst;
+    $('pkSell').textContent = `Sælg for ${worth} mønter`;
+    const done = () => { $('packOv').hidden = true; if (after) after(); };
+    $('pkKeep').onclick = () => {
+      const S2 = squadLoad();
+      if (S2.pl.length >= SQ_MAX) { if (!worst) return; S2.pl[worst.i] = p; } else S2.pl.push(p);
+      if (p.pos === 'MV' && ovr(p) > ovr(S2.pl[0])) { const i = S2.pl.indexOf(p); [S2.pl[0], S2.pl[i]] = [S2.pl[i], S2.pl[0]]; } // a better keeper goes in goal
+      squadSave(S2); sfx.win(); done();
+    };
+    $('pkSell').onclick = () => { addCoins(worth, 'salg'); done(); };
+    $('packOv').hidden = false; sfx.win();
+  }
+  function buyPack(i, after) {
+    const [n, price, lo, hi] = PACKS[i], pr = loadProf();
+    if (pr.coins < price) return `Mangler ${price - pr.coins}`;
+    pr.coins -= price; saveProf(pr);
+    showCard(makeCard(lo, hi), n, after); return '';
+  }
+  // the weekly event: three tasks, a new theme every Monday; finish them all for an event card (80+) and coins
+  const EVENTS = [
+    { n: 'Målfest', ev: 'Målfest', tasks: [['goals', 'Scor 12 mål', 12], ['win', 'Vind 3 kampe', 3], ['big', 'Vind med 3 mål', 1]] },
+    { n: 'Muren', ev: 'Muren', tasks: [['clean', 'Hold buret rent 2 gange', 2], ['tk', 'Vind 25 tacklinger', 25], ['win', 'Vind 3 kampe', 3]] },
+    { n: 'Tiki-taka', ev: 'Tiki-taka', tasks: [['pa', 'Lav 80 afleveringer', 80], ['win', 'Vind 3 kampe', 3], ['hard', 'Vind på Svær eller Legende', 1]] },
+    { n: 'Holdkemi', ev: 'Holdkemi', tasks: [['play', 'Spil 5 kampe', 5], ['goals', 'Scor 8 mål', 8], ['win', 'Vind 2 kampe', 2]] },
+  ];
+  const weekNo = () => Math.floor((Date.now() / 864e5 + 3) / 7); // Thursday 1 Jan 1970 + 3 days = a Monday start
+  function evLoad() {
+    let E = null; try { E = JSON.parse(localStorage.getItem('mf-event') || 'null'); } catch (_) {}
+    const wk = weekNo();
+    if (!E || E.wk !== wk) E = { wk, p: [0, 0, 0], got: false };
+    return E;
+  }
+  const evTheme = E => EVENTS[E.wk % EVENTS.length];
+  function evSave(E) { try { localStorage.setItem('mf-event', JSON.stringify(E)); } catch (_) {} }
+  function evMatch(d) { // after a match: count towards this week's tasks; returns lines for the end screen
+    const E = evLoad(), T = evTheme(E), out = [];
+    if (E.got) return out;
+    const add = { goals: d.gf, win: d.win ? 1 : 0, big: d.win && d.gf - d.ga >= 3 ? 1 : 0, clean: d.ga === 0 ? 1 : 0, tk: d.tk, pa: d.pa, hard: d.win && d.diff >= 2 ? 1 : 0, play: 1 };
+    T.tasks.forEach(([id, txt, need], i) => {
+      const was = E.p[i]; E.p[i] = Math.min(need, E.p[i] + (add[id] || 0));
+      if (E.p[i] > was) out.push(`Event ${T.n}: ${txt} ${E.p[i]}/${need}`);
+    });
+    if (T.tasks.every(([, , need], i) => E.p[i] >= need)) {
+      E.got = true; addCoins(200, 'event'); out.push(`Event ${T.n} klaret! +200 mønter og et eventkort`);
+      evSave(E);
+      setTimeout(() => showCard(makeCard(80, 84, { ev: T.ev }), `Eventkort: ${T.n}`), 600);
+      return out;
+    }
+    evSave(E); return out;
+  }
+  function evPaint() {
+    const E = evLoad(), T = evTheme(E), box = $('evBox'); box.textContent = '';
+    const h = document.createElement('b'); h.textContent = `Ugens event: ${T.n}` + (E.got ? ' · klaret' : ' · belønning: eventkort 80+ og 200 mønter'); box.appendChild(h);
+    T.tasks.forEach(([, txt, need], i) => { const r = document.createElement('div'); const a = document.createElement('span'); a.textContent = txt; const b = document.createElement('span'); b.textContent = `${Math.min(need, E.p[i])}/${need}`; r.append(a, b); box.appendChild(r); });
+  }
   let sqSel = 1;
   function squadShow() {
     const S = squadLoad(), n = Math.max(1, cfg.size), xi = squadXI(n, S), inXI = new Set(xi.map(x => x.i));
@@ -4576,7 +4690,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const b = document.createElement('button'); b.className = 'alt sqrow' + (i === sqSel ? ' sel' : '');
       const ps = document.createElement('span'); ps.className = 'pos'; ps.textContent = p.pos;
       const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.n;
-      const o = document.createElement('span'); o.className = 'ovr ' + ovrTier(ovr(p)); o.textContent = ovr(p);
+      const na = document.createElement('span'); na.className = 'nat'; na.textContent = p.nat || 'DK'; nm.appendChild(na);
+      if (p.ev) { const e = document.createElement('span'); e.className = 'nat'; e.textContent = '★'; nm.appendChild(e); }
+      const o = document.createElement('span'); o.className = 'ovr ' + (p.ev ? 'gold' : ovrTier(ovr(p))); o.textContent = ovr(p);
       if (!inXI.has(i)) b.classList.add('bench');
       b.append(ps, nm, o); b.onclick = () => { sqSel = i; squadShow(); };
       L.appendChild(b);
@@ -4600,6 +4716,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
       r.append(b, bt, bar); box.appendChild(r);
     }
     $('sqTeam').textContent = `Holdets rating ${teamOvr(n)} (${n} mod ${n})`;
+    const ch = chemOf(n, S); $('sqChem').textContent = `Kemi ${ch.v}/100 (spillere fra samme land, der starter sammen)`;
+    $('sqPos').textContent = POS[p.pos] + ' · ' + (NATS[p.nat] || 'Danmark');
+    evPaint();
     $('sqXI').textContent = inXI.has(sqSel) ? `Starter ved ${n} mod ${n}.` : `På bænken ved ${n} mod ${n}. De bedste spillere starter automatisk.`;
     paintTP(S); paintCoins();
     $('squad').hidden = false;
@@ -4669,6 +4788,15 @@ button.small { font-size: 13px; padding: 9px 10px; }
       };
       TR.appendChild(b);
     }
+    PACKS.forEach(([n, price, lo, hi], i) => { // player packs: a new card for your squad
+      const b = document.createElement('button'); const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${n} (${lo}-${hi})`;
+      const pp = document.createElement('span'); pp.className = 'pr'; pp.textContent = `● ${price}`; b.append(nm, pp);
+      b.onclick = () => {
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; pp.textContent = 'Tryk igen: åbn'; return; }
+        const r = buyPack(i, shopShow); if (r) pp.textContent = r;
+      };
+      TR.appendChild(b);
+    });
     $('lvLbl').textContent = `Træning · Du har ${squadLoad().tp} TP · Holdets rating ${teamOvr(Math.max(1, cfg.size))}`;
     const T = $('shopTeams'), B = $('shopBalls'), Pp = $('shopPitch');
     T.textContent = B.textContent = Pp.textContent = '';
@@ -5837,7 +5965,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st) }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st) }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
