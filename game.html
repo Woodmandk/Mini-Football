@@ -2916,7 +2916,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const ai = p.ctrl === 'ai';
       p.fat = p.fat || 0;
       if (p.sprint && p.ms) p.ms.spr += dt;
-      if (p.sprint && p.turbo <= 0) { p.stamina = Math.max(0, p.stamina - (ai ? 0.16 : 0.28) * dt); p.fat = Math.min(0.4, p.fat + 0.006 * dt); }
+      if (p.sprint && p.turbo <= 0) { p.stamina = Math.max(0, p.stamina - (ai ? 0.12 : 0.14) * dt); p.fat = Math.min(0.4, p.fat + 0.004 * dt); }
       else p.stamina = Math.min(1 - p.fat, p.stamina + 0.18 * dt);
       const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? 1.35 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1);
 
