@@ -651,6 +651,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         <div><b class="k">SKIFT</b><span>Uden bolden. Skift til den medspiller, der er tættest på bolden.</span></div>
         <div><b class="k">TILLÆGSTID</b><span>Hver halvleg får lagt tid til for frispark, mål og skader. Står det lige efter fuld tid, spilles der forlænget spilletid før straffesparkene (kan slås fra).</span></div>
         <div><b class="k">UDSKIFTNING</b><span>Trætte og skadede spillere skiftes ud ved pausen og sidst i kampen. Mod computeren kan du selv skifte i pausemenuen.</span></div>
+        <div><b class="k">KAMERA</b><span>Vælg Normal, Tæt eller Vid under Indstillinger. Ved mål, kort, frispark og hjørnespark kører kameraet tæt på med filmstriber (Filmklip kan slås fra).</span></div>
         <div><b class="k">SIGTELINJE</b><span>Mens du holder SKYD, og ved frispark og hjørnespark, viser en stiplet streg, hvor bolden går hen. Guld betyder, at den går mod mål. Kan slås fra under Indstillinger.</span></div>
         <div><b class="k">AVANCERET</b><span>Vælg Knapper: Avanceret under Indstillinger. Så spurter du kun med SPURT-knappen, med bolden giver FINTE et hurtigt sidestep forbi forsvareren, og uden bolden holder du PRES for at lukke ned på manden med bolden.</span></div>
       </div>
@@ -757,7 +758,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, aim: true, adv: false, lock: false, name2: '', coop: 0 };
+  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
   if (![1, 2, 3, 5, 7, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
@@ -1255,10 +1256,26 @@ button.small { font-size: 13px; padding: 9px 10px; }
   resize();
   const shootoutOn = () => !!(mode === 'guest' ? soG : so);
   const soGoal = () => (so ? (so.turn ? PL : PR) : ball.x > CX ? PR : PL); // the goal the shootout is at right now
+  let cineZ = 1, cineA = 0; const lead = [0, 0];
+  function cineFocus() { // where the camera goes in a stoppage, and how close: [x, y, zoom], or null in open play
+    if (cfg.cine === false) return null;
+    const c = P[celeb];
+    if (banner === 'MÅL!' && c) return [c.x, c.y, 1.45];
+    if (flash && (flash.text === 'Gult kort' || flash.text === 'Rødt kort') && pause > 0) return [ball.x, ball.y, 1.35];
+    if (flash && /^Udskiftning/.test(flash.text) && flash.t > 0.6) return null;
+    if (setp && (ball.rs === 'free' || ball.rs === 'corner') && setp.t < Math.max(1.1, setp.wait) && ball.owner >= 0) { const o = P[ball.owner]; return [o.x + o.fx * 60, o.y + o.fy * 30, 1.3]; }
+    if (banner === 'Pause' || banner === 'Forlænget') return [CX, CY, 0.9];
+    return null;
+  }
   function updateCamera(dt, snap) {
     const full = Math.min(sw / WW, sh / WH);
-    const zoomed = Math.min(sw / 760, sh / 440);
+    const CAMV = [[760, 440], [580, 335], [1000, 580]][cfg.cam | 0] || [760, 440]; // Kamera: Normal, Tæt, Vid
+    const zoomed = Math.min(sw / CAMV[0], sh / CAMV[1]);
     sc = ((twoSides() && size <= 3) || (state !== 'play' && state !== 'hl')) ? full : Math.max(full, zoomed);
+    // small cut-scenes at the stoppages (as in FIFA): the camera moves in on the scorer, the card, the set piece
+    const cf = state === 'play' && !(replay && replay.t >= 0) && !(twoSides() && size <= 3) ? cineFocus() : null;
+    cineZ += ((cf ? cf[2] : 1) - cineZ) * (snap ? 1 : 1 - Math.pow(0.05, dt)); cineA += ((cf ? 1 : 0) - cineA) * (snap ? 1 : 1 - Math.pow(0.02, dt));
+    sc = Math.max(full, sc * cineZ);
     if (shootoutOn() && state === 'play') { // penalty shootout: a close-up of the goal
       sc = Math.max(full, Math.min(sw / 480, sh / 330));
       const gx = soGoal(), tx = gx + (gx === PR ? -95 : 95);
@@ -1270,7 +1287,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const vw = sw / sc, vh = sh / sc;
     const k = snap ? 1 : 1 - Math.pow(0.02, dt);
     let fx = ball.x, fy = ball.y;
-    if (setp && boxPiece()) { const g = boxPiece(); fx = ball.x * 0.45 + (g.gx - g.dir * 110) * 0.55; fy = ball.y * 0.45 + CY * 0.55; } // corner: show the box too
+    { // look ahead a little the way the play is going, so you see who you can pass to (FIFA's camera does this)
+      const o = owner(), lx = o ? o.fx * 70 + o.vx * 0.25 : ball.vx * 0.2, ly = o ? o.fy * 40 + o.vy * 0.15 : ball.vy * 0.12;
+      lead[0] += (lx - lead[0]) * Math.min(1, dt * 1.5); lead[1] += (ly - lead[1]) * Math.min(1, dt * 1.5);
+      fx += lead[0]; fy += lead[1];
+    }
+    if (cf) { fx = cf[0]; fy = cf[1]; }
+    else if (setp && boxPiece()) { const g = boxPiece(); fx = ball.x * 0.45 + (g.gx - g.dir * 110) * 0.55; fy = ball.y * 0.45 + CY * 0.55; } // corner: show the box too
     camX += (fx - camX) * k; camY += (fy - camY) * k;
     const cx = vw >= WW ? WW / 2 : Math.max(vw / 2, Math.min(WW - vw / 2, camX));
     const cy = vh >= WH ? WH / 2 : Math.max(vh / 2, Math.min(WH - vh / 2, camY));
@@ -4460,7 +4483,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
 
   // ----- little helpers for pickers -----
   // match options, shown where you start a match (setup, cup, career, online lobby) instead of hidden in the settings
-  const MOPTS = [['lock', 'Styring', ['Skift', 'Låst']], ['calm', 'Tempo', ['Normalt', 'Roligt']], ['aim', 'Sigtelinje', ['Fra', 'Til']], ['adv', 'Knapper', ['Simpel', 'Avanceret']], ['et', 'Forlænget', ['Fra', 'Til']], ['inj', 'Skader', ['Fra', 'Til']], ['pu', 'Power-ups', ['Fra', 'Til']]];
+  const MOPTS = [['lock', 'Styring', ['Skift', 'Låst']], ['calm', 'Tempo', ['Normalt', 'Roligt']], ['aim', 'Sigtelinje', ['Fra', 'Til']], ['adv', 'Knapper', ['Simpel', 'Avanceret']], ['et', 'Forlænget', ['Fra', 'Til']], ['inj', 'Skader', ['Fra', 'Til']], ['cam', 'Kamera', ['Normal', 'Tæt', 'Vid']], ['cine', 'Filmklip', ['Fra', 'Til']], ['pu', 'Power-ups', ['Fra', 'Til']]];
   function buildOpts() {
     for (const box of document.querySelectorAll('[data-mopts]')) {
       box.textContent = '';
@@ -4468,7 +4491,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
         const c = document.createElement('div'), l = document.createElement('div'), sg = document.createElement('div');
         l.className = 'lbl'; l.textContent = name; sg.className = 'seg'; sg.setAttribute('role', 'group'); sg.setAttribute('aria-label', name);
         c.append(l, sg); box.appendChild(c);
-        mkSeg(sg, [0, 1], labels, () => (['calm', 'aim', 'et', 'inj'].includes(key) ? cfg[key] !== false : !!cfg[key]) ? 1 : 0, v => { cfg[key] = !!v; saveCfg(); segPaints.forEach(f => f()); });
+        if (labels.length > 2) mkSeg(sg, labels.map((_, i) => i), labels, () => cfg[key] | 0, v => { cfg[key] = v; saveCfg(); segPaints.forEach(f => f()); });
+        else mkSeg(sg, [0, 1], labels, () => (['calm', 'aim', 'et', 'inj', 'cine'].includes(key) ? cfg[key] !== false : !!cfg[key]) ? 1 : 0, v => { cfg[key] = !!v; saveCfg(); segPaints.forEach(f => f()); });
       }
       const tip = document.createElement('p'); tip.className = 'hint mtip'; box.appendChild(tip);
       const paintTip = () => { tip.textContent = cfg.lock ? 'Låst spiller: du styrer kun din egen mand hele kampen. SKIFT kalder på bolden.' : 'Skift spiller: du skifter selv med SKIFT, og spillet skifter automatisk, når bolden kommer.'; };
@@ -5846,6 +5870,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
       }
       ctx.font = `700 ${fs}px ${col.font}`;
     }
+    if ((banner === 'Pause' || banner === 'Forlænget') && stats && mode !== 'guest') { // the half-time board: how it has gone so far
+      const S = stats, tot = (S.pos[0] + S.pos[1]) || 1, pp = Math.round(S.pos[0] / tot * 100);
+      const ln = `Skud ${S.sh[0]}-${S.sh[1]}  ·  Boldbesiddelse ${pp}-${100 - pp} %  ·  Afleveringer ${S.pa[0]}-${S.pa[1]}`;
+      ctx.font = `700 ${Math.max(12, Math.min(18, sw * 0.022))}px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const w = ctx.measureText(ln).width + 28, y = sh * 0.6;
+      ctx.fillStyle = 'rgba(10,14,12,0.78)'; ctx.fillRect(sw / 2 - w / 2, y - 18, w, 36);
+      ctx.fillStyle = col.chalk; ctx.fillText(ln, sw / 2, y);
+    }
     const text = (replay && replay.t >= 0) ? '' : banner || (flash ? flash.text : '');
     if (text) {
       const big = /^[123]$/.test(text);
@@ -5928,6 +5960,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
     drawSky(dt);
     if (state === 'play' && !saved) drawOffscreen();
     if (state === 'play' && sc * WW > sw + 2) drawMinimap();
+    if (cineA > 0.02 && state === 'play') { // cinema bars while the camera tells the story
+      const bh = sh * 0.075 * cineA; ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, sw, bh); ctx.fillRect(0, sh - bh, sw, bh);
+    }
     if (state === 'play' || state === 'end') drawHUD();
     if (state === 'play') drawCaption(dt);
     if (saved && state === 'hl') hlCaption();
