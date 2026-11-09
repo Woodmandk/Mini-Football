@@ -2100,6 +2100,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
     p.tackle = TACKLE_T; p.tcd = 0.7; p.charging = false; p.hold = 0;
     sfx.slide();
   }
+  // how far a is behind b: 1 = right at his back, 0 = beside him, -1 = in front (uses where b is going, else where he faces)
+  function rearOf(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 1, v = Math.hypot(b.vx, b.vy);
+    const hx = v > 40 ? b.vx / v : b.fx, hy = v > 40 ? b.vy / v : b.fy;
+    return -(dx * hx + dy * hy) / d;
+  }
   function tackleWins(a) {
     // clean tackle: the tackler takes the ball, it never flies off
     const o = owner();
@@ -2280,9 +2286,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function tackleBody(a, b) {
     if (setp) { a.tackle = 0; a.recover = 0.2; return; } // nobody can take the ball before the set piece is taken
     if (b.hands > 0) { a.tackle = 0; a.recover = 0.3; return; } // nobody goes through the keeper when he holds it
-    const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces, i.e. from behind
-    if (ball.owner === b.i && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
-    const behind = dot > 0.8 && ball.owner === b.i;
+    const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces
+    const rear = rearOf(a, b);
+    // through the back of the man on the ball is a foul (like a real referee); from the back-side it is often one too
+    const behind = ball.owner === b.i && (rear > 0.5 || (dot > 0.8 && rear > 0.1) || (rear > 0.2 && Math.random() < 0.5));
+    if (ball.owner === b.i && !behind && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
     // took the man and nowhere near the ball
     const late = ball.owner !== b.i && Math.hypot(ball.x - b.x, ball.y - b.y) > 90 && dBall(a) > 90;
     a.tackle = 0;
@@ -2291,7 +2299,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const o = owner();
       if (!(o && o.team === b.team && !setp)) b.stun = Math.max(b.stun, 0.5); // his team keeps the ball: he stays on his feet and plays on (advantage)
       sfx.foul(); if (localHuman(a)) buzz(80);
-      foul(a, b, behind && b.sprint && Math.hypot(b.vx, b.vy) > MAXV * 1.05); // took down a man running at full speed: a hard foul
+      foul(a, b, behind && rear > 0.5 && (Math.hypot(b.vx, b.vy) > MAXV * 0.9 || Math.random() < 0.35)); // straight through the back of a man on the run: a hard foul
       return;
     }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
@@ -2598,11 +2606,19 @@ button.small { font-size: 13px; padding: 9px 10px; }
         // go for the ball, staying goal-side of whoever has it (low pressing: wait for them further back until they come close)
         let bx = ball.x + ball.vx * 0.15, by = ball.y + ball.vy * 0.15;
         const wait = o && !keeper && T.pr === 0 && (o.x - ownX) * dir > L * 0.55;
-        if (o) { const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1, r = wait ? 140 : 26; bx = o.x + gx / gl * r; by = o.y + gy / gl * r; }
-        go(bx, by, dBall(p) > 60 && !wait);
+        const rear = o ? rearOf(p, o) : -1;
+        if (o) {
+          const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1, r = wait ? 140 : 26;
+          bx = o.x + gx / gl * r; by = o.y + gy / gl * r;
+          if (!wait && rear > 0.15) { // caught behind the man: run round him to get in front / beside him instead of kicking his heels
+            const v = Math.hypot(o.vx, o.vy), hx = v > 40 ? o.vx / v : o.fx, hy = v > 40 ? o.vy / v : o.fy;
+            const side = ((p.x - o.x) * -hy + (p.y - o.y) * hx) >= 0 ? 1 : -1;
+            bx = o.x + hx * 34 - hy * side * 30; by = o.y + hy * 34 + hx * side * 30;
+          }
+        }
+        go(bx, by, (dBall(p) > 60 || rear > 0.15) && !wait);
         if (o && !wait && dBall(p) < 70 - 12 * iq && p.tcd <= 0 && Math.random() < d.tackle * [0.8, 1, 1.3][T.pr] * dt) { // clever defenders wait until they are close enough to win it
-          const front = ((p.x - o.x) * o.fx + (p.y - o.y) * o.fy) > -5; // only slide from the front or side
-          if (front || Math.random() < 0.15) out.tackle = true;
+          if (rear < 0.15 || Math.random() < 0.06 * (1 - iq)) out.tackle = true; // only slide from the front or side; a clumsy one sometimes goes through the back (a foul)
         }
       } else if (keeper) {
         go(ownX + dir * 38, CY + Math.max(-MOUTH + 10, Math.min(MOUTH - 10, (ball.y - CY) * 0.6)));
@@ -2780,8 +2796,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
           p.windup -= dt;
           if (p.windup <= 0) {
             p.windup = 0;
-            const o = owner(), back = o && o.team !== p.team && ((p.x - o.x) * o.fx + (p.y - o.y) * o.fy) < -8; // he has got behind the man: usually holds back
-            if (!has && dBall(p) < 110 && !(back && Math.random() < 0.85)) startTackle(p); else p.tcd = 0.4;
+            const o = owner(), back = o && o.team !== p.team && rearOf(p, o) > 0.3; // he has got behind the man: nearly always holds back
+            if (!has && dBall(p) < 110 && !(back && Math.random() < 0.93)) startTackle(p); else p.tcd = 0.4;
           }
         }
         continue;
@@ -2895,10 +2911,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
         for (const p of P) {
           if (p.team === o.team || p.stun > 0 || o.frozen > 0 || o.hands > 0 || !on(p)) continue;
           const db = dBall(p);
-          if (p.tackle > 0 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; }
+          const rear = rearOf(p, o);
+          if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody)
           if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
-          if (p.tackle <= 0 && ball.stealCd <= 0 && facing && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
+          if (p.tackle <= 0 && ball.stealCd <= 0 && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
         }
       }
     }
