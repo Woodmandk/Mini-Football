@@ -1924,7 +1924,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (ball.last && ball.last.off && ball.last.to === p.i && ball.last.team === p.team) { // received while offside
       const x = p.x, y = p.y; p.recv = 0; restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return;
     }
-    for (const q of P) q.recv = 0;
+    for (const q of P) q.recv = 0; ball.spinT = 0;
     setp = null;
     if (ball.lastTeam !== p.team) wonAt[p.team] = clock; // we just won it (the clock counts down)
     ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0; ball.fresh = false;
@@ -1936,6 +1936,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function release(p, vx, vy, nopick) {
     if (ball.owner === p.i) ball.owner = -1;
     ball.vx = vx; ball.vy = vy; p.nopick = nopick; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.chB = false; p.holdB = 0; p.frozen = 0; p.hands = 0;
+    ball.spinT = 0;
     if (setp) { setp = null; guard = 0.25; } // the set piece is taken: play on
     ball.lastTeam = p.team; ball.lastIdx = p.i; ball.kicker = isHuman(p) ? p.i : -1; ball.kickAt = performance.now(); // co-op: who kicked it, so the OTHER person gets the man who receives it
   }
@@ -1963,6 +1964,16 @@ button.small { font-size: 13px; padding: 9px 10px; }
     release(p, p.fx * power + p.vx * 0.25, p.fy * power + p.vy * 0.25, 0.3);
     ball.last = { team: p.team, pass: false };
     if (pw > 0.75 && !isPen) ball.vz = 140; // a hard shot rises a little
+    { // finesse (as in FIFA): a placed shot, not at full power and not on the sprint, curls in from outside the post
+      const gx = p.team ? PL : PR, dist = Math.hypot(gx - ball.x, CY - ball.y);
+      if (isHuman(p) && !isPen && ball.gk === 'shot' && !p.sprint && pw >= 0.25 && pw <= 0.8 && dist < 480 && dist > 90) {
+        let sp = Math.hypot(ball.vx, ball.vy) * 0.92; const a0 = Math.atan2(ball.vy, ball.vx);
+        let sg = Math.sign(ball.vx * (CY - ball.y) - ball.vy * (gx - ball.x)); if (!sg) sg = p.y < CY ? 1 : -1;
+        const th = 0.2, T = Math.max(0.2, dist / sp);
+        ball.vx = Math.cos(a0 - sg * th) * sp; ball.vy = Math.sin(a0 - sg * th) * sp;
+        ball.spin = sg * 2 * th / T; ball.spinT = T;
+      }
+    }
     if (ball.gk === 'fk' && Math.abs((p.team ? PL : PR) - p.x) < 480) { // a free kick at goal: curled up over the wall, a fair pace so the keeper has a chance
       const gx = p.team ? PL : PR, sp = Math.min(560 + pw * 260, Math.hypot(ball.vx, ball.vy)), k = sp / (Math.hypot(ball.vx, ball.vy) || 1);
       ball.vx *= k; ball.vy *= k;
@@ -2751,7 +2762,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (has) { // turn with the ball smoothly so it rolls around your feet
           const ca = Math.atan2(p.fy, p.fx);
           let da = ta - ca; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
-          const na = ca + Math.max(-11 * dt, Math.min(11 * dt, da));
+          const tr = p.sprint ? 7 : 11; // at full sprint the ball needs a wider turn
+          const na = ca + Math.max(-tr * dt, Math.min(tr * dt, da));
           p.fx = Math.cos(na); p.fy = Math.sin(na);
         } else if (p.ctrl === 'ai') { // computer players turn gradually instead of snapping round
           const ca = Math.atan2(p.fy, p.fx);
@@ -2772,7 +2784,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
       } else if (p.stun > 0) { p.vx *= 0.85; p.vy *= 0.85; }
       else if (p.frozen > 0) { p.frozen -= dt; p.vx = p.vy = 0; if (p.frozen <= 0 && has && p.ctrl === 'ai') p.frozen = 0.01; }
       else {
-        const t = Math.min(1, (p.ctrl === 'ai' ? ACC_AI : ACC) * WX().grip * dt); // the computer has more momentum: no instant turns; a wet or snowy pitch is slippery
+        let acc = p.ctrl === 'ai' ? ACC_AI : ACC;
+        if (p.ctrl !== 'ai') { // as in FIFA: a sprint takes a moment to build up, a sharp turn at full speed costs speed
+          const sp0 = Math.hypot(p.vx, p.vy), dot = sp0 > 1 ? (p.vx * inp.x + p.vy * inp.y) / (sp0 * (Math.hypot(inp.x, inp.y) || 1)) : 1;
+          if (p.sprint && dot > 0.7 && sp0 < top) acc *= 0.55;
+          else if (sp0 > MAXV * 1.1 && dot < 0.3) acc *= 0.6;
+        }
+        const t = Math.min(1, acc * WX().grip * dt); // the computer has more momentum: no instant turns; a wet or snowy pitch is slippery
         p.vx += (inp.x * top - p.vx) * t; p.vy += (inp.y * top - p.vy) * t;
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
@@ -2905,7 +2923,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (o) {
       if (o.stun > 0) { ball.owner = -1; }
       else {
-        const tx = o.x + o.fx * (REACH - 3), ty = o.y + o.fy * (REACH - 3);
+        // touches: close control when you jog, the ball knocked a little ahead when you sprint (easier to nick off you)
+        o.touch = (o.touch || 0) + dt * (o.sprint ? 8 : 6);
+        const off = REACH - 3 + (o.sprint ? 5 + 5 * Math.max(0, Math.sin(o.touch)) : Math.hypot(o.vx, o.vy) > 60 ? 1.5 * Math.sin(o.touch) : 0);
+        const tx = o.x + o.fx * off, ty = o.y + o.fy * off;
         const k = Math.min(1, 28 * dt);
         ball.x += (tx - ball.x) * k; ball.y += (ty - ball.y) * k;
         ball.y = Math.max(PT + BRAD, Math.min(PB - BRAD, ball.y));
@@ -2934,6 +2955,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ball.vx *= damp; ball.vy *= damp;
       const sp = Math.hypot(ball.vx, ball.vy);
       if (sp > 1500) { ball.vx *= 1500 / sp; ball.vy *= 1500 / sp; }
+      if (ball.spinT > 0) { // a curled shot bends back toward goal
+        ball.spinT -= dt; const a = ball.spin * dt, c = Math.cos(a), sn = Math.sin(a), vx = ball.vx;
+        ball.vx = vx * c - ball.vy * sn; ball.vy = vx * sn + ball.vy * c;
+      }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
