@@ -1655,6 +1655,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     mode = m;
     if (m !== 'two') cupMatch = null;
     if (m !== 'host') { makePlayers(matchSize()); assignLocal(); }
+    for (const q of P) { q.fat = 0; q.stamina = 1; } // fresh legs for a new match
     score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
     for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; p.lay = 0; p.hands = 0; }
     particles = []; matchNo++;
@@ -1931,7 +1932,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ball.lastTeam = p.team; ball.lastIdx = p.i;
     p.tackle = 0; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.chB = false; p.holdB = 0;
     if (size > 1 && p.k === 0 && !pen && !so && inBox(p.team, p.x, p.y)) { p.hands = 5; p.think = 0; } // the keeper has it in his hands
-    if (prev !== ball.owner) { sfx.trap(); onPossession(p); }
+    if (prev !== ball.owner) {
+      sfx.trap(); onPossession(p);
+      if (isHuman(p) && !(p.frozen > 0)) { // directional first touch (as in FIFA): the ball is taken the way you push the stick
+        const i = p.ctrl === 'L0' ? localInput(0) : p.ctrl === 'L1' ? localInput(1) : p.ctrl === 'R' ? (remoteIn.get(p.peer) || ZERO) : null;
+        const l = i ? Math.hypot(i.x, i.y) : 0;
+        if (l > 0.3) { p.fx = i.x / l; p.fy = i.y / l; ball.x = p.x + p.fx * (REACH - 3); ball.y = p.y + p.fy * (REACH - 3); }
+      }
+    }
   }
   function release(p, vx, vy, nopick) {
     if (ball.owner === p.i) ball.owner = -1;
@@ -2769,7 +2777,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (drill && state === 'play') drillTick(dt);
     if (!so && !pen && kind !== 'train' && kind !== 'test') {
       clock -= dt;
-      if (half === 1 && clock <= matchLen / 2) { half = 2; banner = 'Pause'; pause = 4.0; sfx.whistle(2); return; }
+      if (half === 1 && clock <= matchLen / 2) { half = 2; for (const q of P) { q.fat = (q.fat || 0) * 0.5; q.stamina = 1 - q.fat; } banner = 'Pause'; pause = 4.0; sfx.whistle(2); return; }
       if (clock <= 0) {
         clock = 0;
         if (score[0] === score[1]) { sfx.whistle(2); startShootout(); return; }
@@ -2801,8 +2809,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const mag = Math.hypot(inp.x, inp.y);
       p.sprint = (inp.sprint || mag > 0.97) && p.stamina > 0.04 && mag > 0.2 && p.tackle <= 0;
       if (p.turbo > 0) { p.turbo -= dt; p.stamina = 1; }
-      if (p.sprint && p.turbo <= 0) p.stamina = Math.max(0, p.stamina - 0.5 * dt);
-      else p.stamina = Math.min(1, p.stamina + 0.22 * dt);
+      // energy as in FIFA: a sprint uses it up gently and it comes back when you jog, but every sprint also tires
+      // him a little for the rest of the match (the bar's ceiling drops), so nobody sprints all game
+      const ai = p.ctrl === 'ai';
+      p.fat = p.fat || 0;
+      if (p.sprint && p.turbo <= 0) { p.stamina = Math.max(0, p.stamina - (ai ? 0.16 : 0.28) * dt); p.fat = Math.min(0.4, p.fat + 0.006 * dt); }
+      else p.stamina = Math.min(1 - p.fat, p.stamina + 0.18 * dt);
       const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? 1.35 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1);
 
       if (mag > 0.2 && p.tackle <= 0 && !(p.dive > 0)) {
@@ -5097,6 +5109,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (isMine(p) && p.stamina < 0.99) {
       ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(p.x - 20, p.y + PRAD + 6, 40, 5);
       ctx.fillStyle = p.stamina < 0.25 ? col.home : col.gold; ctx.fillRect(p.x - 20, p.y + PRAD + 6, 40 * p.stamina, 5);
+      if (p.fat > 0.02) { ctx.fillStyle = 'rgba(229,72,59,0.55)'; ctx.fillRect(p.x + 20 - 40 * p.fat, p.y + PRAD + 6, 40 * p.fat, 5); } // tiredness for the rest of the match
     }
   }
   function drawKickHint(me, inp) { // where SKYD sends it from the keeper's hands
