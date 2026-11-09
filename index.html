@@ -2397,20 +2397,42 @@ button.small { font-size: 13px; padding: 9px 10px; }
     return [own + dir * z[0], CY + z[1] * MOUTH];
   }
   function crossTarget(p, ax, ay) { // the teammate in the box nearest the way you aim (or the best placed one)
-    const rs = P.filter(q => q.team === p.team && q !== p && on(q) && !(q.k === 0) && Math.abs(q.x - (p.team ? PL : PR)) < 230 && Math.abs(q.y - CY) < 200);
+    const gx = p.team ? PL : PR, inBox = (x, y) => Math.abs(x - gx) < 230 && Math.abs(y - CY) < 200;
+    const rs = P.filter(q => q.team === p.team && q !== p && on(q) && !(q.k === 0) && (inBox(q.x, q.y) || (q.tgt && inBox(q.tgt[0], q.tgt[1])))); // in the box, or on his way in
     if (!rs.length) return null;
     const al = Math.hypot(ax, ay);
     const score = q => { const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1; return (al > 0.3 ? (dx * ax + dy * ay) / (d * al) : 0) - Math.abs(q.y - CY) / 400 - (P.some(f => f.team !== p.team && Math.hypot(f.x - q.x, f.y - q.y) < 30) ? 0.25 : 0); };
     return rs.reduce((a, b) => (score(b) > score(a) ? b : a));
   }
+  function crossSpot(p) { // out wide in the last third: a high ball from here is a cross into the box (as in FIFA)
+    const gx = p.team ? PL : PR;
+    return size > 1 && Math.abs(gx - p.x) < 360 && Math.abs(p.y - CY) > 130;
+  }
   function cross(p, ax, ay) { // whip it into the box toward a teammate
     const q = crossTarget(p, ax, ay);
     if (!q) { lob(p, (p.team ? PL + 110 : PR - 110) - p.x, CY - p.y); return; }
-    const lead = (Math.random() - 0.5) * 30;
-    lob(p, q.x + (p.team ? -1 : 1) * 12 - p.x, q.y + lead - p.y, q);
+    const lead = (Math.random() - 0.5) * 30, gx = p.team ? PL : PR;
+    let tx = q.x, ty = q.y;
+    if (q.tgt && Math.abs(q.tgt[0] - gx) < 230 && Math.abs(q.tgt[1] - CY) < 200) { tx += (q.tgt[0] - q.x) * 0.7; ty += (q.tgt[1] - q.y) * 0.7; } // into the space he is running into
+    lob(p, tx + (p.team ? -1 : 1) * 12 - p.x, ty + lead - p.y, q);
   }
 
   // ---------- AI ----------
+  // a teammate out wide in the last third: the forwards (and an attacking midfielder) attack the box for the cross,
+  // one to the near post, one to the far post, one to the penalty spot
+  function boxRun(p, o, mates, rank) {
+    if (!o || o === p || o.team !== p.team || setp || isKeeper(p) || !crossSpot(o) || (rank === 0 && formOf(p)[0] <= 0.55)) return null; // the nearest midfielder still offers short
+    const dir = p.team ? -1 : 1, gx = p.team ? PL : PR;
+    if ((gx - o.x) * dir < 0) return null;
+    const runners = mates.filter(q => q !== o && q.k !== 0 && on(q) && (size <= 3 || formOf(q)[0] > (size <= 5 ? 0.3 : 0.55))).sort((a, b) => (gx - a.x) * dir - (gx - b.x) * dir).slice(0, 3);
+    const i = runners.indexOf(p);
+    if (i < 0) return null;
+    const s = Math.sign(o.y - CY) || 1;
+    const spot = [[60, s * 50], [75, -s * 70], [135, 0]][i];
+    let x = gx - dir * spot[0], y = CY + spot[1];
+    if (size >= 5) { const ol = dir > 0 ? Math.max(offsideLine(p.team), o.x) : Math.min(offsideLine(p.team), o.x); x = dir > 0 ? Math.min(x, ol - 6) : Math.max(x, ol + 6); } // stay onside until it is played
+    return [x, y];
+  }
   // Big teams: the block slides with the ball but the lines keep their gaps, forwards move more than defenders.
   function shapeSpot(p, push, weHave) {
     const f = formOf(p), half = (PR - PL) / 2, dir = p.team ? -1 : 1, ownX = p.team ? PR : PL;
@@ -2634,7 +2656,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (keeper) go(ownX + dir * 45, CY + (ball.y - CY) * 0.3);
         else if (size <= 3) { // the other man takes the opposite side of the pitch from the ball, ahead of it, so there is always a pass on
           const lane = Math.abs(o.y - CY) > 40 ? (o.y > CY ? -1 : 1) : (p.k === 1 ? -1 : 1);
-          go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 150)), CY + lane * [100, 130, 160][T.w], Math.abs(p.x - o.x) < 60);
+          const bx = boxRun(p, o, mates, -1);
+          if (bx) go(bx[0], bx[1], Math.hypot(bx[0] - p.x, bx[1] - p.y) > 50); else go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 150)), CY + lane * [100, 130, 160][T.w], Math.abs(p.x - o.x) < 60);
         }
         else {
           let [x, y] = shape(0.06);
@@ -2671,8 +2694,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
               else if (u0 > 0.45 && u0 < 0.85 && Math.sin(clock * 0.8 + p.i * 2.1) > 0.6) { x += dir * 120; x = dir > 0 ? Math.min(x, ol - 8) : Math.max(x, ol + 8); } // a midfielder steps into the space behind the forwards
             }
           }
+          const bx = boxRun(p, o, mates, rank);
+          if (bx) { go(bx[0], bx[1], Math.hypot(bx[0] - p.x, bx[1] - p.y) > 50); }
+          else {
           [x, y] = spaceOut(p, x, y, mates, o);
           go(x, y, p.run > 0 || Math.hypot(x - p.x, y - p.y) > 90);
+          }
         }
       } else if (setp && setp.team !== p.team && o && (keeper || p === chaser || (p === second && !bp))) {
         // set piece against us: the keeper minds his goal, the nearest men stand the right distance off, between the ball and our goal
@@ -2970,7 +2997,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
                 // held: always to a teammate, further out the longer you hold. A short hold = a hard pass along the ground (blue),
                 // a long hold = a high ball (gold) that comes down at his chest
                 const pw = Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP));
-                if (q && hb >= PASS_HIGH) { lob(p, q.x + q.vx * 0.4 - p.x, q.y + q.vy * 0.4 - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
+                const cq = hb >= PASS_HIGH && crossSpot(p) ? crossTarget(p, inp.x, inp.y) : null;
+                if (cq) { cross(p, inp.x, inp.y); ball.last.ic = true; flash = { text: 'Indlæg!', t: 0.6 }; if (stats) stats.pa[p.team]++; }
+                else if (q && hb >= PASS_HIGH) { lob(p, q.x + q.vx * 0.4 - p.x, q.y + q.vy * 0.4 - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
                 else if (q) pass(p, q, false, pw);
               }
             }
@@ -5146,7 +5175,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const hi = p.holdB >= PASS_HIGH;
       ctx.strokeStyle = hi ? col.gold : '#7fd3ff'; ctx.lineWidth = 3.5;
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.holdB / MAXCHARGE)); ctx.stroke();
-      ctx.fillStyle = hi ? col.gold : '#7fd3ff'; ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.fillText(hi ? 'HØJ' : 'HÅRD', 0, -PRAD - 14);
+      ctx.fillStyle = hi ? col.gold : '#7fd3ff'; ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.fillText(hi ? (crossSpot(p) ? 'INDLÆG' : 'HØJ') : 'HÅRD', 0, -PRAD - 14);
     }
     if (p.superShot) { ctx.fillStyle = `rgba(255,140,40,${0.25 + 0.15 * Math.sin(performance.now() / 120)})`; ctx.beginPath(); ctx.arc(0, 0, PRAD + 10, 0, Math.PI * 2); ctx.fill(); }
     if (p.turbo > 0) { ctx.strokeStyle = 'rgba(120,220,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, PRAD + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
@@ -5419,7 +5448,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset();
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]) }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
