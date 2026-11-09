@@ -2686,7 +2686,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         // second man cuts off the way to goal; with high pressing he hunts the ball in their half too
         const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1;
         const hunt = T.pr === 2 && (o.x - ownX) * dir > L * 0.5;
-        const r = hunt ? 30 : T.pr === 0 ? 130 : 105;
+        const r = hunt ? 75 : T.pr === 0 ? 190 : 150;
         // not straight behind the first man (that is two in one spot) but off to the inside, so the carrier is pushed wide
         const side = hunt ? (p.k % 2 ? 1 : -1) : (Math.abs(o.y - CY) > 40 ? Math.sign((CY - o.y) * gx) || 1 : p.k % 2 ? 1 : -1), lat = hunt ? 30 : 60;
         go(o.x + gx / gl * r - gy / gl * side * lat, o.y + gy / gl * r + gx / gl * side * lat, true);
@@ -2728,6 +2728,18 @@ button.small { font-size: 13px; padding: 9px 10px; }
         const mark = foes.filter(f => f !== o).sort((a, b) => Math.abs(a.x - ownX) - Math.abs(b.x - ownX))[(p.k + 1) % Math.max(1, foes.length - 1)] || foes[0];
         const gx = ownX - mark.x, gy = CY - mark.y, gl = Math.hypot(gx, gy) || 1, k = o ? 0.35 * iq : 0;
         go(mark.x + gx / gl * 55 * (1 - k) + (o ? (o.x - mark.x) * k * 0.45 : 0), mark.y + gy / gl * 55 * (1 - k) + (o ? (o.y - mark.y) * k * 0.45 : 0), iq > 0.7 && Math.hypot(mark.x - p.x, mark.y - p.y) > 150);
+      }
+      // as in FIFA: one man presses and one covers, everybody else holds his place instead of crowding the man on the ball
+      if (o && o.team !== p.team && !keeper && p !== chaser && !setp) {
+        const cov = p === second, near = cov ? (T.pr === 2 ? 75 : 150) : 145;
+        const ex = tx - o.x, ey = ty - o.y, ed = Math.hypot(ex, ey);
+        const beaten = cov && (chaser.stun > 0 || chaser.recover > 0 || rearOf(chaser, o) > 0.3); // the first man is beaten: the cover steps in
+        if (ed < near && !beaten) {
+          if (ed > 1) { tx = o.x + ex / ed * near; ty = o.y + ey / ed * near; }
+          else { const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1; tx = o.x + gx / gl * near; ty = o.y + gy / gl * near; }
+          tx = Math.max(PL + 20, Math.min(PR - 20, tx)); ty = Math.max(PT + 20, Math.min(PB - 20, ty));
+        }
+        if (!beaten && Math.hypot(p.x - o.x, p.y - o.y) < near - 30) out.sprint = true; // he runs at us: drop off quickly to keep the gap
       }
     }
     p.tgt = o === p ? null : [tx, ty];
