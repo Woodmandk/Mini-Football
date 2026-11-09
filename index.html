@@ -1267,6 +1267,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (banner === 'MÅL!' && c) return [c.x, c.y, 1.45];
     if (flash && (flash.text === 'Gult kort' || flash.text === 'Rødt kort') && pause > 0) return [ball.x, ball.y, 1.35];
     if (flash && /^Udskiftning/.test(flash.text) && flash.t > 0.6) return null;
+    if (ref.carry) return [ref.x * 0.5 + ball.x * 0.5, ref.y * 0.5 + ball.y * 0.5, 1.25]; // watch the referee bring the ball
     if (setp && (ball.rs === 'free' || ball.rs === 'corner') && setp.t < Math.max(1.1, setp.wait) && ball.owner >= 0) { const o = P[ball.owner]; return [o.x + o.fx * 60, o.y + o.fy * 30, 1.3]; }
     if (banner === 'Pause' || banner === 'Forlænget') return [CX, CY, 0.9];
     return null;
@@ -2395,7 +2396,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (dist > 340 || dist < 0 || Math.abs(b.y - CY) > 200 || b.fx * dir < 0.3) return false;
     return !P.some(q => q.team === a.team && q !== a && on(q) && q.k !== 0 && (gx - q.x) * dir < dist + 10);
   }
-  const CALM = 0.68; // FIFA-like tempo factor for the whole match
+  const TEMPO = () => kind === 'train' ? 1 : cfg.calm === false ? 0.8 : 0.6; // FIFA-like tempo for the whole match ('Normalt' is still calmer than it used to be)
   let lastCard = '', pendCard = null; // a yellow under advantage is shown at the next stoppage, as in FIFA
   function foul(a, b, hard) {
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
@@ -3471,7 +3472,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ball.owner = taker.i; ball.loose = 0; ball.lastTeam = team; ball.lastIdx = ball.owner;
     taker.frozen = 99; guard = 0; ball.fresh = true; taker.charging = false; taker.hold = 0; taker.pending = 0; taker.pendB = 0; taker.chB = false; taker.holdB = 0; taker.wasA = taker.wasB = true; // a button still held from before doesn't kick it
     setp = { team, t: 0, r: type === 'throw' ? 70 : Math.max(110, G.circ), // 9.15 m, as in the Laws of the Game
-      wait: type === 'throw' ? 1.1 : type === 'kick' ? 0.3 : type === 'goal' ? 1.6 : type === 'corner' ? 2.6 : 2.2 }; // as in FIFA: the referee places the ball, everyone jogs into place, then he whistles
+      wait: type === 'throw' ? 1.1 : 0.3, place: 0 };
+    if (type === 'free' || type === 'corner' || (type === 'goal' && size > 1)) { // as in FIFA: the referee runs over with the ball and puts it down, everyone jogs into place, then he whistles
+      const d = Math.hypot(ref.x - x, ref.y - y);
+      setp.place = Math.max(0.6, Math.min(type === 'goal' ? 1.2 : 1.9, d / 260));
+      setp.wait = setp.place + (type === 'corner' ? 0.9 : type === 'free' ? 0.8 : 0.4);
+    }
     if (type === 'free' && boxPiece() && size >= 2) { // a free kick near goal: the defenders put up a wall between the ball and the goal
       const n = size >= 5 ? 3 : size >= 3 ? 2 : 1;
       setp.wall = P.filter(q => q.team !== team && on(q) && !(q.k === 0) && !isHuman(q)).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).slice(0, n).map(q => q.i);
@@ -3485,7 +3491,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const kp = size > 1 ? P[slotOf(1 - team, 0)] : null; if (kp && on(kp) && !isHuman(kp)) { const dir = team ? -1 : 1; far(kp, [(team ? PL : PR) - dir * 28, CY + (y - CY) * 0.15]); }
     }
     for (const p of P) if (p.team !== team && p.tackle > 0) { p.tackle = 0; p.recover = 0.2; }
-    if (type !== 'kick' && !banner) pause = Math.max(pause, 1.2); // the whistle: everything stops for a moment before it starts again
+    if (type !== 'kick' && !banner) pause = Math.max(pause, 0.45); // the whistle: a short stop, then the referee brings the ball (no dead waiting)
     flash = { text: label || (type === 'throw' ? 'Indkast' : type === 'corner' ? 'Hjørnespark' : type === 'free' ? 'Frispark' : type === 'kick' ? 'Afspark' : 'Målspark'), t: 1.0 };
     showPendCard();
     sfx.whistle();
@@ -5385,7 +5391,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function pack(st) {
     const now = performance.now();
     const o = {
-      m: matchNo, st, z: size, c: Math.ceil(clock * 10), g: golden ? 1 : 0, at: addT ? addT.mins : 0, sc: score, bn: banner, fl: flash ? flash.text : '', sp: setp ? setp.r : 0,
+      m: matchNo, st, z: size, c: Math.ceil(clock * 10), g: golden ? 1 : 0, at: addT ? addT.mins : 0, sc: score, bn: banner, fl: flash ? flash.text : '', sp: setp ? setp.r : 0, rc: setp && setp.place && setp.t < setp.place ? 1 : 0,
       b: [RND(ball.x), RND(ball.y), ball.owner, RND(ball.z)],
       p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0) | (p.dive > 0 || p.lay > 0 ? 32 : 0) | (keeperKick(p) ? 64 : 0)]),
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
@@ -5455,7 +5461,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     banner = nb;
     const fl = typeof s.fl === 'string' ? s.fl.slice(0, 14) : '';
     if (fl && !flash) { flash = { text: fl, t: 0.9 }; sfx.foul(); }
-    spR = Math.max(0, Math.min(200, Number(s.sp) || 0));
+    spR = Math.max(0, Math.min(200, Number(s.sp) || 0)); refCarryG = !!s.rc;
     const no = Number(s.b[2]), had = P[ball.owner]; ball.owner = Number.isInteger(no) && no >= 0 && no < P.length ? no : -1;
     if (had && had.ctrl === 'ME' && ball.owner < 0 && state === 'play') buzz(22); // the ball left your feet: a kick
     tgt = s;
@@ -5610,6 +5616,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   }
   // ---------- the referee (as in FIFA): runs with play, a little behind the ball and off to the side, runs over to a
   // foul and holds up the card. Only for show: every phone works him out from the ball, so it needs nothing online.
+  let refCarryG = false;
   function refReset() { ref.x = CX; ref.y = CY + Math.min(160, (PB - PT) * 0.3); ref.card = 0; ref.lx = undefined; }
   let refK = '', refC = '#16181d';
   function refKit() { // the referee always wears a colour neither team (nor a keeper) has, so he never looks like a player
@@ -5624,6 +5631,16 @@ button.small { font-size: 13px; padding: 9px 10px; }
     dt = Math.min(dt, 0.05);
     let tx, ty, fast = false;
     const cardOn = flash && /^(Gult|Rødt) kort/.test(flash.text);
+    const carry = mode === 'guest' ? refCarryG : !!(setp && setp.place && setp.t < setp.place && pause <= 0);
+    ref.carry = carry && !cardOn;
+    if (ref.carry) { // bringing the ball to the spot: he gets there just as the set piece is ready
+      ref.card = 0;
+      const rem = mode === 'guest' ? 0.5 : Math.max(0.05, setp.place - setp.t), gx = ball.x - (ball.x < CX ? -8 : 8), k = Math.min(1, dt * TEMPO() / rem);
+      const dx0 = gx - ref.x, dy0 = ball.y - ref.y, dl = Math.hypot(dx0, dy0) || 1;
+      ref.x += dx0 * k; ref.y += dy0 * k; ref.fx += (dx0 / dl - ref.fx) * 0.3; ref.fy += (dy0 / dl - ref.fy) * 0.3;
+      const fl0 = Math.hypot(ref.fx, ref.fy) || 1; ref.fx /= fl0; ref.fy /= fl0;
+      return;
+    }
     if (cardOn) { ref.card = 1; ref.red = flash.text.startsWith('Rødt'); tx = ball.x + (ball.x < CX ? 40 : -40); ty = ball.y + (ball.y < CY ? 34 : -34); fast = true; }
     else {
       ref.card = 0;
@@ -5718,7 +5735,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       // how long AFLEVER has been held (kept here so a guest sees it too): the line reaches further and turns blue (hard) or gold (high)
       const now = performance.now();
       if (inp.b) { if (!hintAt[i]) hintAt[i] = now; } else hintAt[i] = 0;
-      const hb = hintAt[i] ? (now - hintAt[i]) / 1000 * (cfg.calm && kind !== 'train' ? CALM : 1) : 0; // in game time, like the hold itself
+      const hb = hintAt[i] ? (now - hintAt[i]) / 1000 * TEMPO() : 0; // in game time, like the hold itself
       const q = passTarget(me, inp.x, inp.y, hb > PASS_TAP ? Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)) : 0); if (!q) continue;
       ctx.strokeStyle = hb >= PASS_HIGH ? 'rgba(255,212,71,0.9)' : hb > PASS_TAP ? 'rgba(127,211,255,0.9)' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
@@ -5957,7 +5974,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const p of P) if (p.stun > 0) drawPlayer(p);
     drawRef();
     for (const p of P) if (p.stun <= 0) drawPlayer(p);
-    drawBall(); // after the players so a lob is seen flying over them
+    if (ref.carry && state === 'play') { const bx = ball.x, by = ball.y, bz = ball.z; ball.x = ref.x + ref.fx * 9; ball.y = ref.y + ref.fy * 9; ball.z = 14; drawBall(); ball.x = bx; ball.y = by; ball.z = bz; } // the referee carries it over
+    else drawBall(); // after the players so a lob is seen flying over them
     drawParticles();
     if (!saved) drawRx();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -5985,7 +6003,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const DT = 1 / 120;
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
-    while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT * (cfg.calm && kind !== 'train' ? CALM : 1)); acc -= DT; } // calm tempo: the whole match runs about a third slower, FIFA pace
+    while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT * TEMPO()); acc -= DT; } // the whole match runs at FIFA pace
     netTick(now, dt);
     hlTick(dt);
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
