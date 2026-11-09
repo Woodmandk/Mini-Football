@@ -2058,7 +2058,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     const hs = ax !== undefined ? Math.max(260, Math.min(q ? 1000 : 600, Math.hypot(ax, ay) / (lp ? 0.8 : q ? 0.73 : 0.85))) : 540; // a high pass comes down at his chest // crosses land where they're aimed (to a man: at head height)
     release(p, p.fx * hs + (lp ? 0 : p.vx * 0.2), p.fy * hs + (lp ? 0 : p.vy * 0.2), 0.35);
-    ball.vz = 470; ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
+    ball.vz = 470;
+    if (lp && ax !== undefined) { // a high pass: timed so it comes down at his chest when it reaches him, whatever the distance
+      const dd = Math.hypot(ax, ay), T = Math.max(0.5, Math.min(0.9, dd / 520)), sp = Math.max(160, dd / T);
+      ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.vz = (30 + GRAV / 2 * T * T) / T;
+    }
+    ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
     const gx = p.team ? PL : PR;
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
     if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; ball.last.kc = Math.random() < 0.3; ball.last.dw = Math.random() < 0.4; q.recv = 1.6; handOver(p, q); } // the keeper comes for about a third of them // the man it is aimed at runs onto it
@@ -2799,7 +2804,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           else shoot(p, p.hold);
         }
         if (p.pending > 0) { p.pending -= dt; if (p.pending <= 0 && ball.owner === p.i) shoot(p, p.pendHold || 0); }
-        // AFLEVER (as in FIFA): tap = to the nearest man that way (into his path if he is ahead), hold = further out to a man further away
+        // AFLEVER (as in FIFA): tap = to the nearest man that way (into his path if he is ahead), hold = further out to a man further away (hard along the ground, held long = a high ball)
         if (bDown) { p.chB = true; p.holdB = 0; }
         if (p.chB) {
           if (inp.b) p.holdB = Math.min(MAXCHARGE, p.holdB + dt);
@@ -2813,10 +2818,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
               } else {
                 p.pendB = 0;
                 const q = passTarget(p, inp.x, inp.y, Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)));
-                // held: always to a teammate, further out the longer you hold, with more pace on it. Along the ground unless
-                // an opponent stands in the way of a long one, then it is lifted over him onto the same man
+                // held: always to a teammate, further out the longer you hold. A short hold = a hard pass along the ground (blue),
+                // a long hold = a high ball (gold) that comes down at his chest
                 const pw = Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP));
-                if (q && hb >= PASS_HIGH && laneBlocked(p, q)) { lob(p, q.x + q.vx * 0.4 - p.x, q.y + q.vy * 0.4 - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
+                if (q && hb >= PASS_HIGH) { lob(p, q.x + q.vx * 0.4 - p.x, q.y + q.vy * 0.4 - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
                 else if (q) pass(p, q, false, pw);
               }
             }
@@ -2934,7 +2939,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (q && on(q) && q.stun <= 0 && dBall(q) < REACH + 26) grab(q);
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
-        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.i === ball.last.to) && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
+        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
         if (h) header(h);
       }
       if (ball.owner < 0 && ball.z < 26) {
@@ -4966,10 +4971,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.hold / MAXCHARGE)); ctx.stroke();
     }
     if (p.holdB > PASS_TAP * 0.6) { // AFLEVER held: the ring fills = power and distance
-      const hi = false;
+      const hi = p.holdB >= PASS_HIGH;
       ctx.strokeStyle = hi ? col.gold : '#7fd3ff'; ctx.lineWidth = 3.5;
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.holdB / MAXCHARGE)); ctx.stroke();
-      ctx.fillStyle = hi ? col.gold : '#7fd3ff'; ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.fillText(p.holdB >= MAXCHARGE * 0.9 ? 'LANG' : '', 0, -PRAD - 14);
+      ctx.fillStyle = hi ? col.gold : '#7fd3ff'; ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.fillText(hi ? 'HØJ' : 'HÅRD', 0, -PRAD - 14);
     }
     if (p.superShot) { ctx.fillStyle = `rgba(255,140,40,${0.25 + 0.15 * Math.sin(performance.now() / 120)})`; ctx.beginPath(); ctx.arc(0, 0, PRAD + 10, 0, Math.PI * 2); ctx.fill(); }
     if (p.turbo > 0) { ctx.strokeStyle = 'rgba(120,220,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, PRAD + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
@@ -5020,7 +5025,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (inp.b) { if (!hintAt[i]) hintAt[i] = now; } else hintAt[i] = 0;
       const hb = hintAt[i] ? (now - hintAt[i]) / 1000 * (cfg.calm && kind !== 'train' ? 0.8 : 1) : 0; // in game time, like the hold itself
       const q = passTarget(me, inp.x, inp.y, hb > PASS_TAP ? Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)) : 0); if (!q) continue;
-      ctx.strokeStyle = hb >= PASS_HIGH && laneBlocked(me, q) ? 'rgba(255,212,71,0.9)' : hb > PASS_TAP ? 'rgba(127,211,255,0.9)' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
+      ctx.strokeStyle = hb >= PASS_HIGH ? 'rgba(255,212,71,0.9)' : hb > PASS_TAP ? 'rgba(127,211,255,0.9)' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
       ctx.beginPath(); ctx.arc(q.x, q.y, PRAD + 6, 0, Math.PI * 2); ctx.stroke();
     }
