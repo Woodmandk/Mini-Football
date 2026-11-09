@@ -2058,7 +2058,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     const hs = ax !== undefined ? Math.max(260, Math.min(q ? 1000 : 600, Math.hypot(ax, ay) / (lp ? 0.8 : q ? 0.73 : 0.85))) : 540; // a high pass comes down at his chest // crosses land where they're aimed (to a man: at head height)
     release(p, p.fx * hs + (lp ? 0 : p.vx * 0.2), p.fy * hs + (lp ? 0 : p.vy * 0.2), 0.35);
-    ball.vz = 470; ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
+    ball.vz = 470;
+    if (lp && ax !== undefined) { // a high pass: timed so it comes down at his chest when it reaches him, whatever the distance
+      const dd = Math.hypot(ax, ay), T = Math.max(0.5, Math.min(0.9, dd / 520)), sp = Math.max(160, dd / T);
+      ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.vz = (30 + GRAV / 2 * T * T) / T;
+    }
+    ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
     const gx = p.team ? PL : PR;
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
     if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; ball.last.kc = Math.random() < 0.3; ball.last.dw = Math.random() < 0.4; q.recv = 1.6; handOver(p, q); } // the keeper comes for about a third of them // the man it is aimed at runs onto it
@@ -2094,6 +2099,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
     p.fx = dx; p.fy = dy; p.tdx = dx; p.tdy = dy;
     p.tackle = TACKLE_T; p.tcd = 0.7; p.charging = false; p.hold = 0;
     sfx.slide();
+  }
+  // how far a is behind b: 1 = right at his back, 0 = beside him, -1 = in front (uses where b is going, else where he faces)
+  function rearOf(a, b) {
+    const dx = a.x - b.x, dy = a.y - b.y, d = Math.hypot(dx, dy) || 1, v = Math.hypot(b.vx, b.vy);
+    const hx = v > 40 ? b.vx / v : b.fx, hy = v > 40 ? b.vy / v : b.fy;
+    return -(dx * hx + dy * hy) / d;
   }
   function tackleWins(a) {
     // clean tackle: the tackler takes the ball, it never flies off
@@ -2275,9 +2286,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function tackleBody(a, b) {
     if (setp) { a.tackle = 0; a.recover = 0.2; return; } // nobody can take the ball before the set piece is taken
     if (b.hands > 0) { a.tackle = 0; a.recover = 0.3; return; } // nobody goes through the keeper when he holds it
-    const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces, i.e. from behind
-    if (ball.owner === b.i && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
-    const behind = dot > 0.8 && ball.owner === b.i;
+    const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces
+    const rear = rearOf(a, b);
+    // through the back of the man on the ball is a foul (like a real referee); from the back-side it is often one too
+    const behind = ball.owner === b.i && (rear > 0.5 || (dot > 0.8 && rear > 0.1) || (rear > 0.2 && Math.random() < 0.5));
+    if (ball.owner === b.i && !behind && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
     // took the man and nowhere near the ball
     const late = ball.owner !== b.i && Math.hypot(ball.x - b.x, ball.y - b.y) > 90 && dBall(a) > 90;
     a.tackle = 0;
@@ -2286,7 +2299,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const o = owner();
       if (!(o && o.team === b.team && !setp)) b.stun = Math.max(b.stun, 0.5); // his team keeps the ball: he stays on his feet and plays on (advantage)
       sfx.foul(); if (localHuman(a)) buzz(80);
-      foul(a, b, behind && b.sprint && Math.hypot(b.vx, b.vy) > MAXV * 1.05); // took down a man running at full speed: a hard foul
+      foul(a, b, behind && rear > 0.5 && (Math.hypot(b.vx, b.vy) > MAXV * 0.9 || Math.random() < 0.35)); // straight through the back of a man on the run: a hard foul
       return;
     }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
@@ -2640,11 +2653,19 @@ button.small { font-size: 13px; padding: 9px 10px; }
         // go for the ball, staying goal-side of whoever has it (low pressing: wait for them further back until they come close)
         let bx = ball.x + ball.vx * 0.15, by = ball.y + ball.vy * 0.15;
         const wait = o && !keeper && T.pr === 0 && (o.x - ownX) * dir > L * 0.55;
-        if (o) { const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1, r = wait ? 140 : 26; bx = o.x + gx / gl * r; by = o.y + gy / gl * r; }
-        go(bx, by, dBall(p) > 60 && !wait);
+        const rear = o ? rearOf(p, o) : -1;
+        if (o) {
+          const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1, r = wait ? 140 : 26;
+          bx = o.x + gx / gl * r; by = o.y + gy / gl * r;
+          if (!wait && rear > 0.15) { // caught behind the man: run round him to get in front / beside him instead of kicking his heels
+            const v = Math.hypot(o.vx, o.vy), hx = v > 40 ? o.vx / v : o.fx, hy = v > 40 ? o.vy / v : o.fy;
+            const side = ((p.x - o.x) * -hy + (p.y - o.y) * hx) >= 0 ? 1 : -1;
+            bx = o.x + hx * 34 - hy * side * 30; by = o.y + hy * 34 + hx * side * 30;
+          }
+        }
+        go(bx, by, (dBall(p) > 60 || rear > 0.15) && !wait);
         if (o && !wait && dBall(p) < 70 - 12 * iq && p.tcd <= 0 && Math.random() < d.tackle * [0.8, 1, 1.3][T.pr] * dt) { // clever defenders wait until they are close enough to win it
-          const front = ((p.x - o.x) * o.fx + (p.y - o.y) * o.fy) > -5; // only slide from the front or side
-          if (front || Math.random() < 0.15) out.tackle = true;
+          if (rear < 0.15 || Math.random() < 0.06 * (1 - iq)) out.tackle = true; // only slide from the front or side; a clumsy one sometimes goes through the back (a foul)
         }
       } else if (keeper) {
         go(ownX + dir * 38, CY + Math.max(-MOUTH + 10, Math.min(MOUTH - 10, (ball.y - CY) * 0.6)));
@@ -2823,8 +2844,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
           p.windup -= dt;
           if (p.windup <= 0) {
             p.windup = 0;
-            const o = owner(), back = o && o.team !== p.team && ((p.x - o.x) * o.fx + (p.y - o.y) * o.fy) < -8; // he has got behind the man: usually holds back
-            if (!has && dBall(p) < 110 && !(back && Math.random() < 0.85)) startTackle(p); else p.tcd = 0.4;
+            const o = owner(), back = o && o.team !== p.team && rearOf(p, o) > 0.3; // he has got behind the man: nearly always holds back
+            if (!has && dBall(p) < 110 && !(back && Math.random() < 0.93)) startTackle(p); else p.tcd = 0.4;
           }
         }
         continue;
@@ -2847,7 +2868,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           else shoot(p, p.hold);
         }
         if (p.pending > 0) { p.pending -= dt; if (p.pending <= 0 && ball.owner === p.i) shoot(p, p.pendHold || 0); }
-        // AFLEVER (as in FIFA): tap = to the nearest man that way (into his path if he is ahead), hold = further out to a man further away
+        // AFLEVER (as in FIFA): tap = to the nearest man that way (into his path if he is ahead), hold = further out to a man further away (hard along the ground, held long = a high ball)
         if (bDown) { p.chB = true; p.holdB = 0; }
         if (p.chB) {
           if (inp.b) p.holdB = Math.min(MAXCHARGE, p.holdB + dt);
@@ -2861,10 +2882,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
               } else {
                 p.pendB = 0;
                 const q = passTarget(p, inp.x, inp.y, Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)));
-                // held: always to a teammate, further out the longer you hold, with more pace on it. Along the ground unless
-                // an opponent stands in the way of a long one, then it is lifted over him onto the same man
+                // held: always to a teammate, further out the longer you hold. A short hold = a hard pass along the ground (blue),
+                // a long hold = a high ball (gold) that comes down at his chest
                 const pw = Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP));
-                if (q && hb >= PASS_HIGH && laneBlocked(p, q)) { lob(p, q.x + q.vx * 0.4 - p.x, q.y + q.vy * 0.4 - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
+                if (q && hb >= PASS_HIGH) { lob(p, q.x + q.vx * 0.4 - p.x, q.y + q.vy * 0.4 - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
                 else if (q) pass(p, q, false, pw);
               }
             }
@@ -2938,10 +2959,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
         for (const p of P) {
           if (p.team === o.team || p.stun > 0 || o.frozen > 0 || o.hands > 0 || !on(p)) continue;
           const db = dBall(p);
-          if (p.tackle > 0 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; }
+          const rear = rearOf(p, o);
+          if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody)
           if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
-          if (p.tackle <= 0 && ball.stealCd <= 0 && facing && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
+          if (p.tackle <= 0 && ball.stealCd <= 0 && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; grab(p); break; }
         }
       }
     }
@@ -2982,7 +3004,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (q && on(q) && q.stun <= 0 && dBall(q) < REACH + 26) grab(q);
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
-        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.i === ball.last.to) && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
+        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
         if (h) header(h);
       }
       if (ball.owner < 0 && ball.z < 26) {
@@ -5014,10 +5036,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.hold / MAXCHARGE)); ctx.stroke();
     }
     if (p.holdB > PASS_TAP * 0.6) { // AFLEVER held: the ring fills = power and distance
-      const hi = false;
+      const hi = p.holdB >= PASS_HIGH;
       ctx.strokeStyle = hi ? col.gold : '#7fd3ff'; ctx.lineWidth = 3.5;
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.holdB / MAXCHARGE)); ctx.stroke();
-      ctx.fillStyle = hi ? col.gold : '#7fd3ff'; ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.fillText(p.holdB >= MAXCHARGE * 0.9 ? 'LANG' : '', 0, -PRAD - 14);
+      ctx.fillStyle = hi ? col.gold : '#7fd3ff'; ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.fillText(hi ? 'HØJ' : 'HÅRD', 0, -PRAD - 14);
     }
     if (p.superShot) { ctx.fillStyle = `rgba(255,140,40,${0.25 + 0.15 * Math.sin(performance.now() / 120)})`; ctx.beginPath(); ctx.arc(0, 0, PRAD + 10, 0, Math.PI * 2); ctx.fill(); }
     if (p.turbo > 0) { ctx.strokeStyle = 'rgba(120,220,255,0.8)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(0, 0, PRAD + 5, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
@@ -5068,7 +5090,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       if (inp.b) { if (!hintAt[i]) hintAt[i] = now; } else hintAt[i] = 0;
       const hb = hintAt[i] ? (now - hintAt[i]) / 1000 * (cfg.calm && kind !== 'train' ? 0.8 : 1) : 0; // in game time, like the hold itself
       const q = passTarget(me, inp.x, inp.y, hb > PASS_TAP ? Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)) : 0); if (!q) continue;
-      ctx.strokeStyle = hb >= PASS_HIGH && laneBlocked(me, q) ? 'rgba(255,212,71,0.9)' : hb > PASS_TAP ? 'rgba(127,211,255,0.9)' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
+      ctx.strokeStyle = hb >= PASS_HIGH ? 'rgba(255,212,71,0.9)' : hb > PASS_TAP ? 'rgba(127,211,255,0.9)' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
       ctx.beginPath(); ctx.arc(q.x, q.y, PRAD + 6, 0, Math.PI * 2); ctx.stroke();
     }
