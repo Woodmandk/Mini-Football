@@ -2127,6 +2127,15 @@ button.small { font-size: 13px; padding: 9px 10px; }
     p.tackle = TACKLE_T; p.tcd = 0.7; p.charging = false; p.hold = 0;
     sfx.slide();
   }
+  function firstTime(p, inp) {
+    const gx = p.team ? PL : PR, l = Math.hypot(inp.x, inp.y);
+    let ax = l > 0.3 ? inp.x : gx - p.x, ay = l > 0.3 ? inp.y : CY - p.y;
+    const head = ball.z > 30;
+    ball.owner = p.i; ball.z = 0; ball.vz = 0; p.nopick = 0;
+    shoot(p, head ? MAXCHARGE * 0.35 : MAXCHARGE * 0.7, ax, ay);
+    if (head) { ball.z = 30; ball.vz = -40; ball.last.head = true; ball.last.ks = Math.random() < 0.55; flash = { text: 'Hovedstød!', t: 0.7 }; }
+    else { ball.z = 4; ball.vz = 120; flash = { text: 'Volley!', t: 0.7 }; }
+  }
   function standTackle(p, o) { // as in FIFA: a poke at the ball instead of a slide
     if (p.tcd > 0 || p.recover > 0 || (setp && setp.team !== p.team)) return;
     p.tcd = 0.55; p.fx = (o.x - p.x) / (Math.hypot(o.x - p.x, o.y - p.y) || 1); p.fy = (o.y - p.y) / (Math.hypot(o.x - p.x, o.y - p.y) || 1);
@@ -2958,7 +2967,13 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (p.pendB > 0) { p.pendB -= dt; if (p.pendB <= 0 && ball.owner === p.i) pass(p, p.pendQ); }
       } else {
         p.charging = false; p.hold = 0; p.chB = false; p.holdB = 0;
-        if (aDown && !(p.frozen > 0) && !(p.dive > 0)) {
+        // first-time finish (as in FIFA): SKYD as a loose ball from your own side reaches you = hit it first time, volley or header
+        // (press SKYD while it is on its way and he hits it as it arrives)
+        const ownBall = ball.owner < 0 && !isKeeper(p) && ball.last && ball.last.team === p.team && !(p.frozen > 0);
+        if (aDown && ownBall && dBall(p) < 320) p.ftArm = 2.5;
+        if (p.ftArm > 0) { p.ftArm -= dt; if (!ownBall) p.ftArm = 0; else if (ball.z < 90 && dBall(p) < REACH + 28) { p.ftArm = 0; firstTime(p, inp); } }
+        if (aDown && ownBall && dBall(p) < 320) { /* armed for a first-time finish, no tackle */ }
+        else if (aDown && !(p.frozen > 0) && !(p.dive > 0)) {
           const o = owner(), d = o && o.team !== p.team ? Math.hypot(o.x - p.x, o.y - p.y) : 1e9;
           if (isKeeper(p) && inBox(p.team, p.x, p.y)) manualDive(p, inp);
           else if (d < REACH + 24) standTackle(p, o); // right up against him: a standing tackle, you stay on your feet
@@ -3078,7 +3093,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       }
       if (ball.owner < 0 && ball.last && ball.last.pass && ball.last.lp && ball.vz <= 0 && ball.z < 75) { // a high pass coming down: the man it is meant for takes it on his chest
         const q = P[ball.last.to];
-        if (q && on(q) && q.stun <= 0 && dBall(q) < REACH + 26) grab(q);
+        if (q && on(q) && q.stun <= 0 && !(q.ftArm > 0) && dBall(q) < REACH + 26) grab(q);
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
         const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
