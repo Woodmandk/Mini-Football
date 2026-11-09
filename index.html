@@ -342,7 +342,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
           <div class="shoplist" id="drillList"></div></div>
         <div class="col"><div class="lbl">Træningsbane</div>
           <p>Dit hold mod en målmand. Intet ur og ingen modstandere, så du kan øve skud, lob, stikninger og driblinger.</p>
-          <button id="bTrain" class="go">Start træning</button></div>
+          <button id="bTrain" class="go">Start træning</button>
+          <div class="lbl" style="margin-top:12px">Testkamp</div>
+          <p>Kamp mod computeren uden ur, så du kan prøve spurt, tacklinger og afleveringer under pres. Tæller ikke med nogen steder.</p>
+          <div class="seg" id="segTest" role="group" aria-label="Spillere pr. hold i testkampen"></div>
+          <button id="bTest" class="go" style="margin-top:6px">Start testkamp</button></div>
       </div>
     </div>
 
@@ -1719,7 +1723,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const n = [...new Set(P.filter(p => p.team === t).map(p => (p.ctrl === 'ME' ? myName() : mode === 'guest' ? p.name : nameOf(p))).filter(Boolean))];
       return n.length ? n : ['Computer'];
     };
-    if (kind !== 'train') recordMatch([teamNames(0), teamNames(1)], score, matchGoals, win);
+    if (kind !== 'train' && kind !== 'test') recordMatch([teamNames(0), teamNames(1)], score, matchGoals, win);
     if (cupMatch) { cupResult(cupMatch.i, score[0], score[1], win); }
     $('toCup').hidden = !cupMatch; $('again').hidden = $('again').hidden || !!cupMatch;
     afterMatch(win, me, ss);
@@ -1728,11 +1732,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const lines = [];
     if (me !== null && me !== undefined) {
       const online = mode === 'host' || mode === 'guest';
-      if (kind !== 'train' && kind !== 'pen') dailyEvent('match', { win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], mode, diff: matchDiff(), size, online });
+      if (kind !== 'train' && kind !== 'pen' && kind !== 'test') dailyEvent('match', { win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], mode, diff: matchDiff(), size, online });
       if (online) { const o = onlineSides(me); const r = rateOnline(o.opps, win === me ? 1 : win < 0 ? 0.5 : 0, score[me]); if (r) lines.push(r); }
     }
     for (const c of chWon) lines.push('Udfordring klaret: ' + c);
-    if (kind !== 'train') for (const l of seriesAfter(win, me)) lines.push(l);
+    if (kind !== 'train' && kind !== 'test') for (const l of seriesAfter(win, me)) lines.push(l);
     $('endCh').textContent = lines.join('\n'); $('endCh').hidden = !lines.length;
     $('end').hidden = false;
     sfx.whistle(3);
@@ -2767,7 +2771,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       return;
     }
     if (drill && state === 'play') drillTick(dt);
-    if (!so && !pen && kind !== 'train') {
+    if (!so && !pen && kind !== 'train' && kind !== 'test') {
       clock -= dt;
       if (half === 1 && clock <= matchLen / 2) { half = 2; banner = 'Pause'; pause = 4.0; sfx.whistle(2); return; }
       if (clock <= 0) {
@@ -3127,7 +3131,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (sn) matchGoals.push(sn);
     lastGk = sp && sp.team === team ? (ball.gk || 'shot') : 'own'; lastGoalTeam = team;
     hlAdd(team, mode === 'host' ? lastScorer : sp && sp.team === team && sp.ctrl === 'L0' ? cfg.name || 'Spiller 1' : sp && sp.team === team && sp.ctrl === 'L1' ? 'Spiller 2' : sn, lastGk);
-    if (kind !== 'train' && team === (P.find(q => q.ctrl === 'L0') || { team: 0 }).team) dailyEvent('goal', lastGk);
+    if (kind !== 'train' && kind !== 'test' && team === (P.find(q => q.ctrl === 'L0') || { team: 0 }).team) dailyEvent('goal', lastGk);
     banner = 'MÅL!'; pause = cfg.replay ? 5.4 : 3.0; ball.owner = -1;
     if (cfg.replay) startReplay();
     goalFx(team);
@@ -3405,7 +3409,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   let kind = null, teamPick = null, tD = [DIFF[1], DIFF[1]], myTeamNow = -1, wasBehind = false;
   const seasonLoad = () => { try { return JSON.parse(localStorage.getItem('mf-season') || 'null'); } catch (_) { return null; } };
   const seasonSaveS = v => { try { localStorage.setItem('mf-season', JSON.stringify(v)); } catch (_) {} };
-  function matchSize() { if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : cfg.size; }
+  function matchSize() { if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : kind === 'test' ? (cfg.tsize || 5) : cfg.size; }
   function matchMins() { if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
   function matchDiff() { if (drill) return DRILL_DIFF[(drill.lv || 1) - 1]; if (comp) return comp.diff; if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
   const tn = t => (teamPick ? teamPick[t].n : KITN[kit][t]);
@@ -3461,13 +3465,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function applyKind() {
     myTeamNow = mode === 'cpu' || mode === 'host' ? 0 : -1; wasBehind = false;
     if (kind === 'pen') { half = 2; clock = 0.01; } // straight to the shootout
+    if (kind === 'test') flash = { text: 'Testkamp: intet ur, tæller ikke', t: 2.2 };
     if (kind === 'train') { for (const p of P) if (p.team === 1 && p.k !== 0) p.out = 1e9; flash = { text: drill ? DRILLS[drill.id].txt : 'Træning: kun dig og målmanden', t: 2.2 }; }
   }
 
   function afterMatch(win, me, ss) {
     const rw = $('endReward'); rw.hidden = true; $('toSeason').hidden = true; $('toComp').hidden = true;
     $('fh').style.color = col.home; $('fa').style.color = col.away;
-    if (kind === 'train') return;
+    if (kind === 'train' || kind === 'test') return; // practice never counts
     const pr = loadProf(), got = [];
     const give = id => { if (!pr.tro[id]) { pr.tro[id] = new Date().toISOString().slice(0, 10); got.push(id); } };
     let coins = 0, extra = '';
@@ -4567,6 +4572,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     $('seasonPlay').onclick = () => { $('season').hidden = true; kind = 'season'; withHelp(() => { kind = 'season'; startMatch('cpu'); }); };
     $('toSeason').onclick = () => { toMenu(); seasonShow(); };
     $('bPens').onclick = () => { kind = 'pen'; withHelp(() => { kind = 'pen'; startMatch('cpu'); }); };
+    mkSeg($('segTest'), [2, 3, 5, 7, 11], ['2', '3', '5', '7', '11'], () => cfg.tsize || 5, v => { cfg.tsize = v; saveCfg(); });
+    $('bTest').onclick = () => { kind = 'test'; drillAgain = null; drill = null; withHelp(() => { kind = 'test'; startMatch('cpu'); }); };
     $('bTrain').onclick = () => { kind = 'train'; drillAgain = null; drill = null; withHelp(() => { kind = 'train'; startMatch('cpu'); }); };
     drillList(); $('goPractice').addEventListener('click', drillList);
     $('goProf').onclick = profShow; $('profClose').onclick = () => { $('prof').hidden = true; };
@@ -5220,8 +5227,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const m = Math.floor(clock / 60), s = Math.floor(clock % 60);
     const ss = mode === 'guest' ? soG : soSums();
     ctx.fillStyle = ss ? col.gold : col.chalk;
-    if (kind === 'train' && !ss) ctx.font = `700 ${fs * 0.6}px ${col.font}`;
-    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : kind === 'train' ? (drill ? (drill.id === 'cones' ? `PORT ${drill.gate}/6 · ${drill.time.toFixed(1)} S` : `${Math.max(1, drill.i)}/${DRILLS[drill.id].tries} · ${drill.goals} MÅL`) : 'TRÆNING') : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
+    if ((kind === 'train' || kind === 'test') && !ss) ctx.font = `700 ${fs * 0.6}px ${col.font}`;
+    ctx.fillText(ss ? `STR ${ss[0]}-${ss[1]}` : kind === 'train' ? (drill ? (drill.id === 'cones' ? `PORT ${drill.gate}/6 · ${drill.time.toFixed(1)} S` : `${Math.max(1, drill.i)}/${DRILLS[drill.id].tries} · ${drill.goals} MÅL`) : 'TRÆNING') : kind === 'test' ? 'TEST' : `${m}:${String(s).padStart(2, '0')}`, sw / 2, y + fs * 0.25);
     if (teamPick) { // team badges either side of the score
       ctx.font = `700 ${fs * 0.6}px ${col.font}`;
       for (const t of [0, 1]) {
