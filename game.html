@@ -1160,7 +1160,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   // and after a goal the team that conceded kicks off from the centre spot.
   let kickFirst = 0;
   function kickoff(team) {
-    recBuf = []; pen = null; guard = 0; setp = null;
+    recBuf = []; pen = null; guard = 0; setp = null; pendCard = null;
     refReset();
     ball.x = CX; ball.y = CY; ball.z = ball.vz = 0; ball.vx = ball.vy = 0; ball.trail = []; ball.owner = -1; ball.loose = 0; ball.last = null; ball.lastTeam = -1;
     for (const p of P) {
@@ -1959,6 +1959,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     for (const q of P) q.recv = 0; ball.spinT = 0;
     setp = null;
     if (ball.lastTeam !== p.team) wonAt[p.team] = clock; // we just won it (the clock counts down)
+    else if (ball.last && ball.last.pass && ball.last.to === p.i) ball.stealCd = Math.max(ball.stealCd || 0, 0.5); // a clean first touch: a moment to settle it before a shoulder-nick can take it
     ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0; ball.fresh = false;
     ball.lastTeam = p.team; ball.lastIdx = p.i;
     p.tackle = 0; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.chB = false; p.holdB = 0;
@@ -2185,11 +2186,11 @@ button.small { font-size: 13px; padding: 9px 10px; }
   function tackleWins(a) {
     // clean tackle: the tackler takes the ball, it never flies off
     const o = owner();
-    if (o && o !== a) { o.stun = 0.55; o.nopick = 0.5; o.vx *= 0.3; o.vy *= 0.3; if (localHuman(o)) buzz(50); }
+    if (o && o !== a) { o.stun = 0.55; o.nopick = 0.7; o.tcd = Math.max(o.tcd, 1.2); o.vx *= 0.3; o.vy *= 0.3; if (localHuman(o)) buzz(50); }
     a.tackle = 0; a.recover = 0.1; a.vx *= 0.4; a.vy *= 0.4; if (localHuman(a) && o) buzz(25);
     if (stats) stats.tk[a.team]++;
     if (a.ms) a.ms.tk++;
-    grab(a);
+    grab(a); ball.stealCd = Math.max(ball.stealCd || 0, 1.5); // the winner gets a moment to get away, no instant win-back (no ping-pong)
     sfx.win(); shake = Math.max(shake, 3);
   }
   // ---------- Keeper: dives, saves, kicks out of his hands ----------
@@ -2272,7 +2273,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (dist > 340 || dist < 0 || Math.abs(b.y - CY) > 200 || b.fx * dir < 0.3) return false;
     return !P.some(q => q.team === a.team && q !== a && on(q) && q.k !== 0 && (gx - q.x) * dir < dist + 10);
   }
-  let lastCard = '';
+  const CALM = 0.68; // FIFA-like tempo factor for the whole match
+  let lastCard = '', pendCard = null; // a yellow under advantage is shown at the next stoppage, as in FIFA
   function foul(a, b, hard) {
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
     let card = '';
@@ -2291,8 +2293,14 @@ button.small { font-size: 13px; padding: 9px 10px; }
     else if (inBox(a.team, b.x, b.y) && size > 1) startPenalty(b.team);
     else restart('free', b.team, x, y);
     if (card === 'Rødt kort') { sendOff(a); if (stats) stats.rc[a.team]++; }
-    if (card) { flash = { text: card, t: 1.8 }; lastCard = nameOf(a) || ''; }
+    if (card && adv) pendCard = { text: card, who: nameOf(a) || '' };
+    else if (card) { flash = { text: card, t: 1.8 }; lastCard = nameOf(a) || ''; }
     if (card && !adv) { pause = Math.max(pause, card === 'Rødt kort' ? 1.9 : 1.3); banner = ''; } // the referee stops the game and shows the card
+  }
+  function showPendCard() { // the play has stopped: now the referee shows the card he held back for the advantage
+    if (!pendCard || mode === 'guest') { pendCard = null; return; }
+    flash = { text: pendCard.text, t: 1.8 }; lastCard = pendCard.who; pendCard = null;
+    pause = Math.max(pause, 1.5); banner = '';
   }
   function sendOff(p) {
     if (isHuman(p)) { const q = nearestFree(p); if (q) swapControl(p, q, true); }
@@ -2327,6 +2335,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       swapControl(so ? ks[so.k[team].length % ks.length] : kh.reduce((a, b) => (Math.abs(b.x - gx) < Math.abs(a.x - gx) ? b : a)), kp, true); // in a shootout they take turns in goal too
     }
     flash = { text: so ? tn(team) + ' skyder' : 'Straffespark', t: 2.4 };
+    showPendCard();
     sfx.whistle();
   }
   function penShot(taker) { // the taker struck the ball: the keeper commits to a side
@@ -2512,6 +2521,21 @@ button.small { font-size: 13px; padding: 9px 10px; }
     const err = (Math.random() - 0.5) * 2 * d.aimErr * 0.6, a = Math.atan2(best.ty - p.y, goalX - p.x) + err;
     return { gap: best.gap, aim: [Math.cos(a), Math.sin(a)], pw: gd > 300 ? MAXCHARGE * 0.9 : gd > 160 ? MAXCHARGE * 0.6 : MAXCHARGE * 0.35 };
   }
+  // the safe ball out of pressure: a free mate with a clear lane, sideways or backwards is fine (like FIFA's recycle)
+  function safeOut(p, mates, foes, dir) {
+    let best = null, bs = -1e9;
+    for (const q of mates) {
+      if (q === p || isOffside(q, p)) continue;
+      const r = Math.hypot(q.x - p.x, q.y - p.y);
+      if (r < 60 || r > 380) continue;
+      const open = Math.min(140, foeD0(q, foes)), lane = Math.min(80, laneGap(p.x, p.y, q.x, q.y, foes));
+      if (open < 55 || lane < 26) continue;
+      const back = (q.x - p.x) * dir < -40 && (q.x - (dir > 0 ? PL : PR)) * dir < 200 ? 60 : 0; // not a back pass across his own box
+      const sc = open + lane * 2 + (q.x - p.x) * dir * 0.12 - back - Math.max(0, r - 260) * 0.5 - (q.k === 0 ? 40 : 0);
+      if (sc > bs) { bs = sc; best = q; }
+    }
+    return bs > 150 ? best : null;
+  }
   function bestPass(p, list, foes, dir) {
     let best = null, bs = -1e9;
     for (const q of list) {
@@ -2589,7 +2613,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
     if (o === p && p.frozen > 0) {
       // taking a throw-in, corner or goal kick
       p.think += dt;
-      if (p.think > (ball.rs === 'corner' || ball.rs === 'free' ? 2.4 : ball.rs === 'kick' ? 0.9 : 1.6)) {
+      if (p.think > Math.max(ball.rs === 'corner' || ball.rs === 'free' ? 2.4 : ball.rs === 'kick' ? 0.9 : 1.6, setp ? setp.wait + 0.4 : 0)) {
         if (ball.rs === 'free' && boxPiece() && Math.abs(goalX - p.x) < 430 && Math.random() < 0.55) { out.shoot = MAXCHARGE * (0.2 + Math.random() * 0.5); out.aim = [goalX - p.x, CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.45 + Math.random() * 0.3) - p.y]; } // straight at goal, over the wall
         else if (ball.rs === 'corner' || (boxPiece() && Math.random() < 0.5)) { out.cross = true; out.aim = [goalX - dir * 100 - p.x, CY - p.y]; }
         else { const q = passTarget(p, dir, (CY - p.y) / 300); if (q) out.passTo = q; else { out.shoot = 0.5; out.aim = [dir, 0]; } }
@@ -2612,7 +2636,19 @@ button.small { font-size: 13px; padding: 9px 10px; }
         const ffx = nearestFoe.fx, ffy = nearestFoe.fy, side = ffx * -fy - ffy * -fx >= 0 ? 1 : -1; // step off the line he slides along
         ax = -ffy * side + ax * 0.35; ay = ffx * side + ay * 0.35; dodge = true;
       }
-      go(p.x + ax * 100, p.y + ay * 100, dodge || (foeD > 140 && p.stamina > 0.5));
+      // under pressure, think like a FIFA player: a man closing him down in front means turn away and shield it,
+      // then play the safe ball (sideways or back) instead of running into him and losing it
+      const fwd = foeD > 1 ? (fx * dir) / foeD : 0;
+      const pressed = !keeper && size > 1 && !dodge && foes.some(f => { const dd = Math.hypot(f.x - p.x, f.y - p.y); return dd < 62 || (dd < 105 && ((f.x - p.x) * dir) / (dd || 1) > 0.25); });
+      if (pressed && !(p.plan.shT > 0)) p.plan.shT = 0.7 + iq * 0.5; // once he has decided to shield, he sticks with it for a moment (no wobbling)
+      if (p.plan.shT > 0) p.plan.shT -= dt;
+      if (p.plan.shT > 0 && !dodge) {
+        let bx = -fx / (foeD || 1), by = -fy / (foeD || 1); // away from the man closing him down
+        const side = Math.sign(p.y - CY) || 1; by -= side * 0.35; // ...and back toward the middle, where the help is
+        if (fwd < -0.2) { bx = ax; by = ay; } // he's already behind me: just go
+        const bl = Math.hypot(bx, by) || 1; ax = bx / bl; ay = by / bl;
+      }
+      go(p.x + ax * 100, p.y + ay * 100, dodge || (foeD > 140 && p.stamina > 0.5 && !(p.plan.shT > 0)));
       const wide = Math.abs(p.y - CY) > MOUTH + 70 && toGoal < 260 && toGoal > 20;
       const sinceWon = wonAt[p.team] - clock;
       const ahead = mates.filter(q => q !== p && q.k !== 0 && (q.x - p.x) * dir > 140 && !isOffside(q, p) && !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 55));
@@ -2624,6 +2660,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         ? mates.find(q => q !== p && q.k !== 0 && !isOffside(q, p) && (goalX - q.x) * dir < toGoal + 40 && laneGap(p.x, p.y, q.x, q.y, foes) > 30 && shotChance(q, goalX, foes, d, size)) : null;
       if (chance && p.think > d.react * 0.7 && (chance.gap > 60 || Math.random() < (0.3 + iq) * 4 * dt)) { out.shoot = chance.pw; out.aim = chance.aim; } // an open goal always, a corner chance more often the cleverer he is
       else if (tapIn) { out.passTo = tapIn; } // square it to the man with the open goal
+      else if (p.plan.shT > 0 && p.think > d.react * 0.6 && Math.random() < (1.6 + iq * 3) * dt && (out.passTo = safeOut(p, mates, foes, dir))) {} // pressed: the safe pass
       else if (!keeper && size >= 3 && wide && p.think > 0.4 && Math.random() < (sty === 'kant' ? 3.5 : 1.6) * dt) { out.cross = true; out.aim = [goalX - dir * 115 - p.x, CY - p.y]; } // cross to a man in the box
       else if (keeper && p.think > 0.6) { out.passTo = passTarget(p, dir, 0) || null; if (!out.passTo) { out.shoot = MAXCHARGE; out.aim = [dir, 0]; } }
       else if (!keeper && sty === 'mur' && size >= 3 && fromOwn < Lp * 0.33 && foeD < 100 && p.think > 0.25 && !p.plan.cl) {
@@ -2699,7 +2736,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           const rank = near.indexOf(p);
           if (rank >= 0 && rank < 2 && !setp) { // the two nearest offer: find open grass 120-170 from the ball, a bit forward
             let best = null, bsc = -1e9;
-            const ol = offsideLine(p.team);
+            const ol = offsideLine(p.team), prs = (o.plan && o.plan.shT > 0) || foeD0(o, foes) < 70; // he's under pressure: the nearest man comes short, behind or square, to give him the way out
             for (let a = 0; a < 10; a++) {
               const ang = (a / 10) * Math.PI * 2, r = 120 + (a % 2) * 50;
               const sx = o.x + Math.cos(ang) * r, sy = o.y + Math.sin(ang) * r;
@@ -2707,7 +2744,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
               const fd = Math.min(...foes.map(f => Math.hypot(f.x - sx, f.y - sy)));
               const lane = Math.min(...foes.map(f => { const t = Math.max(0, Math.min(1, ((f.x - o.x) * (sx - o.x) + (f.y - o.y) * (sy - o.y)) / (r * r))); return Math.hypot(o.x + (sx - o.x) * t - f.x, o.y + (sy - o.y) * t - f.y); }));
               const off = size >= 5 && (dir > 0 ? sx > ol : sx < ol);
-              const sc = Math.min(fd, 140) + Math.min(lane, 60) * 1.2 + (sx - o.x) * dir * 0.35 - Math.hypot(sx - p.x, sy - p.y) * 0.25 - (off ? 300 : 0) - (rank === 1 && near[0] && Math.hypot(near[0].x - sx, near[0].y - sy) < 90 ? 200 : 0);
+              const sc = Math.min(fd, 140) + Math.min(lane, 60) * 1.2 + (sx - o.x) * dir * (prs && rank === 0 ? -0.15 : 0.35) - Math.hypot(sx - p.x, sy - p.y) * 0.25 - (off ? 300 : 0) - (rank === 1 && near[0] && Math.hypot(near[0].x - sx, near[0].y - sy) < 90 ? 200 : 0);
               if (sc > bsc) { bsc = sc; best = [sx, sy]; }
             }
             if (best) [x, y] = best;
@@ -3082,7 +3119,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
 
     if (setp) {
       // set piece: the taker stands still and can only aim; the other team keeps its distance until the ball is played
-      setp.t += dt;
+      const was = setp.t; setp.t += dt;
+      if (was < setp.wait && setp.t >= setp.wait && setp.wait > 1) sfx.whistle(); // everyone is in place: the referee whistles, now it can be taken
       const tk = owner();
       if (!tk || tk.team !== setp.team) setp = null;
       else {
@@ -3127,7 +3165,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody)
           if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
-          if (p.tackle <= 0 && ball.stealCd <= 0 && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.6) * dt) { ball.stealCd = 0.8; o.nopick = 0.35; if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
+          if (p.tackle <= 0 && ball.stealCd <= 0 && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.0) * dt) { ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
         }
       }
     }
@@ -3230,20 +3268,23 @@ button.small { font-size: 13px; padding: 9px 10px; }
     ball.owner = taker.i; ball.loose = 0; ball.lastTeam = team; ball.lastIdx = ball.owner;
     taker.frozen = 99; guard = 0; ball.fresh = true; taker.charging = false; taker.hold = 0; taker.pending = 0; taker.pendB = 0; taker.chB = false; taker.holdB = 0; taker.wasA = taker.wasB = true; // a button still held from before doesn't kick it
     setp = { team, t: 0, r: type === 'throw' ? 70 : Math.max(110, G.circ), // 9.15 m, as in the Laws of the Game
-      wait: type === 'throw' ? 0.8 : type === 'kick' ? 0.3 : 1.2 }; // a calm moment before it can be taken
+      wait: type === 'throw' ? 1.1 : type === 'kick' ? 0.3 : type === 'goal' ? 1.6 : type === 'corner' ? 2.6 : 2.2 }; // as in FIFA: the referee places the ball, everyone jogs into place, then he whistles
     if (type === 'free' && boxPiece() && size >= 2) { // a free kick near goal: the defenders put up a wall between the ball and the goal
       const n = size >= 5 ? 3 : size >= 3 ? 2 : 1;
       setp.wall = P.filter(q => q.team !== team && on(q) && !(q.k === 0) && !isHuman(q)).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y)).slice(0, n).map(q => q.i);
     }
     if (boxPiece()) { // corner or free kick near goal: everyone takes up their places in and around the box straight away
       const others = P.filter(q => q !== taker && on(q) && !(size > 1 && q.k === 0));
-      for (const q of others.filter(q => q.team === team)) { const s = boxSpot(q); if (s) { q.x = s[0]; q.y = s[1]; q.vx = q.vy = 0; q.tackle = 0; } }
-      for (const q of others.filter(q => q.team !== team)) { const s = boxMark(q); if (s) { q.x = s[0]; q.y = s[1]; q.vx = q.vy = 0; q.tackle = 0; } }
-      const kp = size > 1 ? P[slotOf(1 - team, 0)] : null; if (kp && on(kp)) { const dir = team ? -1 : 1; kp.x = (team ? PL : PR) - dir * 28; kp.y = CY + (y - CY) * 0.15; kp.vx = kp.vy = 0; }
+      // they run there themselves during the wait (no teaming): only men who are really far away get a head start
+      const far = (q, s) => { const d = Math.hypot(s[0] - q.x, s[1] - q.y); if (d > 520) { const k = (d - 520) / d; q.x += (s[0] - q.x) * k; q.y += (s[1] - q.y) * k; } q.tackle = 0; };
+      for (const q of others.filter(q => q.team === team && !isHuman(q))) { const s = boxSpot(q); if (s) far(q, s); }
+      for (const q of others.filter(q => q.team !== team && !isHuman(q))) { const s = boxMark(q); if (s) far(q, s); }
+      const kp = size > 1 ? P[slotOf(1 - team, 0)] : null; if (kp && on(kp) && !isHuman(kp)) { const dir = team ? -1 : 1; far(kp, [(team ? PL : PR) - dir * 28, CY + (y - CY) * 0.15]); }
     }
     for (const p of P) if (p.team !== team && p.tackle > 0) { p.tackle = 0; p.recover = 0.2; }
     if (type !== 'kick' && !banner) pause = Math.max(pause, 1.2); // the whistle: everything stops for a moment before it starts again
     flash = { text: label || (type === 'throw' ? 'Indkast' : type === 'corner' ? 'Hjørnespark' : type === 'free' ? 'Frispark' : type === 'kick' ? 'Afspark' : 'Målspark'), t: 1.0 };
+    showPendCard();
     sfx.whistle();
   }
   // A pass to your own side that rolls into your own net is not a goal: the keeper gets it back.
@@ -5222,8 +5263,8 @@ button.small { font-size: 13px; padding: 9px 10px; }
     p.ph = (p.ph || 0) + mv * 0.17;
     p.amp = (p.amp || 0) + (Math.min(1, mv / 2.6) - (p.amp || 0)) * 0.25;
     const sw = Math.sin(p.ph) * p.amp, keeper = size > 1 && p.k === 0;
-    const kitC = p.ref ? '#16181d' : p.team ? col.away : col.home;
-    const shirt = p.ref ? '#16181d' : keeper ? (p.team ? '#ffd447' : '#9be23a') : kitC;
+    const kitC = p.ref ? refKit() : p.team ? col.away : col.home;
+    const shirt = p.ref ? kitC : keeper ? (p.team ? '#ffd447' : '#9be23a') : kitC;
     const light = parseInt(shirt.slice(1, 3), 16) + parseInt(shirt.slice(3, 5), 16) + parseInt(shirt.slice(5, 7), 16) > 560;
     const sock = light ? '#2a2f36' : '#f4f4ef', skin = SKIN[(p.i * 7 + 3) % SKIN.length], hair = HAIR[(p.i * 5 + 1) % HAIR.length];
     // a disc on the grass in the team colour keeps him easy to spot, gold for the one you control
@@ -5258,6 +5299,15 @@ button.small { font-size: 13px; padding: 9px 10px; }
   // ---------- the referee (as in FIFA): runs with play, a little behind the ball and off to the side, runs over to a
   // foul and holds up the card. Only for show: every phone works him out from the ball, so it needs nothing online.
   function refReset() { ref.x = CX; ref.y = CY + Math.min(160, (PB - PT) * 0.3); ref.card = 0; ref.lx = undefined; }
+  let refK = '', refC = '#16181d';
+  function refKit() { // the referee always wears a colour neither team (nor a keeper) has, so he never looks like a player
+    const key = col.home + col.away; if (key === refK) return refC;
+    const rgb = h => { h = String(h).replace('#', ''); if (h.length === 3) h = h.replace(/./g, c => c + c); const n = parseInt(h, 16) || 0; return [n >> 16 & 255, n >> 8 & 255, n & 255]; };
+    const others = [col.home, col.away, '#ffd447', '#9be23a'].map(rgb);
+    let best = refC, bd = -1;
+    for (const c of ['#16181d', '#f2e14b', '#3fd0ff', '#ff5fb0', '#ffffff', '#8a5cff']) { const v = rgb(c), d = Math.min(...others.map(o => Math.hypot(v[0] - o[0], v[1] - o[1], v[2] - o[2]))); if (d > bd + 25) { bd = d; best = c; } }
+    refK = key; refC = best; return best;
+  }
   function updRef(dt) {
     dt = Math.min(dt, 0.05);
     let tx, ty, fast = false;
@@ -5356,7 +5406,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       // how long AFLEVER has been held (kept here so a guest sees it too): the line reaches further and turns blue (hard) or gold (high)
       const now = performance.now();
       if (inp.b) { if (!hintAt[i]) hintAt[i] = now; } else hintAt[i] = 0;
-      const hb = hintAt[i] ? (now - hintAt[i]) / 1000 * (cfg.calm && kind !== 'train' ? 0.8 : 1) : 0; // in game time, like the hold itself
+      const hb = hintAt[i] ? (now - hintAt[i]) / 1000 * (cfg.calm && kind !== 'train' ? CALM : 1) : 0; // in game time, like the hold itself
       const q = passTarget(me, inp.x, inp.y, hb > PASS_TAP ? Math.min(1, (hb - PASS_TAP) / (MAXCHARGE - PASS_TAP)) : 0); if (!q) continue;
       ctx.strokeStyle = hb >= PASS_HIGH ? 'rgba(255,212,71,0.9)' : hb > PASS_TAP ? 'rgba(127,211,255,0.9)' : 'rgba(255,255,255,0.5)'; ctx.lineWidth = 3; ctx.setLineDash([8, 8]);
       ctx.beginPath(); ctx.moveTo(me.x, me.y); ctx.lineTo(q.x, q.y); ctx.stroke(); ctx.setLineDash([]);
@@ -5566,7 +5616,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
   const DT = 1 / 120;
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; acc += dt;
-    while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT * (cfg.calm && kind !== 'train' ? 0.8 : 1)); acc -= DT; } // calm tempo: the whole match runs a fifth slower
+    while (acc >= DT) { if (state === 'play' && mode !== 'guest') step(DT * (cfg.calm && kind !== 'train' ? CALM : 1)); acc -= DT; } // calm tempo: the whole match runs about a third slower, FIFA pace
     netTick(now, dt);
     hlTick(dt);
     if (replay) { replay.t += replay.t < 0 ? dt : dt * 0.5; if (replay.t * 30 >= replay.frames.length || banner !== 'MÅL!' || state !== 'play') replay = null; }
