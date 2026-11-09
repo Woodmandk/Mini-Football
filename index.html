@@ -2386,8 +2386,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
       u = Math.max(u, floor / half);
     }
     let x = ownX + dir * u * half;
-    if (weHave) { const ol = offsideLine(p.team); x = dir > 0 ? Math.min(x, ol - 10) : Math.max(x, ol + 10); } // stay onside
-    const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1 : 0.88) * [0.8, 1, 1.18][T.w] + (ball.y - CY) * 0.22;
+    if (weHave) { // stay onside, but the forwards play on the shoulder of the last defender and the midfield follows, so the team has depth
+      const ol = offsideLine(p.team), want = u0 > 0.75 ? 25 : u0 > 0.45 ? 230 : 1e9;
+      x = dir > 0 ? Math.min(Math.max(x, ol - want), ol - 10) : Math.max(Math.min(x, ol + want), ol + 10);
+    }
+    // with the ball the team stretches the pitch (wide men hug the touchline), without it the block narrows to the ball side
+    const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1.3 : 0.88) * [0.8, 1, 1.18][T.w] + (ball.y - CY) * (weHave ? 0.16 : 0.26);
     return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
   }
   // the best mate to pass to: free of markers, a clear lane, and further up the pitch
@@ -2440,6 +2444,25 @@ button.small { font-size: 13px; padding: 9px 10px; }
         if (best) { marks.set(q, best); free.delete(best); }
       }
     }
+  }
+  const foeD0 = (q, foes) => foes.reduce((m, f) => Math.min(m, Math.hypot(f.x - q.x, f.y - q.y)), 1e9);
+  // no clumping: a player keeps his distance from teammates (and from where they are heading), like a real team holds its shape
+  function spaceOut(p, x, y, mates, o) {
+    const R = size >= 11 ? 120 : size >= 7 ? 105 : size >= 5 ? 95 : 85;
+    for (let it = 0; it < 2; it++) {
+      let px = 0, py = 0;
+      for (const q of mates) {
+        if (q === p || q.k === 0) continue;
+        for (const [qx, qy] of q.tgt && q !== o ? [[q.x, q.y], q.tgt] : [[q.x, q.y]]) {
+          const dx = x - qx, dy = y - qy, dd = Math.hypot(dx, dy);
+          const r = q === o ? R * 0.9 : R; // and don't stand on top of the man on the ball either
+          if (dd < r) { const k = (r - dd) / r; if (dd > 1) { px += dx / dd * k * r * 0.6; py += dy / dd * k * r * 0.6; } else { px += (p.i % 2 ? 1 : -1) * r * 0.3; py += (p.i % 3 - 1) * r * 0.3; } }
+        }
+      }
+      x += px; y += py;
+      x = Math.max(PL + 30, Math.min(PR - 30, x)); y = Math.max(PT + 30, Math.min(PB - 30, y));
+    }
+    return [x, y];
   }
   function aiInput(p, dt) {
     const d = aiD(p.team), T = tac(p.team);
@@ -2498,6 +2521,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const ahead = mates.filter(q => q !== p && q.k !== 0 && (q.x - p.x) * dir > 140 && !isOffside(q, p) && !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 55));
       const range = [300, 340, 400][T.pt] + (sty === 'angreb' ? 60 : sty === 'kort' ? -50 : 0);
       // a real chance: a clear line to a corner of the goal (or an empty net) is always taken, not left to chance
+      const runner = size >= 5 && !keeper ? mates.find(q => q.run > 0 && (q.x - p.x) * dir > 60 && !isOffside(q, p) && laneGap(p.x, p.y, q.x, q.y, foes) > 22) : null;
       const chance = !keeper && toGoal > 0 && !(p.frozen > 0) ? shotChance(p, goalX, foes, d, size) : null;
       const tapIn = !keeper && !chance && toGoal > 0 && toGoal < 330 && size > 1 && p.think > d.react && Math.random() < (0.4 + iq) * 3 * dt
         ? mates.find(q => q !== p && q.k !== 0 && !isOffside(q, p) && (goalX - q.x) * dir < toGoal + 40 && laneGap(p.x, p.y, q.x, q.y, foes) > 30 && shotChance(q, goalX, foes, d, size)) : null;
@@ -2516,6 +2540,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         const q = ahead.reduce((a, b) => ((b.x - a.x) * dir > 0 ? b : a));
         if ((q.x - p.x) * dir > 60) { out.passTo = q; out.through = size >= 5 || (sty === 'kontra' && Math.random() < 0.6); }
       }
+      else if (runner && p.think > d.react && Math.random() < d.pass * (0.6 + iq) * 1.5 * dt) { out.passTo = runner; out.through = true; } // a mate is running in behind: slip him in
       else if (gd < range && p.think > d.react + 0.2 && Math.random() < d.shoot * (sty === 'angreb' ? 1.4 : 1) * dt * (gd < 220 ? 1.5 : 0.6)) {
         const err = (Math.random() - 0.5) * 2 * d.aimErr;
         const gk0 = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
@@ -2542,7 +2567,9 @@ button.small { font-size: 13px; padding: 9px 10px; }
       }
     } else {
       p.think = 0; p.plan = null;
-      const weHave = o && o.team === p.team;
+      // our pass still on its way counts as having it: the team keeps its attacking shape instead of falling back mid-pass
+      const weHave = (o && o.team === p.team) || (!o && ball.last && ball.last.team === p.team && ball.last.pass && P[ball.last.to] && P[ball.last.to].recv > 0 && P[ball.last.to] !== p);
+      if (!weHave) p.run = 0;
       const chaser = mates.reduce((a, b) => (dBall(b) < dBall(a) ? b : a));
       const ballInBox = Math.abs(ball.x - ownX) < 170 && Math.abs(ball.y - CY) < 160;
       const L = PR - PL;
@@ -2562,8 +2589,12 @@ button.small { font-size: 13px; padding: 9px 10px; }
       const bs = bp && !keeper ? (weHave ? boxSpot(p) : boxMark(p)) : null;
       if (bs) go(bs[0], bs[1], Math.hypot(bs[0] - p.x, bs[1] - p.y) > 110);
       else if (weHave) {
+        const o = owner() || P[ball.last.to]; // our pass on its way: shape up around the man it is going to
         if (keeper) go(ownX + dir * 45, CY + (ball.y - CY) * 0.3);
-        else if (size <= 3) { const lane = p.k === 1 ? -1 : 1; go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 170)), CY + lane * [100, 130, 160][T.w], Math.abs(p.x - o.x) < 60); }
+        else if (size <= 3) { // the other man takes the opposite side of the pitch from the ball, ahead of it, so there is always a pass on
+          const lane = Math.abs(o.y - CY) > 40 ? (o.y > CY ? -1 : 1) : (p.k === 1 ? -1 : 1);
+          go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 150)), CY + lane * [100, 130, 160][T.w], Math.abs(p.x - o.x) < 60);
+        }
         else {
           let [x, y] = shape(0.06);
           const near = mates.filter(q => q !== o && q.k !== 0).sort((a, b) => Math.hypot(a.x - o.x, a.y - o.y) - Math.hypot(b.x - o.x, b.y - o.y));
@@ -2582,11 +2613,25 @@ button.small { font-size: 13px; padding: 9px 10px; }
               if (sc > bsc) { bsc = sc; best = [sx, sy]; }
             }
             if (best) [x, y] = best;
-          } else if (formOf(p)[0] > 0.45 && formOf(p)[0] < 0.85 && Math.sin(performance.now() / 1300 + p.i * 2.1) > 0.55) {
-            x += dir * 110; // a midfielder bursts forward now and then
-            const ol = offsideLine(p.team); x = dir > 0 ? Math.min(x, ol - 8) : Math.max(x, ol + 8);
+          } else {
+            p.run = p.run || 0;
+            const u0 = formOf(p)[0], ol = offsideLine(p.team), fwd = (o.x - ownX) * dir; // how far up the pitch the ball is
+            const sideOfBall = Math.sign(o.y - CY) === Math.sign(y - CY) && Math.abs(y - CY) > (PB - PT) * 0.22;
+            if (p.run > 0) { // making a run in behind: sprint at goal and ask for the through ball
+              p.run -= dt;
+              x = p.x + dir * 160; y = p.y + (CY - p.y) * 0.25;
+              if ((goalX - p.x) * dir < 90 || p.run <= 0) p.run = -2.5 - Math.random() * 2; // done: back to the line, rest a bit
+            } else {
+              if (p.run < 0) p.run = Math.min(0, p.run + dt);
+              const onLine = (ol - p.x) * dir < 300 && (ol - p.x) * dir > -20 && (goalX - ol) * dir > 140, carrierFree = foeD0(o, foes) > 55 && (o.fx * dir > 0 || o.ctrl !== 'ai'); // room behind the line to run into
+              // a forward on the last line times a run when the man on the ball has his head up
+              if (u0 > 0.7 && p.run === 0 && onLine && carrierFree && fwd > L * 0.25 && Math.random() < (1 + iq) * dt) p.run = 1.4 + Math.random() * 0.6;
+              else if (u0 < 0.4 && sideOfBall && fwd > L * 0.5 && size >= 7) { x = ownX + dir * Math.min(L * 0.78, (o.x - ownX) * dir + 60); y = y < CY ? PT + 40 : PB - 40; } // the full back overlaps on the ball side
+              else if (u0 > 0.45 && u0 < 0.85 && Math.sin(clock * 0.8 + p.i * 2.1) > 0.6) { x += dir * 120; x = dir > 0 ? Math.min(x, ol - 8) : Math.max(x, ol + 8); } // a midfielder steps into the space behind the forwards
+            }
           }
-          go(x, y, Math.hypot(x - p.x, y - p.y) > 90);
+          [x, y] = spaceOut(p, x, y, mates, o);
+          go(x, y, p.run > 0 || Math.hypot(x - p.x, y - p.y) > 90);
         }
       } else if (setp && setp.team !== p.team && o && (keeper || p === chaser || (p === second && !bp))) {
         // set piece against us: the keeper minds his goal, the nearest men stand the right distance off, between the ball and our goal
@@ -2604,8 +2649,10 @@ button.small { font-size: 13px; padding: 9px 10px; }
         // second man cuts off the way to goal; with high pressing he hunts the ball in their half too
         const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1;
         const hunt = T.pr === 2 && (o.x - ownX) * dir > L * 0.5;
-        const r = hunt ? 30 : T.pr === 0 ? 120 : 90;
-        go(o.x + gx / gl * r + (hunt ? (p.k % 2 ? 24 : -24) : 0), o.y + gy / gl * r, true);
+        const r = hunt ? 30 : T.pr === 0 ? 130 : 105;
+        // not straight behind the first man (that is two in one spot) but off to the inside, so the carrier is pushed wide
+        const side = hunt ? (p.k % 2 ? 1 : -1) : (Math.abs(o.y - CY) > 40 ? Math.sign((CY - o.y) * gx) || 1 : p.k % 2 ? 1 : -1), lat = hunt ? 30 : 60;
+        go(o.x + gx / gl * r - gy / gl * side * lat, o.y + gy / gl * r + gx / gl * side * lat, true);
       } else if (p === chaser || (keeper && ballInBox && dBall(p) < 150)) {
         // go for the ball, staying goal-side of whoever has it (low pressing: wait for them further back until they come close)
         let bx = ball.x + ball.vx * 0.15, by = ball.y + ball.vy * 0.15;
@@ -2632,7 +2679,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
           const gx = ownX - m.x, gy = CY - m.y, gl = Math.hypot(gx, gy) || 1, k = o ? 0.28 * iq : 0;
           go(m.x + gx / gl * 38 * (1 - k) + (o ? (o.x - m.x) * k * 0.5 : 0), m.y + gy / gl * 38 * (1 - k) + (o ? (o.y - m.y) * k * 0.5 : 0), Math.hypot(m.x - p.x, m.y - p.y) > 160);
         }
-        else { const [x, y] = shape(0); go(x, y, Math.hypot(x - p.x, y - p.y) > 220); }
+        else { const [x, y] = spaceOut(p, ...shape(0), mates, o); go(x, y, Math.hypot(x - p.x, y - p.y) > 220); }
       } else if (foes.length) {
         // mark the most dangerous free opponent
         const mark = foes.filter(f => f !== o).sort((a, b) => Math.abs(a.x - ownX) - Math.abs(b.x - ownX))[(p.k + 1) % Math.max(1, foes.length - 1)] || foes[0];
@@ -2640,6 +2687,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
         go(mark.x + gx / gl * 55 * (1 - k) + (o ? (o.x - mark.x) * k * 0.45 : 0), mark.y + gy / gl * 55 * (1 - k) + (o ? (o.y - mark.y) * k * 0.45 : 0), iq > 0.7 && Math.hypot(mark.x - p.x, mark.y - p.y) > 150);
       }
     }
+    p.tgt = o === p ? null : [tx, ty];
     let ix = tx - p.x, iy = ty - p.y; const il = Math.hypot(ix, iy);
     if (il > 1) { ix /= il; iy /= il; } else ix = iy = 0;
     const s = Math.min(1, il / 25) * d.spd;
