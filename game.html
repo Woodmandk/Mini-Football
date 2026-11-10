@@ -267,6 +267,35 @@ table.st tr.me td { color: var(--gold); }
 /* your own team */
 .minis button.mine { border-color: var(--gold); color: var(--gold); }
 .tp.big { font-size: 16px; font-weight: 700; color: #7fe0a0; flex: 0 0 92px; text-align: right; }
+/* the pack opening: the pack shakes, bursts open, then nation, position and rating are revealed one by one */
+#pkFx { position: absolute; inset: 0; z-index: 60; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 50% 50%, #1b3326 0%, #050b08 75%); --fx: #c98a4b; cursor: pointer; }
+#pkFx .fxrays { position: absolute; left: 50%; top: 50%; width: 260vmax; height: 260vmax; margin: -130vmax 0 0 -130vmax; opacity: 0; transition: opacity .4s;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--fx) 30%, transparent) 0deg 7deg, transparent 7deg 20deg); animation: fxspin 9s linear infinite; mask-image: radial-gradient(circle, #000 0%, transparent 32%); -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 32%); }
+#pkFx.burst .fxrays { opacity: 1; }
+#pkFx .fxflash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+#pkFx.burst .fxflash { animation: fxflash .7s ease-out; }
+.fxpack { position: relative; width: 132px; height: 186px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; overflow: hidden;
+  background: linear-gradient(160deg, color-mix(in srgb, var(--pk) 70%, #fff), var(--pk) 45%, color-mix(in srgb, var(--pk) 55%, #000)); color: #fff; box-shadow: 0 0 30px color-mix(in srgb, var(--pk) 70%, transparent), inset 0 0 0 3px rgba(255,255,255,0.35);
+  animation: fxdrop .55s cubic-bezier(.2,1.4,.4,1); }
+.fxpack .fxlogo { font-weight: 800; letter-spacing: .14em; font-size: 15px; text-shadow: 0 2px 0 rgba(0,0,0,.3); }
+.fxpack b { font-size: 13px; opacity: .9; }
+.fxpack .fxshine { position: absolute; inset: -40% -60%; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,.55) 50%, transparent 60%); animation: fxshine 1.2s ease-in-out infinite; }
+#pkFx.shake .fxpack { animation: fxshake .09s linear infinite; box-shadow: 0 0 70px 10px var(--fx), inset 0 0 0 3px rgba(255,255,255,0.6); }
+#pkFx.burst .fxpack { animation: fxboom .35s ease-in forwards; }
+.fxclue { position: absolute; left: 0; right: 0; text-align: center; font-weight: 800; color: #fff; opacity: 0; transform: scale(2.2); transition: opacity .25s, transform .35s cubic-bezier(.2,1.3,.4,1); text-shadow: 0 0 18px var(--fx), 0 3px 0 rgba(0,0,0,.6), 0 0 6px #000; pointer-events: none; }
+#fxNat { top: 22%; font-size: 30px; } #fxPos { top: 40%; font-size: 24px; letter-spacing: .12em; text-transform: uppercase; } #fxOvr { top: 55%; font-size: 72px; color: #fff; -webkit-text-stroke: 2px var(--fx); }
+.fxclue.on { opacity: 1; transform: scale(1); }
+.fxtap { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 12px; color: rgba(255,255,255,.45); margin: 0; }
+.fxconf i { position: absolute; top: -20px; width: 8px; height: 14px; border-radius: 2px; animation: fxfall linear forwards; }
+@keyframes fxspin { to { transform: rotate(360deg); } }
+@keyframes fxflash { 0% { opacity: .95; } 100% { opacity: 0; } }
+@keyframes fxdrop { from { transform: translateY(-120vh) rotate(-12deg); } to { transform: none; } }
+@keyframes fxshine { from { transform: translateX(-60%); } to { transform: translateX(60%); } }
+@keyframes fxshake { 0% { transform: translate(0,0) rotate(0); } 25% { transform: translate(-4px,2px) rotate(-3deg); } 50% { transform: translate(3px,-3px) rotate(2deg); } 75% { transform: translate(-2px,-2px) rotate(-1deg); } 100% { transform: translate(4px,3px) rotate(3deg); } }
+@keyframes fxboom { to { transform: scale(2.4); opacity: 0; } }
+@keyframes fxfall { to { transform: translateY(115vh) rotate(720deg); } }
+.pk.flip { animation: pkflip .8s cubic-bezier(.2,1.2,.4,1); }
+@keyframes pkflip { from { transform: perspective(600px) rotateY(180deg) scale(.6); opacity: 0; } 60% { opacity: 1; } to { transform: none; } }
 .pk { width: 170px; margin: 6px auto 10px; border-radius: 14px; padding: 12px 10px; text-align: center; box-shadow: 0 6px 24px rgba(0,0,0,0.5); animation: pkin 0.7s ease-out; }
 .pk .o { font-size: 40px; font-weight: 700; line-height: 1; } .pk .ps { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
 .pk .n { font-size: 16px; font-weight: 700; margin: 6px 0 2px; } .pk .nt { font-size: 11px; opacity: 0.85; }
@@ -448,7 +477,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           </div></div>
         <div class="col"><div class="lbl">Spillere pr. hold</div>
           <div class="seg" id="segSize" role="group" aria-label="Holdstørrelse">
-            <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button><button data-v="7">7</button><button data-v="11">11</button>
+            <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5" title="Indendørs med bander">5 inde</button><button data-v="7">7</button><button data-v="11">11</button>
           </div></div>
         <div class="col" id="formBox"><div class="lbl" id="formLbl">Formation <button id="setupMine" class="linkbtn">Taktik og opstilling ›</button></div>
           <div class="seg" id="segForm" role="group" aria-label="Formation"></div></div>
@@ -484,7 +513,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     <div class="card wide" id="pgOnline" hidden>
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Online</h2><span class="sp"></span></div>
       <div class="ow one"><div class="col"><div class="lbl">Rangeret kamp mod hvem som helst</div>
-          <p id="quickSub">5 mod 5 med dit eget hold, 3 minutter. Vind for at stige i rang og få dobbelt XP i sæsonpasset.</p>
+          <p id="quickSub">7 mod 7 med dit eget hold, 4 minutter. Vind for at stige i rang og få dobbelt XP i sæsonpasset.</p>
           <button id="quick" class="go quick" disabled>Find modstander</button></div></div>
       <div class="ow">
         <div class="col"><div class="lbl">Start en ny kamp</div>
@@ -586,6 +615,14 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       <p class="sqnote" id="pkNote"></p>
       <div class="btns"><button id="pkKeep">Behold</button><button id="pkSell" class="alt">Sælg</button></div>
     </div>
+  </div>
+
+  <div id="pkFx" hidden>
+    <div class="fxrays"></div><div class="fxflash"></div>
+    <div class="fxpack" id="fxPack"><span class="fxlogo">BANEBOLD</span><b id="fxName">Pakke</b><i class="fxshine"></i></div>
+    <div class="fxclue" id="fxNat"></div><div class="fxclue" id="fxPos"></div><div class="fxclue fxovr" id="fxOvr"></div>
+    <div class="fxconf" id="fxConf"></div>
+    <p class="fxtap">Tryk for at springe over</p>
   </div>
 
   <div class="overlay" id="season" hidden>
@@ -853,8 +890,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, tempo: 1, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
+  const cfg = { size: 7, mins: 3, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, tempo: 1, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
+  if (!cfg.v7) { cfg.v7 = 1; if (cfg.size < 7) cfg.size = 7; } // Daniel: a match should be 7 or 11 a side by default (5 a side is now indoor)
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
   if (![1, 2, 3, 5, 7, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
   function seg(id, key) {
@@ -2387,8 +2425,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     return best;
   }
   // offside (5 and 11 a side): past the second-last opponent, in their half, ahead of the ball
+  // 5 a side is indoor football: boards all round, the ball bounces back off them, no throw-ins, corners, goal kicks or offside
+  const INDOOR = () => size === 5 && kind !== 'train';
   function isOffside(q, p) {
-    if (size < 5 || !q || p.frozen > 0 || kind === 'train') return false;
+    if (size < 5 || INDOOR() || !q || p.frozen > 0 || kind === 'train') return false;
     const dir = q.team ? -1 : 1;
     if ((q.x - CX) * dir <= 0 || (q.x - ball.x) * dir <= 0) return false;
     const foes = P.filter(f => f.team !== q.team).map(f => f.x * dir).sort((a, b) => b - a);
@@ -2880,7 +2920,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const s = Math.sign(o.y - CY) || 1;
     const spot = [[60, s * 50], [75, -s * 70], [135, 0]][i];
     let x = gx - dir * spot[0], y = CY + spot[1];
-    if (size >= 5) { const ol = dir > 0 ? Math.max(offsideLine(p.team), o.x) : Math.min(offsideLine(p.team), o.x); x = dir > 0 ? Math.min(x, ol - 6) : Math.max(x, ol + 6); } // stay onside until it is played
+    if (size >= 5 && !INDOOR()) { const ol = dir > 0 ? Math.max(offsideLine(p.team), o.x) : Math.min(offsideLine(p.team), o.x); x = dir > 0 ? Math.min(x, ol - 6) : Math.max(x, ol + 6); } // stay onside until it is played
     return [x, y];
   }
   // Big teams: the block slides with the ball but the lines keep their gaps, forwards move more than defenders.
@@ -3422,8 +3462,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         p.vx += (inp.x * top - p.vx) * t; p.vy += (inp.y * top - p.vy) * t;
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
-      p.x = Math.max(PL + PRAD - 30, Math.min(PR - PRAD + 30, p.x));
-      p.y = Math.max(PT + PRAD - 10, Math.min(PB - PRAD + 10, p.y));
+      const wall = INDOOR() ? 30 + PRAD : 0; // indoors the boards stop you
+      p.x = Math.max(PL + PRAD - 30 + wall, Math.min(PR - PRAD + 30 - wall, p.x));
+      p.y = Math.max(PT + PRAD - 10 + (wall && 10 + PRAD - 4), Math.min(PB - PRAD + 10 - (wall && 10 + PRAD - 4), p.y));
       if (p.hands > 0) { // the keeper with the ball in his hands: stays in his box, and must let go in time
         if (ball.owner !== p.i) p.hands = 0;
         else {
@@ -3655,6 +3696,16 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         const nx = dx / d, ny = dy / d; ball.x = px + nx * m; ball.y = py + ny * m;
         if (ball.owner < 0) { const rv = ball.vx * nx + ball.vy * ny; if (rv < 0) { ball.vx -= 1.7 * rv * nx; ball.vy -= 1.7 * rv * ny; sfx.post(); shake = Math.max(shake, 4); crowd.ooh(true); buzz([30, 40, 30]); } }
       }
+    }
+    if (ball.owner < 0 && INDOOR()) { // indoors: the ball comes back off the boards (it only goes out through the goal)
+      const e = 0.72; let hit = 0;
+      if (ball.y < PT + BRAD) { ball.y = PT + BRAD; if (ball.vy < 0) { hit = -ball.vy; ball.vy = -ball.vy * e; ball.vx *= 0.94; } }
+      if (ball.y > PB - BRAD) { ball.y = PB - BRAD; if (ball.vy > 0) { hit = ball.vy; ball.vy = -ball.vy * e; ball.vx *= 0.94; } }
+      if (!(Math.abs(ball.y - CY) < MOUTH - POSTR && ball.z < BAR)) {
+        if (ball.x < PL + BRAD) { ball.x = PL + BRAD; if (ball.vx < 0) { hit = Math.max(hit, -ball.vx); ball.vx = -ball.vx * e; ball.vy *= 0.94; } }
+        if (ball.x > PR - BRAD) { ball.x = PR - BRAD; if (ball.vx > 0) { hit = Math.max(hit, ball.vx); ball.vx = -ball.vx * e; ball.vy *= 0.94; } }
+      }
+      if (hit > 120) { noise(0.06, Math.min(0.5, hit / 1400), 'lowpass', 500, 1, 120); if (hit > 500) shake = Math.max(shake, 2); }
     }
     if (ball.owner >= 0) return;
     // out of play: throw-ins, corners and goal kicks
@@ -4014,8 +4065,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   let kind = null, teamPick = null, tD = [DIFF[1], DIFF[1]], myTeamNow = -1, wasBehind = false;
   const seasonLoad = () => { try { return JSON.parse(localStorage.getItem('mf-season') || 'null'); } catch (_) { return null; } };
   const seasonSaveS = v => { try { localStorage.setItem('mf-season', JSON.stringify(v)); } catch (_) {} };
-  function matchSize() { if (quick && (mode === 'host' || mode === 'guest')) return 5; if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : kind === 'test' ? (cfg.tsize || 5) : cfg.size; }
-  function matchMins() { if (quick && (mode === 'host' || mode === 'guest')) return 3; if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
+  function matchSize() { if (quick && (mode === 'host' || mode === 'guest')) return 7; if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : kind === 'test' ? (cfg.tsize || 5) : cfg.size; }
+  function matchMins() { if (quick && (mode === 'host' || mode === 'guest')) return 4; if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
   function matchDiff() { if (drill) return DRILL_DIFF[(drill.lv || 1) - 1]; if (comp) return comp.diff; if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
   const tn = t => (teamPick ? teamPick[t].n : KITN[kit][t]);
   const aiD = t => tD[t] || DIFF[1];
@@ -4683,7 +4734,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       koShow(); compSubs();
     };
     const cv2 = { size: cfg.size > 1 ? cfg.size : 5, mins: cfg.mins, lvl: 2 };
-    mkSeg($('carSize'), [1, 2, 3, 5, 7, 11], ['1', '2', '3', '5', '7', '11'], () => cv2.size, v => { cv2.size = v; });
+    mkSeg($('carSize'), [1, 2, 3, 5, 7, 11], ['1', '2', '3', '5 inde', '7', '11'], () => cv2.size, v => { cv2.size = v; });
     mkSeg($('carMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => cv2.mins, v => { cv2.mins = v; });
     mkSeg($('carLvl'), [1, 2, 3], ['Let', 'Normal', 'Svær'], () => cv2.lvl, v => { cv2.lvl = v; });
     howSeg($('carHow'), () => (carLoad() || { how: 2 }).how, v => { const C = carLoad(); if (C) { C.how = v; carSave(C); } }, $('carP2'));
@@ -4870,7 +4921,35 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const st = add('st', '');
     for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflekser' : name} ${p[k]}`; st.appendChild(d); }
   }
-  function showCard(p, title, after) { // the reveal: keep him (on the bench, or in place of your weakest) or sell him for coins
+  // ---------- the pack opening (as in FIFA): the pack shakes, bursts, then nation, position and rating one at a time ----------
+  const flagOf = c => (c && /^[A-Z]{2}$/.test(c) ? String.fromCodePoint(...[...c].map(ch => 0x1f1e6 + ch.charCodeAt(0) - 65)) + ' ' : '');
+  const FXC = { bronze: '#c98a4b', silver: '#d5dde5', gold: '#ffd447', elite: '#b57bff', event: '#3ff2a8' };
+  let fxT = [];
+  function packFx(p, title, done) {
+    const el = $('pkFx'); if (!el) { done(); return; }
+    const o = ovr(p), tier = p.ev ? 'event' : ovrTier(o), big = o >= 75 || p.ev, pkc = /Guld/.test(title) ? '#e3b23c' : /Sølv/.test(title) ? '#9aa4ad' : /Bronze/.test(title) ? '#8a5a35' : '#2f9d55';
+    fxT.forEach(clearTimeout); fxT = [];
+    el.className = ''; el.style.setProperty('--fx', FXC[tier]); $('fxPack').style.setProperty('--pk', pkc); $('fxName').textContent = title;
+    $('fxNat').textContent = flagOf(p.nat) + (NATS[p.nat] || 'Danmark'); $('fxPos').textContent = POS[p.pos] || ''; $('fxOvr').textContent = o;
+    for (const id of ['fxNat', 'fxPos', 'fxOvr']) $(id).classList.remove('on');
+    $('fxConf').textContent = ''; const pk = $('fxPack'); pk.style.animation = 'none'; void pk.offsetWidth; pk.style.animation = '';
+    el.hidden = false;
+    let ended = false;
+    const end = () => { if (ended) return; ended = true; fxT.forEach(clearTimeout); fxT = []; el.hidden = true; done(); };
+    el.onclick = end;
+    const at = (t, f) => fxT.push(setTimeout(f, t));
+    at(450, () => { el.classList.add('shake'); for (let i = 0; i < 6; i++) at(i * 140, () => tone(220 + i * 70 + (big ? i * 30 : 0), 0.12, 'triangle', 0.05)); });
+    const B = big ? 1500 : 1150;
+    at(B, () => { el.classList.remove('shake'); el.classList.add('burst'); noise(0.5, 0.5, 'lowpass', 1800, 1, 300); tone(big ? 880 : 660, 0.4, 'sine', 0.08, 300); buzz(big ? [40, 30, 80] : 40);
+      if (big) { const C = $('fxConf'), cs = [FXC[tier], '#fff', '#ffd447', col.home || '#e5483b']; for (let i = 0; i < 70; i++) { const c = document.createElement('i'); c.style.left = Math.random() * 100 + '%'; c.style.background = cs[i % cs.length]; c.style.animationDuration = 1.6 + Math.random() * 1.6 + 's'; c.style.animationDelay = Math.random() * 0.6 + 's'; C.appendChild(c); } } });
+    const step = big ? 750 : 450;
+    at(B + 350, () => { $('fxNat').classList.add('on'); tone(520, 0.12, 'square', 0.04); });
+    at(B + 350 + step, () => { $('fxPos').classList.add('on'); tone(620, 0.12, 'square', 0.04); });
+    at(B + 350 + step * 2, () => { $('fxOvr').classList.add('on'); tone(big ? 990 : 780, 0.3, 'triangle', 0.07); });
+    at(B + 350 + step * 2 + (big ? 1300 : 800), end);
+  }
+  function showCard(p, title, after) { packFx(p, title, () => showCardNow(p, title, after)); }
+  function showCardNow(p, title, after) { // the reveal: keep him (on the bench, or in place of your weakest) or sell him for coins
     const S = squadLoad(), full = S.pl.length >= SQ_MAX, worth = Math.round(ovr(p) * 2);
     const worst = full ? S.pl.map((q, i) => ({ q, i })).filter(x => x.i > 0 && (x.q.pos === 'MV') === (p.pos === 'MV')).sort((a, b) => ovr(a.q) - ovr(b.q))[0] : null;
     $('pkTitle').textContent = title; cardHTML($('pkCard'), p);
@@ -4886,6 +4965,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     };
     $('pkSell').onclick = () => { addCoins(worth, 'salg'); done(); };
     $('packOv').hidden = false; sfx.win();
+    const pc = $('pkCard'); pc.classList.remove('flip'); void pc.offsetWidth; pc.classList.add('flip');
   }
   function buyPack(i, after) {
     const [n, price, lo, hi] = PACKS[i], pr = loadProf();
@@ -5308,7 +5388,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     teamPicker($('teamsB'), $('teamLblB'), () => (setupMode === 'two' && !sofaCoop() ? 'Hold 2' : 'Modstander'), () => cfg.opp, v => { cfg.opp = v; saveCfg(); });
     const sv = { size: cfg.size, mins: cfg.mins, diff: cfg.diff };
     teamPicker($('seasonTeams'), $('seasonTeamLbl'), () => 'Vælg dit hold', () => cfg.team, v => { cfg.team = v; saveCfg(); });
-    mkSeg($('seasonSize'), [1, 2, 3, 5, 7, 11], ['1', '2', '3', '5', '7', '11'], () => sv.size, v => { sv.size = v; });
+    mkSeg($('seasonSize'), [1, 2, 3, 5, 7, 11], ['1', '2', '3', '5 inde', '7', '11'], () => sv.size, v => { sv.size = v; });
     mkSeg($('seasonMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => sv.mins, v => { sv.mins = v; });
     mkSeg($('seasonDiff'), [0, 1, 2, 3], DIFFN, () => sv.diff, v => { sv.diff = v; });
     $('goSeason').onclick = seasonShow;
@@ -5555,7 +5635,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     mode = 'host'; state = 'lobby'; roster = [];
     makePlayers(matchSize()); assignLocal(); kickoff(); $('rosterR').dataset.key = '';
     $('menu').hidden = true; $('lobby').hidden = false;
-    $('lobbyCode').textContent = code || 'Rangeret'; $('lobbyLbl').textContent = quick ? 'Online · 5 mod 5 · 3 min' : 'Kampkode';
+    $('lobbyCode').textContent = code || 'Rangeret'; $('lobbyLbl').textContent = quick ? 'Online · 7 mod 7 · 4 min' : 'Kampkode';
     $('lobbyMsg').textContent = quick ? 'Leder efter en modstander…' : comp ? `${comp.type === 'cup' ? 'Co-op-pokal' : 'Karriere'}: send koden til dem, der skal spille med (op til ${size - 1}). I er alle på ${comp.a.n} mod ${comp.b.n}.` : `Send koden til dine venner (op til ${size * 2 - 1}). Tomme pladser spilles af computeren.`;
     $('startOnline').hidden = quick; $('share').hidden = quick || window.top !== window; $('share').textContent = 'Del invitationslink';
     net.onPeers(ch => {
@@ -5601,7 +5681,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function joinEnter(code) {
     mode = 'guest'; state = 'lobby'; seenMatch = -1; tgt = null; gIn = [0, 0, 0, 0]; gRx = [0, 0]; gRd = -1; gLr = 0; gWs = -1; gFm = myForm(cfg.size); gZ = 0; rxGuestSeen = 0;
     $('menu').hidden = true; $('lobby').hidden = false; $('startOnline').hidden = true; $('share').hidden = true;
-    $('lobbyCode').textContent = code || 'Rangeret'; $('lobbyLbl').textContent = quick ? 'Online · 5 mod 5 · 3 min' : 'Kampkode'; $('lobbyMsg').textContent = quick ? 'Fandt en, der venter. Forbinder…' : 'Forbundet. Venter på at værten starter kampen…';
+    $('lobbyCode').textContent = code || 'Rangeret'; $('lobbyLbl').textContent = quick ? 'Online · 7 mod 7 · 4 min' : 'Kampkode'; $('lobbyMsg').textContent = quick ? 'Fandt en, der venter. Forbinder…' : 'Forbundet. Venter på at værten starter kampen…';
     $('rosterR').textContent = ''; $('rosterB').textContent = ''; $('rosterR').dataset.key = '';
     sendG();
     net.onPeers(ch => {
@@ -5911,6 +5991,16 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     for (const [x, y, a0] of [[PL, PT, 0], [PR, PT, Math.PI / 2], [PR, PB, Math.PI], [PL, PB, -Math.PI / 2]]) { ctx.beginPath(); ctx.arc(x, y, G.corner, a0, a0 + Math.PI / 2); ctx.stroke(); }
     ctx.lineWidth = 3;
     for (const [px, py] of POSTS) { ctx.fillStyle = col.chalk; ctx.beginPath(); ctx.arc(px, py, POSTR, 0, Math.PI * 2); ctx.fill(); }
+    if (INDOOR()) drawBoards();
+  }
+  function drawBoards() { // indoor: white boards with a coloured top rail all the way round, open only at the goals
+    const T = 20, o = 2, x0 = PL - o - T, x1 = PR + o, y0 = PT - o - T, y1 = PB + o;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x0 + 5, y1 + 5, PR - PL + 2 * (o + T), 6); ctx.fillRect(x1 + T + 1, y0 + 5, 6, PB - PT + 2 * (o + T)); // shadow
+    const seg = (x, y, w, h) => { ctx.fillStyle = '#eef2ee'; ctx.fillRect(x, y, w, h); ctx.fillStyle = '#2a5fae'; const v = w < h; if (v) ctx.fillRect(x === x1 ? x + w - 4 : x, y, 4, h); else ctx.fillRect(x, y === y1 ? y + h - 4 : y, w, 4); ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h); };
+    seg(x0, y0, PR - PL + 2 * (o + T), T); seg(x0, y1, PR - PL + 2 * (o + T), T);
+    for (const [x] of [[x0], [x1]]) { seg(x, y0, T, CY - MOUTH - y0); seg(x, CY + MOUTH, T, y1 + T - CY - MOUTH); }
+    ctx.fillStyle = '#c0392b'; ctx.font = `800 12px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let x = PL + 120; x < PR - 60; x += 240) { ctx.fillText('BANEBOLD', x, y0 + T / 2 + 2); ctx.fillText('BANEBOLD', x, y1 + T / 2 - 2); }
   }
   const isMine = p => p.ctrl === 'L0' || p.ctrl === 'L1' || p.ctrl === 'ME';
   const myPlayers = () => P.filter(isMine);
