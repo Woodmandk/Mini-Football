@@ -122,6 +122,29 @@ table.st td.l, table.st th.l { text-align: left; }
 .help div { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: center; font-size: 14px; line-height: 1.35; }
 .help b.k { display: inline-flex; align-items: center; justify-content: center; width: 70px; height: 34px; border-radius: 17px; border: 2px solid var(--chalk); font-size: 11px; letter-spacing: 0.04em; }
 /* menu pages */
+.hub { gap: 8px; padding: 10px 14px 8px; }
+.hubtop { display: flex; align-items: center; gap: 8px; }
+.hubtop .logo { font: 800 20px/1 var(--font); font-style: italic; text-transform: uppercase; white-space: nowrap; }
+.hubtop .logo .r { color: #e5483b; } .hubtop .logo .b { color: #2f7ff0; }
+.hubtop .namein { flex: 0 1 130px; min-width: 70px; padding: 7px 9px; font-size: 14px; }
+.hubtop .prog { flex: 1 1 auto; min-width: 0; }
+.hubtop .chip { flex: 0 0 auto; padding: 7px 10px; border-radius: 999px; background: rgba(0,0,0,0.3); font-weight: 700; font-size: 13px; }
+.hubtop .gear { flex: 0 0 auto; padding: 6px 11px; font-size: 18px; }
+.tabp { display: grid; grid-template-rows: repeat(2, minmax(92px, 1fr)); grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; text-align: left; }
+.tabp[hidden] { display: none; }
+button.tile { min-height: 92px; justify-content: flex-end; font-size: 17px; }
+button.tile small { font-size: 11px; }
+button.tile.hot { grid-row: span 2; background: linear-gradient(160deg, #3aa862, #23784a); border-color: #6fd497; font-size: 21px; }
+button.tile.hot small { color: #d8f0df; }
+button.tile .ic { font-style: normal; font-size: 22px; margin-bottom: auto; line-height: 1; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+button.tile.hot .ic { font-size: 34px; }
+.tabbar button { position: relative; }
+.tabbar button.dot::after, button.tile.dot::before { content: ""; position: absolute; top: 6px; right: 8px; width: 9px; height: 9px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
+button.tile.dot::before { top: 10px; right: 12px; }
+.tabbar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: rgba(0,0,0,0.35); border-radius: 12px; padding: 4px; }
+.tabbar button { padding: 9px 2px; font-size: 13px; background: transparent; border-color: transparent; color: var(--muted); box-shadow: none; }
+.tabbar button[aria-pressed="true"] { background: var(--chalk); color: var(--night); }
+#wrap.n560 .tabp { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: 1fr 1fr; } #wrap.n560 .hubtop .logo, #wrap.n560 .hubtop .namein { display: none; }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: center; text-align: left; }
 .homeleft { gap: 14px; }
 .homeleft h1 { font-size: clamp(30px, 7vw, 44px); }
@@ -425,29 +448,43 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
 
   <div class="overlay" id="menu">
     <!-- forside: vælg hvad du vil spille -->
-    <div class="card wide" id="pgHome">
-      <div class="home">
-        <div class="col homeleft">
-          <h1><span class="r">Mini</span><br><span class="b">Football</span></h1>
-          <label class="namechip"><span>Du spiller som</span>
-            <input id="name" class="namein" maxlength="12" placeholder="Skriv dit navn" autocomplete="off" aria-label="Dit navn"></label>
-          <button id="homeProg" class="alt prog" aria-label="Sæsonpas og rang"><span class="rkb" id="hpRank">BRO</span><span class="pp"><span id="hpPass">Sæsonpas 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
-          <div class="minis four">
-            <button id="goMine" class="alt mine">Mit hold</button><button id="goSquad" class="alt mine">Trup og træning</button>
-            <button id="goProf" class="alt">Profil og trofæer</button><button id="goShop" class="alt">Butik <span class="coins" data-coins>0</span></button>
-          </div>
-          <div class="minis small">
-            <button id="bDaily" class="alt">Udfordringer</button><button id="bFriends" class="alt">Venner</button>
-            <button id="bHelp" class="alt">Hjælp</button><button id="goSet" class="alt">Indstillinger</button>
-          </div>
-        </div>
-        <div class="btns bigs">
-          <button id="bCpu" class="big">Hurtig kamp<small>Mod computeren</small></button>
-          <button id="goSeason" class="big alt">Karriere og turneringer<small id="compSub">Karriere, co-op-pokal og sæson</small></button>
-          <button id="goOnline" class="big alt">Online<small>Find en modstander (rangeret) eller spil med venner</small></button>
-          <button id="bTwo" class="big alt">2 på én telefon<small>Mod hinanden eller sammen mod computeren</small></button>
-          <button id="goPractice" class="big alt">Træning og færdighedsspil<small>Færdighedsspil, straffe og træningsbane</small></button>
-        </div>
+    <div class="card wide hub" id="pgHome">
+      <div class="hubtop">
+        <div class="logo"><span class="r">Mini</span> <span class="b">Football</span></div>
+        <input id="name" class="namein" maxlength="12" placeholder="Dit navn" autocomplete="off" aria-label="Dit navn">
+        <button id="homeProg" class="alt prog" aria-label="Sæsonpas og rang"><span class="rkb" id="hpRank">BRO</span><span class="pp"><span id="hpPass">Sæsonpas 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
+        <span class="chip"><span class="coins" data-coins>0</span></span>
+        <button id="goSet" class="alt gear" aria-label="Indstillinger">⚙</button>
+      </div>
+      <div class="tabp" data-tab="spil">
+        <button id="goOnline" class="big tile hot"><i class="ic">🌐</i>Rangeret online<small>Find en modstander i 7 eller 11 mod 11, eller spil med venner via kode</small></button>
+        <button id="bCpu" class="big tile alt"><i class="ic">⚽</i>Mod computeren<small>Hurtig kamp med dit eget hold</small></button>
+        <button id="goSeason" class="big tile alt"><i class="ic">🏆</i>Karriere og turneringer<small id="compSub">Karriere, co-op-pokal og sæson</small></button>
+        <button id="bTwo" class="big tile alt"><i class="ic">👥</i>2 på én telefon<small>Mod hinanden eller sammen mod computeren</small></button>
+        <button id="goPractice" class="big tile alt"><i class="ic">🎯</i>Træning<small>Færdighedsspil, straffe og træningsbane</small></button>
+      </div>
+      <div class="tabp" data-tab="hold" hidden>
+        <button id="goMine" class="big tile hot"><i class="ic">📋</i>Opstilling<small id="holdSub">Dine spillere på banen. Byt med et tryk</small></button>
+        <button id="goSquad" class="big tile alt"><i class="ic">💪</i>Trup og træning<small>Træn dine spillere med TP</small></button>
+        <button id="goTac" class="big tile alt"><i class="ic">🎨</i>Taktik og trøje<small>Holdnavn, farver, spillestil og pres</small></button>
+      </div>
+      <div class="tabp" data-tab="butik" hidden>
+        <button id="goShop" class="big tile hot"><i class="ic">🛒</i>Butik<small>Spillerpakker, bolde, baner og hold. Du har <span data-coins>0</span> mønter</small></button>
+        <button id="goFree" class="big tile alt"><i class="ic">🎁</i>Gratis pakker<small id="freeSub">Fra sæsonpasset og daglige belønninger</small></button>
+      </div>
+      <div class="tabp" data-tab="saeson" hidden>
+        <button id="goPass" class="big tile hot"><i class="ic">⭐</i>Sæsonpas og rang<small id="passSub">30 niveauer hver måned</small></button>
+        <button id="bDaily" class="big tile alt"><i class="ic">✅</i>Dagens udfordringer<small>3 nye hver dag. Giver mønter og XP</small></button>
+        <button id="goEvent" class="big tile alt"><i class="ic">📅</i>Ugens event<small id="evSub">Klar ugens opgaver og få et eventkort</small></button>
+      </div>
+      <div class="tabp" data-tab="profil" hidden>
+        <button id="goProf" class="big tile hot"><i class="ic">🏅</i>Profil og trofæer<small>Din statistik og alle trofæer</small></button>
+        <button id="bFriends" class="big tile alt"><i class="ic">🤝</i>Venner<small>Rating og indbyrdes kampe mod dem, du har spillet med</small></button>
+        <button id="goLeague" class="big tile alt"><i class="ic">📊</i>Stilling<small>Kampe spillet på denne telefon</small></button>
+        <button id="bHelp" class="big tile alt"><i class="ic">❓</i>Sådan spiller du<small>Knapper og regler</small></button>
+      </div>
+      <div class="tabbar" id="tabbar" role="tablist">
+        <button data-t="spil">Spil</button><button data-t="hold">Hold</button><button data-t="butik">Butik</button><button data-t="saeson">Sæson</button><button data-t="profil">Profil</button>
       </div>
     </div>
 
@@ -982,6 +1019,15 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => page(b.closest('#pgSetup') && setupMode === 'host' ? 'pgOnline' : 'pgHome'));
   $('goOnline').onclick = () => page('pgOnline');
+  let hubTab = 'spil'; try { hubTab = localStorage.getItem('mf-tab') || 'spil'; } catch (_) {}
+  function hubShow(t) { // the five tabs on the front page (as in FIFA): Spil, Hold, Butik, Sæson, Profil
+    if (!document.querySelector(`.tabp[data-tab="${t}"]`)) t = 'spil';
+    hubTab = t; try { localStorage.setItem('mf-tab', t); } catch (_) {}
+    document.querySelectorAll('.tabp').forEach(el => { el.hidden = el.dataset.tab !== t; });
+    for (const b of $('tabbar').children) b.setAttribute('aria-pressed', String(b.dataset.t === t));
+    if (typeof hubPaint === 'function') hubPaint();
+  }
+  for (const b of $('tabbar').children) b.onclick = () => hubShow(b.dataset.t);
   $('goSet').onclick = () => page('pgSet');
   $('goPractice').onclick = () => page('pgPractice');
   const cleanName = v => String(v || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 12);
@@ -1106,7 +1152,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('dailyBonus').textContent = D.bonus ? `Du har klaret alle tre i dag og fået ${DAILY_BONUS} ekstra.` : `Klar alle tre for ${DAILY_BONUS} ekstra mønter.`;
     $('daily').hidden = false;
   }
-  $('bDaily').onclick = showDaily;
+  $('bDaily').onclick = () => { try { localStorage.setItem('mf-dseen', today()); } catch (_) {} showDaily(); hubPaint(); };
   $('dailyClose').onclick = () => { $('daily').hidden = true; };
 
   // ---------- Friends and rating (no server: phones swap their numbers when you play online) ----------
@@ -1279,7 +1325,21 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('hpRank').textContent = rk.n.slice(0, 3).toUpperCase(); $('hpRank').style.setProperty('--rk', rk.c);
     $('hpPass').textContent = `Sæsonpas ${S.t}/${PASS_N}` + (S.free.length ? ` · ${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} at åbne` : '');
     $('hpBar').style.width = (S.t >= PASS_N ? 100 : (S.xp - S.t * PASS_XP) / PASS_XP * 100) + '%';
+    hubPaint();
     $('hpStreak').textContent = st > 1 ? `${st} dage i træk` : `Rating ${Math.round(M.r)}`;
+  }
+  function hubPaint() { // live subtitles on the front page tiles
+    try {
+      const n = cfg.size || 7, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
+      $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Byt spillere med et tryk`;
+      $('freeSub').textContent = S.free.length ? `${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} klar til at blive åbnet!` : 'Fra sæsonpasset og daglige belønninger';
+      $('goFree').classList.toggle('hot', !!S.free.length);
+      $('passSub').textContent = `Niveau ${S.t}/${PASS_N} · ${rankOf(M.r).n} i 7 mod 7 · ${rankOf(M.r11 || 1000).n} i 11 mod 11`;
+      const dseen = (() => { try { return localStorage.getItem('mf-dseen') === today(); } catch (_) { return true; } })();
+      const dot = (t, on) => { const b = document.querySelector(`#tabbar [data-t="${t}"]`); if (b) b.classList.toggle('dot', !!on); };
+      dot('butik', S.free.length); dot('saeson', !dseen); $('goFree').classList.toggle('dot', !!S.free.length); $('bDaily').classList.toggle('dot', !dseen);
+      $('evSub').textContent = `${T.n}: ` + (E.got ? 'klaret!' : T.tasks.map(([, , need], i) => `${Math.min(need, E.p[i])}/${need}`).join(' · '));
+    } catch (_) {}
   }
   function passShow() {
     const M = loadMe(), rk = rankOf(M.r), S = passLoad(), mi = new Date().getMonth();
@@ -5548,6 +5608,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('goMine').onclick = () => mtShow(cfg.size);
     $('setupMine').onclick = () => mtShow(cfg.size, 'lay');
     $('lobbyMine').onclick = () => mtShow(mode === 'host' ? size : lobbySize);
+    $('goTac').onclick = () => mtShow(cfg.size, 'tac');
+    $('goPass').onclick = passShow; $('goEvent').onclick = () => { squadShow(); $('evBox').scrollIntoView({ block: 'nearest' }); }; $('goLeague').onclick = showLeague;
+    $('goFree').onclick = () => { if (passLoad().free.length) $('pvOpen').onclick(); else toast('Ingen gratis pakker lige nu. Spil kampe for at stige i sæsonpasset.'); };
     $('goShop').onclick = shopShow; $('shopClose').onclick = () => { $('shop').hidden = true; paintTeamPickers(); };
     // sound: unlock audio on the first tap, soft click on menu buttons
     $('wrap').addEventListener('click', e => {
@@ -5624,7 +5687,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm(); homeGifts();
-    page(text ? 'pgOnline' : 'pgHome');
+    page(text ? 'pgOnline' : 'pgHome'); hubShow(hubTab);
     if (text) netmsg.textContent = text;
   }
   $('cancel').onclick = () => toMenu();
@@ -6717,7 +6780,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     render(dt);
     requestAnimationFrame(frame);
   }
-  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset(); setTimeout(homeGifts, 700);
+  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
   if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st) }; // only for automated tests
   requestAnimationFrame(frame);
