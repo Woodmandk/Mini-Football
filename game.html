@@ -514,10 +514,20 @@ table.st tr.me td { color: var(--gold); }
 .sqrow .fm { width: 26px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.14); overflow: hidden; flex: none; } .sqrow .fm i { display: block; height: 100%; }
 .sqrow .mo { font-size: 12px; flex: none; }
 .fmrow small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; line-height: 1.25; text-align: left; }
+.clhead { display: flex; align-items: center; gap: 12px; margin: 2px 0 10px; } .clhead .clcr { width: 46px; height: 52px; flex: none; } .clhead .clcr svg { width: 100%; height: 100%; }
+.clhead b { font-size: 18px; display: block; } .clhead small { color: var(--muted); font-size: 12px; }
+.facgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.fac { display: grid; grid-template-columns: 34px 1fr auto; gap: 2px 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
+.fac.none { opacity: 0.85; border-style: dashed; }
+.fac > i { font-style: normal; font-size: 24px; grid-row: 1 / 3; } .fac > b { font-size: 14px; }
+.fac .pips { display: flex; gap: 3px; } .fac .pips u { width: 12px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.16); } .fac .pips u.on { background: var(--gold); }
+.fac small { grid-column: 2 / -1; font-size: 11px; line-height: 1.25; } .fac small.nx { color: var(--muted); }
+.fac button { grid-column: 1 / -1; min-height: 0; padding: 6px 10px; font-size: 13px; margin-top: 4px; }
+.yh { font-size: 13px; color: var(--gold); }
 .mklist { display: flex; flex-direction: column; gap: 6px; }
 .mkrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
 .mkrow.deal { border-color: var(--gold); } .mkrow.deal .nm b::after { content: ' · TILBUD'; color: var(--gold); font-size: 10px; }
-.mkrow.arm { border-color: #ff6b5e; }
+.mkrow.arm { border-color: #ff6b5e; } .mkrow.yo { border-color: var(--gold); }
 .mkrow .ovr { font-weight: 800; font-size: 17px; width: 30px; text-align: center; flex: none; }
 .mkrow .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; } .mkrow .nm b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .mkrow .nm small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mkrow .st { font-size: 11px; color: var(--muted); white-space: pre; flex: none; }
@@ -642,6 +652,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       <div class="tabp" data-tab="hold" hidden>
         <button id="goMine" class="big tile hot"><i class="ic">📋</i>Opstilling<small id="holdSub">Dine spillere på banen. Byt med et tryk</small></button>
         <button id="goSquad" class="big tile alt"><i class="ic">💪</i>Trup og træning<small id="squadSub">Træn dine spillere med TP</small></button>
+        <button id="goClub" class="big tile alt"><i class="ic">🏟️</i>Klubben<small id="clubSub">Træningsanlæg, klinik, akademi og fanshop</small></button>
         <button id="goMarket" class="big tile alt"><i class="ic">🤝</i>Transfermarked<small id="mktSub">Køb og sælg spillere. Nye hver dag</small></button>
         <button id="goTac" class="big tile alt"><i class="ic">🎨</i>Taktik og trøje<small>Holdnavn, farver, spillestil og pres</small></button>
       </div>
@@ -826,6 +837,15 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <button id="sqDrills" class="go">Færdighedsspil ›</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="clubOv" hidden>
+    <div class="card wide">
+      <div class="top"><button class="alt back" id="clClose">‹ Tilbage</button><h2>Klubben</h2><span class="coins big" data-coins>0</span></div>
+      <div class="clhead"><span class="clcr" id="clCrest"></span><div><b id="clName"></b><small id="clSub"></small></div></div>
+      <div class="mklist" id="clYouth"></div>
+      <div class="facgrid" id="clFac"></div>
     </div>
   </div>
 
@@ -1627,6 +1647,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       $('hcSub').textContent = `Hold ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'Mit hold');
       $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Byt spillere med et tryk`;
       { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; $('squadSub').textContent = tr ? `${tr} i startopstillingen er trætte. Skift ud eller giv massage` : 'Træn dine spillere med TP. Se form og humør'; $('goSquad').classList.toggle('hot', !!tr);
+        { const Cl = youthTick(), pc = loadProf(), can = Object.keys(FAC).some(k => (Cl.f[k] | 0) < FAC_MAX && (pc.lvl || 1) >= FAC_LVL[Cl.f[k] | 0] && pc.coins >= FAC_COST[Cl.f[k] | 0]); facMemo = Cl.f;
+          $('clubSub').textContent = Cl.y ? `Et nyt talent venter i akademiet: ${Cl.y.n} (${ovr(Cl.y)}, potentiale ${Cl.y.pot})` : can ? 'Du har råd til at bygge ud' : 'Træningsanlæg, klinik, akademi og fanshop'; $('goClub').classList.toggle('hot', !!Cl.y); }
         const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = Mk.l.length ? `${Mk.l.length} spillere i dag` + (dl ? ` · tilbud: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Udsolgt i dag. Nye spillere i morgen'; }
       $('freeSub').textContent = S.free.length ? `${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} klar til at blive åbnet!` : 'Fra sæsonpasset og daglige belønninger';
       $('goFree').classList.toggle('hot', !!S.free.length);
@@ -4763,9 +4785,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       pr.xp = (pr.xp || 0) + 20 + gf * 5 + (won ? 25 : 0); pr.lvl = pr.lvl || 1;
       while (pr.xp >= pr.lvl * 100) { pr.xp -= pr.lvl * 100; pr.lvl++; coins += 40 * pr.lvl; extra = (extra ? extra + ' · ' : '') + `Klubniveau ${pr.lvl}!` + (stadOf(pr.lvl) > stadOf(pr.lvl - 1) ? ` Jeres bane er udbygget: ${STAD[stadOf(pr.lvl)][0]}!` : ''); }
     }
+    if (me === 0 || me === 1) coins = Math.round(coins * (1 + 0.08 * facLv('fan'))); // the fan shop sells more on match days
     pr.coins += coins; saveProf(pr);
     let tp = 0;
-    if ((me === 0 || me === 1) && kind !== 'pen') { tp = 4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0); addTP(tp); }
+    if ((me === 0 || me === 1) && kind !== 'pen') { tp = Math.round((4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0)) * (1 + 0.1 * facLv('tr'))); addTP(tp); }
     if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Trætte ben: ' + tired.slice(0, 3).join(', ') + '. Giv dem en pause'; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Udvikling: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
     rw.textContent = `+${coins} mønter` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
     rw.hidden = false;
@@ -5554,7 +5577,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const g = { sht: (m.g || 0) * 0.5 + Math.min(m.sh || 0, 8) * 0.1, pas: Math.min(m.pa || 0, 25) * 0.035, def: Math.min(m.tk || 0, 8) * 0.22, spd: Math.min(m.spr || 0, 60) * 0.01 };
       g[POSMAIN[pl.pos]] += 0.25;
       for (const [k, nm] of SKILLS) {
-        gx[k] = (gx[k] || 0) + g[k] / (1 + Math.max(0, pl[k] - 60) / 15);
+        gx[k] = (gx[k] || 0) + g[k] / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1); // a better training ground, and a talent who has not reached his potential, grow faster
         while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${nm} ${pl[k]}`); }
         gx[k] = Math.round(gx[k] * 100) / 100;
       }
@@ -5570,7 +5593,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function squadTick(S) {
     const now = Date.now(); if (!S.ft || now < S.ft) { S.ft = now; return; }
     const mins = (now - S.ft) / 60000; if (mins < 1) return;
-    let ch = false; for (const p of S.pl) if (p.fit != null && p.fit < 100) { p.fit = Math.min(100, Math.round((p.fit + mins / 4) * 10) / 10); if (p.fit >= 100) delete p.fit; ch = true; }
+    let ch = false; for (const p of S.pl) if (p.fit != null && p.fit < 100) { p.fit = Math.min(100, Math.round((p.fit + mins / 4 * (1 + 0.25 * facLv('kl'))) * 10) / 10); if (p.fit >= 100) delete p.fit; ch = true; }
     S.ft = now; if (ch) squadSave(S);
   }
   function squadAfter(res) { // after a match with your own squad: tired legs, and the mood follows the result
@@ -5585,6 +5608,64 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     S.pl.forEach((pl, i) => { if (!played.has(i) && morOf(pl) > 45) pl.mor = morOf(pl) - 1; }); // the ones left out sulk a little
     S.ft = S.ft || Date.now(); squadSave(S);
     return tired;
+  }
+  // ---------- the club's facilities (as in Top Eleven): build them up with coins, each one helps a little every day ----------
+  const FAC = {
+    tr: { n: 'Træningsanlæg', i: '🏋️', d: l => `+${l * 10} % TP fra kampe, og spillerne udvikler sig ${l * 10} % hurtigere` },
+    kl: { n: 'Klinik', i: '🩺', d: l => `Formen kommer ${l * 25} % hurtigere igen, massage giver +${30 + l * 5}` },
+    ak: { n: 'Ungdomsakademi', i: '🌱', d: l => (l ? `Et nyt talent hver ${AK_DAYS[l]}. dag` + (l > 1 ? `, med højere potentiale` : '') : 'Ingen talenter endnu') },
+    fan: { n: 'Fanshop', i: '🧣', d: l => `+${l * 8} % mønter fra hver kamp` },
+  };
+  const FAC_MAX = 5, FAC_COST = [200, 450, 900, 1600, 2600], FAC_LVL = [1, 2, 4, 6, 8], AK_DAYS = [0, 4, 3, 3, 2, 2];
+  function clubLoad() { let C = null; try { C = JSON.parse(localStorage.getItem('mf-club') || 'null'); } catch (_) {} C = C && typeof C === 'object' ? C : {}; C.f = C.f || {}; return C; }
+  function clubSave(C) { try { localStorage.setItem('mf-club', JSON.stringify(C)); } catch (_) {} }
+  let facMemo = null;
+  const facLv = k => { if (!facMemo) facMemo = clubLoad().f; return clamp(facMemo[k] | 0, 0, FAC_MAX); };
+  const dayNo = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
+  function youthTick() { // the academy: a new talent is waiting when enough days have passed (one at a time)
+    const C = clubLoad(), l = clamp(C.f.ak | 0, 0, FAC_MAX); if (!l) return C;
+    const d = dayNo(); if (C.yd == null) { C.yd = d - AK_DAYS[l]; }
+    if (!C.y && d - C.yd >= AK_DAYS[l]) {
+      const t = teamOvr(cfg.size || 7), c = makeCard(clamp(t - 9 + l, 45, 85), clamp(t - 3 + l, 47, 88), { nat: Math.random() < 0.7 ? 'DK' : undefined });
+      c.age = 16 + Math.floor(Math.random() * 3); c.pot = clamp(ovr(c) + 8 + l * 2 + Math.floor(Math.random() * 8), 60, 96); c.ab = abOf(c).slice(0, 1);
+      C.y = c; C.yd = d; clubSave(C);
+    }
+    return C;
+  }
+  function clubShow() {
+    const C = youthTick(), pr = loadProf(), mt = loadMT(), lvl = pr.lvl || 1; facMemo = C.f;
+    crestInto($('clCrest'), TEAMS[OWN]);
+    $('clName').textContent = mt.made ? mt.n : (cfg.name || 'Mit hold');
+    $('clSub').textContent = `Klubniveau ${lvl} · ${STAD[stadOf(lvl)][0]}` + (stadOf(lvl) < 3 ? ` · næste bane ved niveau ${STAD[stadOf(lvl) + 1][1]}` : '') + ` · Hold ${teamOvr(cfg.size || 7)}`;
+    const G = $('clFac'); G.textContent = '';
+    for (const k of Object.keys(FAC)) {
+      const F = FAC[k], l = clamp(C.f[k] | 0, 0, FAC_MAX), d = document.createElement('div'); d.className = 'fac' + (l ? '' : ' none');
+      const ic = document.createElement('i'); ic.textContent = F.i;
+      const b = document.createElement('b'); b.textContent = F.n;
+      const pips = document.createElement('span'); pips.className = 'pips'; for (let x = 0; x < FAC_MAX; x++) { const e = document.createElement('u'); if (x < l) e.className = 'on'; pips.appendChild(e); }
+      const sm = document.createElement('small'); sm.textContent = l ? F.d(l) : 'Ikke bygget endnu';
+      const nx = document.createElement('small'); nx.className = 'nx'; nx.textContent = l < FAC_MAX ? 'Næste: ' + F.d(l + 1) : 'Fuldt udbygget';
+      const bt = document.createElement('button');
+      if (l >= FAC_MAX) { bt.textContent = 'Max'; bt.disabled = true; bt.className = 'alt'; }
+      else if (lvl < FAC_LVL[l]) { bt.textContent = `Kræver klubniveau ${FAC_LVL[l]}`; bt.disabled = true; bt.className = 'alt'; }
+      else { bt.textContent = `${l ? 'Udbyg' : 'Byg'} · ${FAC_COST[l]} mønter`; if (pr.coins < FAC_COST[l]) bt.className = 'alt';
+        bt.onclick = () => { const pr2 = loadProf(), C2 = clubLoad(), l2 = clamp(C2.f[k] | 0, 0, FAC_MAX); if (l2 !== l) return; if (pr2.coins < FAC_COST[l]) { bt.textContent = `Mangler ${FAC_COST[l] - pr2.coins} mønter`; return; }
+          addCoins(-FAC_COST[l], 'byg'); C2.f[k] = l + 1; clubSave(C2); facMemo = C2.f; sfx.win(); buzz([30, 40, 60]); clubShow(); hubPaint(); }; }
+      d.append(ic, b, pips, sm, nx, bt); G.appendChild(d);
+    }
+    const Y = $('clYouth'); Y.textContent = '';
+    if (C.y) { // the talent from the academy: sign him or let him go
+      const c = C.y, h = document.createElement('b'); h.className = 'yh'; h.textContent = `🌱 Nyt talent fra akademiet: ${c.age} år, potentiale ${c.pot}`; Y.appendChild(h);
+      const row = mktRow(c, 'Skriv kontrakt', bt => {
+        const S2 = squadLoad(), C2 = clubLoad(); if (!C2.y) return;
+        if (S2.pl.length >= SQ_MAX) { bt.textContent = 'Truppen er fuld: sælg en først'; return; }
+        const np = { ...C2.y, mor: 85 }; S2.pl.push(np); squadSave(S2); delete C2.y; clubSave(C2); sfx.win(); buzz(30); clubShow(); hubPaint();
+      }, 'yo');
+      const no = document.createElement('button'); no.className = 'alt'; no.textContent = `Sælg +${sellOf(c)}`;
+      no.onclick = () => { const C2 = clubLoad(); if (!C2.y) return; addCoins(sellOf(C2.y), 'salg'); delete C2.y; clubSave(C2); clubShow(); hubPaint(); };
+      row.appendChild(no); Y.appendChild(row);
+    } else if (facLv('ak')) { const d = Math.max(1, AK_DAYS[facLv('ak')] - (dayNo() - (C.yd || 0))), e = document.createElement('p'); e.className = 'sqnote'; e.textContent = `🌱 Akademiet arbejder. Næste talent om ${d} dag${d > 1 ? 'e' : ''}.`; Y.appendChild(e); }
+    paintCoins(); $('clubOv').hidden = false;
   }
   const fitCol = v => (v >= 75 ? '#59e38b' : v >= 55 ? '#ffd447' : '#ff6b5e');
   const morFace = v => (v >= 85 ? '😄' : v >= 60 ? '🙂' : v >= 35 ? '😐' : '😠');
@@ -5813,8 +5894,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     { // form and humør: what he brings into the next match
       const f = Math.round(fitOf(p)), m = Math.round(morOf(p)), r = document.createElement('div'); r.className = 'lvrow fmrow';
       const b = document.createElement('b'); b.textContent = `Form ${f}`;
-      const bt = document.createElement('button'); bt.className = 'alt'; bt.textContent = f >= 100 ? 'Frisk' : `Massage +${MASSAGE[1]} · ${MASSAGE[0]} mønter`; bt.disabled = f >= 100;
-      bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins} mønter`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1]); squadSave(S2); sfx.win(); squadShow(); };
+      const bt = document.createElement('button'); bt.className = 'alt'; bt.textContent = f >= 100 ? 'Frisk' : `Massage +${MASSAGE[1] + 5 * facLv('kl')} · ${MASSAGE[0]} mønter`; bt.disabled = f >= 100;
+      bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins} mønter`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1] + 5 * facLv('kl')); squadSave(S2); sfx.win(); squadShow(); };
       const bar = document.createElement('div'); bar.className = 'lvbar'; const i2 = document.createElement('i'); i2.style.width = f + '%'; i2.style.background = fitCol(f); bar.appendChild(i2);
       r.append(b, bt, bar); box.appendChild(r);
       const r2 = document.createElement('div'); r2.className = 'lvrow fmrow'; const b2 = document.createElement('b'); b2.textContent = `Humør ${m} ${morFace(m)}`;
@@ -5850,7 +5931,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     }
     $('sqTeam').textContent = `Hold ${teamOvr(n)}`;
     const ch = chemOf(n, S); $('sqChem').textContent = `kemi ${ch.v}`;
-    $('sqPos').textContent = DPOSN[dpOf(p)] + ' · ' + (NATS[p.nat] || 'Danmark');
+    $('sqPos').textContent = DPOSN[dpOf(p)] + ' · ' + (NATS[p.nat] || 'Danmark') + (p.pot && o < p.pot ? ` · talent, potentiale ${p.pot}` : '');
     evPaint();
     $('sqXI').textContent = inXI.has(sqSel) ? `starter ved ${n} mod ${n}.` : `på bænken ved ${n} mod ${n}.`;
     paintTP(S); paintCoins();
@@ -5878,6 +5959,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     paintTP(S); $('abOv').hidden = false;
   }
   function squadInit() {
+    $('goClub').onclick = clubShow; $('clClose').onclick = () => { $('clubOv').hidden = true; hubPaint(); };
     $('goMarket').onclick = () => { mkArm = -1; mktShow(); }; $('mkClose').onclick = () => { $('mktOv').hidden = true; hubPaint(); };
     $('abClose').onclick = () => { $('abOv').hidden = true; };
     $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } squadShow(); });
