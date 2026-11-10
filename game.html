@@ -114,7 +114,8 @@ table.st td.l, table.st th.l { text-align: left; }
 #cupScoreRow input { width: 64px; flex: none; text-align: center; }
 #cupNext { font-weight: 700; }
 .roster li.pick { cursor: pointer; text-decoration: underline dotted; }
-.help { display: grid; gap: 10px; text-align: left; }
+.help { display: grid; gap: 10px 18px; text-align: left; grid-template-columns: 1fr 1fr; }
+#wrap.n560 .help { grid-template-columns: 1fr; }
 .help div { display: grid; grid-template-columns: 74px 1fr; gap: 10px; align-items: center; font-size: 14px; line-height: 1.35; }
 .help b.k { display: inline-flex; align-items: center; justify-content: center; width: 70px; height: 34px; border-radius: 17px; border: 2px solid var(--chalk); font-size: 11px; letter-spacing: 0.04em; }
 /* menu pages */
@@ -142,6 +143,9 @@ button.tile.dot::before { top: 10px; right: 12px; }
 #pgSetup > *, #pgPractice > *, #shop .card > *, #prof .card > * { flex-shrink: 0; }
 #pgPractice .ow.three .col:nth-child(1) .lbl::before { content: "🥅"; } #pgPractice .ow.three .col:nth-child(2) .lbl::before { content: "⭐"; } #pgPractice .ow.three .col:nth-child(3) .lbl::before { content: "⚽"; }
 #pgPractice .ow.three .col p { min-height: 0; }
+#pgPractice .ow.three { grid-template-columns: 1fr 1.25fr 1fr 1fr; gap: 10px; } #pgPractice .ow.three .col:nth-child(4) .lbl::before { content: "🧪"; }
+#wrap.n560 #pgPractice .ow.three { grid-template-columns: 1fr 1fr; }
+#pgPractice .seg button { padding-inline: 2px; }
 #pgSetup .setup { min-height: 150px; align-content: start; }
 #pgSetup .teams { flex-wrap: wrap; }
 .ow .col, .ow.three .col { background: rgba(0,0,0,0.25); border: 1px solid rgba(244,247,242,0.12); border-radius: 14px; padding: 12px; gap: 8px; }
@@ -261,7 +265,13 @@ button.go { background: #2f9d55; font-size: 18px; padding: 14px; }
 .ow p { min-height: 2.9em; }
 .netmsg { text-align: center; }
 .setrows { display: flex; flex-direction: column; gap: 8px; text-align: left; }
-.setrows div { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 15px; }
+.setrows > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 15px; background: rgba(0,0,0,.22); border-radius: 12px; padding: 8px 12px; }
+.setrows > div > span:first-child { display: flex; flex-direction: column; gap: 2px; } .setrows small { font-size: 11px; color: var(--muted); }
+.setrows .two { display: flex; gap: 6px; } .setrows .namein { max-width: 190px; }
+#bkBox { flex-direction: column; align-items: stretch; } #bkBox[hidden] { display: none; }
+.setopts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px 14px; text-align: left; }
+#wrap.n560 .setopts { grid-template-columns: 1fr 1fr; }
+#pgSet > * { flex-shrink: 0; }
 button.sw { min-width: 70px; padding: 9px 12px; font-size: 13px; background: transparent; border-color: rgba(244,247,242,0.45); color: var(--muted); }
 button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); border-color: var(--chalk); }
 .kbd { font-size: 12px; }
@@ -275,6 +285,65 @@ button.prog .pp { flex: 1; display: flex; flex-direction: column; gap: 4px; min-
 button.prog .st { color: var(--gold); font-weight: 700; white-space: nowrap; font-size: 12px; }
 .pbar { display: block; height: 6px; border-radius: 3px; background: rgba(244,247,242,0.15); overflow: hidden; }
 .pbar b { display: block; height: 100%; width: 0; background: var(--gold); border-radius: 3px; transition: width .4s; }
+/* ranks: shield badges, the rank screen, the rank-up show and the end-screen panel */
+svg.rkbadge { width: 40px; height: 46px; flex: 0 0 auto; filter: drop-shadow(0 2px 3px rgba(0,0,0,.45)); }
+button.rkchip { display: flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; text-align: left; flex: 0 0 auto; }
+button.rkchip svg.rkbadge { width: 30px; height: 35px; }
+.rkt { display: flex; flex-direction: column; gap: 2px; } .rkt b { font-size: 13px; white-space: nowrap; } .rkt small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+button.tile .ic svg.rkbadge { width: 46px; height: 53px; }
+.rkseas { text-align: right; font-size: 11px; color: var(--muted); }
+.rkmine { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
+.rkcard { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; background: linear-gradient(150deg, color-mix(in srgb, var(--rk) 22%, transparent), rgba(0,0,0,.3) 60%); border: 1px solid color-mix(in srgb, var(--rk) 50%, transparent); }
+.rkcard svg.rkbadge { width: 76px; height: 88px; }
+.rki { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.rki small { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.rki > b { font-size: 22px; color: var(--rk); line-height: 1; }
+.rki .pbar { height: 9px; border-radius: 5px; } .rki .pbar b { background: var(--rk); }
+.rki span { font-size: 12px; color: var(--chalk); } .rki .rkmeta { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.rki button { margin-top: 4px; padding: 9px 10px; font-size: 14px; }
+.rkroadw { display: flex; flex-direction: column; gap: 10px; }
+.rkroadw .seg { max-width: 320px; margin: 0 auto; width: 100%; }
+.road { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; scroll-snap-type: x proximity; }
+.road .rs { flex: 0 0 92px; scroll-snap-align: center; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; border-radius: 12px; background: rgba(0,0,0,.3); border: 1px solid rgba(244,247,242,.1); font-size: 11px; color: var(--muted); position: relative; }
+.road .rs svg.rkbadge { width: 44px; height: 51px; }
+.road .rs b { color: var(--chalk); font-size: 12px; } .road .rs .rw { color: var(--gold); font-weight: 700; }
+.road .rs.got { opacity: .6; } .road .rs.got .rw::before { content: "✓ "; }
+.road .rs.now { opacity: 1; border-color: var(--gold); box-shadow: 0 0 0 2px rgba(255,212,71,.35); }
+.road .rs.now::after { content: "Du er her"; position: absolute; top: -2px; left: 50%; transform: translate(-50%, -50%); background: var(--gold); color: #1a1405; font-size: 9px; font-weight: 800; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+.road .rs.pk { background: linear-gradient(180deg, rgba(255,212,71,.14), rgba(0,0,0,.3)); }
+.road { padding-top: 12px; }
+.rkhow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; text-align: left; }
+.rkhow div { display: flex; flex-direction: column; gap: 3px; background: rgba(0,0,0,.25); border-radius: 12px; padding: 10px 12px; }
+.rkhow b { color: var(--gold); font-size: 13px; } .rkhow span { font-size: 12.5px; color: var(--chalk); line-height: 1.45; }
+#wrap.n560 :is(.rkmine, .rkhow) { grid-template-columns: 1fr; }
+#rkFx { position: absolute; inset: 0; z-index: 61; overflow: hidden; display: grid; place-items: center; background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--fx) 22%, #0b1711) 0%, #050b08 70%); --fx: #ffd447; cursor: pointer; }
+#rkFx .fxrays { position: absolute; left: 50%; top: 45%; width: 260vmax; height: 260vmax; margin: -130vmax 0 0 -130vmax; opacity: 1;
+  background: repeating-conic-gradient(from 0deg, color-mix(in srgb, var(--fx) 30%, transparent) 0deg 7deg, transparent 7deg 20deg); animation: fxspin 9s linear infinite; mask-image: radial-gradient(circle, #000 0%, transparent 32%); -webkit-mask-image: radial-gradient(circle, #000 0%, transparent 32%); }
+#rkFx .fxflash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; animation: fxflash .7s ease-out .5s; }
+#rkFx.down { --fx: #6b7a84; } #rkFx.down .fxrays, #rkFx.down .fxflash { display: none; }
+.rkfx { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.rkfxb svg.rkbadge { width: 150px; height: 174px; animation: rkpop .9s cubic-bezier(.2,1.5,.4,1) both; filter: drop-shadow(0 0 26px var(--fx)) drop-shadow(0 6px 4px rgba(0,0,0,.5)); }
+.rkfxb.swap svg.rkbadge { animation: rkswap .5s cubic-bezier(.2,1.5,.4,1) both; }
+.rkfxt { font-size: 15px; letter-spacing: .3em; text-transform: uppercase; color: #fff; opacity: .85; animation: rkup .5s .6s both; }
+.rkfxn { font-size: 40px; font-weight: 800; font-style: italic; text-transform: uppercase; color: var(--fx); text-shadow: 0 3px 0 rgba(0,0,0,.5), 0 0 22px color-mix(in srgb, var(--fx) 60%, transparent); animation: rkup .5s .8s both; }
+.rkfxr { font-size: 14px; color: var(--gold); font-weight: 700; min-height: 1em; animation: rkup .5s 1s both; }
+@keyframes rkpop { 0% { transform: scale(.2) rotate(-25deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes rkswap { 0% { transform: scale(1.5); filter: brightness(3); } 100% { transform: none; } }
+@keyframes rkup { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
+.endrank { display: flex; gap: 12px; align-items: center; text-align: left; padding: 10px 12px; border-radius: 14px; background: linear-gradient(150deg, color-mix(in srgb, var(--rk, #ffd447) 20%, transparent), rgba(0,0,0,.3) 60%); border: 1px solid color-mix(in srgb, var(--rk, #ffd447) 45%, transparent); }
+.endrank svg.rkbadge { width: 58px; height: 67px; }
+.eri { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.ert { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; } .ert b { font-size: 17px; color: var(--rk); }
+#erDelta { font-size: 22px; font-weight: 800; } #erDelta.up { color: #6fe08f; } #erDelta.dn { color: #ff7a6b; }
+.eri .pbar { height: 9px; border-radius: 5px; } .eri .pbar b { background: var(--rk); transition: width .9s cubic-bezier(.3,.8,.3,1); }
+.erparts { display: flex; flex-wrap: wrap; gap: 4px; } .erparts span { font-size: 11px; padding: 3px 7px; border-radius: 999px; background: rgba(0,0,0,.35); color: var(--chalk); white-space: nowrap; } .erparts span i { font-style: normal; font-weight: 800; margin-left: 4px; }
+.erparts span.p i { color: #6fe08f; } .erparts span.m i { color: #ff7a6b; }
+.eri small { font-size: 11.5px; color: var(--muted); }
+.qcol { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+button.qrk { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 10px; font-size: 13px; }
+button.qrk svg.rkbadge { width: 26px; height: 30px; }
+.pvhead.one { grid-template-columns: 1fr; }
+.btns.row { flex-direction: row; justify-content: center; } .btns.row button { flex: 1; max-width: 280px; }
 .rkb { flex: 0 0 auto; min-width: 30px; height: 30px; padding: 0 6px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #0d1a14; background: var(--rk, #c98a4b); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25), 0 0 10px color-mix(in srgb, var(--rk, #c98a4b) 45%, transparent); }
 .rkb.pass { background: var(--gold); }
 .pvhead { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; text-align: left; }
@@ -308,7 +377,14 @@ button.go.quick { background: linear-gradient(180deg, #3a7bd5, #2a5fae); }
 .chl .bar i { display: block; height: 100%; background: var(--gold); }
 .chl small { color: var(--muted); font-size: 12px; }
 .h1s { font-size: clamp(22px, 4.6vw, 30px); }
-.endch { color: var(--gold); white-space: pre-line; }
+.endcard { max-width: 780px; }
+.endgrid { display: grid; grid-template-columns: 1fr 1.15fr; gap: 16px; align-items: start; }
+.endl { align-items: center; } .endr { text-align: left; }
+#wrap.n560 .endgrid { grid-template-columns: 1fr; }
+.endch { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.endch li { font-size: 12.5px; color: var(--chalk); background: rgba(0,0,0,.28); border-radius: 9px; padding: 6px 10px; border-left: 3px solid var(--gold); }
+.endch li.pas { border-color: #7fb8ff; } .endch li.ev { border-color: #ff7ad9; } .endch li.ch { border-color: #6fe08f; }
+.endr .reward { font-size: 14px; }
 .hlrow { display: flex; gap: 8px; } .hlrow button { flex: 1; }
 .hlclose { position: absolute; top: calc(8px + env(safe-area-inset-top, 0px)); right: max(10px, env(safe-area-inset-right, 0px)); padding: 8px 12px; font-size: 13px; background: rgba(9,20,15,0.7); border-color: rgba(244,247,242,0.4); }
 table.st tr.me td { color: var(--gold); }
@@ -357,6 +433,13 @@ table.st tr.me td { color: var(--gold); }
 .evbox b { font-size: 13px; } .evbox div { display: flex; justify-content: space-between; gap: 8px; }
 .sqgrid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; text-align: left; align-items: start; }
 .sqlist { display: flex; flex-direction: column; gap: 3px; }
+.pausecard { max-width: 640px; }
+.pscore { display: flex; align-items: baseline; justify-content: center; gap: 12px; font-weight: 700; font-size: 15px; }
+.pscore b { font-size: 34px; color: var(--chalk); font-variant-numeric: tabular-nums; } .pscore small { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; } .pgrid.one { grid-template-columns: 1fr; max-width: 380px; margin: 0 auto; width: 100%; }
+.pquick { display: flex; flex-direction: column; gap: 6px; } .pquick .lbl { margin-bottom: 3px; }
+.pbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .pbtns button { font-size: 13px; padding: 10px 6px; }
+#wrap.n560 .pgrid { grid-template-columns: 1fr; }
 .sublist { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin: 4px 0 10px; }
 .subrow { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .subrow .nm { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -473,12 +556,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       <div class="hubtop">
         <div class="logo"><span class="r">Mini</span> <span class="b">Football</span></div>
         <input id="name" class="namein" maxlength="12" placeholder="Dit navn" autocomplete="off" aria-label="Dit navn">
-        <button id="homeProg" class="alt prog" aria-label="Sæsonpas og rang"><span class="rkb" id="hpRank">BRO</span><span class="pp"><span id="hpPass">Sæsonpas 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
+        <button id="homeRank" class="alt rkchip" aria-label="Din rang"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
+        <button id="homeProg" class="alt prog" aria-label="Sæsonpas"><span class="pp"><span id="hpPass">Sæsonpas 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
         <span class="chip"><span class="coins" data-coins>0</span></span>
         <button id="goSet" class="alt gear" aria-label="Indstillinger">⚙</button>
       </div>
       <div class="tabp" data-tab="spil">
-        <button id="goOnline" class="big tile hot"><i class="ic">🌐</i>Rangeret online<small>Find en modstander i 7 eller 11 mod 11, eller spil med venner via kode</small></button>
+        <button id="goOnline" class="big tile hot"><i class="ic">🌐</i>Online<small id="onlSub">Rangeret mod hvem som helst, eller spil med venner via kode</small></button>
         <button id="bCpu" class="big tile alt"><i class="ic">⚽</i>Mod computeren<small>Hurtig kamp med dit eget hold</small></button>
         <button id="goSeason" class="big tile alt"><i class="ic">🏆</i>Karriere og turneringer<small id="compSub">Karriere, co-op-pokal og sæson</small></button>
         <button id="bTwo" class="big tile alt"><i class="ic">👥</i>2 på én telefon<small>Mod hinanden eller sammen mod computeren</small></button>
@@ -494,7 +578,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         <button id="goFree" class="big tile alt"><i class="ic">🎁</i>Gratis pakker<small id="freeSub">Fra sæsonpasset og daglige belønninger</small></button>
       </div>
       <div class="tabp" data-tab="saeson" hidden>
-        <button id="goPass" class="big tile hot"><i class="ic">⭐</i>Sæsonpas og rang<small id="passSub">30 niveauer hver måned</small></button>
+        <button id="goRank" class="big tile hot"><span class="ic" id="rankIc"></span>Rang<small id="rankSub">Divisioner, rangpoint og belønninger</small></button>
+        <button id="goPass" class="big tile alt"><i class="ic">⭐</i>Sæsonpas<small id="passSub">30 niveauer hver måned</small></button>
         <button id="bDaily" class="big tile alt"><i class="ic">✅</i>Dagens udfordringer<small>3 nye hver dag. Giver mønter og XP</small></button>
         <button id="goEvent" class="big tile alt"><i class="ic">📅</i>Ugens event<small id="evSub">Klar ugens opgaver og få et eventkort</small></button>
       </div>
@@ -530,17 +615,17 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     <div class="card wide" id="pgPractice" hidden>
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Træning og færdighedsspil</h2><span class="sp"></span></div>
       <div class="ow three">
-        <div class="col"><div class="lbl">Straffesparkskonkurrence</div>
-          <p>5 straffe hver mod computeren. Sigt med joysticket og tryk SKYD. Når du står i mål, bestemmer joysticket hvilken vej du kaster dig.</p>
+        <div class="col"><div class="lbl">Straffe</div>
+          <p>5 straffe hver mod computeren. Sigt med joysticket og tryk SKYD. I mål bestemmer joysticket, hvor du kaster dig.</p>
           <button id="bPens" class="go">Start straffe</button></div>
         <div class="col"><div class="lbl">Færdighedsspil</div>
           <p>5 niveauer i hver. Stjerner giver træningspoint (TP) og låser næste niveau op.</p>
           <div class="shoplist" id="drillList"></div></div>
         <div class="col"><div class="lbl">Træningsbane</div>
-          <p>Dit hold mod en målmand. Intet ur og ingen modstandere, så du kan øve skud, lob, stikninger og driblinger.</p>
-          <button id="bTrain" class="go">Start træning</button>
-          <div class="lbl" style="margin-top:12px">Testkamp</div>
-          <p>Kamp mod computeren uden ur, så du kan prøve spurt, tacklinger og afleveringer under pres. Tæller ikke med nogen steder.</p>
+          <p>Dit hold mod en målmand. Intet ur og ingen modstandere. Øv skud, lob, stikninger og driblinger.</p>
+          <button id="bTrain" class="go">Start træning</button></div>
+        <div class="col"><div class="lbl">Testkamp</div>
+          <p>Mod computeren uden ur. Prøv spurt, tacklinger og afleveringer under pres. Tæller ikke med.</p>
           <div class="seg" id="segTest" role="group" aria-label="Spillere pr. hold i testkampen"></div>
           <button id="bTest" class="go" style="margin-top:6px">Start testkamp</button></div>
       </div>
@@ -594,8 +679,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     <div class="card wide" id="pgOnline" hidden>
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Online</h2><span class="sp"></span></div>
       <div class="ow one"><div class="col"><div class="lbl">Rangeret kamp mod hvem som helst</div>
-          <p id="quickSub">Med dit eget hold. 7 mod 7 og 11 mod 11 har hver sin rang. Vind for at stige og få dobbelt XP i sæsonpasset.</p>
-          <div class="qrow"><button id="quick" class="go quick" disabled>Find modstander · 7 mod 7</button><button id="quick11" class="go quick" disabled>Find modstander · 11 mod 11</button></div></div></div>
+          <p id="quickSub">Med dit eget hold mod en tilfældig spiller. Sejr giver rangpoint, og rangerede kampe giver dobbelt XP i sæsonpasset. Tryk på din rang for at se, hvordan det virker.</p>
+          <div class="qrow"><div class="qcol"><button id="quick" class="go quick" disabled>Find modstander · 7 mod 7</button><button class="alt qrk" data-rl=""></button></div><div class="qcol"><button id="quick11" class="go quick" disabled>Find modstander · 11 mod 11</button><button class="alt qrk" data-rl="11"></button></div></div></div></div>
       <div class="ow">
         <div class="col"><div class="lbl">Start en ny kamp</div>
           <p>Du vælger holdstørrelse og længde og får en kode, du sender til dine venner.</p>
@@ -611,19 +696,24 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     </div>
 
     <!-- indstillinger -->
-    <div class="card" id="pgSet" hidden>
+    <div class="card wide" id="pgSet" hidden>
       <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Indstillinger</h2><span class="sp"></span></div>
-      <div class="setrows">
+      <div class="col" id="setGame"><p class="hint">Gælder alle kampe. Du kan også ændre dem, lige før en kamp starter.</p><div class="mopts setopts" data-mopts></div></div>
+      <div class="setrows" id="setSnd">
         <div><span>Publikum og kommentator</span><button id="tCrowd" class="sw"></button></div>
         <div><span>Test kommentatoren</span><button id="tSay" class="alt">Afspil</button></div>
         <div><span>Vibration ved skud og mål</span><button id="tVib" class="sw"></button></div>
         <div><span>Musik i menuen</span><button id="tMusic" class="sw"></button></div>
         <div><span>Genafspilning af mål</span><button id="tReplay" class="sw"></button></div>
-        <div><span>Backup af dit fremskridt</span><span><button id="bkOut" class="alt">Kopiér kode</button> <button id="bkIn" class="alt">Indlæs kode</button></span></div>
       </div>
-      <div id="bkBox" hidden><p id="bkMsg" class="kbdx"></p><textarea id="bkTxt" rows="3" spellcheck="false"></textarea><button id="bkGo" class="alt" hidden>Indlæs nu</button></div>
-      <button id="fs" class="alt" hidden>Fuld skærm</button>
-      <p class="kbd">På computer: WASD styrer, mellemrum er SKYD/TACKLE, F er AFLEVER/SKIFT og Shift spurter.</p>
+      <div class="setrows" id="setAcc">
+        <div><span>Dit navn<small>Vises for dine venner online</small></span><input id="setName" class="namein" maxlength="12" placeholder="Dit navn" autocomplete="off" aria-label="Dit navn"></div>
+        <div><span>Backup af dit fremskridt<small>Gem koden et sikkert sted, eller flyt dit hold til en ny telefon</small></span><span class="two"><button id="bkOut" class="alt">Kopiér kode</button><button id="bkIn" class="alt">Indlæs kode</button></span></div>
+        <div id="bkBox" hidden><p id="bkMsg" class="kbdx"></p><textarea id="bkTxt" rows="3" spellcheck="false"></textarea><button id="bkGo" class="alt" hidden>Indlæs nu</button></div>
+        <div id="fsRow"><span>Fuld skærm</span><button id="fs" class="alt" hidden>Fuld skærm</button></div>
+        <div><span>Knapper og regler</span><button id="setHelp" class="alt">Sådan spiller du</button></div>
+        <p class="kbd">På computer: WASD styrer, mellemrum er SKYD/TACKLE, F er AFLEVER/SKIFT og Shift spurter.</p>
+      </div>
     </div>
   </div>
 
@@ -662,7 +752,6 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <p class="sqnote"><b id="sqTeam"></b> · <span id="sqChem"></span> · <span id="sqXI"></span></p>
           <p class="sqnote">Træningspoint (TP) får du i færdighedsspil og kampe, eller i butikken.</p>
           <button id="sqDrills" class="go">Færdighedsspil ›</button>
-          <div class="evbox" id="evBox"></div>
         </div>
       </div>
     </div>
@@ -671,21 +760,41 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   <!-- sæsonpas og online-rang -->
   <div class="overlay" id="passOv" hidden>
     <div class="card wide">
-      <div class="top"><span class="sp"></span><h2 id="pvTitle">Sæsonpas og rang</h2><button id="passClose" class="alt back">Luk</button></div>
-      <div class="pvhead">
-        <div class="pvbox"><div class="rkb" id="pvBadge"></div><div class="pvt"><b id="pvRank"></b><small id="pvRankTxt"></small><i class="pbar"><b id="pvRankBar"></b></i></div></div>
-        <div class="pvbox"><div class="rkb" id="pvBadge11"></div><div class="pvt"><b id="pvRank11"></b><small id="pvRankTxt11"></small><i class="pbar"><b id="pvRankBar11"></b></i></div></div>
+      <div class="top"><button id="passClose" class="alt back">‹ Tilbage</button><h2 id="pvTitle">Sæsonpas</h2><span class="sp"></span></div>
+      <div class="pvhead one">
         <div class="pvbox"><div class="rkb pass" id="pvLv"></div><div class="pvt"><b id="pvPass"></b><small id="pvPassTxt"></small><i class="pbar"><b id="pvPassBar"></b></i></div></div>
       </div>
       <div class="tiers" id="pvTiers"></div>
       <p class="hint" id="pvHow"></p>
-      <div class="btns"><button id="pvOpen" hidden>Åbn gratis pakke</button><button id="pvQuick" class="alt">Find online modstander</button></div>
+      <div class="btns row"><button id="pvOpen" hidden>Åbn gratis pakke</button><button id="pvQuick" class="alt">Spil en kamp</button></div>
     </div>
+  </div>
+  <!-- rang: din division, rangvejen og reglerne -->
+  <div class="overlay" id="rankOv" hidden>
+    <div class="card wide">
+      <div class="top"><button id="rankClose" class="alt back">‹ Tilbage</button><h2>Rang</h2><span class="sp rkseas" id="rkSeason"></span></div>
+      <div class="rkmine" id="rkMine"></div>
+      <div class="rkroadw" id="rkRoad"><div class="seg" id="rkRoadSeg" role="group" aria-label="Holdstørrelse"><button data-l="">7 mod 7</button><button data-l="11">11 mod 11</button></div><div class="road" id="rkRoadRow"></div><p class="hint">Hver ny division i sæsonen giver en belønning første gang, du når den. En ny rang giver en pakke.</p></div>
+      <div class="rkhow" id="rkHow">
+        <div><b>Rangerne</b><span>Bronze, Sølv, Guld, Platin og Diamant har hver tre divisioner: III, II og I. Hver division er 100 rangpoint (RP). Over Diamant I er Legende, hvor pointene bare fortsætter.</span></div>
+        <div><b>Point pr. kamp</b><span>Sejr +25, uafgjort +5, nederlag -18. En stærkere modstander giver op til 10 ekstra, en svagere lidt mindre. I Bronze taber du kun det halve, i Sølv tre fjerdedele.</span></div>
+        <div><b>Sejrsstime</b><span>To sejre i træk giver +5 ekstra, tre giver +10, fire eller flere +15. En sejr med 3 mål eller mere giver +3.</span></div>
+        <div><b>Skjold</b><span>Når du når en ny rang, får du 3 skjold. Ville et nederlag sende dig ned i rangen under, bruges et skjold i stedet, og du bliver.</span></div>
+        <div><b>Hvilke kampe tæller</b><span>Find modstander giver fulde point. Kampe med venner via kode giver halve point. 7 mod 7 og 11 mod 11 har hver sin rang.</span></div>
+        <div><b>Sæsonen</b><span>Hver måned er en sæson. Når den slutter, får du mønter efter din bedste rang (Guld og op giver også en pakke), og du starter en rang lavere.</span></div>
+      </div>
+    </div>
+  </div>
+  <div id="rkFx" hidden>
+    <div class="fxrays"></div><div class="fxflash"></div><div class="fxconf" id="rkConf"></div>
+    <div class="rkfx"><div class="rkfxb" id="rkFxB"></div><b class="rkfxt" id="rkFxT">Rykket op</b><span class="rkfxn" id="rkFxN"></span><small class="rkfxr" id="rkFxR"></small></div>
+    <p class="fxtap">Tryk for at fortsætte</p>
   </div>
   <div class="overlay" id="giftOv" hidden>
     <div class="card">
       <h1 class="h1s" id="giftT"></h1>
       <p id="giftP"></p>
+      <input id="giftName" class="namein" maxlength="12" placeholder="Dit navn" autocomplete="off" aria-label="Dit navn" hidden>
       <div class="gdays" id="giftDays"></div>
       <div class="btns"><button id="giftOk">Fedt</button></div>
     </div>
@@ -850,8 +959,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   </div>
 
   <div class="overlay" id="help" hidden>
-    <div class="card">
-      <h1>Sådan spiller du</h1>
+    <div class="card wide">
+      <div class="top"><span class="sp"></span><h2>Sådan spiller du</h2><span class="sp"></span></div>
       <div class="help">
         <div><b class="k">JOYSTICK</b><span>Sæt tommelfingeren hvor som helst i venstre side og styr. Træk langt ud for at spurte.</span></div>
         <div><b class="k">SKYD</b><span>Med bolden. Hold inde for et hårdere skud. Tryk to gange hurtigt for et lob over målmanden.</span></div>
@@ -875,46 +984,42 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   </div>
 
   <div class="overlay" id="league" hidden>
-    <div class="card">
-      <h1>Stilling</h1>
+    <div class="card wide">
+      <div class="top"><button id="leagueClose" class="alt back">‹ Tilbage</button><h2>Stilling</h2><span class="sp"></span></div>
       <p>Alle kampe spillet på denne telefon. Sejr giver 3 point, uafgjort 1.</p>
       <div class="tablewrap"><table class="st" id="leagueTable"></table></div>
       <div class="lbl">Topscorere</div>
       <div class="tablewrap"><table class="st" id="scorerTable"></table></div>
       <div class="btns">
-        <button id="leagueClose">Luk</button>
-        <button id="leagueReset" class="alt">Nulstil stillingen</button>
+        <button id="leagueReset" class="alt small">Nulstil stillingen</button>
       </div>
     </div>
   </div>
 
   <div class="overlay" id="daily" hidden>
-    <div class="card">
-      <h1 class="h1s">Dagens udfordringer</h1>
-      <p id="dailyInfo"></p>
-      <ul class="chl" id="dailyList"></ul>
-      <p id="dailyBonus"></p>
-      <div class="btns"><button id="dailyClose">Luk</button></div>
+    <div class="card wide">
+      <div class="top"><button id="dailyClose" class="alt back">‹ Tilbage</button><h2>Udfordringer</h2><span class="sp"></span></div>
+      <div class="col" id="dlyBox"><p id="dailyInfo"></p><ul class="chl" id="dailyList"></ul><p id="dailyBonus"></p></div>
+      <div class="col" id="evTab"><div class="evbox" id="evBox"></div></div>
     </div>
   </div>
 
   <div class="overlay" id="friends" hidden>
-    <div class="card">
-      <h1>Venner</h1>
-      <p>Alle du har spillet online med. Ranglisten bygger på rating: du vinder flere point for at slå en, der er bedre end dig. Dine venners tal er fra sidste gang, I spillede.</p>
+    <div class="card wide">
+      <div class="top"><button id="friendsClose" class="alt back">‹ Tilbage</button><h2>Venner</h2><span class="sp"></span></div>
+      <p>Alle du har spillet online med, og deres rang fra sidste gang, I spillede. Spil med en ven via kode, så kommer de på listen.</p>
       <div class="tablewrap"><table class="st" id="friendsTable"></table></div>
       <p id="friendsEmpty" hidden>Ingen venner endnu. Spil en online-kamp med en ven, så kommer de på listen.</p>
-      <div class="btns"><button id="friendsClose">Luk</button></div>
     </div>
   </div>
 
   <div class="overlay" id="cup" hidden>
-    <div class="card">
-      <h1>Turnering</h1>
+    <div class="card wide">
+      <div class="top"><button id="cupBack" class="alt back">‹ Tilbage</button><h2>Venneturnering</h2><span class="sp"></span></div>
       <div id="cupSetup">
         <p>Skriv 3 til 8 navne. Alle møder alle én gang. Spil kampene på denne telefon, eller spil dem online og skriv resultatet ind.</p>
         <div class="cupnames" id="cupNames"></div>
-        <div class="btns"><button id="cupStart">Start turneringen</button><button id="cupClose1" class="alt">Luk</button></div>
+        <div class="btns"><button id="cupStart">Start turneringen</button><button id="cupClose1" class="alt" hidden>Luk</button></div>
       </div>
       <div id="cupView" hidden>
         <div class="tablewrap"><table class="st" id="cupTable"></table></div>
@@ -927,7 +1032,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         </div>
         <div class="btns">
           <button id="cupPlay">Spil kampen på denne telefon</button>
-          <button id="cupClose" class="alt">Luk</button>
+          <button id="cupClose" class="alt" hidden>Luk</button>
           <button id="cupReset" class="alt">Ny turnering</button>
         </div>
       </div>
@@ -935,32 +1040,43 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   </div>
 
   <div class="overlay" id="paused" hidden>
-    <div class="card">
-      <h1>Pause</h1>
-      <div id="subs" hidden><p class="sub-h" id="subsH"></p><div id="subList" class="sublist"></div></div>
-      <div class="btns">
-        <button id="resume">Fortsæt</button>
-        <button id="quit" class="alt">Afslut kamp</button>
+    <div class="card wide pausecard">
+      <div class="top"><span class="sp"></span><h2>Pause</h2><span class="sp"></span></div>
+      <div class="pscore" id="pScore"></div>
+      <div class="pgrid">
+        <div class="col">
+          <button id="resume" class="go">Fortsæt ›</button>
+          <div class="mopts pquick" id="pQuick"></div>
+          <div class="pbtns"><button id="pHelp" class="alt">Knapper og regler</button><button id="quit" class="alt">Afslut kamp</button></div>
+        </div>
+        <div class="col" id="subs" hidden><p class="sub-h" id="subsH"></p><div id="subList" class="sublist"></div></div>
       </div>
     </div>
   </div>
 
   <div class="overlay" id="end" hidden>
-    <div class="card">
-      <h1 id="endTitle">Slut</h1>
-      <div class="final"><span class="h" id="fh">0</span> – <span class="a" id="fa">0</span></div>
-      <p id="endMsg"></p>
-      <p id="endReward" class="reward" hidden></p>
-      <p id="endCh" class="endch" hidden></p>
-      <div class="tablewrap"><table class="st" id="statsTable"></table></div>
-      <div class="btns">
-        <button id="again">Spil igen</button>
-        <div class="hlrow" id="hlRow" hidden><button id="hlBtn" class="alt">Se målene</button><button id="hlRec" class="alt">Lav video</button><button id="hlShare" hidden>Del video</button><button id="hlSave" class="alt" hidden>Gem video</button></div>
-        <button id="ready" hidden>Klar til revanche</button>
-        <button id="toCup" hidden>Tilbage til turneringen</button>
-        <button id="toSeason" hidden>Tilbage til sæsonen</button>
-        <button id="toComp" hidden>Se pokalen</button>
-        <button id="toMenu" class="alt">Til menuen</button>
+    <div class="card wide endcard">
+      <div class="endgrid">
+        <div class="col endl">
+          <h1 id="endTitle">Slut</h1>
+          <div class="final"><span class="h" id="fh">0</span> – <span class="a" id="fa">0</span></div>
+          <p id="endMsg"></p>
+          <div class="tablewrap"><table class="st" id="statsTable"></table></div>
+        </div>
+        <div class="col endr">
+          <div class="endrank" id="endRank" hidden><div class="erb" id="erBadge"></div><div class="eri"><div class="ert"><b id="erName"></b><span id="erDelta"></span></div><i class="pbar"><b id="erBar"></b></i><div class="erparts" id="erParts"></div><small id="erNote"></small></div></div>
+          <p id="endReward" class="reward" hidden></p>
+          <ul id="endCh" class="endch" hidden></ul>
+          <div class="btns">
+            <button id="again">Spil igen</button>
+            <div class="hlrow" id="hlRow" hidden><button id="hlBtn" class="alt">Se målene</button><button id="hlRec" class="alt">Lav video</button><button id="hlShare" hidden>Del video</button><button id="hlSave" class="alt" hidden>Gem video</button></div>
+            <button id="ready" hidden>Klar til revanche</button>
+            <button id="toCup" hidden>Tilbage til turneringen</button>
+            <button id="toSeason" hidden>Tilbage til sæsonen</button>
+            <button id="toComp" hidden>Se pokalen</button>
+            <button id="toMenu" class="alt">Til menuen</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1020,7 +1136,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // ---------- Menu pages: forside -> kampopsætning / online / indstillinger ----------
   let setupMode = 'cpu';
   const PAGES = ['pgHome', 'pgSetup', 'pgOnline', 'pgSet', 'pgPractice', 'pgComp'];
-  function page(id) { for (const k of PAGES) $(k).hidden = k !== id; }
+  function page(id) { for (const k of PAGES) $(k).hidden = k !== id; if (id === 'pgOnline' && typeof qrkPaint === 'function') qrkPaint(); }
   const sofaCoop = () => setupMode === 'two' && cfg.coop === 1; // 2 on one phone, both on the same team against the computer
   function setupVis() {
     $('coopBox').hidden = setupMode !== 'two';
@@ -1050,7 +1166,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (typeof hubPaint === 'function') hubPaint();
   }
   for (const b of $('tabbar').children) b.onclick = () => hubShow(b.dataset.t);
-  $('goSet').onclick = () => page('pgSet');
+  $('goSet').onclick = () => { page('pgSet'); $('setName').value = cfg.name || ''; $('fsRow').hidden = $('fs').hidden; subTabs($('pgSet'), [['Kamp', ['setGame']], ['Lyd og vibration', ['setSnd']], ['Konto', ['setAcc']]], 'set', $('setGame')); };
+  $('setName').addEventListener('input', () => { cfg.name = cleanName($('setName').value); $('name').value = cfg.name; saveCfg(); });
+  $('setHelp').onclick = () => { $('help').hidden = false; };
   $('goPractice').onclick = () => page('pgPractice');
   const cleanName = v => String(v || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 12);
   $('name').value = cfg.name || '';
@@ -1172,9 +1290,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const n = new Date(), mid = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1), left = Math.max(0, mid - n), h = Math.floor(left / 3600000), m = Math.floor(left / 60000) % 60;
     $('dailyInfo').innerHTML = `Klar dem for at få mønter. Du har <b data-coins>${loadProf().coins || 0}</b> mønter. Nye udfordringer om ${h} t ${m} min.`;
     $('dailyBonus').textContent = D.bonus ? `Du har klaret alle tre i dag og fået ${DAILY_BONUS} ekstra.` : `Klar alle tre for ${DAILY_BONUS} ekstra mønter.`;
-    $('daily').hidden = false;
+    evPaint(); $('daily').hidden = false;
+    subTabs($('daily'), [['I dag', ['dlyBox']], ['Ugens event', ['evTab']]], 'daily', $('dlyBox'));
   }
-  $('bDaily').onclick = () => { try { localStorage.setItem('mf-dseen', today()); } catch (_) {} showDaily(); hubPaint(); };
+  $('bDaily').onclick = () => { try { localStorage.setItem('mf-dseen', today()); } catch (_) {} subTab.daily = 'I dag'; showDaily(); hubPaint(); };
   $('dailyClose').onclick = () => { $('daily').hidden = true; };
 
   // ---------- Friends and rating (no server: phones swap their numbers when you play online) ----------
@@ -1188,23 +1307,24 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function saveMe(M) { meCache = { ...M }; try { localStorage.setItem('mf-me', JSON.stringify(M)); } catch (_) {} }
   const loadFriends = () => { try { return JSON.parse(localStorage.getItem('mf-friends') || '{}') || {}; } catch (_) { return {}; } };
   const saveFriends = F => { try { localStorage.setItem('mf-friends', JSON.stringify(F)); } catch (_) {} };
-  const myCard = () => { const M = loadMe(); return [M.id, cfg.name || '', Math.round(M.r), M.w, M.d, M.l, M.g, Math.round(M.r11 || 1000)]; }; // what other phones get to see
+  const myCard = () => { const M = loadMe(); return [M.id, cfg.name || '', Math.round(M.r), M.w, M.d, M.l, M.g, Math.round(M.r11 || 1000), rpOf(M, ''), rpOf(M, '11')]; }; // what other phones get to see
   function readCard(c) {
     if (!Array.isArray(c) || typeof c[0] !== 'string' || !/^[a-z0-9]{6,20}$/.test(c[0])) return null;
     const n = v => Math.max(0, Math.min(99999, Number(v) | 0));
-    return { id: c[0], n: cleanName(c[1]), r: n(c[2]) || 1000, w: n(c[3]), d: n(c[4]), l: n(c[5]), g: n(c[6]), r11: n(c[7]) || 1000 };
+    const r = n(c[2]) || 1000, r11 = n(c[7]) || 1000;
+    return { id: c[0], n: cleanName(c[1]), r, w: n(c[3]), d: n(c[4]), l: n(c[5]), g: n(c[6]), r11, rp: c[8] === undefined ? rpFromElo(r) : n(c[8]), rp11: c[9] === undefined ? rpFromElo(r11) : n(c[9]) };
   }
   const netCards = new Map(); // peer -> card, for everyone in this online game ('host' = the host)
   function seeCard(peer, raw) {
     const c = readCard(raw); if (!c) return;
     const key = JSON.stringify(c), old = netCards.get(peer);
     if (old && old.key === key) return;
-    netCards.set(peer, { ...c, key, card: [c.id, c.n, c.r, c.w, c.d, c.l, c.g, c.r11] }); noteFriend(c);
+    netCards.set(peer, { ...c, key, card: [c.id, c.n, c.r, c.w, c.d, c.l, c.g, c.r11, c.rp, c.rp11] }); noteFriend(c);
   }
   function noteFriend(c) {
     if (!c || c.id === loadMe().id) return;
     const F = loadFriends(), f = F[c.id] || { h: [0, 0, 0] };
-    Object.assign(f, { n: c.n || f.n || 'Ven', r: c.r, w: c.w, d: c.d, l: c.l, g: c.g, at: Date.now() });
+    Object.assign(f, { n: c.n || f.n || 'Ven', r: c.r, rp: c.rp, w: c.w, d: c.d, l: c.l, g: c.g, at: Date.now() });
     F[c.id] = f; saveFriends(F);
   }
   // after an online match: rating (Elo) against the humans on the other team, and head-to-head per friend
@@ -1215,33 +1335,29 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     else { add('host', hostInfo[0]); for (const r of roster) if (r[0] !== myPeer) add(r[0], r[1]); }
     return { mates, opps };
   }
-  function rateOnline(opps, res, gf) {
+  let lastRank = null; // the rank result of the last online match, for the end screen
+  function rateOnline(opps, res, gf, gd) {
+    lastRank = null;
     if (!opps.length) return '';
-    const M = loadMe();
-    const avg = opps.reduce((a, c) => a + c.r, 0) / opps.length;
-    const L = quick && quickN === 11 ? '11' : '', rk = 'r' + L, bk = 'bi' + L; // 11 a side ranked has its own ladder
-    if (L) { const a11 = opps.reduce((a, c) => a + (c.r11 || 1000), 0) / opps.length; M[rk] = M[rk] || 1000; return rateLadder(M, rk, bk, a11, res, gf, '11 mod 11 '); }
-    const exp = 1 / (1 + Math.pow(10, (avg - M.r) / 400)), dr = Math.round(32 * (res - exp)), r0 = rankOf(M.r);
-    M.r = Math.max(100, M.r + dr); const r1 = rankOf(M.r); M.bi = Math.max(M.bi | 0, r1.i); if (!M.sm) M.sm = monthKey(); if (res === 1) M.w++; else if (res === 0) M.l++; else M.d++;
-    M.g += gf; saveMe(M);
+    const M = loadMe(), L = (quick ? quickN === 11 : size === 11) ? '11' : '';
+    const elo = (k, avg) => { const exp = 1 / (1 + Math.pow(10, (avg - (M[k] || 1000)) / 400)); M[k] = Math.max(100, Math.round((M[k] || 1000) + 32 * (res - exp))); };
+    if (L) { elo('r11', opps.reduce((a, c) => a + (c.r11 || 1000), 0) / opps.length); M.w11 = (M.w11 | 0) + (res === 1 ? 1 : 0); M.n11 = (M.n11 | 0) + 1; }
+    else { elo('r', opps.reduce((a, c) => a + c.r, 0) / opps.length); if (res === 1) M.w++; else if (res === 0) M.l++; else M.d++; }
+    M.g += gf;
+    const oppRp = opps.reduce((a, c) => a + (L ? c.rp11 : c.rp), 0) / opps.length;
+    lastRank = rankMatch(M, L, oppRp, res, gd, quick ? 1 : 0.5);
+    saveMe(M);
     const F = loadFriends();
     for (const c of opps) { const f = F[c.id]; if (f) { f.h = f.h || [0, 0, 0]; f.h[res === 1 ? 0 : res === 0 ? 2 : 1]++; } }
     saveFriends(F);
-    return `Din rating: ${M.r} (${dr >= 0 ? '+' : ''}${dr}) · ${r1.n}` + (r1.i > r0.i ? ` · Rykket op til ${r1.n}!` : r1.i < r0.i ? ` · Rykket ned til ${r1.n}` : r1.next ? ` · ${r1.next - M.r} til ${r1.nn}` : '');
-  }
-  function rateLadder(M, rk, bk, avg, res, gf, lbl) {
-    const exp = 1 / (1 + Math.pow(10, (avg - M[rk]) / 400)), dr = Math.round(32 * (res - exp)), r0 = rankOf(M[rk]);
-    M[rk] = Math.max(100, M[rk] + dr); const r1 = rankOf(M[rk]); M[bk] = Math.max(M[bk] | 0, r1.i); if (!M.sm) M.sm = monthKey();
-    M.w11 = (M.w11 | 0) + (res === 1 ? 1 : 0); M.n11 = (M.n11 | 0) + 1; M.g += gf; saveMe(M);
-    const F = loadFriends(); saveFriends(F);
-    return `${lbl}rating: ${M[rk]} (${dr >= 0 ? '+' : ''}${dr}) · ${r1.n}` + (r1.i > r0.i ? ` · Rykket op til ${r1.n}!` : r1.i < r0.i ? ` · Rykket ned til ${r1.n}` : r1.next ? ` · ${r1.next - M[rk]} til ${r1.nn}` : '');
+    return '';
   }
   function showFriends() {
     const M = loadMe(), F = loadFriends();
-    const rows = Object.values(F).map(f => ({ ...f, me: false })); rows.push({ n: (cfg.name || 'Dig') + ' (dig)', r: Math.round(M.r), w: M.w, d: M.d, l: M.l, g: M.g, me: true });
-    rows.sort((a, b) => b.r - a.r);
+    const rows = Object.values(F).map(f => ({ ...f, rp: f.rp === undefined ? rpFromElo(f.r) : f.rp, me: false })); rows.push({ n: (cfg.name || 'Dig') + ' (dig)', rp: rpOf(M, ''), w: M.w, d: M.d, l: M.l, g: M.g, me: true });
+    rows.sort((a, b) => b.rp - a.rp);
     const tbl = $('friendsTable');
-    fillTable(tbl, ['#', 'Navn', 'Rating', 'V-U-T', 'Mål', 'Du mod dem'], rows.map((f, i) => [i + 1, f.n, f.r, `${f.w}-${f.d}-${f.l}`, f.g, f.me ? '' : `${(f.h || [0])[0]}-${(f.h || [0, 0])[1]}-${(f.h || [0, 0, 0])[2]}`]));
+    fillTable(tbl, ['#', 'Navn', 'Rang', 'RP', 'V-U-T', 'Mål', 'Du mod dem'], rows.map((f, i) => [i + 1, f.n, rankOf(f.rp).n, f.rp, `${f.w}-${f.d}-${f.l}`, f.g, f.me ? '' : `${(f.h || [0])[0]}-${(f.h || [0, 0])[1]}-${(f.h || [0, 0, 0])[2]}`]));
     tbl.rows[0].cells[0].className = ''; tbl.rows[0].cells[1].className = 'l';
     [...tbl.rows].slice(1).forEach((r, i) => { if (rows[i] && rows[i].me) r.className = 'me'; r.cells[1].className = 'l'; r.cells[0].className = ''; });
     $('friendsEmpty').hidden = rows.length > 1;
@@ -1253,31 +1369,84 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // ---------- Online rank (divisions on top of the Elo rating) and the monthly season ----------
   // Every calendar month is a season: your best division that month pays out when the next one starts, and the rating
   // is pulled halfway back to 1000 so everyone has something to climb again. All kept on this phone ('mf-me').
-  const RANKS = [['Bronze', 0, '#c98a4b', 50], ['Sølv', 1080, '#c4ccd6', 100], ['Guld', 1180, '#ffd447', 200], ['Platin', 1290, '#7fe0d4', 350], ['Diamant', 1400, '#7fb8ff', 500], ['Legende', 1520, '#ff7ad9', 800]];
-  function rankOf(r) {
-    let i = 0; while (i < RANKS.length - 1 && r >= RANKS[i + 1][1]) i++;
-    const lo = i ? RANKS[i][1] : 900, hi = RANKS[i + 1] ? RANKS[i + 1][1] : null;
-    return { i, n: RANKS[i][0], c: RANKS[i][2], p: hi ? Math.max(0, Math.min(1, (r - lo) / (hi - lo))) : 1, next: hi, nn: RANKS[i + 1] ? RANKS[i + 1][0] : '' };
+  // Like the big competitive games (League, Rocket League, Brawl Stars, FC): six ranks, the first five with three divisions
+  // (III, II, I) of 100 rank points (RP) each, then Legende with open-ended points. Points are shown, not hidden:
+  // a win gives about +25, a loss costs about -18 (half in Bronze), a stronger opponent gives more, win streaks give a bonus.
+  // Reaching a new rank gives 3 shields: a loss that would drop you out of the rank uses a shield instead.
+  // Every new division this season pays out on the rank road (Rangvej). 7 and 11 a side have each their own ladder.
+  const TIERS = [['Bronze', '#d9955a', '#6e3f1c', 50], ['Sølv', '#d3dbe4', '#59636f', 100], ['Guld', '#ffd447', '#946a12', 200], ['Platin', '#7fe0d4', '#21746b', 350], ['Diamant', '#86b9ff', '#2a4fae', 500], ['Legende', '#ff7ad9', '#7d2470', 800]];
+  const RANKS = TIERS; // season coins by best rank: RANKS[i][3]
+  const DIVN = ['III', 'II', 'I'], DIV_RP = 100, LEG_RP = 1500, SHIELDS = 3;
+  const stepName = st => st >= 15 ? 'Legende' : `${TIERS[Math.floor(st / 3)][0]} ${DIVN[st % 3]}`;
+  function rankOf(rp) {
+    rp = Math.max(0, Math.round(rp) || 0);
+    if (rp >= LEG_RP) return { i: 5, t: 5, d: -1, step: 15, rp, n: 'Legende', tn: 'Legende', c: TIERS[5][1], c2: TIERS[5][2], p: 1, inDiv: rp - LEG_RP, need: 0, nn: '', floor: LEG_RP };
+    const step = Math.floor(rp / DIV_RP), t = Math.floor(step / 3), d = step % 3;
+    return { i: t, t, d, step, rp, n: stepName(step), tn: TIERS[t][0], c: TIERS[t][1], c2: TIERS[t][2], p: (rp % DIV_RP) / DIV_RP, inDiv: rp % DIV_RP, need: DIV_RP - rp % DIV_RP, nn: stepName(step + 1), floor: t * 3 * DIV_RP };
+  }
+  const rpFromElo = r => Math.max(0, Math.min(1400, Math.round(((r || 1000) - 1000) * 3.75)));
+  const rpOf = (M, L) => { const v = M['rp' + L]; return v === undefined ? rpFromElo(L ? M.r11 : M.r) : v; };
+  // the step reward on the rank road: a pack when you reach a new rank, coins for a new division
+  const roadReward = st => st % 3 === 0 ? { pk: st >= 12 ? 2 : st >= 6 ? 1 : 0 } : { c: 25 + 15 * Math.floor(st / 3) };
+  const roadTxt = r => r.pk !== undefined ? ['Bronzepakke', 'Sølvpakke', 'Guldpakke'][r.pk] : `${r.c} mønter`;
+  let badgeN = 0;
+  function badgeSVG(k, cls) { // a shield in the rank's colours, the division as a roman numeral, more stars the higher you are
+    const [, c, c2] = TIERS[k.t], id = 'bg' + (++badgeN);
+    const star = (x, y, r) => { let d = ''; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * 0.45 : r; d += (i ? 'L' : 'M') + (x + Math.cos(a) * q).toFixed(1) + ' ' + (y + Math.sin(a) * q).toFixed(1); } return `<path d="${d}Z" fill="#fff8d6" stroke="${c2}" stroke-width="1.5"/>`; };
+    const ns = k.t === 5 ? 0 : k.t, stars = Array.from({ length: ns }, (_, i) => star(50 + (i - (ns - 1) / 2) * 17, 9, 7.5)).join('');
+    const crown = k.t === 5 ? `<path d="M28 20 L34 4 L42 14 L50 0 L58 14 L66 4 L72 20 Z" fill="#ffe27a" stroke="#8a5a00" stroke-width="2"/>` : '';
+    const gem = k.t === 4 ? `<path d="M50 40 L62 52 L50 70 L38 52 Z" fill="#fff" fill-opacity=".85"/>` : '';
+    const txt = k.d >= 0 ? `<text x="50" y="${k.t === 4 ? 92 : 78}" text-anchor="middle" font-family="Barlow,Arial,sans-serif" font-weight="800" font-size="${k.t === 4 ? 18 : 30}" fill="${c2}">${DIVN[k.d]}</text>` : `<text x="50" y="76" text-anchor="middle" font-size="30" fill="${c2}">★</text>`;
+    return `<svg class="${cls || 'rkbadge'}" viewBox="0 -4 100 116" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".25" stop-color="${c}"/><stop offset="1" stop-color="${c2}"/></linearGradient></defs>`
+      + `<path d="M50 8 L92 22 L88 64 Q84 92 50 108 Q16 92 12 64 L8 22 Z" fill="${c2}"/><path d="M50 16 L83 27 L80 62 Q76 85 50 98 Q24 85 20 62 L17 27 Z" fill="url(#${id})"/>`
+      + `<path d="M50 16 L83 27 L81 48 Q50 38 19 48 L17 27 Z" fill="#fff" fill-opacity=".18"/>${gem}${txt}${stars}${crown}</svg>`;
+  }
+  // a ranked result: points with the reasons, shields, streak, promotion, rank road rewards. Returns what the end screen shows
+  function rankMatch(M, L, oppRp, res, gd, w) {
+    const me = rpOf(M, L), k0 = rankOf(me), diff = Math.max(-10, Math.min(10, Math.round((oppRp - me) / 25)));
+    const parts = []; let ws = M['ws' + L] | 0;
+    if (res === 1) {
+      ws++; parts.push(['Sejr', 25]);
+      if (diff) parts.push([diff > 0 ? 'Stærkere modstander' : 'Svagere modstander', diff]);
+      if (ws >= 2) parts.push([`${ws} sejre i træk`, Math.min(15, 5 * (ws - 1))]);
+      if (gd >= 3) parts.push(['Stor sejr', 3]);
+    } else if (res === 0.5) {
+      ws = 0; parts.push(['Uafgjort', 5]); if (diff > 0) parts.push(['Stærkere modstander', Math.ceil(diff / 2)]);
+    } else {
+      ws = 0; parts.push(['Nederlag', -18]); if (diff) parts.push([diff > 0 ? 'Stærkere modstander' : 'Svagere modstander', Math.round(diff / 2)]);
+      const sum = parts.reduce((a, q) => a + q[1], 0);
+      if (k0.t === 0) parts.push(['Bronze: kun halvt tab', -Math.round(sum / 2)]); else if (k0.t === 1) parts.push(['Sølv: kun trekvart tab', -Math.round(sum / 4)]);
+    }
+    if (w !== 1) { const sum = parts.reduce((a, q) => a + q[1], 0); parts.push(['Venskabskamp: halve point', -Math.trunc(sum / 2)]); }
+    let rp = Math.max(0, me + parts.reduce((a, q) => a + q[1], 0)), shield = false, sh = M['sh' + L] | 0;
+    if (rp < k0.floor && k0.t > 0 && sh > 0) { sh--; shield = true; rp = k0.floor; }
+    const k1 = rankOf(rp);
+    if (k1.t > k0.t) sh = SHIELDS;
+    const out = { L, k0, k1, delta: rp - me, parts, shield, sh, ws, rw: [], up: k1.step > k0.step, down: k1.step < k0.step, tierUp: k1.t > k0.t };
+    let rr = M['rr' + L]; if (rr === undefined) rr = k0.step;
+    for (let st = rr + 1; st <= k1.step; st++) { const rw = roadReward(st); out.rw.push(`${stepName(st)}: ${roadTxt(rw)}`); if (rw.c) addCoins(rw.c, 'rang'); else { const S = passLoad(); S.free.push(rw.pk); passSave(S); } }
+    M['rr' + L] = Math.max(rr, k1.step); M['rp' + L] = rp; M['sh' + L] = sh; M['ws' + L] = ws; M['bs' + L] = Math.max(M['bs' + L] | 0, k1.step);
+    if (!M.sm) M.sm = monthKey();
+    return out;
   }
   const monthKey = () => today().slice(0, 7);
   const MONTHS = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december'];
   const daysLeftInMonth = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate() - n.getDate() + 1; };
+  const seasonPay = st => { const t = Math.min(5, Math.floor(st / 3)); return { c: TIERS[t][3], pk: t >= 4 ? 2 : t >= 2 ? 1 : -1 }; };
   function rankSeason() { // returns a message when a new season started (with the reward for the last one)
     const M = loadMe(), mk = monthKey();
     if (M.sm === mk) return '';
     let msg = '';
-    if (M.sm && (M.w + M.d + M.l) > 0) {
-      const b = Math.max(M.bi | 0, rankOf(M.r).i), coins = RANKS[b][3];
-      addCoins(coins, 'sæson');
-      msg = `Online-sæsonen er slut. Du nåede ${RANKS[b][0]} og får ${coins} mønter. Ny sæson: din rating er rykket lidt mod midten, så kæmp dig op igen.`;
-      M.r = Math.round(1000 + (M.r - 1000) * 0.5);
+    for (const [L, nm, played] of [['', '7 mod 7', (M.w + M.d + M.l) > 0 || M.rp !== undefined], ['11', '11 mod 11', !!M.n11 || M.rp11 !== undefined]]) {
+      if (!M.sm || !played) continue;
+      const best = Math.max(M['bs' + L] | 0, rankOf(rpOf(M, L)).step), pay = seasonPay(best);
+      addCoins(pay.c, 'sæson'); if (pay.pk >= 0) { const S = passLoad(); S.free.push(pay.pk); passSave(S); }
+      msg += `${nm}: du nåede ${stepName(best)} og får ${pay.c} mønter` + (pay.pk >= 0 ? ` og en ${roadTxt({ pk: pay.pk }).toLowerCase()}. ` : '. ');
+      const t = rankOf(rpOf(M, L)).t; M['rp' + L] = t >= 1 ? (t - 1) * 3 * DIV_RP : 0; // a new season starts you one rank lower
+      M['sh' + L] = 0; M['ws' + L] = 0; M['rr' + L] = rankOf(M['rp' + L]).step; M['bs' + L] = M['rr' + L];
     }
-    if (M.sm && M.n11) {
-      const b = Math.max(M.bi11 | 0, rankOf(M.r11 || 1000).i), coins = RANKS[b][3];
-      addCoins(coins, 'sæson'); msg += ` I 11 mod 11 nåede du ${RANKS[b][0]}: ${coins} mønter mere.`;
-      M.r11 = Math.round(1000 + ((M.r11 || 1000) - 1000) * 0.5);
-    }
-    M.sm = mk; M.bi = rankOf(M.r).i; M.bi11 = rankOf(M.r11 || 1000).i; saveMe(M);
+    if (msg) msg = 'Sidste måneds rangsæson er slut. ' + msg + 'Den nye sæson starter dig en rang lavere, så kæmp dig op igen.';
+    M.sm = mk; saveMe(M);
     return msg;
   }
 
@@ -1316,13 +1485,14 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     try { localStorage.setItem('mf-login', JSON.stringify({ d, n })); } catch (_) {}
     if (r === 'pk') { const S = passLoad(); S.free.push(1); passSave(S); } else addCoins(r, 'login');
     passXP(40);
-    return { n, r };
+    return { n, r, first: !L };
   }
   const loginStreak = () => { try { const L = JSON.parse(localStorage.getItem('mf-login') || 'null'); return L && L.d === today() ? L.n : 0; } catch (_) { return 0; } };
   let giftQ = [];
   function giftNext() {
     const g = giftQ.shift(); if (!g) { $('giftOv').hidden = true; return; }
-    $('giftT').textContent = g.t; $('giftP').textContent = g.p;
+    $('giftT').textContent = g.t; $('giftP').textContent = g.p; $('giftName').hidden = !g.ask; $('giftOk').textContent = g.ask ? 'Videre' : 'Fedt';
+    if (g.ask) setTimeout(() => { try { $('giftName').focus(); } catch (_) {} }, 300);
     const box = $('giftDays'); box.textContent = ''; box.hidden = !g.days;
     if (g.days) for (let i = 0; i < 7; i++) {
       const dd = document.createElement('div'), cyc = (g.days - 1) % 7, r = LOGIN[i];
@@ -1331,11 +1501,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     }
     $('giftOv').hidden = false; sfx.win();
   }
-  $('giftOk').onclick = giftNext;
+  $('giftOk').onclick = () => { if (!$('giftName').hidden) { const n = cleanName($('giftName').value); if (n) { cfg.name = n; $('name').value = n; saveCfg(); } $('giftName').hidden = true; } giftNext(); };
   function homeGifts() { // the first time the menu is shown today
     const s = rankSeason(); if (s) giftQ.push({ t: 'Ny online-sæson', p: s });
     const L = loginCheck();
-    if (L) giftQ.push({ t: L.n > 1 ? `${L.n} dage i træk!` : 'Velkommen tilbage!', p: (L.r === 'pk' ? 'Dagens belønning: en gratis Sølvpakke.' : `Dagens belønning: ${L.r} mønter.`) + ' Kom igen i morgen, så bliver den større. Dag 7 giver en pakke.', days: L.n });
+    if (L && L.first && !cfg.name) giftQ.push({ t: 'Velkommen!', p: 'Hvad skal du hedde? Dit navn står på dine spillere og ses af dem, du spiller med online. Du kan altid ændre det under Indstillinger.', ask: true });
+    if (L) giftQ.push({ t: L.n > 1 ? `${L.n} dage i træk!` : L.first ? 'Din første belønning' : 'Velkommen tilbage!', p: (L.r === 'pk' ? 'Dagens belønning: en gratis Sølvpakke.' : `Dagens belønning: ${L.r} mønter.`) + ' Kom igen i morgen, så bliver den større. Dag 7 giver en pakke.', days: L.n });
     if (giftQ.length && $('giftOv').hidden) giftNext();
     paintProg();
   }
@@ -1343,12 +1514,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // the strip on the home page and the overlay behind it
   function paintProg() {
     const el = $('homeProg'); if (!el) return;
-    const M = loadMe(), rk = rankOf(M.r), S = passLoad(), st = loginStreak();
-    $('hpRank').textContent = rk.n.slice(0, 3).toUpperCase(); $('hpRank').style.setProperty('--rk', rk.c);
+    const M = loadMe(), S = passLoad(), st = loginStreak();
+    const L = rpOf(M, '11') > rpOf(M, '') ? '11' : '', rk = rankOf(rpOf(M, L));
+    $('hpRank').innerHTML = badgeSVG(rk); $('hpRankN').textContent = rk.n; $('hpRankP').textContent = (rk.t === 5 ? `${rk.inDiv} RP` : `${rk.inDiv}/100 RP`) + ` · ${L ? 11 : 7} mod ${L ? 11 : 7}`;
     $('hpPass').textContent = `Sæsonpas ${S.t}/${PASS_N}` + (S.free.length ? ` · ${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} at åbne` : '');
     $('hpBar').style.width = (S.t >= PASS_N ? 100 : (S.xp - S.t * PASS_XP) / PASS_XP * 100) + '%';
     hubPaint();
-    $('hpStreak').textContent = st > 1 ? `${st} dage i træk` : `Rating ${Math.round(M.r)}`;
+    $('hpStreak').textContent = st > 1 ? `🔥 ${st} dage` : '';
   }
   function hubPaint() { // live subtitles on the front page tiles
     try {
@@ -1356,7 +1528,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Byt spillere med et tryk`;
       $('freeSub').textContent = S.free.length ? `${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} klar til at blive åbnet!` : 'Fra sæsonpasset og daglige belønninger';
       $('goFree').classList.toggle('hot', !!S.free.length);
-      $('passSub').textContent = `Niveau ${S.t}/${PASS_N} · ${rankOf(M.r).n} i 7 mod 7 · ${rankOf(M.r11 || 1000).n} i 11 mod 11`;
+      $('passSub').textContent = `Niveau ${S.t} af ${PASS_N} · ${S.t >= PASS_N ? 'fuldført' : `${(S.t + 1) * PASS_XP - S.xp} XP til næste`} · nyt pas om ${daysLeftInMonth()} dage`;
+      const k7 = rankOf(rpOf(M, '')), k11 = rankOf(rpOf(M, '11')), kb = k11.step > k7.step ? k11 : k7;
+      $('rankIc').innerHTML = badgeSVG(kb);
+      $('rankSub').textContent = `${k7.n} i 7 mod 7 · ${k11.n} i 11 mod 11. Se rangvejen og hvordan du stiger`;
+      $('onlSub').textContent = `${k7.n} i 7 mod 7 · ${k11.n} i 11 mod 11. Eller spil med venner via kode`;
       const dseen = (() => { try { return localStorage.getItem('mf-dseen') === today(); } catch (_) { return true; } })();
       const dot = (t, on) => { const b = document.querySelector(`#tabbar [data-t="${t}"]`); if (b) b.classList.toggle('dot', !!on); };
       dot('butik', S.free.length); dot('saeson', !dseen); $('goFree').classList.toggle('dot', !!S.free.length); $('bDaily').classList.toggle('dot', !dseen);
@@ -1364,15 +1540,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     } catch (_) {}
   }
   function passShow() {
-    const M = loadMe(), rk = rankOf(M.r), S = passLoad(), mi = new Date().getMonth();
-    $('pvTitle').textContent = `Sæson ${MONTHS[mi]}`;
-    for (const [L, r, bi, nm] of [['', M.r, M.bi, '7 mod 7'], ['11', M.r11 || 1000, M.bi11, '11 mod 11']]) {
-      const k = rankOf(r);
-      $('pvBadge' + L).textContent = k.n.slice(0, 3).toUpperCase(); $('pvBadge' + L).style.setProperty('--rk', k.c);
-      $('pvRank' + L).textContent = `${nm}: ${k.n} · ${Math.round(r)}`;
-      $('pvRankTxt' + L).textContent = (k.next ? `${k.next - Math.round(r)} til ${k.nn}. ` : 'Højeste division! ') + `Sæsonen giver ${RANKS[Math.max(bi | 0, k.i)][3]} mønter om ${daysLeftInMonth()} dage.`;
-      $('pvRankBar' + L).style.width = k.p * 100 + '%';
-    }
+    const S = passLoad(), mi = new Date().getMonth();
+    $('pvTitle').textContent = `Sæsonpas ${MONTHS[mi]}`;
     $('pvLv').textContent = S.t;
     $('pvPass').textContent = `Sæsonpas niveau ${S.t} af ${PASS_N}`;
     $('pvPassTxt').textContent = S.t >= PASS_N ? 'Fuldført! Et nyt pas starter næste måned.' : `${(S.t + 1) * PASS_XP - S.xp} XP til næste niveau. Nyt pas om ${daysLeftInMonth()} dage.`;
@@ -1386,7 +1555,6 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('pvHow').textContent = 'XP: hver kamp giver 50, plus mål og sejr. Online giver halvanden gang så meget, rangerede kampe dobbelt. Dagens udfordringer og at komme hver dag giver ekstra.';
     $('pvOpen').hidden = !S.free.length;
     $('pvOpen').textContent = `Åbn gratis ${['Bronze', 'Sølv', 'Guld'][S.free[0] | 0].toLowerCase()}pakke` + (S.free.length > 1 ? ` (${S.free.length})` : '');
-    $('pvQuick').hidden = !(room && room.peer);
     $('passOv').hidden = false;
   }
   $('homeProg').onclick = passShow;
@@ -1396,7 +1564,70 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const k = S.free.shift(); passSave(S);
     const [n, , lo, hi] = PACKS[k]; showCard(makeCard(lo, hi), n, passShow);
   };
-  $('pvQuick').onclick = () => { $('passOv').hidden = true; page('pgOnline'); };
+  $('pvQuick').onclick = () => { $('passOv').hidden = true; page('pgHome'); hubShow('spil'); };
+  // ----- the rank screen -----
+  let rkRoadL = '';
+  function rankShow() {
+    const M = loadMe(), box = $('rkMine'); box.textContent = '';
+    $('rkSeason').textContent = `Sæsonen slutter om ${daysLeftInMonth()} dage`;
+    for (const [L, nm] of [['', '7 mod 7'], ['11', '11 mod 11']]) {
+      const rp = rpOf(M, L), k = rankOf(rp), sh = M['sh' + L] | 0, ws = M['ws' + L] | 0, best = Math.max(M['bs' + L] | 0, k.step), pay = seasonPay(best);
+      const c = document.createElement('div'); c.className = 'rkcard'; c.style.setProperty('--rk', k.c);
+      const meta = [k.t > 0 ? `Skjold: ${sh ? '🛡'.repeat(sh) : 'ingen'}` : 'Bronze: du kan ikke rykke ned', ws >= 2 ? `🔥 ${ws} sejre i træk` : '', `Bedst i sæsonen: ${stepName(best)}, giver ${pay.c} mønter${pay.pk >= 0 ? ' og en pakke' : ''}`].filter(Boolean).join(' · ');
+      c.innerHTML = badgeSVG(k) + `<div class="rki"><small>${nm}</small><b>${k.n}</b><i class="pbar"><b style="width:${k.p * 100}%"></b></i><span>${k.t === 5 ? `${k.inDiv} RP i Legende` : `${k.inDiv}/100 RP · ${k.need} til ${k.nn}`}</span><span class="rkmeta">${meta}</span><button class="go">Find modstander · ${nm}</button></div>`;
+      c.querySelector('button').onclick = () => { $('rankOv').hidden = true; page('pgOnline'); };
+      box.appendChild(c);
+    }
+    roadPaint();
+    $('rankOv').hidden = false;
+    subTabs($('rankOv'), [['Min rang', ['rkMine']], ['Rangvej', ['rkRoad']], ['Sådan virker det', ['rkHow']]], 'rank', $('rkMine'));
+    const rb = $('rankOv').querySelectorAll('.tabbar.sub button')[1]; if (rb && !rb.dataset.hk) { rb.dataset.hk = 1; rb.addEventListener('click', () => requestAnimationFrame(roadPaint)); }
+    requestAnimationFrame(roadPaint);
+  }
+  function roadPaint() {
+    const M = loadMe(), L = rkRoadL, k = rankOf(rpOf(M, L)), rr = M['rr' + L] === undefined ? k.step : M['rr' + L], row = $('rkRoadRow'); row.textContent = '';
+    for (const b of $('rkRoadSeg').children) b.setAttribute('aria-pressed', String(b.dataset.l === L));
+    let now = null;
+    for (let st = 0; st <= 15; st++) {
+      const d = document.createElement('div'), kk = rankOf(st * DIV_RP), rw = st ? roadReward(st) : null;
+      d.className = 'rs' + (st === k.step ? ' now' : st <= rr ? ' got' : '') + (rw && rw.pk !== undefined ? ' pk' : '');
+      d.innerHTML = badgeSVG(kk) + `<b>${kk.n}</b><span>${st * DIV_RP} RP</span><span class="rw">${rw ? roadTxt(rw) : 'Start'}</span>`;
+      row.appendChild(d); if (st === k.step) now = d;
+    }
+    if (now) requestAnimationFrame(() => { row.scrollLeft = Math.max(0, now.offsetLeft - row.clientWidth / 2 + now.clientWidth / 2); });
+  }
+  for (const b of $('rkRoadSeg').children) b.onclick = () => { rkRoadL = b.dataset.l; roadPaint(); };
+  $('rankClose').onclick = () => { $('rankOv').hidden = true; paintProg(); };
+  $('homeRank').onclick = rankShow; $('goRank').onclick = rankShow;
+  document.querySelectorAll('.qrk').forEach(b => b.onclick = () => { rkRoadL = b.dataset.rl; subTab.rank = 'Min rang'; rankShow(); });
+  function qrkPaint() { const M = loadMe(); document.querySelectorAll('.qrk').forEach(b => { const k = rankOf(rpOf(M, b.dataset.rl)); b.innerHTML = badgeSVG(k) + `<span>${k.n} · ${k.t === 5 ? k.inDiv + ' RP' : k.inDiv + '/100 RP'}</span>`; }); }
+  // after a ranked match: the panel on the end screen, then the big show when you went up (or a quiet one when you went down)
+  function endRankShow(R) {
+    const box = $('endRank'); if (!R) { box.hidden = true; return; }
+    box.hidden = false; box.style.setProperty('--rk', R.k0.c);
+    $('erBadge').innerHTML = badgeSVG(R.k0); $('erName').textContent = R.k0.n;
+    const d = $('erDelta'); d.textContent = (R.delta >= 0 ? '+' : '') + R.delta + ' RP'; d.className = R.delta > 0 ? 'up' : R.delta < 0 ? 'dn' : '';
+    const pts = $('erParts'); pts.textContent = '';
+    for (const [t, v] of R.parts) { if (!v) continue; const sp = document.createElement('span'); sp.className = v > 0 ? 'p' : 'm'; sp.textContent = t; const i = document.createElement('i'); i.textContent = (v > 0 ? '+' : '') + v; sp.appendChild(i); pts.appendChild(sp); }
+    const note = [R.shield ? `🛡 Et skjold reddede dig. ${R.sh} tilbage` : '', R.up ? `Rykket op til ${R.k1.n}!` : R.down ? `Rykket ned til ${R.k1.n}` : R.k1.t === 5 ? `${R.k1.inDiv} RP i Legende` : `${R.k1.need} RP til ${R.k1.nn}`, ...R.rw.map(x => 'Rangvej: ' + x)].filter(Boolean).join(' · ');
+    $('erNote').textContent = note;
+    const bar = $('erBar'); bar.style.transition = 'none'; bar.style.width = R.k0.p * 100 + '%'; void bar.offsetWidth; bar.style.transition = '';
+    setTimeout(() => {
+      if (R.up) bar.style.width = '100%'; else if (R.down) bar.style.width = '0%'; else bar.style.width = R.k1.p * 100 + '%';
+      if (R.up || R.down) setTimeout(() => { box.style.setProperty('--rk', R.k1.c); $('erBadge').innerHTML = badgeSVG(R.k1); $('erName').textContent = R.k1.n; bar.style.transition = 'none'; bar.style.width = (R.up ? 0 : 100) + '%'; void bar.offsetWidth; bar.style.transition = ''; bar.style.width = R.k1.p * 100 + '%'; rankFx(R); }, 1000);
+    }, 500);
+  }
+  function rankFx(R) {
+    const fx = $('rkFx'); fx.classList.toggle('down', R.down); fx.style.setProperty('--fx', R.k1.c);
+    $('rkFxT').textContent = R.down ? 'Rykket ned' : R.tierUp ? 'Ny rang' : 'Rykket op';
+    $('rkFxN').textContent = R.k1.n;
+    $('rkFxR').textContent = R.down ? (R.k1.t < R.k0.t ? 'Du får 3 skjold, når du når rangen igen' : 'Vind et par kampe, så er du tilbage') : [R.tierUp ? '3 skjold mod nedrykning' : '', ...R.rw.map(x => x.split(': ')[1])].filter(Boolean).join(' · ');
+    const b = $('rkFxB'); b.className = 'rkfxb'; b.innerHTML = badgeSVG(R.k0);
+    const conf = $('rkConf'); conf.textContent = '';
+    fx.hidden = false; buzz && buzz(R.down ? [40] : [30, 40, 60]);
+    setTimeout(() => { b.innerHTML = badgeSVG(R.k1); b.className = 'rkfxb swap'; if (!R.down) { sfx.win(); for (let i = 0; i < 40; i++) { const c = document.createElement('i'); c.style.left = Math.random() * 100 + '%'; c.style.background = [R.k1.c, '#fff', '#ffd447'][i % 3]; c.style.animationDuration = 1.6 + Math.random() * 1.8 + 's'; c.style.animationDelay = Math.random() * 0.6 + 's'; conf.appendChild(c); } } }, 650);
+  }
+  $('rkFx').onclick = () => { $('rkFx').hidden = true; };
   // per-second rates for AI decisions
   const DIFF = [
   // iq (0..1) is how clever the choices are: where to shoot, who to pass to, when to slide in, cutting off passes
@@ -2204,19 +2435,24 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     afterMatch(win, me, ss);
     $('hlRow').hidden = !hlClips.length; hlOutShow(false);
     $('hlBtn').textContent = `Se målene (${hlClips.length})`;
-    const lines = [];
+    const lines = []; lastRank = null; endRankShow(null);
     if (me !== null && me !== undefined) {
       const online = mode === 'host' || mode === 'guest';
       if (kind !== 'train' && kind !== 'pen' && kind !== 'test') dailyEvent('match', { win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], mode, diff: matchDiff(), size, online });
       if (kind !== 'train' && kind !== 'pen' && kind !== 'test' && mode !== 'two') for (const l of evMatch({ win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], diff: matchDiff() })) lines.push(l);
-      if (online) { const o = onlineSides(me); const r = rateOnline(o.opps, win === me ? 1 : win < 0 ? 0.5 : 0, score[me]); if (r) lines.push(r); }
+      if (online) { const o = onlineSides(me); rateOnline(o.opps, win === me ? 1 : win < 0 ? 0.5 : 0, score[me], score[me] - score[1 - me]); endRankShow(lastRank); }
       if (kind !== 'train' && kind !== 'test') { const x = kind === 'pen' ? 30 : matchXP(win === me, win < 0, score[me], online); lines.push(`+${x} XP i sæsonpasset`); for (const l of passXP(x)) lines.push(l); }
     } else if (mode === 'two' && kind !== 'train' && kind !== 'test') for (const l of passXP(40)) lines.push(l);
     for (const c of chWon) lines.push('Udfordring klaret: ' + c);
     if (kind !== 'train' && kind !== 'test') for (const l of seriesAfter(win, me)) lines.push(l);
-    $('endCh').textContent = lines.join('\n'); $('endCh').hidden = !lines.length;
+    endLines(lines);
     $('end').hidden = false;
     sfx.whistle(3);
+  }
+  function endLines(lines) {
+    const ul = $('endCh'); ul.textContent = '';
+    for (const l of lines) { const li = document.createElement('li'); li.textContent = l; li.className = /^Sæsonpas|XP/.test(l) ? 'pas' : /^Event/.test(l) ? 'ev' : /^Udfordring/.test(l) ? 'ch' : ''; ul.appendChild(li); }
+    ul.hidden = !lines.length;
   }
   // a series (best of 3 / 5) and the all-time score between the two of you, kept on this phone ('mf-h2h')
   let series = null, serG = null; // serG: what a guest phone was told by the host
@@ -2256,7 +2492,24 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('again').textContent = comp ? (y ? `Næste kamp (${x}/${y} klar) ›` : 'Næste kamp ›') : y ? `Revanche (${x}/${y} klar)` : 'Spil igen';
   }
   $('ready').onclick = () => { gRd = seenMatch; sendG(); $('ready').disabled = true; $('ready').textContent = 'Du er klar'; };
-  function setPaused(v) { paused = v; $('paused').hidden = !v; clearInput(); if (v) subsPaint(); }
+  function setPaused(v) {
+    paused = v; $('paused').hidden = !v; clearInput(); quitAsk = 0; $('quit').textContent = 'Afslut kamp';
+    if (!v) return;
+    subsPaint();
+    const m = Math.max(0, Math.ceil(clock || 0)), mm = Math.floor(m / 60), ss = String(m % 60).padStart(2, '0');
+    $('pScore').innerHTML = ''; const a = document.createElement('span'); a.textContent = tn(0); a.style.color = col.home; const b = document.createElement('b'); b.textContent = `${score[0]} – ${score[1]}`; const c = document.createElement('span'); c.textContent = tn(1); c.style.color = col.away; const t = document.createElement('small'); t.textContent = `${mm}:${ss} tilbage`;
+    $('pScore').append(a, b, c, t);
+    $('paused').querySelector('.pgrid').classList.toggle('one', $('subs').hidden);
+  }
+  let quitAsk = 0;
+  { const box = $('pQuick'); // the settings you might want in the middle of a match
+    for (const [key, name, labels] of [['crowd', 'Lyd', ['Fra', 'Til']], ['cam', 'Kamera', ['Normal', 'Tæt', 'Vid']], ['aim', 'Sigtelinje', ['Fra', 'Til']]]) {
+      const c = document.createElement('div'), l = document.createElement('div'), sg = document.createElement('div'); l.className = 'lbl'; l.textContent = name; sg.className = 'seg'; c.append(l, sg); box.appendChild(c);
+      if (labels.length > 2) mkSeg(sg, [0, 1, 2], labels, () => cfg[key] | 0, v => { cfg[key] = v; saveCfg(); segPaints.forEach(f => f()); });
+      else mkSeg(sg, [0, 1], labels, () => (key === 'aim' ? cfg[key] !== false : !!cfg[key]) ? 1 : 0, v => { cfg[key] = !!v; saveCfg(); if (key === 'crowd' && !v) { try { speechSynthesis.cancel(); } catch (_) {} } segPaints.forEach(f => f()); });
+    }
+  }
+  $('pHelp').onclick = () => { $('help').hidden = false; };
   function subsPaint() { // the pause menu: your players, how fresh they are, and SKIFT to bring a man on from the bench
     const box = $('subs'), ok = mode === 'cpu' && !coopTwo && size >= 3 && kind !== 'train' && state === 'play';
     box.hidden = !ok; if (!ok) return;
@@ -2282,7 +2535,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   });
   $('pauseBtn').onclick = () => setPaused(true);
   $('resume').onclick = () => setPaused(false);
-  $('quit').onclick = () => { setPaused(false); toMenu(); };
+  $('quit').onclick = () => { if (performance.now() - quitAsk > 2500) { quitAsk = performance.now(); $('quit').textContent = 'Tryk igen for at afslutte'; return; } setPaused(false); toMenu(); };
   $('bCpu').onclick = () => showSetup('cpu');
   $('bTwo').onclick = () => showSetup('two');
   function skipReplay() { replay = null; if (mode !== 'guest' && banner === 'MÅL!') pause = Math.min(pause, 0.3); }
@@ -2339,8 +2592,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const press = (...ids) => { for (const id of ids) { const b = $(id); if (b && !b.hidden && b.offsetParent) { b.click(); return true; } } return false; };
     if (typing()) { document.activeElement.blur(); return true; }
     // the overlays from the top down (later in the page lies on top)
-    const OV = [['giftOv', 'giftOk'], ['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['passOv', 'passClose'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
+    const OV = [['giftOv', 'giftOk'], ['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['passOv', 'passClose'], ['rankOv', 'rankClose'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
       ['help', 'helpOk'], ['myteam', 'mtClose'], ['lobby', 'cancel'], ['season', 'seasonClose'], ['shop', 'shopClose'], ['prof', 'profClose']];
+    if (!$('rkFx').hidden) { $('rkFx').hidden = true; return true; }
     if (state === 'hl') return press('hlClose') || true;
     for (const [ov, ...bs] of OV) if (shown(ov)) { if (!press(...bs)) $(ov).hidden = true; return true; }
     if (state === 'play') {
@@ -4046,7 +4300,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         hlOutShow(true, can);
       };
       r.start(500); hlRecorder = r;
-    } catch (_) { hlRecorder = null; $('endCh').hidden = false; $('endCh').textContent = 'Telefonen kan ikke optage video her, men du kan stadig se højdepunkterne.'; }
+    } catch (_) { hlRecorder = null; endLines(['Telefonen kan ikke optage video her, men du kan stadig se højdepunkterne.']); }
   }
   function hlOutShow(on, can) { $('hlRec').hidden = on || !(window.MediaRecorder && cv.captureStream); $('hlShare').hidden = !on || !can; $('hlSave').hidden = !on; }
   function hlRecStop(cancel) { const r = hlRecorder; hlRecorder = null; if (!r) return; r.cancelled = !!cancel; try { r.stop(); } catch (_) {} }
@@ -4068,7 +4322,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const box = $('cupNames'); box.textContent = '';
     for (let i = 0; i < 8; i++) { const inp = document.createElement('input'); inp.className = 'namein'; inp.maxLength = 12; inp.placeholder = 'Navn ' + (i + 1); box.appendChild(inp); }
     $('bCup').onclick = cupShow;
-    $('cupClose').onclick = $('cupClose1').onclick = () => { $('cup').hidden = true; };
+    $('cupClose').onclick = $('cupClose1').onclick = $('cupBack').onclick = () => { $('cup').hidden = true; };
     $('cupReset').onclick = () => { if ($('cupReset').dataset.sure) { try { localStorage.removeItem('mf-cup'); } catch (_) {} cupShow(); } else { $('cupReset').dataset.sure = '1'; $('cupReset').textContent = 'Tryk igen for at slette'; } };
     $('cupStart').onclick = () => {
       const n = [...new Set([...$('cupNames').querySelectorAll('input')].map(i => cleanName(i.value)).filter(Boolean))];
@@ -4291,7 +4545,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (me === 0 || me === 1) { // experience: the team levels up and the club pays a bonus
       const gf = score[me], won = win === me;
       pr.xp = (pr.xp || 0) + 20 + gf * 5 + (won ? 25 : 0); pr.lvl = pr.lvl || 1;
-      while (pr.xp >= pr.lvl * 100) { pr.xp -= pr.lvl * 100; pr.lvl++; coins += 40 * pr.lvl; extra = (extra ? extra + ' · ' : '') + `Holdniveau ${pr.lvl}!`; }
+      while (pr.xp >= pr.lvl * 100) { pr.xp -= pr.lvl * 100; pr.lvl++; coins += 40 * pr.lvl; extra = (extra ? extra + ' · ' : '') + `Klubniveau ${pr.lvl}!`; }
     }
     pr.coins += coins; saveProf(pr);
     let tp = 0;
@@ -5214,8 +5468,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const pr = loadProf();
     $('profName').textContent = cfg.name || 'Din profil';
     const box = $('profStats'); box.textContent = '';
-    [['Kampe', pr.games], ['Sejre', pr.w], ['Uafgjort', pr.d], ['Nederlag', pr.l], ['Mål scoret', pr.gf], ['Mål imod', pr.ga],
-     ['Holdniveau', `${pr.lvl || 1} (${pr.xp || 0}/${(pr.lvl || 1) * 100} xp)`], ['Største sejr', pr.bigWin ? '+' + pr.bigWin : '–'], ['Flest sejre i træk', pr.bestStreak], ['Sæsoner vundet', pr.seasons], ['Straffe­konkurrencer vundet', pr.shootouts]]
+    const M = loadMe();
+    [['Rang 7 mod 7', rankOf(rpOf(M, '')).n], ['Rang 11 mod 11', rankOf(rpOf(M, '11')).n], ['Kampe', pr.games], ['Sejre', pr.w], ['Uafgjort', pr.d], ['Nederlag', pr.l], ['Mål scoret', pr.gf], ['Mål imod', pr.ga],
+     ['Klubniveau', `${pr.lvl || 1} (${pr.xp || 0}/${(pr.lvl || 1) * 100})`], ['Største sejr', pr.bigWin ? '+' + pr.bigWin : '–'], ['Flest sejre i træk', pr.bestStreak], ['Sæsoner vundet', pr.seasons], ['Straffe­konkurrencer vundet', pr.shootouts]]
       .forEach(([k, v]) => { const d = document.createElement('div'); const b = document.createElement('b'); b.textContent = v; d.append(b, k); box.appendChild(d); });
     const tb = $('profTro'); tb.textContent = '';
     let n = 0;
@@ -5226,7 +5481,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       tb.appendChild(d);
     }
     $('troLbl').textContent = `Trofæer (${n} af ${TRO.length}) · 50 mønter for hvert nyt`;
-    subTabs($('prof'), [['Statistik', ['profStatCol']], [`Trofæer ${n}/${TRO.length}`, ['profTroCol']]], 'prof');
+    subTabs($('prof'), [['Statistik', ['profStatCol']], ['Trofæer', ['profTroCol']]], 'prof', $('prof').querySelector('.profgrid'));
     paintCoins(pr);
     $('prof').hidden = false;
   }
@@ -5306,7 +5561,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     BALLS.forEach((x, i) => row(B, 'ball:' + i, x.n, x.p, x.c, cfg.ball === i, () => { cfg.ball = i; saveCfg(); }));
     PITCHES.forEach((x, i) => row(Pp, 'pitch:' + i, x.n, x.p, x.a, cfg.pitch === i, () => { cfg.pitch = i; saveCfg(); pitchLook(); }));
     paintCoins(pr);
-    subTabs($('shop'), [['Pakker', ['shopPk']], ['Træning', ['shopTr']], ['Hold', ['shopTm']], ['Bolde', ['shopBl']], ['Baner', ['shopPi']]], 'shop');
+    subTabs($('shop'), [['Pakker', ['shopPk']], ['Træning', ['shopTr']], ['Hold', ['shopTm']], ['Bolde', ['shopBl']], ['Baner', ['shopPi']]], 'shop', $('shop').querySelector('.shopgrid'));
     $('shop').hidden = false;
   }
   function pitchLook() { const x = PITCHES[cfg.pitch] || PITCHES[0]; col.a = x.a; col.b = x.b; }
@@ -5667,8 +5922,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('setupMine').onclick = () => mtShow(cfg.size, 'lay');
     $('lobbyMine').onclick = () => mtShow(mode === 'host' ? size : lobbySize);
     $('goTac').onclick = () => mtShow(cfg.size, 'tac');
-    $('goPass').onclick = passShow; $('goEvent').onclick = () => { squadShow(); $('evBox').scrollIntoView({ block: 'nearest' }); }; $('goLeague').onclick = showLeague;
-    $('goFree').onclick = () => { if (passLoad().free.length) $('pvOpen').onclick(); else toast('Ingen gratis pakker lige nu. Spil kampe for at stige i sæsonpasset.'); };
+    $('goPass').onclick = passShow; $('goEvent').onclick = () => { subTab.daily = 'Ugens event'; showDaily(); }; $('goLeague').onclick = showLeague;
+    $('goFree').onclick = () => { if (passLoad().free.length) $('pvOpen').onclick(); else { passShow(); toast('Ingen gratis pakker lige nu. Sæsonpasset, rangvejen og dag 7 i træk giver pakker.'); } };
     $('goShop').onclick = shopShow; $('shopClose').onclick = () => { $('shop').hidden = true; paintTeamPickers(); };
     // sound: unlock audio on the first tap, soft click on menu buttons
     $('wrap').addEventListener('click', e => {
@@ -6840,7 +7095,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st) }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
