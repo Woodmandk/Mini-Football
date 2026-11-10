@@ -168,7 +168,7 @@ button.packtile::after { content: ""; position: absolute; inset: -40% -60%; back
 .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: rgba(0,0,0,0.35); border-radius: 12px; padding: 4px; }
 .tabbar button { padding: 9px 2px; font-size: 13px; background: transparent; border-color: transparent; color: var(--muted); box-shadow: none; }
 .tabbar button[aria-pressed="true"] { background: var(--chalk); color: var(--night); }
-#wrap.n560 .tabp { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: 1fr 1fr; } #wrap.n560 .hubtop .logo, #wrap.n560 .hubtop .namein { display: none; }
+#wrap.n560 .tabp { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: 1fr 1fr; } #wrap.n560 .hubtop .logo, #wrap.n560 .hubtop .namein { display: none; } #wrap.w640 .hubtop .logo { display: none; }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: center; text-align: left; }
 .homeleft { gap: 14px; }
 .homeleft h1 { font-size: clamp(30px, 7vw, 44px); }
@@ -475,6 +475,18 @@ table.st tr.me td { color: var(--gold); }
 #vs .vsm i { display: grid; place-items: center; width: calc(64px * var(--k, 1)); height: calc(64px * var(--k, 1)); margin: 0 auto; border-radius: 50%; background: #0b1510; border: 3px solid var(--gold); color: var(--gold); font-weight: 800; font-size: calc(22px * var(--k, 1)); font-style: italic; box-shadow: 0 6px 24px rgba(0,0,0,.6); }
 #vs .vsinfo { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center; font-size: calc(12px * var(--k, 1)); font-weight: 700; color: #fff; text-shadow: 0 1px 4px #000; letter-spacing: .08em; text-transform: uppercase; opacity: 0; transition: opacity .4s .5s; pointer-events: none; }
 #vs.in .vsinfo { opacity: .9; }
+/* klubmærke */
+.crestbox svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 3px 5px rgba(0,0,0,.45)); }
+#homeClub { display: flex; align-items: center; gap: 8px; min-height: 0; padding: 4px 12px 4px 6px; flex: 0 1 auto; min-width: 0; text-align: left; }
+#homeClub .crestbox { width: 30px; height: 34px; flex: 0 0 auto; } #homeClub b { display: block; font-size: 13px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; } #homeClub small { font-size: 10px; opacity: .75; font-weight: 600; }
+.mtcrest { display: none; gap: 8px; }
+.mtgrid.tab-tac { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); } .mtgrid.tab-tac .mtleft { max-width: none; } .mtgrid.tab-tac .mtcrest { display: flex; }
+.mtgrid.narrow.tab-tac { grid-template-columns: 1fr; }
+.mtcrest .crhead { display: flex; align-items: center; gap: 14px; } .mtcrest .crhead .crestbox { width: 84px; height: 94px; flex: 0 0 auto; }
+.mtcrest .crhead b { font-size: 18px; font-style: italic; text-transform: uppercase; line-height: 1.1; } .mtcrest .crhead small { display: block; font-size: 11px; opacity: .7; font-weight: 500; margin-top: 4px; }
+.mtcrest .seg { padding: 3px; } .mtcrest .seg button { padding: 7px 2px; font-size: 12px; }
+.crsym { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; } .crsym button { min-height: 0; padding: 5px 0; font-size: 17px; } .crsym button[aria-pressed="true"] { border-color: var(--gold); background: rgba(255,212,71,.16); }
+#vs .crestbox { width: calc(84px * var(--k, 1)); height: calc(94px * var(--k, 1)); }
 /* kampens spiller */
 .endhead { display: flex; align-items: center; justify-content: center; gap: 16px; } .endhead h1 { margin: 0; font-size: 30px; } .endhead .final { margin: 0; font-size: 34px; }
 #motm { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 0; padding: 6px 12px; text-align: left; border-color: var(--gold); background: linear-gradient(180deg, rgba(255,212,71,.16), rgba(0,0,0,.25)); }
@@ -523,7 +535,7 @@ button.small { font-size: 13px; padding: 9px 10px; }
 #mtLayTip { max-width: 300px; }
 .mttabs { flex: 0 1 330px; padding: 3px; } .mttabs button { padding: 7px 6px; font-size: 13px; }
 .mtovr { flex: 0 0 auto !important; text-align: right; font-size: 12px; color: var(--muted); white-space: nowrap; } .mtovr b { color: var(--gold); font-size: 16px; }
-.mtgrid.tab-lay, .mtgrid.tab-tac { grid-template-columns: 1fr; }
+.mtgrid.tab-lay { grid-template-columns: 1fr; }
 .mtgrid.tab-lay .mtleft, .mtgrid.tab-tac .mtright { display: none; }
 .mtgrid.tab-tac .mtleft { max-width: 520px; width: 100%; justify-self: center; }
 .mtlay { display: flex; gap: 10px; align-items: stretch; width: 100%; justify-content: center; }
@@ -588,8 +600,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
 <div id="wrap">
   <canvas id="c" aria-label="Fodboldbane"></canvas>
   <div id="vs" hidden>
-    <div class="vss vsa"><div class="crest" id="vsC0"></div><div class="vsn" id="vsN0"></div><div class="vsr" id="vsR0"></div><div class="vsst" id="vsS0"></div></div>
-    <div class="vss vsb"><div class="crest" id="vsC1"></div><div class="vsn" id="vsN1"></div><div class="vsr" id="vsR1"></div><div class="vsst" id="vsS1"></div></div>
+    <div class="vss vsa"><div class="crestbox" id="vsC0"></div><div class="vsn" id="vsN0"></div><div class="vsr" id="vsR0"></div><div class="vsst" id="vsS0"></div></div>
+    <div class="vss vsb"><div class="crestbox" id="vsC1"></div><div class="vsn" id="vsN1"></div><div class="vsr" id="vsR1"></div><div class="vsst" id="vsS1"></div></div>
     <div class="vsm"><i>VS</i></div><div class="vsinfo" id="vsInfo"></div>
   </div>
   <button id="pauseBtn" class="pausebtn" hidden aria-label="Pause">II</button>
@@ -601,7 +613,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
         <div class="logo"><span class="r">Mini</span> <span class="b">Football</span></div>
-        <input id="name" class="namein" maxlength="12" placeholder="Dit navn" autocomplete="off" aria-label="Dit navn">
+        <input id="name" class="namein" maxlength="12" placeholder="Dit navn" autocomplete="off" aria-label="Dit navn" hidden>
+        <button id="homeClub" class="alt" aria-label="Din klub"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">Mit hold</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Din rang"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
         <button id="homeProg" class="alt prog" aria-label="Sæsonpas"><span class="pp"><span id="hpPass">Sæsonpas 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
         <span class="chip"><span class="coins" data-coins>0</span></span>
@@ -997,6 +1010,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <div class="mtrow"><span class="lbl">Aflevering</span><div class="seg" id="mtPt" role="group" aria-label="Afleveringer"></div></div>
           <p id="mtTacTip" class="mttip"></p>
         </div>
+        <div class="col mtcrest">
+          <div class="crhead"><span class="crestbox" id="crPrev"></span><span><b id="crName">Mit hold</b><small>Klubmærket ses før kampen, på forsiden og af dem, du møder online.</small></span></div>
+          <div class="seg" id="crSh" role="group" aria-label="Mærkets form"></div>
+          <div class="seg" id="crPt" role="group" aria-label="Mærkets mønster"></div>
+          <div class="crsym" id="crSy" role="group" aria-label="Mærkets symbol"></div>
+        </div>
         <div class="col mtright" id="mtLay">
           <div class="seg" id="mtSize" role="group" aria-label="Opstilling til holdstørrelse"></div>
           <div class="mtlay"><canvas id="mtCv" aria-label="Opstilling. Tryk på to spillere for at bytte dem, træk for at flytte"></canvas>
@@ -1146,7 +1165,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // ---------- Settings ----------
   const cfg = { size: 7, mins: 3, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, tempo: 1, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
-  if (!cfg.v7) { cfg.v7 = 1; if (cfg.size < 7) cfg.size = 7; } // Daniel: a match should be 7 or 11 a side by default (5 a side is now indoor)
+  if (!cfg.v7) { cfg.v7 = 1; if (cfg.size < 7) cfg.size = 7; }
+  if (!cfg.tv2) { cfg.tv2 = 1; if (cfg.tempo === 2) cfg.tempo = 1; } // the tempo steps moved up one: whoever had Hurtigt keeps that speed, now called Normalt // Daniel: a match should be 7 or 11 a side by default (5 a side is now indoor)
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
   if (![1, 2, 3, 5, 7, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
   function seg(id, key) {
@@ -1580,6 +1600,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function hubPaint() { // live subtitles on the front page tiles
     try {
       const n = cfg.size || 7, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
+      $('hcSub').textContent = `Hold ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'Mit hold');
       $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Byt spillere med et tryk`;
       $('freeSub').textContent = S.free.length ? `${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} klar til at blive åbnet!` : 'Fra sæsonpasset og daglige belønninger';
       $('goFree').classList.toggle('hot', !!S.free.length);
@@ -1750,6 +1771,30 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const TAC0 = { m: 1, pr: 1, w: 1, pt: 1 }; // mentality, pressing, width, passing; 0..2 each, 1 = normal
   const t3 = v => ([0, 1, 2].includes(Number(v)) ? Number(v) : 1);
   const cleanTac = o => { o = o && typeof o === 'object' ? o : {}; return { m: t3(o.m), pr: t3(o.pr), w: t3(o.w), pt: t3(o.pt) }; };
+  // ----- klubmærke: every team has a crest (form, pattern, symbol) in its two colours. Yours is your own choice
+  // (mf-myteam .cr), the other teams get theirs from their name, so it is always the same.
+  const CR_SH = [['Skjold', 'M50 4 L92 15 V58 C92 84 70 100 50 108 C30 100 8 84 8 58 V15 Z'], ['Rund', 'M50 8 A48 48 0 1 1 49.9 8 Z'], ['Vimpel', 'M10 6 H90 V72 L50 108 L10 72 Z'], ['Kant', 'M50 4 L92 28 V82 L50 106 L8 82 V28 Z']];
+  const CR_PT = ['Ren', 'Striber', 'Delt', 'Bånd'];
+  const CR_SY = ['', '⚽', '⭐', '👑', '⚡', '🔥', '⚓', '🦈', '🐂', '🦅', '🐺', '🦁', '🌊', '🌲'];
+  let crN = 0;
+  function crOf(t) {
+    const c = t && t.cr;
+    if (c && typeof c === 'object') return { sh: (c.sh | 0) % CR_SH.length, pt: (c.pt | 0) % CR_PT.length, sy: Math.max(0, c.sy | 0) % CR_SY.length };
+    let h = 5; for (const ch of String((t && t.n) || '')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    return { sh: h % CR_SH.length, pt: (h >>> 4) % CR_PT.length, sy: 0 };
+  }
+  function crestSVG(t) {
+    const okc = v => (/^#[0-9a-f]{6}$/i.test(String(v)) ? v : null), c1 = okc(t && t.c1) || '#2f9d55', c2 = okc(t && t.c2) || '#f4f7f2', c = crOf(t), d = CR_SH[c.sh][1], id = 'crc' + (++crN);
+    const lum = h => { const v = parseInt(h.slice(1), 16); return ((v >> 16) * 299 + ((v >> 8) & 255) * 587 + (v & 255) * 114) / 1000; };
+    const rim = Math.abs(lum(c1) - lum(c2)) < 40 ? (lum(c1) > 150 ? '#0d1a14' : '#f4f7f2') : c2, ink = lum(c1) > 150 ? '#0d1a14' : '#f4f7f2';
+    const ab = String((t && t.s) || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase(), sy = CR_SY[c.sy];
+    const pat = ['', `<rect x="24" y="0" width="12" height="112" fill="${rim}" opacity=".3"/><rect x="44" y="0" width="12" height="112" fill="${rim}" opacity=".3"/><rect x="64" y="0" width="12" height="112" fill="${rim}" opacity=".3"/>`,
+      `<rect x="50" y="0" width="50" height="112" fill="${rim}" opacity=".32"/>`, `<polygon points="0,84 100,40 100,58 0,102" fill="${rim}" opacity=".5"/>`][c.pt];
+    return `<svg viewBox="0 0 100 112" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs><clipPath id="${id}"><path d="${d}"/></clipPath></defs><path d="${d}" fill="${c1}"/><g clip-path="url(#${id})">${pat}<rect x="0" y="0" width="100" height="40" fill="#fff" opacity=".1"/></g><path d="${d}" fill="none" stroke="${rim}" stroke-width="6" stroke-linejoin="round"/>` +
+      (sy ? `<text x="50" y="${c.sh === 1 ? 54 : 50}" font-size="34" text-anchor="middle" dominant-baseline="central">${sy}</text><text x="50" y="${c.sh === 1 ? 84 : 82}" font-size="14" font-weight="800" text-anchor="middle" fill="${ink}" font-family="inherit" letter-spacing="1">${ab}</text>`
+        : `<text x="50" y="${c.sh === 1 ? 57 : 54}" font-size="${ab.length > 2 ? 26 : 30}" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="${ink}" font-family="inherit" letter-spacing="1">${ab}</text>`) + '</svg>';
+  }
+  const crestInto = (el, t) => { if (el) el.innerHTML = crestSVG(t); };
   const MT0 = () => ({ n: 'Mit hold', s: 'MIT', c1: '#2f9d55', c2: '#f4f7f2', made: false, tac: { ...TAC0 }, lay: {} });
   let mtCache = null;
   function loadMT() {
@@ -3135,7 +3180,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (dist > 340 || dist < 0 || Math.abs(b.y - CY) > 200 || b.fx * dir < 0.3) return false;
     return !P.some(q => q.team === a.team && q !== a && on(q) && q.k !== 0 && (gx - q.x) * dir < dist + 10);
   }
-  const TEMPO = () => [0.53, 0.62, 0.74][cfg.tempo] ?? 0.62; // Daniel 2026-11-10: 20 % slower than 0.66/0.78/0.92 // tempo for the whole match: Roligt / Normalt / Hurtigt
+  const TEMPO = () => [0.62, 0.74, 0.88][cfg.tempo] ?? 0.74; // Daniel 2026-11-10 (evening): standard = what Hurtigt was (0.74); before that 0.53/0.62/0.74 // tempo for the whole match: Roligt / Normalt / Hurtigt
   let lastCard = '', pendCard = null; // a yellow under advantage is shown at the next stoppage, as in FIFA
   function foul(a, b, hard) {
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
@@ -3734,6 +3779,21 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
             bx = o.x + hx * 34 - hy * side * 30; by = o.y + hy * 34 + hx * side * 30;
           }
         }
+        if (o && isHuman(o) && !keeper && !wait) {
+          // a person on the ball can beat him (as in FIFA): the defender commits to the way the carrier is going, a touch late.
+          // A sharp cut close to him leaves him wrong-footed for a moment, and he stands a little off instead of on your toes.
+          const v = Math.hypot(o.vx, o.vy), hx = v > 40 ? o.vx / v : o.fx, hy = v > 40 ? o.vy / v : o.fy;
+          if (p.lkO !== o.i) { p.lkx = hx; p.lky = hy; p.lkO = o.i; }
+          p.wfcd = Math.max(0, (p.wfcd || 0) - dt);
+          const dd = Math.hypot(o.x - p.x, o.y - p.y), turn = p.lkx * hx + p.lky * hy;
+          if (turn < 0.3 && v > 80 && dd < 100 && rear < 0.3 && p.wfcd <= 0 && p.tackle <= 0 && p.windup <= 0 && Math.hypot(p.vx, p.vy) > 50) {
+            p.recover = Math.max(p.recover, 0.24 + 0.22 * (1 - iq)); p.wfcd = 1.5; p.lkx = hx; p.lky = hy;
+            ball.stealCd = Math.max(ball.stealCd || 0, 0.7); dust(p.x, p.y);
+            if (localHuman(o)) buzz(12);
+          }
+          const k = Math.min(1, (3 + 3.5 * iq) * dt); p.lkx += (hx - p.lkx) * k; p.lky += (hy - p.lky) * k;
+          if (rear <= 0.15) { const gx = ownX - o.x, gy = CY - o.y, gl = Math.hypot(gx, gy) || 1, r = 40 - 10 * iq; bx = o.x + gx / gl * r + (p.lkx - hx) * 40; by = o.y + gy / gl * r + (p.lky - hy) * 40; }
+        }
         go(bx, by, (dBall(p) > 60 || rear > 0.15) && !wait);
         if (o && !wait && dBall(p) < 70 - 12 * iq && p.tcd <= 0 && Math.random() < d.tackle * [0.8, 1, 1.3][T.pr] * dt) { // clever defenders wait until they are close enough to win it
           if (rear < 0.15 || Math.random() < 0.06 * (1 - iq)) out.tackle = true; // only slide from the front or side; a clumsy one sometimes goes through the back (a foul)
@@ -4110,7 +4170,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0) + (hasAb(p, 'mur') ? 9 : 0)) { abPop(p, 'mur'); tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody)
           if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; if (p.ms) p.ms.sv = (p.ms.sv || 0) + 1; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
-          if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.0) * (hasAb(o, 'bamse') ? (abPop(o, 'bamse'), 0.35) : 1) * dt) { ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
+          if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.42 : 1.0) * (hasAb(o, 'bamse') ? (abPop(o, 'bamse'), 0.35) : 1) * dt) { ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
         }
       }
     }
@@ -4505,7 +4565,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const OWN = TEAMS.length - 1;
   function syncOwn() {
     const mt = loadMT(), t = TEAMS[OWN];
-    Object.assign(t, { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2, c3: light(mt.c1) ? '#0d1a14' : '#f4f7f2' });
+    Object.assign(t, { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2, c3: light(mt.c1) ? '#0d1a14' : '#f4f7f2', cr: mt.cr || null });
+    crestInto($('hcCrest'), t); if ($('hcName')) $('hcName').textContent = mt.made ? mt.n : (cfg.name || 'Mit hold');
     t.tac = mt.tac;
     document.querySelectorAll('.teams button[data-own]').forEach(b => { b.textContent = t.s; b.setAttribute('aria-label', t.n); b.style.setProperty('--c1', t.c1); b.style.setProperty('--c3', t.c3); });
   }
@@ -5876,7 +5937,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     w: ['Smal: holdet står samlet inde i midten.', '', 'Bred: spillerne spreder sig ud til siderne.'],
     pt: ['Korte afleveringer: mange småafleveringer, færre langskud.', '', 'Lange bolde: flere stikninger frem og skud langt fra.'],
   };
-  let mtN = 5, mtAfter = null, mtDrag = -1, mtBuilt = false, mtTab = 'lay', mtSel = -1, mtSelB = -1, mtDown = null, mtCards = [];
+  let mtN = 5, mtAfter = null, mtDrag = -1, mtBuilt = false, mtTab = 'lay', mtSel = -1, mtSelB = -1, mtDown = null, mtCards = [], mtCrest = null;
   const mtSizes = [2, 3, 5, 7, 11];
   function mtLayNow() { // what the editor shows: your saved line-up for this size, or the chosen formation
     const mt = loadMT();
@@ -5887,7 +5948,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function mtMade() {
     const mt = loadMT();
     if (!mt.made) { mt.made = true; cfg.team = OWN; saveCfg(); } // the first time: pick your new team in the menus
-    saveMT(); syncOwn();
+    saveMT(); syncOwn(); if (mtCrest) mtCrest();
   }
   function mtTip(k) {
     const mt = loadMT(), t = TAC_TIP[k] && TAC_TIP[k][mt.tac[k]];
@@ -5911,6 +5972,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     for (const [id, k] of [['mtM', 'm'], ['mtPr', 'pr'], ['mtW', 'w'], ['mtPt', 'pt']])
       mkSeg($(id), [0, 1, 2], TAC_TXT[k], () => loadMT().tac[k], v => { loadMT().tac[k] = v; mtMade(); mtTip(k); });
     mkSeg($('mtSize'), mtSizes, mtSizes.map(n => n + ' mod ' + n), () => mtN, v => { mtN = v; mtSel = mtSelB = -1; mtFrom(); mtPaintSide(); mtDraw(); });
+    const crGet = () => (mt.cr && typeof mt.cr === 'object' ? mt.cr : (mt.cr = crOf(mt)));
+    const crPaint = () => { crestInto($('crPrev'), mt); $('crName').textContent = mt.n; [...$('crSy').children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === crGet().sy))); };
+    mkSeg($('crSh'), CR_SH.map((_, i) => i), CR_SH.map(x => x[0]), () => crGet().sh, v => { crGet().sh = v; mtMade(); crPaint(); });
+    mkSeg($('crPt'), CR_PT.map((_, i) => i), CR_PT, () => crGet().pt, v => { crGet().pt = v; mtMade(); crPaint(); });
+    CR_SY.forEach((sy, i) => { const b = document.createElement('button'); b.className = 'alt'; b.textContent = sy || 'ABC'; if (!sy) b.style.fontSize = '11px'; b.setAttribute('aria-label', sy ? 'Symbol ' + sy : 'Kun bogstaver'); b.onclick = () => { crGet().sy = i; mtMade(); crPaint(); }; $('crSy').appendChild(b); });
+    mtCrest = crPaint;
     const nm = $('mtName'), sh = $('mtShort');
     nm.addEventListener('input', () => {
       const v = nm.value.replace(/[^\p{L}\p{N} ._'-]/gu, '').slice(0, 16);
@@ -6084,7 +6151,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('mtName').value = mt.made ? mt.n : ''; $('mtShort').value = mt.made ? mt.s : '';
     $('mtC1')._paint(); $('mtC2')._paint();
     segPaints.forEach(f => f());
-    mtTip(''); mtFrom();
+    mtTip(''); mtFrom(); if (mtCrest) mtCrest();
     $('myteam').hidden = false; mtSel = mtSelB = -1; mtTab = focus === 'tac' ? 'tac' : 'lay'; mtTabs(); mtPaintSide();
     requestAnimationFrame(() => { mtDraw(); if (focus === 'lay') $('mtLay').scrollIntoView({ block: 'nearest' }); });
   }
@@ -6122,6 +6189,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     drillList(); $('goPractice').addEventListener('click', drillList);
     $('goProf').onclick = profShow; $('profClose').onclick = () => { $('prof').hidden = true; };
     $('goMine').onclick = () => mtShow(cfg.size);
+    $('homeClub').onclick = () => mtShow(cfg.size, 'tac');
     $('setupMine').onclick = () => mtShow(cfg.size, 'lay');
     $('lobbyMine').onclick = () => mtShow(mode === 'host' ? size : lobbySize);
     $('goTac').onclick = () => mtShow(cfg.size, 'tac');
@@ -6146,7 +6214,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         const id = 'minifootball-' + name;
         let mine = {}, subs = [], peer, done = false;
         const links = new Map();
-        let myId = 'me';
+        let myId = 'me', sendQ = 0;
         const fire = () => {
           const ps = [{ peer: myId, sameTab: true, isMe: true, presence: mine }];
           for (const [k, v] of links) if (v.presence) ps.push({ peer: k, sameTab: false, isMe: false, presence: v.presence });
@@ -6154,12 +6222,15 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         };
         const wire = c => {
           c.on('open', () => { links.set(c.peer, { conn: c, presence: null }); c.send(mine); if (!done) { done = true; resolve(api); } fire(); });
-          c.on('data', d => { const l = links.get(c.peer); if (l && d && typeof d === 'object') { l.presence = d; fire(); } });
+          c.on('data', d => { const l = links.get(c.peer); if (!l || !d || typeof d !== 'object') return;
+            if (typeof d._q === 'number') { if (l.q !== undefined && d._q < l.q && l.q - d._q < 100000) return; l.q = d._q; } // messages can arrive out of order: an older one never replaces a newer one
+            l.presence = d; fire(); });
           c.on('close', () => { links.delete(c.peer); fire(); });
           c.on('error', () => { links.delete(c.peer); fire(); });
         };
         const api = {
-          presence: async patch => { mine = { ...mine, ...patch }; for (const l of links.values()) { try { l.conn.send(mine); } catch (_) {} } },
+          presence: async patch => { mine = { ...mine, ...patch, _q: ++sendQ };
+            for (const l of links.values()) { try { const dc = l.conn.dataChannel; if (dc && dc.bufferedAmount > 20000) continue; l.conn.send(mine); } catch (_) {} } }, // a slow line: skip this one, the next carries newer state anyway (no pile-up)
           onPeers: f => { subs.push(f); setTimeout(fire, 0); return () => {}; },
           leave: async () => { try { peer.destroy(); } catch (_) {} },
         };
@@ -6180,7 +6251,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   let room = null, net = null, lastSend = 0, lostAt = 0, sentIn = '', myPeer = null, seenMatch = -1, tgt = null, lobbySize = 1;
   let roster = []; // [[peer, slot]] (guests also get [peer, slot, name])
   let hostReady = false, hostInfo = [0, 'Vært'], lobbyLr = [0, 0, 0];
-  let gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null, gZ = 0;
+  let gSent = 0, gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null, gZ = 0;
   const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard(), ly: gFm === CUST ? packLay(myLay(lobbySize)) : 0, tc: tacWire(loadMT().tac), tm: teamWire(myCardTeam()) }).catch(() => {}); };
   const netmsg = $('netmsg');
   (async () => {
@@ -6293,10 +6364,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function cleanTeam(a) {
     if (!Array.isArray(a)) return null;
     const n = String(a[0] || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 16), s = String(a[1] || '').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 3).toUpperCase(), c1 = hex(a[2]), c2 = hex(a[3]) || '#f4f7f2';
-    return n && s && c1 ? { n, s, c1, c2 } : null;
+    const cr = Array.isArray(a[4]) ? { sh: Math.abs(a[4][0] | 0), pt: Math.abs(a[4][1] | 0), sy: Math.abs(a[4][2] | 0) } : null;
+    return n && s && c1 ? (cr ? { n, s, c1, c2, cr } : { n, s, c1, c2 }) : null;
   }
-  function myCardTeam() { const mt = loadMT(); return mt.made ? { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2 } : null; }
-  const teamWire = t => (t ? [t.n, t.s, t.c1, t.c2] : 0);
+  function myCardTeam() { const mt = loadMT(); return mt.made ? { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2, cr: mt.cr || null } : null; }
+  const teamWire = t => (t ? (t.cr ? [t.n, t.s, t.c1, t.c2, [crOf(t).sh, crOf(t).pt, crOf(t).sy]] : [t.n, t.s, t.c1, t.c2]) : 0);
   const tacWire = t => [t.m, t.pr, t.w, t.pt];
   function pickSlot(slot) {
     if (state !== 'lobby') return;
@@ -6574,7 +6646,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       $('ready').hidden = true; $('rxbar').hidden = false;
       for (const id of ['lobby', 'end', 'menu']) $(id).hidden = true;
       ball.x = s.b[0]; ball.y = s.b[1];
-      s.p.forEach((q, i) => { if (P[i]) { P[i].x = q[0]; P[i].y = q[1]; } });
+      s.p.forEach((q, i) => { if (P[i]) { P[i].x = q[0]; P[i].y = q[1]; P[i].ovr = 0; P[i].sq = ''; P[i].ab = null; P[i].lv = null; P[i].abI = ''; } });
       vsShow();
       clearInput(); sfx.beep(); updateCamera(0, true);
     } else if (s.st === 'p' && (score[0] !== prev[0] || score[1] !== prev[1])) {
@@ -6603,6 +6675,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       net.presence({ r: 'h', s: pack(st) }).catch(() => {});
     }
     if (mode === 'guest') {
+      if (now - gSent > (state === 'play' ? 70 : 400)) { gSent = now; sendG(); } // said again and again, so a lost message never leaves a button stuck
       if (state === 'play') {
         const inp = localInput(0);
         const a = inp.a || now - downAt.a < 120 ? 1 : 0, b = inp.b || now - downAt.b < 120 ? 1 : 0;
@@ -7315,15 +7388,26 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     for (const t of [0, 1]) {
       const c = t ? col.away : col.home, tx = light(c) ? '#0d1a14' : '#f4f7f2', sd = el.children[t], nm = tn(t);
       sd.style.setProperty('--c', c); sd.style.setProperty('--t', tx);
-      $('vsC' + t).textContent = (teamPick && teamPick[t].s) || nm.slice(0, 3).toUpperCase();
+      crestInto($('vsC' + t), Object.assign({ n: nm, s: nm.slice(0, 3) }, teamPick ? teamPick[t] : null, { c1: c, c2: teamPick && teamPick[t].c2 && teamPick[t].c2 !== c ? teamPick[t].c2 : tx }));
       $('vsN' + t).textContent = nm;
-      const rated = P.filter(p => p.team === t && p.ovr), R = $('vsR' + t), S = $('vsS' + t); R.textContent = ''; S.textContent = '';
-      if (rated.length) {
+      const onl = mode === 'host' || mode === 'guest';
+      const rated = onl && !(comp && mode === 'host') ? [] : P.filter(p => p.team === t && p.ovr), R = $('vsR' + t), S = $('vsS' + t); R.textContent = ''; S.textContent = '';
+      if (onl && !rated.length) { // online: who is on this side, and their rank
+        try {
+          const me = mode === 'guest' ? myTeam() : (P.find(q => q.ctrl === 'L0') || { team: 0 }).team, L = size === 11 ? '11' : '', sd2 = onlineSides(me);
+          const cs = (t === me ? [{ n: cfg.name || 'Dig', rp: rpOf(loadMe(), L) }].concat(sd2.mates.map(c => ({ n: c.n, rp: L ? c.rp11 : c.rp }))) : sd2.opps.map(c => ({ n: c.n, rp: L ? c.rp11 : c.rp })));
+          if (cs.length) {
+            R.textContent = cs.map(c => c.n || 'Spiller').slice(0, 3).join(', ');
+            const rp = cs.map(c => c.rp).filter(v => typeof v === 'number' && v >= 0);
+            if (rp.length && !comp) S.textContent = cs.length > 1 ? `Bedste rang: ${stepName(rankOf(Math.max(...rp)).step)}` : `${stepName(rankOf(rp[0]).step)} · ${Math.round(rp[0])} RP`;
+          } else if (!comp) R.textContent = 'Computer';
+        } catch (_) {}
+      } else if (rated.length) {
         const b = document.createElement('b'); b.textContent = Math.round(rated.reduce((a, p) => a + p.ovr, 0) / rated.length);
         R.append(b, teamSty[t] && STYLES[teamSty[t]] ? STYLES[teamSty[t]].n : 'Rating');
         const st = rated.reduce((a, p) => (p.ovr + (p.ab ? p.ab.length * 2 : 0) > a.ovr + (a.ab ? a.ab.length * 2 : 0) ? p : a));
         S.textContent = `Hold øje med ${st.sq.split(' ').pop()} ${st.ovr}` + (st.ab && st.ab.length ? ' ' + st.ab.map(a => ABIL[a].i + ' ' + ABIL[a].n).join(' ') : '');
-      } else if (mode === 'host' || mode === 'guest') R.textContent = P.filter(p => p.team === t && p.ctrl !== 'ai').length + ' spillere';
+      }
     }
     $('vsInfo').textContent = [`${size} mod ${size}`, mode === 'guest' ? '' : `${matchMins()} min`, wx ? WX_NAME(wx) : '', quick ? 'Rangeret' : comp ? (comp.type === 'career' ? 'Karriere' : 'Pokal') : kind === 'season' ? 'Sæson' : ''].filter(Boolean).join(' · ');
     el.className = ''; el.hidden = false; void el.offsetWidth; el.classList.add('in');
