@@ -462,6 +462,25 @@ table.st tr.me td { color: var(--gold); }
 .sqcard .namein { flex: 1; min-width: 0; font-size: 15px; padding: 6px 8px; background: rgba(0,0,0,0.25); color: inherit; }
 .sqstats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .sqnote { font-size: 12px; color: var(--muted); margin: 0; }
+/* evner */
+.abrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.abslot { display: flex; align-items: center; gap: 8px; min-height: 0; padding: 6px 10px; text-align: left; font-size: 13px; border-radius: 10px; line-height: 1.15; }
+.abslot i { font-style: normal; font-size: 20px; } .abslot small { display: block; font-size: 10px; opacity: .7; font-weight: 500; }
+.abslot.has { border-color: var(--gold); background: linear-gradient(180deg, rgba(255,212,71,.16), rgba(0,0,0,.25)); }
+.abslot.lock { opacity: .55; }
+.ablist { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; text-align: left; max-height: calc(100% - 60px); overflow-y: auto; }
+.ablist button { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: center; text-align: left; padding: 8px 12px; min-height: 0; }
+.ablist button i { font-style: normal; font-size: 26px; grid-row: 1 / 3; } .ablist button b { font-size: 14px; } .ablist button small { font-size: 11px; opacity: .78; font-weight: 500; line-height: 1.25; }
+.ablist button[aria-pressed="true"] { border-color: var(--gold); }
+.pk .ab { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; margin-top: 8px; }
+.pk .ab span, .abchip { background: rgba(0,0,0,.32); color: #fff; border-radius: 99px; padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+#mtSel .abs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; flex-basis: 100%; }
+#fxAb { top: 80%; font-size: 22px; color: #ffe27a; }
+#packOv .card { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 20px; align-items: center; width: min(560px, 94%); text-align: left; }
+#packOv .card h2 { grid-column: 1 / -1; text-align: center; margin: 0 0 4px; } #packOv .pk { grid-row: 2 / 4; margin: 0; }
+#packOv .btns { flex-direction: column; align-self: start; } #packOv #pkNote { align-self: end; font-size: 13px; }
+#wrap.n560 #packOv .card { grid-template-columns: 1fr; } #wrap.n560 #packOv .pk { grid-row: auto; margin: 0 auto; }
+.sqrow .abi { font-size: 12px; margin-left: 4px; }
 .linkbtn { font: 500 11px/1 var(--font); letter-spacing: 0.04em; text-transform: none; padding: 2px 4px; margin-left: 6px; border: 0; background: none; color: var(--gold); text-decoration: underline; }
 button.small { font-size: 13px; padding: 9px 10px; }
 #lobbyTeams { font-size: 15px; }
@@ -753,11 +772,19 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <div class="sqcard" id="sqCard"><div class="o"><b id="sqOvr">60</b><span id="sqPos">Angreb</span></div>
             <input id="sqName" class="namein" maxlength="16" aria-label="Spillerens navn" autocomplete="off"></div>
           <div class="sqstats" id="sqStats"></div>
-          <p class="sqnote"><b id="sqTeam"></b> · <span id="sqChem"></span> · <span id="sqXI"></span></p>
-          <p class="sqnote">Træningspoint (TP) får du i færdighedsspil og kampe, eller i butikken.</p>
+          <div class="abrow" id="sqAb"></div>
+          <p class="sqnote"><b id="sqTeam"></b> · <span id="sqChem"></span> · <span id="sqXI"></span> TP får du i kampe og færdighedsspil.</p>
           <button id="sqDrills" class="go">Færdighedsspil ›</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="abOv" hidden>
+    <div class="card wide">
+      <div class="top"><button class="alt back" id="abClose">‹ Tilbage</button><h2 id="abTitle">Vælg en evne</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+      <p class="sqnote" id="abNote" style="margin-bottom:8px"></p>
+      <div class="ablist" id="abList"></div>
     </div>
   </div>
 
@@ -815,7 +842,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   <div id="pkFx" hidden>
     <div class="fxrays"></div><div class="fxflash"></div>
     <div class="fxpack" id="fxPack"><span class="fxlogo">BANEBOLD</span><b id="fxName">Pakke</b><i class="fxshine"></i></div>
-    <div class="fxclue" id="fxNat"></div><div class="fxclue" id="fxPos"></div><div class="fxclue fxovr" id="fxOvr"></div>
+    <div class="fxclue" id="fxNat"></div><div class="fxclue" id="fxPos"></div><div class="fxclue fxovr" id="fxOvr"></div><div class="fxclue" id="fxAb"></div>
     <div class="fxconf" id="fxConf"></div>
     <p class="fxtap">Tryk for at springe over</p>
   </div>
@@ -2521,7 +2548,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const L = $('subList'); L.textContent = '';
     for (const p of P.filter(q => q.team === 0 && !(q.out > 0)).sort((a, b) => a.k - b.k)) {
       const r = document.createElement('div'); r.className = 'subrow';
-      const n = document.createElement('span'); n.className = 'nm'; n.textContent = `${isKeeper(p) ? 'MV ' : ''}${p.sq || 'Spiller ' + (p.k + 1)}${p.ovr ? ' ' + p.ovr : ''}${p.inj > 0 ? ' (skadet)' : ''}`;
+      const n = document.createElement('span'); n.className = 'nm'; n.textContent = `${isKeeper(p) ? 'MV ' : ''}${p.sq || 'Spiller ' + (p.k + 1)}${p.ovr ? ' ' + p.ovr : ''}${p.ab && p.ab.length ? ' ' + abIcons(p) : ''}${p.inj > 0 ? ' (skadet)' : ''}`;
       const bar = document.createElement('span'); bar.className = 'bar'; const fill = document.createElement('i'); fill.style.width = Math.round((1 - (p.fat || 0) * 2) * 100) + '%'; bar.appendChild(fill);
       const b = document.createElement('button'); b.className = 'alt'; b.textContent = 'Skift'; b.disabled = subsUsed[0] >= subsMax();
       b.onclick = () => { doSub(p); subsPaint(); };
@@ -2596,7 +2623,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const press = (...ids) => { for (const id of ids) { const b = $(id); if (b && !b.hidden && b.offsetParent) { b.click(); return true; } } return false; };
     if (typing()) { document.activeElement.blur(); return true; }
     // the overlays from the top down (later in the page lies on top)
-    const OV = [['giftOv', 'giftOk'], ['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['passOv', 'passClose'], ['rankOv', 'rankClose'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
+    const OV = [['giftOv', 'giftOk'], ['abOv', 'abClose'], ['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['passOv', 'passClose'], ['rankOv', 'rankClose'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
       ['help', 'helpOk'], ['myteam', 'mtClose'], ['lobby', 'cancel'], ['season', 'seasonClose'], ['shop', 'shopClose'], ['prof', 'profClose']];
     if (!$('rkFx').hidden) { $('rkFx').hidden = true; return true; }
     if (state === 'hl') return press('hlClose') || true;
@@ -2711,13 +2738,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (!side) side = f ? -(Math.sign((f.x - p.x) * -fy + (f.y - p.y) * fx) || 1) : 1;
     const px = -fy * side, py = fx * side, k = 0.75;
     let dx = px * k + fx * (1 - k) * 1.3, dy = py * k + fy * (1 - k) * 1.3; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-    p.skill = 0.38; p.skcd = 1.1; p.skx = dx; p.sky = dy; p.fx = dx; p.fy = dy;
+    p.skill = 0.38; p.skcd = hasAb(p, 'tryl') ? 0.6 : 1.1; p.skx = dx; p.sky = dy; p.fx = dx; p.fy = dy;
     p.vx = dx * MAXV * 1.05; p.vy = dy * MAXV * 1.05;
     ball.x = p.x + dx * (REACH - 3); ball.y = p.y + dy * (REACH - 3);
     if (f) {
       const d = Math.hypot(f.x - p.x, f.y - p.y), front = ((f.x - p.x) * fx + (f.y - p.y) * fy) / (d || 1);
-      const sk = lvOf(p) ? lvOf(p).pas / 99 : 0.5, chance = 0.45 + sk * 0.3 - (isHuman(f) ? 0.2 : 0);
-      if (d < 95 && front > 0.4 && f.tackle <= 0 && Math.random() < chance) { f.stun = Math.max(f.stun, 0.4); f.vx *= 0.3; f.vy *= 0.3; flash = { text: 'Finte!', t: 0.6 }; crowd.ooh(); }
+      const sk = lvOf(p) ? lvOf(p).pas / 99 : 0.5, chance = 0.45 + sk * 0.3 - (isHuman(f) ? 0.2 : 0) + (hasAb(p, 'tryl') ? 0.25 : 0);
+      if (d < (hasAb(p, 'tryl') ? 115 : 95) && front > 0.4 && f.tackle <= 0 && Math.random() < chance) { abPop(p, 'tryl'); f.stun = Math.max(f.stun, 0.4); f.vx *= 0.3; f.vy *= 0.3; flash = { text: 'Finte!', t: 0.6 }; crowd.ooh(); }
     }
     if (localHuman(p)) buzz(20);
     sfx.kick(0.1);
@@ -2741,6 +2768,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       }
     }
     if (lvOf(p) && !isPen) power *= 1 + 0.02 * lvOf(p).sht;
+    if (hasAb(p, 'kanon') && !isPen) power *= 1.1;
     if (p.superShot) power *= 1.6;
     const gk = isPen ? 'pen' : ball.fresh && ball.rs === 'free' ? 'fk' : 'shot';
     const x = p.x + fx * (REACH - 2), y = p.y + fy * (REACH - 2);
@@ -2754,7 +2782,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const T = Math.max(0.2, dist / sp);
       r.vx = Math.cos(a0 - sg * th) * sp; r.vy = Math.sin(a0 - sg * th) * sp; r.spin = sg * 2 * th / T; r.spinT = T;
     };
-    if (isHuman(p) && !isPen && gk === 'shot' && !p.sprint && pw >= 0.25 && pw <= 0.8 && dist < 480 && dist > 90) curl(0.2);
+    const skr = hasAb(p, 'skrue'); // Skruebold: bends more, and he can do it at full pace and from further out (the computer's players too)
+    if ((isHuman(p) || skr) && !isPen && gk === 'shot' && (!p.sprint || skr) && pw >= 0.25 && pw <= (skr ? 0.9 : 0.8) && dist < (skr ? 560 : 480) && dist > 90) curl(skr ? 0.27 : 0.2);
     if (gk === 'fk' && Math.abs(gx - p.x) < 480) { // a free kick at goal: curled up over the wall, a fair pace so the keeper has a chance
       const sp = Math.min(560 + pw * 260, Math.hypot(r.vx, r.vy)), k = sp / (Math.hypot(r.vx, r.vy) || 1);
       r.vx *= k; r.vy *= k;
@@ -2783,6 +2812,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     ball.last = { team: p.team, pass: false };
     if (r.vz) ball.vz = r.vz;
     if (r.spinT) { ball.spin = r.spin; ball.spinT = r.spinT; }
+    if (!isPen && r.gk === 'shot') { // evner on the shot: the keeper reads these worse (see keeperWatch)
+      if (r.spinT && hasAb(p, 'skrue')) { ball.last.hard = 0.1; abPop(p, 'skrue'); }
+      else if (pw > 0.45 && hasAb(p, 'kanon')) { ball.last.hard = 0.14; abPop(p, 'kanon'); shake = Math.max(shake, 4); }
+    }
     if (r.fk) ball.last.fk = true;
     if (isPen) penShot(p);
     sfx.kick(pw);
@@ -2855,7 +2888,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     }
     const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1;
     p.fx = dx / d; p.fy = dy / d;
-    { const pl = lvOf(p), e = pl && d > 220 ? Math.max(0, 2 - pl.pas) * 0.012 * Math.min(1.5, d / 400) : 0; // a poor passer is a little off on longer balls
+    const dg = hasAb(p, 'dirigent'); if (dg && (d > 330 || through)) abPop(p, 'dirigent');
+    { const pl = lvOf(p), e = pl && d > 220 && !dg ? Math.max(0, 2 - pl.pas) * 0.012 * Math.min(1.5, d / 400) : 0; // a poor passer is a little off on longer balls
       if (e) { const a = Math.atan2(p.fy, p.fx) + (Math.random() * 2 - 1) * e; p.fx = Math.cos(a); p.fy = Math.sin(a); } }
     // a through ball is weighted to reach the spot about when he does (it would roll ~60 further)
     let speed = (through ? Math.max(380, Math.min(950, (d + 60) * 0.6 + 120)) : Math.max(430, Math.min(980, d * 1.5 + 220))) * 0.93 * WX().pass;
@@ -2904,10 +2938,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (i && Math.hypot(i.x, i.y) > 0.3) { tx = p.x + i.x * 300; ty = p.y + i.y * 300; }
       else { tx = p.x + dir * 320; ty = p.y + (CY - p.y) * 0.3; } // clear it upfield
     }
-    const dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = near ? 640 : 500;
+    const lu = hasAb(p, 'luft'), dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = (near ? 640 : 500) * (lu ? 1.15 : 1);
+    if (lu) abPop(p, 'luft');
     p.fx = dx / d; p.fy = dy / d;
     ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < 0.7 }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them ball.gk = 'head'; ball.fresh = false;
+    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < (lu ? 0.42 : 0.7) }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them ball.gk = 'head'; ball.fresh = false;
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Hovedstød!', t: 0.7 };
     tone(180, 0.07, 'triangle', 0.12, -60);
@@ -2928,7 +2963,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const head = ball.z > 30;
     ball.owner = p.i; ball.z = 0; ball.vz = 0; p.nopick = 0;
     shoot(p, head ? MAXCHARGE * 0.35 : MAXCHARGE * 0.7, ax, ay);
-    if (head) { ball.z = 30; ball.vz = -40; ball.last.head = true; ball.last.ks = Math.random() < 0.55; flash = { text: 'Hovedstød!', t: 0.7 }; }
+    if (head) { ball.z = 30; ball.vz = -40; ball.last.head = true; ball.last.ks = Math.random() < (hasAb(p, 'luft') ? 0.3 : 0.55); abPop(p, 'luft'); flash = { text: 'Hovedstød!', t: 0.7 }; }
     else { ball.z = 4; ball.vz = 120; flash = { text: 'Volley!', t: 0.7 }; }
   }
   function standTackle(p, o) { // as in FIFA: a poke at the ball instead of a slide
@@ -2936,8 +2971,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     p.tcd = 0.55; p.fx = (o.x - p.x) / (Math.hypot(o.x - p.x, o.y - p.y) || 1); p.fy = (o.y - p.y) / (Math.hypot(o.x - p.x, o.y - p.y) || 1);
     const rear = rearOf(p, o);
     if (rear > 0.5) { p.tdx = p.fx; p.tdy = p.fy; tackleBody(p, o); return; } // through the back of him: that is a foul
-    const chance = 0.32 + (o.sprint ? 0.2 : 0) + (rear < -0.3 ? 0.05 : 0) + ((lvOf(p) && lvOf(p).def) || 0) * 0.02 - (o.ctrl === 'ai' ? (aiD(o.team).iq || 0) * 0.15 : 0);
-    if (Math.random() < chance) { tackleWins(p); flash = { text: 'Bolden vundet', t: 0.6 }; }
+    const chance = 0.32 + (o.sprint ? 0.2 : 0) + (rear < -0.3 ? 0.05 : 0) + ((lvOf(p) && lvOf(p).def) || 0) * 0.02 - (o.ctrl === 'ai' ? (aiD(o.team).iq || 0) * 0.15 : 0) + (hasAb(p, 'mur') ? 0.16 : 0) - (hasAb(o, 'bamse') ? 0.12 : 0);
+    if (Math.random() < chance) { abPop(p, 'mur'); tackleWins(p); flash = { text: 'Bolden vundet', t: 0.6 }; }
     else { p.recover = 0.35; p.vx *= 0.3; p.vy *= 0.3; tone(220, 0.05, 'triangle', 0.06); } // missed: he is past you for a moment
   }
   // how far a is behind b: 1 = right at his back, 0 = beside him, -1 = in front (uses where b is going, else where he faces)
@@ -3009,9 +3044,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (p.dive > 0 || p.lay > 0 || p.stun > 0 || p.recover > 0 || ball.owner >= 0 || pen || so || replay) return;
     const s = shotAt(p);
     if (!s) return;
-    if (p.seen !== ball.last) { p.seen = ball.last; p.react = 0; p.willDive = Math.random() < keeperSkill(p) + (ball.last.fk || ball.z > 20 ? 0.15 : 0); p.err = (Math.random() - 0.5) * 100; }
+    if (p.seen !== ball.last) { p.seen = ball.last; p.react = 0; const sh = P[ball.lastIdx], close = sh && Math.hypot(sh.x - p.x, sh.y - p.y) < 260;
+      p.willDive = Math.random() < keeperSkill(p) + (ball.last.fk || ball.z > 20 ? 0.15 : 0) - (ball.last.hard || 0) + (hasAb(p, 'kat') ? 0.14 : 0) + (close && hasAb(p, 'straf') ? 0.2 : 0);
+      p.err = (Math.random() - 0.5) * (hasAb(p, 'kat') ? 50 : 100); p.abSave = hasAb(p, 'kat') ? 'kat' : close && hasAb(p, 'straf') ? 'straf' : ''; }
     p.react += dt;
-    if (!p.willDive || p.react < (ball.last.fk ? 0.08 : 0.18) || s.t > (ball.last.fk || ball.z > 20 ? 0.55 : 0.4)) return; // at a free kick he is set and ready
+    if (!p.willDive || p.react < (ball.last.fk ? 0.08 : hasAb(p, 'kat') ? 0.11 : 0.18) || s.t > (ball.last.fk || ball.z > 20 ? 0.55 : 0.4)) return; // at a free kick he is set and ready
     const dy = s.y + p.err - p.y, dir = p.team ? -1 : 1;
     if (Math.abs(dy) < REACH) return; // straight at him: he just catches it
     dive(p, dir * 70, Math.sign(dy) * Math.min(400, Math.abs(dy) / Math.max(0.2, s.t)));
@@ -3113,10 +3150,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (isHuman(kp)) { const i = kp.ctrl === 'L0' ? localInput(0) : kp.ctrl === 'L1' ? localInput(1) : (remoteIn.get(kp.peer) || ZERO); d = Math.abs(i.y) > 0.3 ? Math.sign(i.y) : 0; }
       else {
         const truth = Math.abs(taker.fy) < 0.08 ? 0 : Math.sign(taker.fy);
-        const right = 0.3 + (mode === 'cpu' ? Math.min(2.5, matchDiff()) : 1) * 0.12 + (drill && drill.id === 'pens' ? drill.i * 0.035 + (drill.lv - 1) * 0.04 : 0); // in the penalty challenge he gets better every kick
+        const right = 0.3 + (mode === 'cpu' ? Math.min(2.5, matchDiff()) : 1) * 0.12 + (drill && drill.id === 'pens' ? drill.i * 0.035 + (drill.lv - 1) * 0.04 : 0) + (hasAb(kp, 'straf') ? 0.2 : 0); // in the penalty challenge he gets better every kick
         d = Math.random() < right ? truth : [-1, 0, 1][Math.floor(Math.random() * 3)];
       }
-      kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * 470; kp.dvx = 0;
+      kp.frozen = 0; kp.dive = 0.42; kp.dvy = d * (hasAb(kp, 'straf') ? 540 : 470); kp.dvx = 0; if (d) abPop(kp, 'straf', true);
     }
     guard = 0; if (so) so.shot = true;
     pen = null;
@@ -3160,8 +3197,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const outN = p.sq || '';
     subOut.push({ team: t, sqi: p.sqi, ms: p.ms });
     const b = benchFor(p);
-    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); }
-    else { // a reserve from the bench: fresh, a touch less good
+    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); p.ab = abOf(b.s); }
+    else { p.ab = null; // a reserve from the bench: fresh, a touch less good
       if (p.lv) p.lv = Object.fromEntries(Object.entries(p.lv).map(([k, v]) => [k, v - 0.6]));
       if (p.ovr) p.ovr = Math.max(40, p.ovr - 3);
       p.sq = FIRSTN[Math.floor(Math.random() * FIRSTN.length)] + ' ' + LASTN[Math.floor(Math.random() * LASTN.length)]; p.sqi = -1;
@@ -3803,9 +3840,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const ai = p.ctrl === 'ai';
       p.fat = p.fat || 0;
       if (p.sprint && p.ms) p.ms.spr += dt;
-      if (p.sprint && p.turbo <= 0) { p.stamina = Math.max(0, p.stamina - (ai ? 0.12 : 0.14) * dt); p.fat = Math.min(0.4, p.fat + 0.004 * dt); }
-      else p.stamina = Math.min(1 - p.fat, p.stamina + 0.18 * dt);
-      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? 1.35 : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
+      if (p.sprint && p.turbo <= 0) { const mo = hasAb(p, 'motor') ? 0.6 : 1; p.stamina = Math.max(0, p.stamina - (ai ? 0.12 : 0.14) * mo * dt); p.fat = Math.min(0.4, p.fat + 0.004 * mo * dt); }
+      else p.stamina = Math.min(1 - p.fat, p.stamina + (hasAb(p, 'motor') ? 0.25 : 0.18) * dt);
+      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
+      if (p.sprint && p.ab && hasAb(p, 'raket') && Math.hypot(p.vx, p.vy) > MAXV * 1.25 && performance.now() - (p.abAt || 0) > 14000) abPop(p, 'raket');
 
       if (mag > 0.2 && p.tackle <= 0 && !(p.dive > 0)) {
         const ta = Math.atan2(inp.y, inp.x);
@@ -4007,10 +4045,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           if (p.team === o.team || p.stun > 0 || o.frozen > 0 || o.hands > 0 || !on(p)) continue;
           const db = dBall(p);
           const rear = rearOf(p, o);
-          if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0)) { tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody)
+          if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0) + (hasAb(p, 'mur') ? 9 : 0)) { abPop(p, 'mur'); tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody)
           if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
-          if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.0) * dt) { ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
+          if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.7 : 1.0) * (hasAb(o, 'bamse') ? (abPop(o, 'bamse'), 0.35) : 1) * dt) { ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
         }
       }
     }
@@ -4032,7 +4070,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 12 + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + 12 + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0) + (ball.last && ball.last.pass && ball.last.team !== p.team && ball.z < 26 && hasAb(p, 'laeser') ? 18 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -4042,10 +4080,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       for (const p of cands) {
         const rv = Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
         if (ball.last && ball.last.pass && ball.last.team === p.team) { grab(p); break; }
-        if (rv < 760 || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
+        const rd = ball.last && ball.last.pass && ball.last.team !== p.team && hasAb(p, 'laeser'); // Spillæser: he cuts out their passes, hard ones too
+        if (rd) abPop(p, 'laeser');
+        if (rv < 760 || rd || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
           const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
           if (save && (p.dive > 0 || dBall(p) > REACH) && sp2 > 700 && Math.random() < 0.8) parry(p); // at full stretch: tipped away
           else if (p.tackle > 0) tackleWins(p); else grab(p);
+          if (save && p.abSave) abPop(p, p.abSave, true);
           if (save) { flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; }
           break;
         }
@@ -4485,7 +4526,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const f = teamPick[t].str - 3;
       return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
-    for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; }
+    for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; }
     if (m === 'cpu' || (comp && m === 'host')) cpuRatings(1); // the computer's players each have their own rating too
     if (m === 'cpu' || (comp && m === 'host')) { // your trained squad (always the home side against the computer): every player plays at his own rating
       const L = squadToPitch(); const d = tD[0], ck = (chemOf(size).v - 50) / 50; // kemi: a team that knows each other plays a little better
@@ -5194,6 +5235,41 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // ----- your squad, as in the big mobile football games: 11 named players with a rating (OVR) you train up ('mf-squad') -----
   // stats 40-99: spd Fart, sht Skud, pas Aflevering, def Forsvar (for the keeper: reflexes). Training costs træningspoint (TP).
   const POS = { MV: 'Målmand', FO: 'Forsvar', MB: 'Midtbane', AN: 'Angreb' };
+  // ----- evner: what makes a player special beyond his numbers. A player has up to two (the second from rating 70).
+  // They come with cards from packs, or you teach him one for TP. Each one changes something you can feel in the match,
+  // and a small sign pops up over him when it does. i = sign, pos = the lines that can learn it.
+  const ABIL = {
+    kanon: { n: 'Kanon', i: '💥', d: 'Skyder hårdere, og målmanden når færre af hans skud.', pos: ['AN', 'MB'] },
+    skrue: { n: 'Skruebold', i: '🌀', d: 'Placerede skud skruer mere, også i fuld fart.', pos: ['AN', 'MB'] },
+    raket: { n: 'Raket', i: '⚡', d: 'Højere topfart, når han spurter.', pos: ['AN', 'MB', 'FO'] },
+    tryl: { n: 'Tryllekunstner', i: '✨', d: 'Finter snyder oftere, og han kan finte igen hurtigere.', pos: ['AN', 'MB'] },
+    luft: { n: 'Luftens herre', i: '🦅', d: 'Hårdere hovedstød, som målmanden sjældnere redder.', pos: ['AN', 'FO'] },
+    dirigent: { n: 'Dirigent', i: '🎯', d: 'Hurtigere og helt præcise afleveringer, også de lange.', pos: ['MB', 'FO'] },
+    motor: { n: 'Motor', i: '🔋', d: 'Bliver langsommere træt og får pusten hurtigere igen.', pos: ['MB', 'FO', 'AN'] },
+    mur: { n: 'Muren', i: '🧱', d: 'Når længere i tacklingen og vinder flere af dem.', pos: ['FO', 'MB'] },
+    laeser: { n: 'Spillæser', i: '👁', d: 'Snupper modstanderens afleveringer, der går tæt forbi ham.', pos: ['FO', 'MB'] },
+    bamse: { n: 'Bamse', i: '💪', d: 'Står fast på bolden: svær at skubbe af den.', pos: ['FO', 'MB', 'AN'] },
+    kat: { n: 'Katten', i: '🐱', d: 'Lynhurtige reflekser: kaster sig efter flere skud.', pos: ['MV'] },
+    straf: { n: 'Straffedræber', i: '🧤', d: 'Redder flere straffespark og skud helt tæt på.', pos: ['MV'] },
+  };
+  const AB_SLOT2 = 70, AB_COST = [25, 60], AB_SWAP = 15; // rating that opens the second place, TP to learn, TP to swap
+  const abOf = p => (p && Array.isArray(p.ab) ? p.ab.filter(a => ABIL[a]).slice(0, 2) : []);
+  const hasAb = (p, a) => !!(p && p.ab && p.ab.indexOf(a) >= 0);
+  const abFor = pos => Object.keys(ABIL).filter(a => ABIL[a].pos.includes(pos));
+  const abIcons = p => abOf(p).map(a => ABIL[a].i).join('');
+  function abPop(p, a, force) { // the sign over him when an evne does its thing (not all the time: once every few seconds per man)
+    if (!hasAb(p, a) || replay) return;
+    const now = performance.now();
+    if (!force && p.abAt && now - p.abAt < 5000) return;
+    p.abAt = now; p.abI = a; p.abT = 1.5;
+  }
+  function abRoll(pos, t, ev, rnd) { // the evner a new card comes with: better cards more often have one, the best have two
+    rnd = rnd || Math.random;
+    const n = ev ? 2 : t >= 72 ? (rnd() < 0.35 ? 2 : 1) : t >= 63 ? (rnd() < 0.65 ? 1 : 0) : (rnd() < 0.3 ? 1 : 0);
+    const pool = abFor(pos), out = [];
+    while (out.length < Math.min(n, pool.length)) { const a = pool[Math.floor(rnd() * pool.length)]; if (!out.includes(a)) out.push(a); }
+    return out;
+  }
   const OVRW = { MV: { spd: 0.1, sht: 0.05, pas: 0.25, def: 0.6 }, FO: { spd: 0.2, sht: 0.05, pas: 0.2, def: 0.55 }, MB: { spd: 0.2, sht: 0.2, pas: 0.45, def: 0.15 }, AN: { spd: 0.3, sht: 0.5, pas: 0.15, def: 0.05 } };
   const FIRSTN = ['Mads', 'Oliver', 'Emil', 'Noah', 'Lucas', 'Viktor', 'Magnus', 'Frederik', 'Anton', 'Malthe', 'Elias', 'Oscar', 'Villads', 'Johan', 'Carl', 'Alfred', 'Storm', 'Aksel', 'Theo', 'Valdemar'];
   const LASTN = ['Holm', 'Krogh', 'Bech', 'Lund', 'Dahl', 'Juul', 'Vang', 'Friis', 'Bak', 'Kjær', 'Brink', 'Skov', 'Ravn', 'Hede', 'Toft', 'Mølgaard', 'Lykke', 'Strand', 'Thorup', 'Bonde'];
@@ -5205,7 +5281,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const strOvr = str => 50 + str * 6; // the computer teams' rating, from their stars
   function squadLoad() {
     let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
-    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) if (!p.nat) p.nat = 'DK'; return S; }
+    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) if (!p.nat) p.nat = 'DK'; if (!S.abv) { abStart(S); squadSave(S); } return S; }
     // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
     const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
     const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
@@ -5214,7 +5290,16 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       SKILLS.forEach(([k], x) => { p[k] = Math.max(40, Math.min(99, b[x] + j() + Math.round((old[k] || 0) * 4.5))); });
       return p;
     }) };
-    squadSave(S); return S;
+    abStart(S); squadSave(S); return S;
+  }
+  function abStart(S) { // the first time: your best keeper, defender, midfielder and forward each have an evne already
+    S.abv = 1;
+    for (const pos of ['MV', 'FO', 'MB', 'AN']) {
+      const c = S.pl.filter(p => p.pos === pos && !abOf(p).length).sort((a, b) => ovr(b) - ovr(a))[0];
+      if (!c) continue;
+      let h = 0; for (const ch of String(c.n)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+      const pool = abFor(pos); c.ab = [pool[h % pool.length]];
+    }
   }
   function squadSave(S) { try { localStorage.setItem('mf-squad', JSON.stringify(S)); } catch (_) {} }
   function addTP(n) { const S = squadLoad(); S.tp = Math.max(0, (S.tp || 0) + (n | 0)); squadSave(S); paintTP(S); return S.tp; }
@@ -5254,12 +5339,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function xiFor(n, S) { S = S || squadLoad(); const m = xiManual(n, S); return m ? m.slice() : xiAuto(n, S); }
   function teamOvr(n) { const S = squadLoad(), L = layFor(n), xi = xiFor(n, S); return Math.round(xi.reduce((t, i, k) => t + fitOvr(S.pl[i], slotPos(L[k], k, n)), 0) / xi.length); }
   function squadToPitch() { // every man plays the place he has in your line-up (picked by you, or the best for each place)
-    for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; }
+    for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; p.ab = null; }
     const S0 = squadLoad(), xi = xiFor(size, S0), L = layFor(size), mine = P.filter(p => p.team === 0);
     for (const p of mine) {
       const i = xi[p.k], s = S0.pl[i]; if (!s) continue;
       const pen = (ovr(s) - fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size))) / 4.5; // out of position: he plays a bit worse
-      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size));
+      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size)); p.ab = abOf(s);
     }
     const avg = { spd: 0, sht: 0, pas: 0, def: 0 };
     for (const [k] of SKILLS) avg[k] = xi.reduce((t, i) => t + statLv(S0.pl[i][k]), 0) / xi.length;
@@ -5279,6 +5364,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       for (const [k] of SKILLS) r[k] = Math.max(40, Math.min(99, Math.round(base + POSB[pos][k] + (rnd() * 16 - 8))));
       p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, (r[k] - base - POSB[pos][k] * 0.4) / 3.5]));
       p.ovr = ovr(r); p.sq = FIRSTN[Math.floor(rnd() * FIRSTN.length)] + ' ' + LASTN[Math.floor(rnd() * LASTN.length)];
+      const str = tm ? tm.str || 3 : 3; // the stars of a team: a top side has an evne on most of its players
+      { const pool = abFor(pos); p.ab = rnd() < 0.08 + 0.13 * str ? [pool[Math.floor(rnd() * pool.length)]] : null; }
     }
   }
   // your players get better by playing (as in FC Mobile): what each man did in the match grows the matching skill
@@ -5323,6 +5410,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     for (const [k] of SKILLS) p[k] = Math.max(40, Math.min(99, t + POSB[pos][k] + Math.floor(Math.random() * 7) - 3));
     for (let i = 0; i < 6 && ovr(p) !== t; i++) { const d = t - ovr(p); for (const [k] of SKILLS) p[k] = Math.max(40, Math.min(99, p[k] + d)); } // land on the rating the pack promised
     if (opt.ev) p.ev = opt.ev;
+    { const ab = abRoll(pos, t, !!opt.ev); if (ab.length) p.ab = ab; }
     if (pos !== 'MV') p.dp = pk1(DPOS3[pos].concat([DPOS3[pos][1]]));
     return p;
   }
@@ -5333,6 +5421,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     add('o', o); add('ps', DPOSN[dpOf(p)]); add('n', p.n); add('nt', (NATS[p.nat] || 'Danmark') + (p.ev ? ' · ' + p.ev : ''));
     const st = add('st', '');
     for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflekser' : name} ${p[k]}`; st.appendChild(d); }
+    if (abOf(p).length) { const ab = add('ab', ''); for (const a of abOf(p)) { const d = document.createElement('span'); d.textContent = ABIL[a].i + ' ' + ABIL[a].n; ab.appendChild(d); } }
   }
   // ---------- the pack opening (as in FIFA): the pack shakes, bursts, then nation, position and rating one at a time ----------
   const flagOf = c => (c && /^[A-Z]{2}$/.test(c) ? String.fromCodePoint(...[...c].map(ch => 0x1f1e6 + ch.charCodeAt(0) - 65)) + ' ' : '');
@@ -5344,7 +5433,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     fxT.forEach(clearTimeout); fxT = [];
     el.className = ''; el.style.setProperty('--fx', FXC[tier]); $('fxPack').style.setProperty('--pk', pkc); $('fxName').textContent = title;
     $('fxNat').textContent = flagOf(p.nat) + (NATS[p.nat] || 'Danmark'); $('fxPos').textContent = DPOSN[dpOf(p)] || ''; $('fxOvr').textContent = o;
-    for (const id of ['fxNat', 'fxPos', 'fxOvr']) $(id).classList.remove('on');
+    $('fxAb').textContent = abOf(p).map(a => ABIL[a].i + ' ' + ABIL[a].n).join('   ');
+    for (const id of ['fxNat', 'fxPos', 'fxOvr', 'fxAb']) $(id).classList.remove('on');
     $('fxConf').textContent = ''; const pk = $('fxPack'); pk.style.animation = 'none'; void pk.offsetWidth; pk.style.animation = '';
     el.hidden = false;
     let ended = false;
@@ -5359,7 +5449,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     at(B + 350, () => { $('fxNat').classList.add('on'); tone(520, 0.12, 'square', 0.04); });
     at(B + 350 + step, () => { $('fxPos').classList.add('on'); tone(620, 0.12, 'square', 0.04); });
     at(B + 350 + step * 2, () => { $('fxOvr').classList.add('on'); tone(big ? 990 : 780, 0.3, 'triangle', 0.07); });
-    at(B + 350 + step * 2 + (big ? 1300 : 800), end);
+    const abN = abOf(p).length ? step : 0;
+    if (abN) at(B + 350 + step * 3, () => { $('fxAb').classList.add('on'); tone(1180, 0.25, 'triangle', 0.06); buzz(25); });
+    at(B + 350 + step * 2 + abN + (big ? 1300 : 800), end);
   }
   function showCard(p, title, after) { packFx(p, title, () => showCardNow(p, title, after)); }
   function showCardNow(p, title, after) { // the reveal: keep him (on the bench, or in place of your weakest) or sell him for coins
@@ -5433,6 +5525,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.n;
       const na = document.createElement('span'); na.className = 'nat'; na.textContent = p.nat || 'DK'; nm.appendChild(na);
       if (p.ev) { const e = document.createElement('span'); e.className = 'nat'; e.textContent = '★'; nm.appendChild(e); }
+      if (abOf(p).length) { const e = document.createElement('span'); e.className = 'abi'; e.textContent = abIcons(p); nm.appendChild(e); }
       const o = document.createElement('span'); o.className = 'ovr ' + (p.ev ? 'gold' : ovrTier(ovr(p))); o.textContent = ovr(p);
       if (!inXI.has(i)) b.classList.add('bench');
       b.append(ps, nm, o); b.onclick = () => { sqSel = i; squadShow(); };
@@ -5456,15 +5549,51 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const bar = document.createElement('div'); bar.className = 'lvbar'; const f = document.createElement('i'); f.style.width = Math.round((v - 40) / 59 * 100) + '%'; bar.appendChild(f);
       r.append(b, bt, bar); box.appendChild(r);
     }
-    $('sqTeam').textContent = `Holdets rating ${teamOvr(n)} (${n} mod ${n})`;
-    const ch = chemOf(n, S); $('sqChem').textContent = `Kemi ${ch.v}/100 (spillere fra samme land, der starter sammen)`;
+    { // his evner: two places, the second opens at rating 70
+      const A = $('sqAb'), ab = abOf(p); A.textContent = '';
+      for (let k = 0; k < 2; k++) {
+        const bt = document.createElement('button'), a = ab[k], lock = !a && k === 1 && (o < AB_SLOT2 || !ab[0]);
+        bt.className = 'alt abslot' + (a ? ' has' : '') + (lock ? ' lock' : '');
+        const ic = document.createElement('i'), tx = document.createElement('span'), sm = document.createElement('small');
+        ic.textContent = a ? ABIL[a].i : lock ? '🔒' : '＋';
+        tx.textContent = a ? ABIL[a].n : lock ? 'Evne 2' : 'Lær en evne';
+        sm.textContent = a ? 'Tryk for at se eller skifte' : lock ? (o < AB_SLOT2 ? `Åbner ved rating ${AB_SLOT2}` : 'Lær den første først') : `${AB_COST[k]} TP`;
+        tx.appendChild(sm); bt.append(ic, tx);
+        bt.onclick = () => { if (!lock) abPick(sqSel, k); };
+        A.appendChild(bt);
+      }
+    }
+    $('sqTeam').textContent = `Hold ${teamOvr(n)}`;
+    const ch = chemOf(n, S); $('sqChem').textContent = `kemi ${ch.v}`;
     $('sqPos').textContent = DPOSN[dpOf(p)] + ' · ' + (NATS[p.nat] || 'Danmark');
     evPaint();
-    $('sqXI').textContent = inXI.has(sqSel) ? `Starter ved ${n} mod ${n}.` : `På bænken ved ${n} mod ${n}. De bedste spillere starter automatisk.`;
+    $('sqXI').textContent = inXI.has(sqSel) ? `starter ved ${n} mod ${n}.` : `på bænken ved ${n} mod ${n}.`;
     paintTP(S); paintCoins();
     $('squad').hidden = false;
   }
+  function abPick(i, k) { // the list of evner his line can learn; the one he has in this place is marked
+    const S = squadLoad(), p = S.pl[i]; if (!p) return;
+    const ab = abOf(p), cur = ab[k], price = cur ? AB_SWAP : AB_COST[k], L = $('abList'); L.textContent = '';
+    $('abTitle').textContent = cur ? 'Skift evne' : 'Lær en evne';
+    $('abNote').textContent = `${p.n} · ${POS[p.pos]} · ` + (cur ? `Har ${ABIL[cur].n}. En anden evne i stedet koster ${AB_SWAP} TP.` : `En evne koster ${price} TP og bliver hos ham. Du mærker den i kampe mod computeren, i karriere og pokal.`);
+    for (const a of abFor(p.pos)) {
+      const bt = document.createElement('button'), A = ABIL[a], other = ab.includes(a) && a !== cur; bt.className = 'alt';
+      const ic = document.createElement('i'), b = document.createElement('b'), sm = document.createElement('small');
+      ic.textContent = A.i; b.textContent = A.n + (a === cur ? ' · valgt' : other ? ' · har han' : ''); sm.textContent = A.d;
+      bt.append(ic, b, sm); bt.setAttribute('aria-pressed', String(a === cur)); bt.disabled = other;
+      bt.onclick = () => {
+        if (a === cur) { $('abOv').hidden = true; return; }
+        const S2 = squadLoad(), q = S2.pl[i];
+        if (S2.tp < price) { sm.textContent = `Mangler ${price - S2.tp} TP. Spil kampe eller færdighedsspil.`; return; }
+        S2.tp -= price; const nb = abOf(q); nb[k] = a; q.ab = nb.filter(Boolean); squadSave(S2); sfx.win(); buzz(30);
+        $('abOv').hidden = true; squadShow();
+      };
+      L.appendChild(bt);
+    }
+    paintTP(S); $('abOv').hidden = false;
+  }
   function squadInit() {
+    $('abClose').onclick = () => { $('abOv').hidden = true; };
     $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } squadShow(); });
     $('sqClose').onclick = () => { $('squad').hidden = true; };
     $('goSquad').onclick = squadShow;
@@ -5801,7 +5930,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const st = document.createElement('div'); st.className = 'sts';
       for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${who.pos === 'MV' && k === 'def' ? 'Reflekser' : name} ${who[k]}`; st.appendChild(d); }
       sel.appendChild(st);
-      const tr = document.createElement('button'); tr.className = 'linkbtn'; tr.textContent = 'Træn ham ›';
+      if (abOf(who).length) { const ab = document.createElement('div'); ab.className = 'abs'; for (const a of abOf(who)) { const d = document.createElement('span'); d.className = 'abchip'; d.textContent = ABIL[a].i + ' ' + ABIL[a].n; d.title = ABIL[a].d; ab.appendChild(d); } sel.appendChild(ab); }
+      const tr = document.createElement('button'); tr.className = 'linkbtn'; tr.textContent = 'Træn ham og vælg evner ›';
       tr.onclick = () => { sqSel = S.pl.indexOf(who); squadShow(); }; sel.appendChild(tr);
     }
     const B = $('mtBench'); B.textContent = '';
@@ -5869,6 +5999,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       g.font = `800 ${Math.round(cw * 0.42)}px ${FT}`; g.fillText(o, cx, cy - chh * 0.14);
       g.font = `800 ${Math.round(cw * 0.22)}px ${FT}`; g.fillStyle = bad ? '#b3261e' : side ? '#7a4a00' : '#14181c'; g.fillText(role, cx, cy + chh * 0.33);
       if (mtSel >= 0 && !sel || mtSelB >= 0) { const who = mtSelB >= 0 ? S.pl[mtSelB] : S.pl[xi[mtSel]]; if (who && dpOf(who) === spos) { g.strokeStyle = '#59e38b'; g.lineWidth = 2.5; g.beginPath(); g.roundRect(cx - cw / 2 - 3, cy - chh / 2 - 3, cw + 6, chh + 6, 8); g.stroke(); } } // where the chosen man would fit
+      if (abOf(sp).length) { g.font = `${Math.round(cw * 0.24)}px ${FT}`; g.fillStyle = '#fff'; g.fillText(abIcons(sp), cx + cw / 2 - 2, cy - chh / 2 + 1); } // his evner on the corner of the card
       const sn = sp.n.split(' ').slice(-1)[0]; g.font = `700 ${Math.max(9, Math.round(cw * 0.21))}px ${FT}`; g.fillStyle = '#fff';
       g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 3; g.strokeText(sn, cx, cy + chh / 2 + 8); g.fillText(sn, cx, cy + chh / 2 + 8);
     });
@@ -6731,9 +6862,22 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       ctx.fillStyle = isMine(p) ? col.gold : col.chalk; ctx.fillText(tag, p.x, p.y - PRAD - 6);
     }
     if (ball.owner === p.i && p.sq && !down && mode !== 'guest' && state === 'play' && !shootoutOn()) { // the man on the ball: his name under him, so you get to know your players
-      const nm = p.sq.split(' ').pop(), ny = p.y + PRAD + (isMine(p) && p.stamina < 0.99 ? 15 : 5);
+      const nm = p.sq.split(' ').pop() + (p.ab && p.ab.length ? ' ' + abIcons(p) : ''), ny = p.y + PRAD + (isMine(p) && p.stamina < 0.99 ? 15 : 5);
       ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(nm, p.x + 1, ny + 1); ctx.fillStyle = 'rgba(244,247,242,0.92)'; ctx.fillText(nm, p.x, ny);
+    }
+    if (p.abAt && p.abI && ABIL[p.abI] && !(replay && replay.t >= 0)) { // an evne just did its thing: its sign rises over him
+      const a = (performance.now() - p.abAt) / 1500;
+      if (a >= 0 && a < 1) {
+        const A = ABIL[p.abI], txt = A.i + ' ' + A.n.toUpperCase(), y = p.y - PRAD - 30 - a * 14, k = a < 0.12 ? a / 0.12 : 1;
+        ctx.save(); ctx.globalAlpha = a > 0.7 ? (1 - a) / 0.3 : 1; ctx.translate(p.x, y); ctx.scale(0.7 + 0.3 * k, 0.7 + 0.3 * k);
+        ctx.font = `800 12px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const w = ctx.measureText(txt).width + 16;
+        ctx.fillStyle = 'rgba(8,16,12,0.82)'; ctx.beginPath(); ctx.roundRect(-w / 2, -11, w, 22, 11); ctx.fill();
+        ctx.strokeStyle = col.gold; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.fillStyle = col.gold; ctx.fillText(txt, 0, 1);
+        ctx.restore();
+      } else p.abI = '';
     }
     if (isMine(p) && p.stamina < 0.99) {
       ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(p.x - 20, p.y + PRAD + 6, 40, 5);
