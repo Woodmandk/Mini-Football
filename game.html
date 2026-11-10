@@ -350,6 +350,23 @@ button.small { font-size: 13px; padding: 9px 10px; }
 .mtfrom button { font-size: 11px !important; }
 .mttip { font-size: 11px; line-height: 1.3; }
 #mtLayTip { max-width: 300px; }
+.mttabs { flex: 0 1 330px; padding: 3px; } .mttabs button { padding: 7px 6px; font-size: 13px; }
+.mtovr { flex: 0 0 auto !important; text-align: right; font-size: 12px; color: var(--muted); white-space: nowrap; } .mtovr b { color: var(--gold); font-size: 16px; }
+.mtgrid.tab-lay, .mtgrid.tab-tac { grid-template-columns: 1fr; }
+.mtgrid.tab-lay .mtleft, .mtgrid.tab-tac .mtright { display: none; }
+.mtgrid.tab-tac .mtleft { max-width: 520px; width: 100%; justify-self: center; }
+.mtlay { display: flex; gap: 10px; align-items: stretch; width: 100%; justify-content: center; }
+.mtside { flex: 0 0 200px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.mtsel { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 8px; font-size: 12px; line-height: 1.35; min-height: 70px; }
+.mtsel b.o { font-size: 22px; float: left; margin-right: 8px; line-height: 1; padding: 4px 6px; border-radius: 6px; color: #14181c; }
+.mtsel .warn { color: #ff9f5a; }
+.mtsel .sts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; clear: both; margin-top: 4px; color: var(--muted); }
+.mtbench { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1 1 0; min-height: 60px; }
+.mtbench button { display: grid; grid-template-columns: 30px 28px 1fr; gap: 6px; align-items: center; padding: 5px 8px; font-size: 12px; text-align: left; }
+.mtbench button .o { font-weight: 800; border-radius: 5px; text-align: center; color: #14181c; padding: 2px 0; }
+.mtbench button[aria-pressed="true"] { outline: 2px solid var(--gold); }
+.t-bronze { background: #c98a4b; } .t-silver { background: #c4ccd6; } .t-gold { background: #e3b23c; } .t-elite { background: #b57bff; }
+.mtgrid.narrow .mtlay { flex-direction: column; align-items: center; } .mtgrid.narrow .mtside { flex: 0 0 auto; width: 100%; } .mtgrid.narrow .mtbench { max-height: 160px; }
 .mtgrid.narrow { grid-template-columns: 1fr; } .mtgrid.narrow .mtright { justify-self: center; } /* set from script: the game may be turned */
 .toast { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; background: rgba(9,20,15,0.92); border: 1px solid rgba(244,247,242,0.3); border-radius: 999px; padding: 8px 16px; font-size: 14px; white-space: nowrap; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
@@ -740,8 +757,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   <!-- your own team: name, colours, tactics and a line-up you drag into place -->
   <div class="overlay" id="myteam" hidden>
     <div class="card wide mtcard">
-      <div class="top"><button class="alt back" id="mtClose">‹ Færdig</button><h2>Mit hold</h2><span class="sp"></span></div>
-      <div class="mtgrid">
+      <div class="top"><button class="alt back" id="mtClose">‹ Færdig</button><div class="seg mttabs" id="mtTabs" role="group" aria-label="Vis"><button data-t="lay">Opstilling</button><button data-t="tac">Taktik og trøje</button></div><span class="sp mtovr" id="mtOvr"></span></div>
+      <div class="mtgrid tab-lay">
         <div class="col mtleft">
           <div class="mtname">
             <input id="mtName" class="namein" maxlength="16" placeholder="Holdets navn" autocomplete="off" aria-label="Holdets navn">
@@ -757,7 +774,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         </div>
         <div class="col mtright" id="mtLay">
           <div class="seg" id="mtSize" role="group" aria-label="Opstilling til holdstørrelse"></div>
-          <canvas id="mtCv" aria-label="Opstilling. Træk spillerne derhen, hvor de skal stå"></canvas>
+          <div class="mtlay"><canvas id="mtCv" aria-label="Opstilling. Tryk på to spillere for at bytte dem, træk for at flytte"></canvas>
+            <div class="mtside"><div class="mtsel" id="mtSel"></div><div class="lbl">Bænk</div><div class="mtbench" id="mtBench"></div><button id="mtAuto" class="alt small">Sæt bedste hold</button></div></div>
           <div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start fra en formation"></div>
           <p class="mttip" id="mtLayTip"></p>
         </div>
@@ -4853,17 +4871,34 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function addTP(n) { const S = squadLoad(); S.tp = Math.max(0, (S.tp || 0) + (n | 0)); squadSave(S); paintTP(S); return S.tp; }
   function paintTP(S) { const t = (S || squadLoad()).tp; document.querySelectorAll('[data-tp]').forEach(e => { e.textContent = t; }); }
   // the line-up for n a side: the keeper plus the best-rated outfield players, back to front
-  function squadXI(n, S) {
+  function squadXI(n, S, auto) {
     S = S || squadLoad();
+    const man = !auto && xiManual(n, S); if (man) return man.map(i => ({ p: S.pl[i], i }));
     const gk = S.pl[0], out = S.pl.slice(1).map((p, i) => ({ p, i: i + 1 })).sort((a, b) => ovr(b.p) - ovr(a.p)).slice(0, Math.max(0, n - 1));
     const ord = { FO: 0, MB: 1, AN: 2 };
     out.sort((a, b) => ord[a.p.pos] - ord[b.p.pos] || a.i - b.i);
     return n === 1 ? [{ p: out.length ? out[0].p : gk, i: 1 }] : [{ p: gk, i: 0 }, ...out];
   }
+  // your own starting line-up per team size (as in FIFA): S.xi[n] = squad index for every place in the formation (place 0 is the keeper)
+  const slotRole = (q, i, n) => (n > 1 && i === 0 ? 'MV' : q[0] < 0.4 ? 'FO' : q[0] < 0.68 ? 'MB' : 'AN');
+  function layFor(n) { const mt = loadMT(); if (cleanLay(mt.lay[n], n)) return mt.lay[n]; const l = formList(n), v = myForm(n); return ((l && (l[v] || l[0])) || [0, FORM[n]])[1]; }
+  function xiManual(n, S) { const x = S.xi && S.xi[n]; return Array.isArray(x) && x.length === n && new Set(x).size === n && x.every(i => Number.isInteger(i) && S.pl[i]) ? x : null; }
+  function xiFor(n, S) { // the squad index in each place: yours if you picked them, otherwise the best men, back to front
+    S = S || squadLoad(); const m = xiManual(n, S); if (m) return m.slice();
+    const auto = squadXI(n, S, true), L = layFor(n), out = new Array(n);
+    if (n === 1) { out[0] = auto[0].i; return out; }
+    out[0] = auto[0].i; const slots = L.map((q, i) => ({ q, i })).slice(1).sort((a, b) => a.q[0] - b.q[0]);
+    slots.forEach((sl, j) => { out[sl.i] = auto[j + 1] ? auto[j + 1].i : auto[0].i; });
+    return out;
+  }
   const teamOvr = n => { const xi = squadXI(n); return Math.round(xi.reduce((s, x) => s + ovr(x.p), 0) / xi.length); };
   function squadToPitch() { // your players take their places: keeper in goal, defenders at the back, forwards up front
     for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; }
-    const xi = squadXI(size), mine = P.filter(p => p.team === 0);
+    const xi = squadXI(size), mine = P.filter(p => p.team === 0), S0 = squadLoad(), man = xiManual(size, S0);
+    if (man) { // you picked the line-up: every man plays the place you gave him
+      for (const p of mine) { const i = man[p.k], s = S0.pl[i]; if (!s) continue; p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k])])); p.sq = s.n; p.sqi = i; p.ovr = ovr(s); }
+      const avg = { spd: 0, sht: 0, pas: 0, def: 0 }; for (const [k] of SKILLS) avg[k] = xi.reduce((t, x) => t + statLv(x.p[k]), 0) / xi.length; return avg;
+    }
     const gk = size > 1 ? mine.find(p => p.k === 0) : null;
     const field = mine.filter(p => p !== gk).sort((a, b) => homeOf(a).x - homeOf(b).x);
     const list = size > 1 ? xi.slice(1) : xi;
@@ -5265,7 +5300,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     w: ['Smal: holdet står samlet inde i midten.', '', 'Bred: spillerne spreder sig ud til siderne.'],
     pt: ['Korte afleveringer: mange småafleveringer, færre langskud.', '', 'Lange bolde: flere stikninger frem og skud langt fra.'],
   };
-  let mtN = 5, mtAfter = null, mtDrag = -1, mtBuilt = false;
+  let mtN = 5, mtAfter = null, mtDrag = -1, mtBuilt = false, mtTab = 'lay', mtSel = -1, mtSelB = -1, mtDown = null, mtCards = [];
   const mtSizes = [2, 3, 5, 7, 11];
   function mtLayNow() { // what the editor shows: your saved line-up for this size, or the chosen formation
     const mt = loadMT();
@@ -5299,7 +5334,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     sw($('mtC1'), 'c1'); sw($('mtC2'), 'c2');
     for (const [id, k] of [['mtM', 'm'], ['mtPr', 'pr'], ['mtW', 'w'], ['mtPt', 'pt']])
       mkSeg($(id), [0, 1, 2], TAC_TXT[k], () => loadMT().tac[k], v => { loadMT().tac[k] = v; mtMade(); mtTip(k); });
-    mkSeg($('mtSize'), mtSizes, mtSizes.map(n => n + ' mod ' + n), () => mtN, v => { mtN = v; mtFrom(); mtDraw(); });
+    mkSeg($('mtSize'), mtSizes, mtSizes.map(n => n + ' mod ' + n), () => mtN, v => { mtN = v; mtSel = mtSelB = -1; mtFrom(); mtPaintSide(); mtDraw(); });
     const nm = $('mtName'), sh = $('mtShort');
     nm.addEventListener('input', () => {
       const v = nm.value.replace(/[^\p{L}\p{N} ._'-]/gu, '').slice(0, 16);
@@ -5321,21 +5356,81 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const p = at(e), L = mtLayNow(), w = cv2.clientWidth, h = cv2.clientHeight;
       let best = -1, bd = Math.max(26, w * 0.08);
       L.forEach((q, i) => { const d = Math.hypot(q[1] * w - p.x, (1 - q[0]) * h - p.y); if (d < bd) { bd = d; best = i; } });
-      if (best < 0) return;
-      const mt = loadMT();
-      if (!cleanLay(mt.lay[mtN], mtN)) mt.lay[mtN] = L.map(q => q.slice());
-      mtDrag = best; cv2.setPointerCapture(e.pointerId); e.preventDefault(); mtDraw();
+      for (const c of mtCards) if (p.x > c.x - c.w / 2 && p.x < c.x + c.w / 2 && p.y > c.y - c.h / 2 && p.y < c.y + c.h / 2 + 12) { best = c.i; break; } // a tap on the card itself
+      if (best < 0) { mtSel = -1; mtSelB = -1; mtPaintSide(); mtDraw(); return; }
+      mtDown = { i: best, x: p.x, y: p.y, moved: false };
+      cv2.setPointerCapture(e.pointerId); e.preventDefault();
     });
     cv2.addEventListener('pointermove', e => {
-      if (mtDrag < 0) return;
-      const p = at(e), [u, v] = toUV(p.x, p.y), mt = loadMT(), q = mt.lay[mtN][mtDrag];
+      if (!mtDown) return;
+      const p0 = at(e);
+      if (mtDrag < 0) { // a drag moves his place in the formation; a tap picks him
+        if (Math.hypot(p0.x - mtDown.x, p0.y - mtDown.y) < 8) return;
+        const mt = loadMT(); if (!cleanLay(mt.lay[mtN], mtN)) mt.lay[mtN] = mtLayNow().map(q => q.slice());
+        mtDrag = mtDown.i; mtDown.moved = true;
+      }
+      const p = p0, [u, v] = toUV(p.x, p.y), mt = loadMT(), q = mt.lay[mtN][mtDrag];
       if (mtDrag === 0) { q[0] = clamp(u, 0.03, 0.3); q[1] = clamp(v, 0.35, 0.65); } else { q[0] = clamp(u, 0.12, 0.95); q[1] = clamp(v, 0.05, 0.95); }
       mtDraw();
     });
-    const up = () => { if (mtDrag < 0) return; mtDrag = -1; saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
+    const up = () => {
+      const d = mtDown; mtDown = null; if (!d) return;
+      if (mtDrag >= 0) { mtDrag = -1; saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); return; }
+      mtTap(d.i);
+    };
+    $('mtAuto').onclick = () => { const S = squadLoad(); if (S.xi) delete S.xi[mtN]; squadSave(S); mtSel = mtSelB = -1; mtPaintSide(); mtDraw(); };
+    for (const b of $('mtTabs').children) b.onclick = () => { mtTab = b.dataset.t; mtTabs(); };
     cv2.addEventListener('pointerup', up); cv2.addEventListener('pointercancel', up);
     $('mtClose').onclick = mtClose;
     addEventListener('resize', () => { if (!$('myteam').hidden) mtDraw(); });
+  }
+  function mtTabs() {
+    const g = $('mtTabs').closest('.card').querySelector('.mtgrid'); g.classList.toggle('tab-lay', mtTab === 'lay'); g.classList.toggle('tab-tac', mtTab === 'tac');
+    for (const b of $('mtTabs').children) b.setAttribute('aria-pressed', String(b.dataset.t === mtTab));
+    if (mtTab === 'lay') requestAnimationFrame(mtDraw);
+  }
+  function mtSwap(a, b) { // a, b: places on the pitch (>= 0) or bench squad indices (as -1 - i)
+    const S = squadLoad(), xi = xiFor(mtN, S);
+    if (a >= 0 && b >= 0) [xi[a], xi[b]] = [xi[b], xi[a]];
+    else { const sl = a >= 0 ? a : b, bi = a >= 0 ? -1 - b : -1 - a; xi[sl] = bi; }
+    S.xi = S.xi || {}; S.xi[mtN] = xi; squadSave(S); sfx.kick(0.3);
+  }
+  function mtTap(i) { // tap one man, then another (on the pitch or the bench) to swap them
+    if (mtSelB >= 0) { mtSwap(i, -1 - mtSelB); mtSelB = -1; mtSel = -1; }
+    else if (mtSel === i) mtSel = -1;
+    else if (mtSel >= 0) { mtSwap(mtSel, i); mtSel = -1; }
+    else mtSel = i;
+    mtPaintSide(); mtDraw();
+  }
+  function mtPaintSide() { // the chosen man's card, the bench and the team rating
+    const S = squadLoad(), xi = xiFor(mtN, S), L = mtLayNow(), on = new Set(xi);
+    const ch = chemOf(mtN, S); $('mtOvr').innerHTML = `Hold <b>${teamOvr(mtN)}</b> · kemi ${ch.v}`;
+    const sel = $('mtSel'); sel.textContent = '';
+    const who = mtSel >= 0 ? S.pl[xi[mtSel]] : mtSelB >= 0 ? S.pl[mtSelB] : null;
+    if (!who) sel.textContent = 'Tryk på en spiller for at se ham. Tryk så på en anden, eller på en fra bænken, for at bytte. Træk en spiller for at flytte hans plads.';
+    else {
+      const o = ovr(who), b = document.createElement('b'); b.className = 'o t-' + ovrTier(o); b.textContent = o;
+      const t = document.createElement('div'); t.innerHTML = ''; const nm = document.createElement('strong'); nm.textContent = who.n;
+      t.append(nm, document.createElement('br'), `${POS[who.pos]} · ${flagOf(who.nat)}${NATS[who.nat] || 'Danmark'}`);
+      sel.append(b, t);
+      if (mtSel >= 0) { const role = slotRole(L[mtSel], mtSel, mtN); if (role !== who.pos) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = `Spiller ${POS[role].toLowerCase()} her, uden for sin position`; sel.appendChild(w); } }
+      const st = document.createElement('div'); st.className = 'sts';
+      for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${who.pos === 'MV' && k === 'def' ? 'Reflekser' : name} ${who[k]}`; st.appendChild(d); }
+      sel.appendChild(st);
+      const tr = document.createElement('button'); tr.className = 'linkbtn'; tr.textContent = 'Træn ham ›';
+      tr.onclick = () => { sqSel = S.pl.indexOf(who); squadShow(); }; sel.appendChild(tr);
+    }
+    const B = $('mtBench'); B.textContent = '';
+    const bench = S.pl.map((p, i) => ({ p, i })).filter(x => !on.has(x.i)).sort((a, b) => ovr(b.p) - ovr(a.p));
+    for (const { p, i } of bench) {
+      const bt = document.createElement('button'); bt.className = 'alt'; bt.setAttribute('aria-pressed', String(i === mtSelB));
+      const o = document.createElement('span'); o.className = 'o t-' + ovrTier(ovr(p)); o.textContent = ovr(p);
+      const ps = document.createElement('span'); ps.textContent = p.pos; const nm = document.createElement('span'); nm.textContent = p.n;
+      bt.append(o, ps, nm);
+      bt.onclick = () => { if (mtSel >= 0) { mtSwap(mtSel, -1 - i); mtSel = -1; mtSelB = -1; } else mtSelB = mtSelB === i ? -1 : i; mtPaintSide(); mtDraw(); };
+      B.appendChild(bt);
+    }
+    if (!bench.length) B.textContent = 'Ingen på bænken. Køb pakker i butikken for flere spillere.';
   }
   function mtFrom() { // start from one of the ready-made formations
     const el = $('mtFrom'), l = formList(mtN), cur = myForm(mtN);
@@ -5345,8 +5440,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       b.onclick = () => { loadMT().lay[mtN] = f.map(q => q.slice()); saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
       el.appendChild(b);
     });
-    $('mtLayTip').textContent = cur === CUST ? `Træk spillerne på plads. Din opstilling bruges i ${mtN} mod ${mtN} (Egen under Formation).`
-      : `Træk en spiller for at lave din egen opstilling til ${mtN} mod ${mtN}.`;
+    $('mtLayTip').textContent = 'Tryk på to spillere for at bytte dem, eller på en spiller og så en fra bænken. Træk en spiller for at flytte hans plads. Rød position betyder, at han spiller uden for sin position.';
   }
   function mtDraw() {
     const c = $('mtCv'), mt = loadMT();
@@ -5354,8 +5448,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     // as big as the screen allows next to the tactics (stacked under them on a narrow screen)
     const narrow = sw / uiK <= 560, card = c.closest('.card');
     c.closest('.mtgrid').classList.toggle('narrow', narrow);
-    let ph = narrow ? 260 : Math.max(150, Math.min(340, sh / uiK - 170)), pw = ph * asp;
-    const maxW = narrow ? card.clientWidth - 30 : card.clientWidth * 0.52;
+    let ph = narrow ? 300 : Math.max(170, Math.min(420, sh / uiK - 150)), pw = ph * asp;
+    const maxW = narrow ? card.clientWidth - 30 : card.clientWidth - 250;
     if (pw > maxW) { pw = maxW; ph = pw / asp; }
     c.style.width = Math.round(pw) + 'px'; c.style.height = Math.round(ph) + 'px';
     const w = Math.round(pw), h = Math.round(ph);
@@ -5371,9 +5465,28 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     g.strokeRect((w - bw) / 2, h - bh, bw, bh);
     g.fillStyle = 'rgba(244,247,242,0.85)'; g.fillRect(w / 2 - w * 0.12, h - 5, w * 0.24, 5);
     g.font = '600 9px ' + getComputedStyle(document.body).fontFamily; g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillStyle = 'rgba(244,247,242,0.3)';
-    g.fillText('ANGREB', w - 5, h * 0.2); g.fillText('MIDTBANE', w - 5, h * 0.42); g.fillText('FORSVAR', w - 5, h * 0.64);
+    if (mtDrag >= 0) g.fillText('ANGREB', w - 5, h * 0.2), g.fillText('MIDTBANE', w - 5, h * 0.42), g.fillText('FORSVAR', w - 5, h * 0.64);
+
     const L = mtLayNow(), pr = Math.max(9, Math.min(15, w * 0.042));
-    L.forEach((q, i) => {
+    const S = squadLoad(), xi = xiFor(mtN, S), FT = getComputedStyle(document.body).fontFamily;
+    const cw = Math.max(30, Math.min(54, w * (mtN >= 11 ? 0.105 : mtN >= 7 ? 0.125 : 0.15))), chh = cw * 1.25, TC = { bronze: '#c98a4b', silver: '#c4ccd6', gold: '#e3b23c', elite: '#b57bff' };
+    mtCards = [];
+    if (mtDrag < 0) L.forEach((q, i) => { // FIFA-style cards: rating, the place he plays, his name
+      const sp = S.pl[xi[i]]; if (!sp) return;
+      const x = q[1] * w, y = (1 - q[0]) * h, o = ovr(sp), role = slotRole(q, i, mtN), sel = i === mtSel;
+      const cx = Math.max(cw / 2 + 2, Math.min(w - cw / 2 - 2, x)), cy = Math.max(chh / 2 + 2, Math.min(h - chh / 2 - 12, y));
+      mtCards.push({ i, x: cx, y: cy, w: cw, h: chh });
+      g.save(); g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 6; g.shadowOffsetY = 2;
+      g.fillStyle = TC[ovrTier(o)]; g.beginPath(); g.roundRect(cx - cw / 2, cy - chh / 2, cw, chh, 6); g.fill(); g.restore();
+      g.fillStyle = mt.c1; g.fillRect(cx - cw / 2 + 3, cy + chh * 0.16, cw - 6, 3);
+      g.lineWidth = sel ? 3 : 1.5; g.strokeStyle = sel ? '#ffffff' : 'rgba(0,0,0,0.35)'; g.beginPath(); g.roundRect(cx - cw / 2, cy - chh / 2, cw, chh, 6); g.stroke();
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#14181c';
+      g.font = `800 ${Math.round(cw * 0.42)}px ${FT}`; g.fillText(o, cx, cy - chh * 0.14);
+      g.font = `800 ${Math.round(cw * 0.22)}px ${FT}`; g.fillStyle = role === sp.pos ? '#14181c' : '#b3261e'; g.fillText(role, cx, cy + chh * 0.33);
+      const sn = sp.n.split(' ').slice(-1)[0]; g.font = `700 ${Math.max(9, Math.round(cw * 0.21))}px ${FT}`; g.fillStyle = '#fff';
+      g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 3; g.strokeText(sn, cx, cy + chh / 2 + 8); g.fillText(sn, cx, cy + chh / 2 + 8);
+    });
+    if (mtDrag >= 0) L.forEach((q, i) => {
       const x = q[1] * w, y = (1 - q[0]) * h, big = i === mtDrag;
       g.beginPath(); g.arc(x, y, big ? pr * 1.3 : pr, 0, Math.PI * 2);
       g.fillStyle = i === 0 ? '#ffd447' : mt.c1; g.fill();
@@ -5392,7 +5505,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('mtC1')._paint(); $('mtC2')._paint();
     segPaints.forEach(f => f());
     mtTip(''); mtFrom();
-    $('myteam').hidden = false;
+    $('myteam').hidden = false; mtSel = mtSelB = -1; mtTab = focus === 'tac' ? 'tac' : 'lay'; mtTabs(); mtPaintSide();
     requestAnimationFrame(() => { mtDraw(); if (focus === 'lay') $('mtLay').scrollIntoView({ block: 'nearest' }); });
   }
   function mtClose() {
