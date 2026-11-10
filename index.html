@@ -515,6 +515,18 @@ table.st tr.me td { color: var(--gold); }
 #packOv .btns { flex-direction: column; align-self: start; } #packOv #pkNote { align-self: end; font-size: 13px; }
 #wrap.n560 #packOv .card { grid-template-columns: 1fr; } #wrap.n560 #packOv .pk { grid-row: auto; margin: 0 auto; }
 .sqrow .abi { font-size: 12px; margin-left: 4px; }
+.sqrow .fm { width: 26px; height: 5px; border-radius: 3px; background: rgba(255,255,255,0.14); overflow: hidden; flex: none; } .sqrow .fm i { display: block; height: 100%; }
+.sqrow .mo { font-size: 12px; flex: none; }
+.fmrow small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; line-height: 1.25; text-align: left; }
+.mklist { display: flex; flex-direction: column; gap: 6px; }
+.mkrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
+.mkrow.deal { border-color: var(--gold); } .mkrow.deal .nm b::after { content: ' · TILBUD'; color: var(--gold); font-size: 10px; }
+.mkrow.arm { border-color: #ff6b5e; }
+.mkrow .ovr { font-weight: 800; font-size: 17px; width: 30px; text-align: center; flex: none; }
+.mkrow .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; } .mkrow .nm b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .mkrow .nm small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mkrow .st { font-size: 11px; color: var(--muted); white-space: pre; flex: none; }
+.mkrow button { min-height: 0; padding: 7px 12px; font-size: 13px; flex: none; white-space: nowrap; }
+.mktoast { position: sticky; bottom: 6px; align-self: center; margin: 8px auto 0; width: max-content; max-width: 90%; background: #1f6f43; color: #fff; font-weight: 700; padding: 8px 16px; border-radius: 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
 .linkbtn { font: 500 11px/1 var(--font); letter-spacing: 0.04em; text-transform: none; padding: 2px 4px; margin-left: 6px; border: 0; background: none; color: var(--gold); text-decoration: underline; }
 button.small { font-size: 13px; padding: 9px 10px; }
 #lobbyTeams { font-size: 15px; }
@@ -633,7 +645,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       </div>
       <div class="tabp" data-tab="hold" hidden>
         <button id="goMine" class="big tile hot"><i class="ic">📋</i>Opstilling<small id="holdSub">Dine spillere på banen. Byt med et tryk</small></button>
-        <button id="goSquad" class="big tile alt"><i class="ic">💪</i>Trup og træning<small>Træn dine spillere med TP</small></button>
+        <button id="goSquad" class="big tile alt"><i class="ic">💪</i>Trup og træning<small id="squadSub">Træn dine spillere med TP</small></button>
+        <button id="goMarket" class="big tile alt"><i class="ic">🤝</i>Transfermarked<small id="mktSub">Køb og sælg spillere. Nye hver dag</small></button>
         <button id="goTac" class="big tile alt"><i class="ic">🎨</i>Taktik og trøje<small>Holdnavn, farver, spillestil og pres</small></button>
       </div>
       <div class="tabp" data-tab="butik" hidden>
@@ -817,6 +830,15 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <button id="sqDrills" class="go">Færdighedsspil ›</button>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="mktOv" hidden>
+    <div class="card wide">
+      <div class="top"><button class="alt back" id="mkClose">‹ Tilbage</button><h2>Transfermarked</h2><span class="coins big" data-coins>0</span></div>
+      <div class="mklist" id="mkBuy"></div>
+      <div class="mklist" id="mkSell"></div>
+      <div class="mktoast" id="mkToast" hidden></div>
     </div>
   </div>
 
@@ -1608,6 +1630,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const n = cfg.size || 7, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
       $('hcSub').textContent = `Hold ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'Mit hold');
       $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Byt spillere med et tryk`;
+      { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; $('squadSub').textContent = tr ? `${tr} i startopstillingen er trætte. Skift ud eller giv massage` : 'Træn dine spillere med TP. Se form og humør'; $('goSquad').classList.toggle('hot', !!tr);
+        const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = Mk.l.length ? `${Mk.l.length} spillere i dag` + (dl ? ` · tilbud: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Udsolgt i dag. Nye spillere i morgen'; }
       $('freeSub').textContent = S.free.length ? `${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} klar til at blive åbnet!` : 'Fra sæsonpasset og daglige belønninger';
       $('goFree').classList.toggle('hot', !!S.free.length);
       $('passSub').textContent = `Niveau ${S.t} af ${PASS_N} · ${S.t >= PASS_N ? 'fuldført' : `${(S.t + 1) * PASS_XP - S.xp} XP til næste`} · nyt pas om ${daysLeftInMonth()} dage`;
@@ -2474,7 +2498,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     mode = m;
     if (m !== 'two') cupMatch = null;
     if (m !== 'host') { makePlayers(matchSize()); assignLocal(); }
-    for (const q of P) { q.fat = 0; q.stamina = 1; } // fresh legs for a new match
+    for (const q of P) { q.fit0 = 0; q.fat = 0; q.stamina = 1; } // fresh legs for a new match (your own squad's form is set in squadToPitch)
     score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; addT = null; stopT = 0; subsUsed = [0, 0]; subOut = []; subChk = 0; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
     for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; p.lay = 0; p.hands = 0; p.inj = 0; }
     particles = []; matchNo++; stadTier = kind === 'train' || kind === 'test' || drill ? 0 : stadOf(loadProf().lvl || 1);
@@ -3314,13 +3338,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const outN = p.sq || '';
     subOut.push({ team: t, sqi: p.sqi, ms: p.ms });
     const b = benchFor(p);
-    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); p.ab = abOf(b.s); }
+    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); p.ab = abOf(b.s); p.fit0 = (100 - fitOf(b.s)) / 100 * 0.4; }
     else { p.ab = null; // a reserve from the bench: fresh, a touch less good
       if (p.lv) p.lv = Object.fromEntries(Object.entries(p.lv).map(([k, v]) => [k, v - 0.6]));
       if (p.ovr) p.ovr = Math.max(40, p.ovr - 3);
       p.sq = FIRSTN[Math.floor(Math.random() * FIRSTN.length)] + ' ' + LASTN[Math.floor(Math.random() * LASTN.length)]; p.sqi = -1;
     }
-    p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; p.fat = 0; p.stamina = 1; p.inj = 0; p.yc = 0; p.fouls = 0; p.lay = 0; p.stun = 0;
+    p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; p.fat = b ? p.fit0 || 0 : 0; p.stamina = 1 - p.fat; p.inj = 0; p.yc = 0; p.fouls = 0; p.lay = 0; p.stun = 0;
     const last = s => (s.split(' ')[1] || s);
     flash = { text: `Udskiftning: ${b || p.sq ? last(p.sq) + ' ind' : 'frisk spiller ind'}${outN ? ', ' + last(outN) + ' ud' : ''}`, t: 2 };
     say('Udskiftning', 1.5);
@@ -4746,7 +4770,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     pr.coins += coins; saveProf(pr);
     let tp = 0;
     if ((me === 0 || me === 1) && kind !== 'pen') { tp = 4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0); addTP(tp); }
-    if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Udvikling: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
+    if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Trætte ben: ' + tired.slice(0, 3).join(', ') + '. Giv dem en pause'; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Udvikling: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
     rw.textContent = `+${coins} mønter` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
     rw.hidden = false;
   }
@@ -5432,7 +5456,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const strOvr = str => 50 + str * 6; // the computer teams' rating, from their stars
   function squadLoad() {
     let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
-    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) if (!p.nat) p.nat = 'DK'; if (!S.abv) { abStart(S); squadSave(S); } return S; }
+    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) if (!p.nat) p.nat = 'DK'; if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
     // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
     const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
     const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
@@ -5441,7 +5465,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       SKILLS.forEach(([k], x) => { p[k] = Math.max(40, Math.min(99, b[x] + j() + Math.round((old[k] || 0) * 4.5))); });
       return p;
     }) };
-    abStart(S); squadSave(S); return S;
+    S.ft = Date.now(); abStart(S); squadSave(S); return S;
   }
   function abStart(S) { // the first time: your best keeper, defender, midfielder and forward each have an evne already
     S.abv = 1;
@@ -5490,12 +5514,15 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function xiFor(n, S) { S = S || squadLoad(); const m = xiManual(n, S); return m ? m.slice() : xiAuto(n, S); }
   function teamOvr(n) { const S = squadLoad(), L = layFor(n), xi = xiFor(n, S); return Math.round(xi.reduce((t, i, k) => t + fitOvr(S.pl[i], slotPos(L[k], k, n)), 0) / xi.length); }
   function squadToPitch() { // every man plays the place he has in your line-up (picked by you, or the best for each place)
-    for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; p.ab = null; }
+    for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; p.ab = null; p.fit0 = 0; }
     const S0 = squadLoad(), xi = xiFor(size, S0), L = layFor(size), mine = P.filter(p => p.team === 0);
     for (const p of mine) {
       const i = xi[p.k], s = S0.pl[i]; if (!s) continue;
       const pen = (ovr(s) - fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size))) / 4.5; // out of position: he plays a bit worse
       p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size)); p.ab = abOf(s);
+      { const fi = fitOf(s), mo = morOf(s), mb = mo >= 85 ? 0.4 : mo < 35 ? -0.5 : 0, fb = Math.max(0, 70 - fi) / 20; // tired legs are slower and tire sooner, a happy player plays a little above himself
+        for (const [k] of SKILLS) p.lv[k] += mb - (k === 'spd' ? fb : fb * 0.4);
+        p.fit0 = (100 - fi) / 100 * 0.4; p.fat = p.fit0; p.stamina = 1 - p.fat; }
     }
     const avg = { spd: 0, sht: 0, pas: 0, def: 0 };
     for (const [k] of SKILLS) avg[k] = xi.reduce((t, i) => t + statLv(S0.pl[i][k]), 0) / xi.length;
@@ -5539,6 +5566,104 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     squadSave(S);
     return ups;
   }
+  // ---------- the manager side (as in Top Eleven): form, humør and the transfer market ----------
+  // Form 0-100: playing a match costs legs, they come back by themselves over time (about 15 an hour) or with a massage.
+  // Humør 0-100: winning and playing lift it, losing and sitting on the bench lower it. Both follow the man into the match.
+  const fitOf = p => (p.fit == null ? 100 : p.fit), morOf = p => (p.mor == null ? 70 : p.mor);
+  const FIT_MIN = 30, MASSAGE = [25, 30]; // coins, form back
+  function squadTick(S) {
+    const now = Date.now(); if (!S.ft || now < S.ft) { S.ft = now; return; }
+    const mins = (now - S.ft) / 60000; if (mins < 1) return;
+    let ch = false; for (const p of S.pl) if (p.fit != null && p.fit < 100) { p.fit = Math.min(100, Math.round((p.fit + mins / 4) * 10) / 10); if (p.fit >= 100) delete p.fit; ch = true; }
+    S.ft = now; if (ch) squadSave(S);
+  }
+  function squadAfter(res) { // after a match with your own squad: tired legs, and the mood follows the result
+    const S = squadLoad(), played = new Set(), tired = [];
+    for (const p of P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) {
+      if (p.team !== 0 || !(p.sqi >= 0) || !S.pl[p.sqi] || played.has(p.sqi)) continue;
+      played.add(p.sqi); const pl = S.pl[p.sqi], m = p.ms || {};
+      pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - (10 + Math.min(8, (m.spr || 0) * 0.13)) * (hasAb(pl, 'motor') ? 0.7 : 1)));
+      pl.mor = clamp(Math.round(morOf(pl) + (res > 0 ? 6 : res < 0 ? -5 : 1) + Math.min(4, (m.g || 0) * 2)), 10, 100);
+      if (pl.fit < 60) tired.push(pl.n.split(' ').slice(-1)[0]);
+    }
+    S.pl.forEach((pl, i) => { if (!played.has(i) && morOf(pl) > 45) pl.mor = morOf(pl) - 1; }); // the ones left out sulk a little
+    S.ft = S.ft || Date.now(); squadSave(S);
+    return tired;
+  }
+  const fitCol = v => (v >= 75 ? '#59e38b' : v >= 55 ? '#ffd447' : '#ff6b5e');
+  const morFace = v => (v >= 85 ? '😄' : v >= 60 ? '🙂' : v >= 35 ? '😐' : '😠');
+  // what a player is worth on the market: steeply more for a better rating, a little more for each evne
+  const valOf = p => Math.max(20, Math.round(120 * Math.pow(1.105, ovr(p) - 55) * (1 + 0.15 * abOf(p).length) / 5) * 5);
+  const sellOf = p => Math.round(valOf(p) * 0.45 / 5) * 5;
+  function mktGen(M) { // today's players: most around your own level, one clearly better (the star), one bargain
+    const t = teamOvr(cfg.size || 7), L = [];
+    const spans = [[-7, -3], [-4, 0], [-2, 2], [0, 3], [2, 5], [5, 9]], gk = Math.floor(Math.random() * 6);
+    spans.forEach(([a, b], i) => {
+      const c = makeCard(clamp(t + a, 45, 92), clamp(t + b, 47, 95), i === gk && Math.random() < 0.5 ? { pos: 'MV' } : {});
+      c.pr = Math.max(20, Math.round(valOf(c) * (0.9 + Math.random() * 0.3) / 5) * 5); L.push(c);
+    });
+    const d = L[Math.floor(Math.random() * 4)]; d.pr = Math.max(20, Math.round(valOf(d) * 0.65 / 5) * 5); d.deal = 1;
+    M.d = today(); M.l = L; return M;
+  }
+  function mktLoad() {
+    let M = null; try { M = JSON.parse(localStorage.getItem('mf-market') || 'null'); } catch (_) {}
+    if (!M || M.d !== today() || !Array.isArray(M.l)) { M = mktGen({ r: 0 }); mktSave(M); }
+    return M;
+  }
+  function mktSave(M) { try { localStorage.setItem('mf-market', JSON.stringify(M)); } catch (_) {} }
+  const MKT_NEW = 40; // coins for a new list before tomorrow
+  let mkArm = -1; // the player you tapped Sælg on once (tap again to sell)
+  function mktRow(p, btnTxt, on, cls) {
+    const r = document.createElement('div'); r.className = 'mkrow' + (cls ? ' ' + cls : '');
+    const o = document.createElement('span'); o.className = 'ovr ' + (p.ev ? 'gold' : ovrTier(ovr(p))); o.textContent = ovr(p);
+    const nm = document.createElement('span'); nm.className = 'nm'; const b = document.createElement('b'); b.textContent = p.n; const sm = document.createElement('small');
+    sm.textContent = `${DPOSN[dpOf(p)]} · ${flagOf(p.nat)}${NATS[p.nat] || 'Danmark'}` + (abOf(p).length ? ' · ' + abOf(p).map(a => ABIL[a].i + ' ' + ABIL[a].n).join(', ') : '');
+    nm.append(b, sm);
+    const st = document.createElement('span'); st.className = 'st'; st.textContent = SKILLS.map(([k, n2]) => `${(p.pos === 'MV' && k === 'def' ? 'Refl' : n2).slice(0, 4)} ${p[k]}`).join('  ');
+    const bt = document.createElement('button'); bt.textContent = btnTxt; bt.onclick = () => on(bt);
+    r.append(o, nm, st, bt); return r;
+  }
+  function mktShow() {
+    const M = mktLoad(), S = squadLoad(), pr = loadProf(), B = $('mkBuy'), SL = $('mkSell');
+    B.textContent = ''; SL.textContent = '';
+    const info = document.createElement('p'); info.className = 'sqnote';
+    const left = (() => { const n = new Date(), e = new Date(n); e.setHours(24, 0, 0, 0); const m = Math.round((e - n) / 60000); return `${Math.floor(m / 60)} t ${m % 60} min`; })();
+    info.textContent = `Dagens spillere. Nye om ${left}. Truppen: ${S.pl.length}/${SQ_MAX}.`; B.appendChild(info);
+    if (!M.l.length) { const e = document.createElement('p'); e.className = 'sqnote'; e.textContent = 'Du har købt dem alle. Kom igen i morgen, eller hent en ny liste.'; B.appendChild(e); }
+    M.l.forEach((c, i) => {
+      B.appendChild(mktRow(c, `${c.pr} mønter`, bt => {
+        const pr2 = loadProf(), S2 = squadLoad(), M2 = mktLoad();
+        if (S2.pl.length >= SQ_MAX) { bt.textContent = 'Truppen er fuld: sælg en først'; return; }
+        if (pr2.coins < c.pr) { bt.textContent = `Mangler ${c.pr - pr2.coins}`; return; }
+        const card = M2.l[i]; if (!card || card.n !== c.n) return;
+        M2.l.splice(i, 1); mktSave(M2); addCoins(-c.pr, 'køb');
+        const np = { ...card }; delete np.pr; delete np.deal; np.mor = 80; S2.pl.push(np);
+        if (np.pos === 'MV' && ovr(np) > ovr(S2.pl[0])) { const k = S2.pl.length - 1; [S2.pl[0], S2.pl[k]] = [S2.pl[k], S2.pl[0]]; if (S2.xi) for (const n in S2.xi) S2.xi[n] = (S2.xi[n] || []).map(v => (v === 0 ? k : v === k ? 0 : v)); }
+        squadSave(S2); sfx.win(); buzz(30); showToast(`${np.n} har skrevet under!`); mktShow(); hubPaint();
+      }, c.deal ? 'deal' : ''));
+    });
+    const nb = document.createElement('button'); nb.className = 'alt'; nb.textContent = `Ny liste nu · ${MKT_NEW} mønter`;
+    nb.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MKT_NEW) { nb.textContent = `Mangler ${MKT_NEW - pr2.coins} mønter`; return; } addCoins(-MKT_NEW, 'scout'); mktSave(mktGen(mktLoad())); mktShow(); };
+    B.appendChild(nb);
+    const inf2 = document.createElement('p'); inf2.className = 'sqnote'; inf2.textContent = 'Sælg dem du ikke bruger. Tryk to gange for at sælge. Du skal beholde mindst 11.'; SL.appendChild(inf2);
+    S.pl.map((p2, i) => ({ p2, i })).sort((a, b) => ovr(a.p2) - ovr(b.p2)).forEach(({ p2, i }) => {
+      const lock = i === 0 || S.pl.length <= 11;
+      const row = mktRow(p2, lock ? (i === 0 ? 'Din målmand' : 'Mindst 11') : mkArm === i ? `Sikker? +${sellOf(p2)}` : `Sælg +${sellOf(p2)}`, () => {
+        if (lock) return;
+        if (mkArm !== i) { mkArm = i; mktShow(); return; }
+        const S2 = squadLoad(); if (S2.pl.length <= 11 || !S2.pl[i] || S2.pl[i].n !== p2.n) return;
+        const worth = sellOf(S2.pl[i]); S2.pl.splice(i, 1);
+        if (S2.xi) for (const n in S2.xi) { const x = S2.xi[n] || []; if (x.includes(i)) delete S2.xi[n]; else S2.xi[n] = x.map(v => (v > i ? v - 1 : v)); } // a starter sold: that line-up is picked again
+        squadSave(S2); addCoins(worth, 'salg'); mkArm = -1; sqSel = 0; sfx.win(); showToast(`${p2.n} er solgt for ${worth} mønter`); mktShow(); hubPaint();
+      }, mkArm === i ? 'arm' : '');
+      if (lock) row.querySelector('button').disabled = true;
+      SL.appendChild(row);
+    });
+    subTabs($('mktOv'), [['Køb', ['mkBuy']], ['Sælg', ['mkSell']]], 'mkt', B);
+    paintCoins(); $('mktOv').hidden = false;
+  }
+  function showToast(t) { const e = $('mkToast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(showToast.t); showToast.t = setTimeout(() => { e.hidden = true; }, 2200); }
+
   // ---------- player cards, kemi and the weekly event (as in FC Mobile) ----------
   const NATS = { DK: 'Danmark', SE: 'Sverige', NO: 'Norge', DE: 'Tyskland', NL: 'Holland', ES: 'Spanien', BR: 'Brasilien', FR: 'Frankrig' };
   const NATN = { DK: [FIRSTN, LASTN], SE: [['Erik', 'Gustav', 'Nils', 'Linus', 'Albin'], ['Berg', 'Lindqvist', 'Holmberg', 'Sjöberg']], NO: [['Ola', 'Sindre', 'Håkon', 'Eirik'], ['Haugen', 'Solberg', 'Bakken', 'Strand']],
@@ -5679,7 +5804,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (abOf(p).length) { const e = document.createElement('span'); e.className = 'abi'; e.textContent = abIcons(p); nm.appendChild(e); }
       const o = document.createElement('span'); o.className = 'ovr ' + (p.ev ? 'gold' : ovrTier(ovr(p))); o.textContent = ovr(p);
       if (!inXI.has(i)) b.classList.add('bench');
-      b.append(ps, nm, o); b.onclick = () => { sqSel = i; squadShow(); };
+      const fm = document.createElement('span'); fm.className = 'fm'; fm.title = 'Form'; const fi = document.createElement('i'); fi.style.width = fitOf(p) + '%'; fi.style.background = fitCol(fitOf(p)); fm.appendChild(fi);
+      const mf = document.createElement('span'); mf.className = 'mo'; mf.textContent = morFace(morOf(p));
+      b.append(ps, nm, fm, mf, o); b.onclick = () => { sqSel = i; squadShow(); };
       L.appendChild(b);
     });
     const p = S.pl[sqSel], o = ovr(p);
@@ -5687,6 +5814,17 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('sqOvr').textContent = o; $('sqPos').textContent = POS[p.pos];
     $('sqName').value = p.n;
     const box = $('sqStats'); box.textContent = '';
+    { // form and humør: what he brings into the next match
+      const f = Math.round(fitOf(p)), m = Math.round(morOf(p)), r = document.createElement('div'); r.className = 'lvrow fmrow';
+      const b = document.createElement('b'); b.textContent = `Form ${f}`;
+      const bt = document.createElement('button'); bt.className = 'alt'; bt.textContent = f >= 100 ? 'Frisk' : `Massage +${MASSAGE[1]} · ${MASSAGE[0]} mønter`; bt.disabled = f >= 100;
+      bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins} mønter`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1]); squadSave(S2); sfx.win(); squadShow(); };
+      const bar = document.createElement('div'); bar.className = 'lvbar'; const i2 = document.createElement('i'); i2.style.width = f + '%'; i2.style.background = fitCol(f); bar.appendChild(i2);
+      r.append(b, bt, bar); box.appendChild(r);
+      const r2 = document.createElement('div'); r2.className = 'lvrow fmrow'; const b2 = document.createElement('b'); b2.textContent = `Humør ${m} ${morFace(m)}`;
+      const sm = document.createElement('small'); sm.textContent = f < 70 ? 'Træt: langsommere og hurtigere flad. Formen kommer igen af sig selv.' : m >= 85 ? 'I hopla: spiller over evne.' : m < 35 ? 'Utilfreds: spiller under evne. Sejre og spilletid hjælper.' : 'Sejre og spilletid løfter humøret.';
+      r2.append(b2, sm); box.appendChild(r2);
+    }
     for (const [k, name] of SKILLS) {
       const v = p[k], price = tpPrice(v), r = document.createElement('div'); r.className = 'lvrow';
       const b = document.createElement('b'); b.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflekser' : k === 'pas' ? 'Aflevering' : name} ${v}`;
@@ -5744,6 +5882,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     paintTP(S); $('abOv').hidden = false;
   }
   function squadInit() {
+    $('goMarket').onclick = () => { mkArm = -1; mktShow(); }; $('mkClose').onclick = () => { $('mktOv').hidden = true; hubPaint(); };
     $('abClose').onclick = () => { $('abOv').hidden = true; };
     $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } squadShow(); });
     $('sqClose').onclick = () => { $('squad').hidden = true; };
@@ -6099,6 +6238,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const o = document.createElement('span'); o.className = 'o t-' + ovrTier(ovr(p)); o.textContent = rate(p);
       const ps = document.createElement('span'); ps.textContent = dpOf(p); if (tsp) bt.classList.toggle('fit', dpOf(p) === tsp); const nm = document.createElement('span'); nm.textContent = p.n;
       bt.append(o, ps, nm);
+      if (fitOf(p) < 90) { const fm = document.createElement('span'); fm.textContent = ` ▮ ${Math.round(fitOf(p))}`; fm.style.color = fitCol(fitOf(p)); fm.style.fontSize = '11px'; bt.appendChild(fm); }
       bt.onclick = () => { if (mtSel >= 0) { mtSwap(mtSel, -1 - i); mtSel = -1; mtSelB = -1; } else mtSelB = mtSelB === i ? -1 : i; mtPaintSide(); mtDraw(); };
       B.appendChild(bt);
     }
@@ -6157,6 +6297,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       g.font = `800 ${Math.round(cw * 0.22)}px ${FT}`; g.fillStyle = bad ? '#b3261e' : side ? '#7a4a00' : '#14181c'; g.fillText(role, cx, cy + chh * 0.33);
       if (mtSel >= 0 && !sel || mtSelB >= 0) { const who = mtSelB >= 0 ? S.pl[mtSelB] : S.pl[xi[mtSel]]; if (who && dpOf(who) === spos) { g.strokeStyle = '#59e38b'; g.lineWidth = 2.5; g.beginPath(); g.roundRect(cx - cw / 2 - 3, cy - chh / 2 - 3, cw + 6, chh + 6, 8); g.stroke(); } } // where the chosen man would fit
       if (abOf(sp).length) { g.font = `${Math.round(cw * 0.24)}px ${FT}`; g.fillStyle = '#fff'; g.fillText(abIcons(sp), cx + cw / 2 - 2, cy - chh / 2 + 1); } // his evner on the corner of the card
+      if (fitOf(sp) < 90) { const fv = fitOf(sp); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(cx - cw / 2 + 3, cy - chh / 2 + 3, cw - 6, 4); g.fillStyle = fitCol(fv); g.fillRect(cx - cw / 2 + 3, cy - chh / 2 + 3, (cw - 6) * fv / 100, 4); } // tired legs: a form bar across the top
       const sn = sp.n.split(' ').slice(-1)[0]; g.font = `700 ${Math.max(9, Math.round(cw * 0.21))}px ${FT}`; g.fillStyle = '#fff';
       g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 3; g.strokeText(sn, cx, cy + chh / 2 + 8); g.fillText(sn, cx, cy + chh / 2 + 8);
     });
