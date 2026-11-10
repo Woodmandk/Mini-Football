@@ -3032,7 +3032,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (dist > 340 || dist < 0 || Math.abs(b.y - CY) > 200 || b.fx * dir < 0.3) return false;
     return !P.some(q => q.team === a.team && q !== a && on(q) && q.k !== 0 && (gx - q.x) * dir < dist + 10);
   }
-  const TEMPO = () => [0.66, 0.78, 0.92][cfg.tempo] ?? 0.78; // tempo for the whole match: Roligt / Normalt / Hurtigt
+  const TEMPO = () => [0.53, 0.62, 0.74][cfg.tempo] ?? 0.62; // Daniel 2026-11-10: 20 % slower than 0.66/0.78/0.92 // tempo for the whole match: Roligt / Normalt / Hurtigt
   let lastCard = '', pendCard = null; // a yellow under advantage is shown at the next stoppage, as in FIFA
   function foul(a, b, hard) {
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
@@ -4679,12 +4679,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       else { const me = P.find(q => q.ctrl === 'L0'); giveBall(me); flash = { text: g ? 'Tag alle portene først' : 'Hent bolden', t: 1 }; }
       return;
     }
-    drill.live = false; drill.wait = 1.4; pen = null; setp = null; drill.feed = null;
+    drill.live = false; drill.wait = g ? 1.4 : 1.1; pen = null; setp = null; drill.feed = null;
     if (g) { drill.goals++; flash = { text: 'MÅL!', t: 1 }; goalFx(0); } else { flash = { text: 'Ingen mål', t: 1 }; crowd.ooh(); }
     ball.vx *= 0.2; ball.vy *= 0.2;
   }
   function drillTick(dt) {
-    if (drill.wait > 0) { drill.wait -= dt; if (drill.wait <= 0) drillSetup(); return; }
+    if (drill.wait > 0) { drill.wait -= dt; if (drill.wait <= 0.3 && !drill.fo && drill.i > 0) drill.fo = performance.now(); if (drill.wait <= 0) { drillSetup(); if (drill) { drill.fo = 0; drill.fi = performance.now(); updateCamera(0, true); } } return; }
     if (!drill.live) return;
     drill.t += dt;
     const o = owner(), me = P.find(q => q.ctrl === 'L0');
@@ -6948,6 +6948,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       ctx.fillStyle = 'rgba(10,20,15,0.85)'; rr(sw / 2 - w / 2, y - 18, w, 36, 18); ctx.fill();
       ctx.strokeStyle = 'rgba(255,212,71,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
       ctx.fillStyle = col.chalk; ctx.fillText(ln, sw / 2, y);
+    }
+    if (drill && (drill.fo || drill.fi)) { // a soft fade between drill tries
+      const now = performance.now(), a = drill.fo ? Math.min(1, (now - drill.fo) / 420) : Math.max(0, 1 - (now - drill.fi) / 550);
+      if (!drill.fo && a <= 0) drill.fi = 0;
+      if (a > 0) { ctx.fillStyle = `rgba(5,12,9,${a.toFixed(3)})`; ctx.fillRect(0, 0, sw, sh); }
     }
     const text = (replay && replay.t >= 0) ? '' : banner || (flash ? flash.text : '');
     if (text) {
