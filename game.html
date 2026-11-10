@@ -222,6 +222,35 @@ button.sw[aria-pressed="true"] { background: var(--chalk); color: var(--night); 
 #bkBox p { font-size: 13px; margin: 6px 0; }
 @media (hover: none) { .kbd { display: none; } }
 #wrap.n560 :is(.home, .sqgrid, .ow, .ow.three, .profgrid, .shopgrid, .seasonview) { grid-template-columns: 1fr; }
+/* sæsonpas, rang og daglig belønning */
+button.prog { display: flex; align-items: center; gap: 10px; padding: 7px 10px; text-align: left; font-size: 13px; }
+button.prog .pp { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+button.prog .st { color: var(--gold); font-weight: 700; white-space: nowrap; font-size: 12px; }
+.pbar { display: block; height: 6px; border-radius: 3px; background: rgba(244,247,242,0.15); overflow: hidden; }
+.pbar b { display: block; height: 100%; width: 0; background: var(--gold); border-radius: 3px; transition: width .4s; }
+.rkb { flex: 0 0 auto; min-width: 30px; height: 30px; padding: 0 6px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #0d1a14; background: var(--rk, #c98a4b); box-shadow: inset 0 -3px 0 rgba(0,0,0,0.25), 0 0 10px color-mix(in srgb, var(--rk, #c98a4b) 45%, transparent); }
+.rkb.pass { background: var(--gold); }
+.pvhead { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; text-align: left; }
+.pvbox { display: flex; gap: 10px; align-items: center; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 10px 12px; }
+.pvbox .rkb { min-width: 46px; height: 46px; font-size: 15px; }
+.pvt { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pvt small { color: var(--muted); font-size: 12px; }
+.tiers { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; }
+.tiers div { border-radius: 8px; padding: 5px 2px; background: rgba(0,0,0,0.3); font-size: 10px; line-height: 1.25; color: var(--muted); }
+.tiers div b { display: block; font-size: 12px; color: var(--chalk); }
+.tiers div.got { background: rgba(255,212,71,0.16); outline: 1px solid rgba(255,212,71,0.6); color: var(--gold); }
+.tiers div.tpk { background: rgba(127,184,255,0.14); }
+.tiers div.tpk.got { background: rgba(255,212,71,0.28); }
+.tiers div.now { outline: 2px solid var(--chalk); }
+.gdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.gdays div { border-radius: 8px; padding: 6px 2px; background: rgba(0,0,0,0.3); font-size: 11px; color: var(--muted); }
+.gdays div b { display: block; color: var(--chalk); font-size: 13px; }
+.gdays div.got { background: rgba(255,212,71,0.18); color: var(--gold); }
+.gdays div.now { outline: 2px solid var(--gold); }
+#wrap.n560 .pvhead { grid-template-columns: 1fr; }
+#wrap.n560 .tiers { grid-template-columns: repeat(6, 1fr); }
+button.go.quick { background: linear-gradient(180deg, #3a7bd5, #2a5fae); }
+.ow.one { grid-template-columns: 1fr; }
 .chl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; text-align: left; }
 .chl li { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; align-items: center; padding: 10px 12px; border-radius: 10px; background: rgba(0,0,0,0.3); font-size: 15px; }
 .chl li.done { outline: 2px solid var(--gold); }
@@ -350,6 +379,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <h1><span class="r">Mini</span><br><span class="b">Football</span></h1>
           <label class="namechip"><span>Du spiller som</span>
             <input id="name" class="namein" maxlength="12" placeholder="Skriv dit navn" autocomplete="off" aria-label="Dit navn"></label>
+          <button id="homeProg" class="alt prog" aria-label="Sæsonpas og rang"><span class="rkb" id="hpRank">BRO</span><span class="pp"><span id="hpPass">Sæsonpas 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
           <div class="minis four">
             <button id="goMine" class="alt mine">Mit hold</button><button id="goSquad" class="alt mine">Trup og træning</button>
             <button id="goProf" class="alt">Profil og trofæer</button><button id="goShop" class="alt">Butik <span class="coins" data-coins>0</span></button>
@@ -362,7 +392,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         <div class="btns bigs">
           <button id="bCpu" class="big">Hurtig kamp<small>Mod computeren</small></button>
           <button id="goSeason" class="big alt">Karriere og turneringer<small id="compSub">Karriere, co-op-pokal og sæson</small></button>
-          <button id="goOnline" class="big alt">Online med venner<small>Opret kamp eller deltag med kode</small></button>
+          <button id="goOnline" class="big alt">Online<small>Find en modstander (rangeret) eller spil med venner</small></button>
           <button id="bTwo" class="big alt">2 på én telefon<small>Mod hinanden eller sammen mod computeren</small></button>
           <button id="goPractice" class="big alt">Træning og færdighedsspil<small>Færdighedsspil, straffe og træningsbane</small></button>
         </div>
@@ -452,7 +482,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
 
     <!-- online: opret eller deltag -->
     <div class="card wide" id="pgOnline" hidden>
-      <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Online med venner</h2><span class="sp"></span></div>
+      <div class="top"><button class="alt back" data-back>‹ Tilbage</button><h2>Online</h2><span class="sp"></span></div>
+      <div class="ow one"><div class="col"><div class="lbl">Rangeret kamp mod hvem som helst</div>
+          <p id="quickSub">5 mod 5 med dit eget hold, 3 minutter. Vind for at stige i rang og få dobbelt XP i sæsonpasset.</p>
+          <button id="quick" class="go quick" disabled>Find modstander</button></div></div>
       <div class="ow">
         <div class="col"><div class="lbl">Start en ny kamp</div>
           <p>Du vælger holdstørrelse og længde og får en kode, du sender til dine venner.</p>
@@ -525,6 +558,27 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     </div>
   </div>
 
+  <!-- sæsonpas og online-rang -->
+  <div class="overlay" id="passOv" hidden>
+    <div class="card wide">
+      <div class="top"><span class="sp"></span><h2 id="pvTitle">Sæsonpas og rang</h2><button id="passClose" class="alt back">Luk</button></div>
+      <div class="pvhead">
+        <div class="pvbox"><div class="rkb" id="pvBadge"></div><div class="pvt"><b id="pvRank"></b><small id="pvRankTxt"></small><i class="pbar"><b id="pvRankBar"></b></i></div></div>
+        <div class="pvbox"><div class="rkb pass" id="pvLv"></div><div class="pvt"><b id="pvPass"></b><small id="pvPassTxt"></small><i class="pbar"><b id="pvPassBar"></b></i></div></div>
+      </div>
+      <div class="tiers" id="pvTiers"></div>
+      <p class="hint" id="pvHow"></p>
+      <div class="btns"><button id="pvOpen" hidden>Åbn gratis pakke</button><button id="pvQuick" class="alt">Find online modstander</button></div>
+    </div>
+  </div>
+  <div class="overlay" id="giftOv" hidden>
+    <div class="card">
+      <h1 class="h1s" id="giftT"></h1>
+      <p id="giftP"></p>
+      <div class="gdays" id="giftDays"></div>
+      <div class="btns"><button id="giftOk">Fedt</button></div>
+    </div>
+  </div>
   <div class="overlay" id="packOv" hidden>
     <div class="card">
       <h2 id="pkTitle">Ny spiller!</h2>
@@ -622,7 +676,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
 
   <div class="overlay" id="lobby" hidden>
     <div class="card">
-      <div class="lbl">Kampkode</div>
+      <div class="lbl" id="lobbyLbl">Kampkode</div>
       <div class="bigcode" id="lobbyCode">0000</div>
       <p id="lobbyMsg"></p>
       <div class="roster">
@@ -799,7 +853,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
+  const cfg = { size: 1, mins: 2, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, tempo: 1, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
   if (![1, 2, 3, 5, 7, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
@@ -966,7 +1020,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (ev === 'goal' && ch.k && !ch.k.includes(data)) continue;
       if (ev === 'match' && !ch.ok(data)) continue;
       D.p[ch.id] = (D.p[ch.id] || 0) + 1;
-      if (D.p[ch.id] >= (ch.need || 1)) { D.done[ch.id] = 1; addCoins(ch.c, 'udfordring'); chWon.push(`${ch.t} +${ch.c}`); if (state === 'play') flash = { text: 'Udfordring klaret!', t: 1.2 }; }
+      if (D.p[ch.id] >= (ch.need || 1)) { D.done[ch.id] = 1; addCoins(ch.c, 'udfordring'); passXP(75); chWon.push(`${ch.t} +${ch.c}`); if (state === 'play') flash = { text: 'Udfordring klaret!', t: 1.2 }; }
     }
     if (!D.bonus && list.every(ch => D.done[ch.id])) { D.bonus = 1; addCoins(DAILY_BONUS, 'udfordringer'); chWon.push(`Alle dagens udfordringer +${DAILY_BONUS}`); }
     saveDaily(D);
@@ -1034,13 +1088,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (!opps.length) return '';
     const M = loadMe();
     const avg = opps.reduce((a, c) => a + c.r, 0) / opps.length;
-    const exp = 1 / (1 + Math.pow(10, (avg - M.r) / 400)), dr = Math.round(32 * (res - exp));
-    M.r = Math.max(100, M.r + dr); if (res === 1) M.w++; else if (res === 0) M.l++; else M.d++;
+    const exp = 1 / (1 + Math.pow(10, (avg - M.r) / 400)), dr = Math.round(32 * (res - exp)), r0 = rankOf(M.r);
+    M.r = Math.max(100, M.r + dr); const r1 = rankOf(M.r); M.bi = Math.max(M.bi | 0, r1.i); if (!M.sm) M.sm = monthKey(); if (res === 1) M.w++; else if (res === 0) M.l++; else M.d++;
     M.g += gf; saveMe(M);
     const F = loadFriends();
     for (const c of opps) { const f = F[c.id]; if (f) { f.h = f.h || [0, 0, 0]; f.h[res === 1 ? 0 : res === 0 ? 2 : 1]++; } }
     saveFriends(F);
-    return `Din rating: ${M.r} (${dr >= 0 ? '+' : ''}${dr}).`;
+    return `Din rating: ${M.r} (${dr >= 0 ? '+' : ''}${dr}) · ${r1.n}` + (r1.i > r0.i ? ` · Rykket op til ${r1.n}!` : r1.i < r0.i ? ` · Rykket ned til ${r1.n}` : r1.next ? ` · ${r1.next - M.r} til ${r1.nn}` : '');
   }
   function showFriends() {
     const M = loadMe(), F = loadFriends();
@@ -1055,6 +1109,132 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   $('bFriends').onclick = showFriends;
   $('friendsClose').onclick = () => { $('friends').hidden = true; };
+  let quick = false, quickJudge = null; // a ranked "Find modstander" match (see quickFind)
+  // ---------- Online rank (divisions on top of the Elo rating) and the monthly season ----------
+  // Every calendar month is a season: your best division that month pays out when the next one starts, and the rating
+  // is pulled halfway back to 1000 so everyone has something to climb again. All kept on this phone ('mf-me').
+  const RANKS = [['Bronze', 0, '#c98a4b', 50], ['Sølv', 1080, '#c4ccd6', 100], ['Guld', 1180, '#ffd447', 200], ['Platin', 1290, '#7fe0d4', 350], ['Diamant', 1400, '#7fb8ff', 500], ['Legende', 1520, '#ff7ad9', 800]];
+  function rankOf(r) {
+    let i = 0; while (i < RANKS.length - 1 && r >= RANKS[i + 1][1]) i++;
+    const lo = i ? RANKS[i][1] : 900, hi = RANKS[i + 1] ? RANKS[i + 1][1] : null;
+    return { i, n: RANKS[i][0], c: RANKS[i][2], p: hi ? Math.max(0, Math.min(1, (r - lo) / (hi - lo))) : 1, next: hi, nn: RANKS[i + 1] ? RANKS[i + 1][0] : '' };
+  }
+  const monthKey = () => today().slice(0, 7);
+  const MONTHS = ['januar', 'februar', 'marts', 'april', 'maj', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'december'];
+  const daysLeftInMonth = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth() + 1, 0).getDate() - n.getDate() + 1; };
+  function rankSeason() { // returns a message when a new season started (with the reward for the last one)
+    const M = loadMe(), mk = monthKey();
+    if (M.sm === mk) return '';
+    let msg = '';
+    if (M.sm && (M.w + M.d + M.l) > 0) {
+      const b = Math.max(M.bi | 0, rankOf(M.r).i), coins = RANKS[b][3];
+      addCoins(coins, 'sæson');
+      msg = `Online-sæsonen er slut. Du nåede ${RANKS[b][0]} og får ${coins} mønter. Ny sæson: din rating er rykket lidt mod midten, så kæmp dig op igen.`;
+      M.r = Math.round(1000 + (M.r - 1000) * 0.5);
+    }
+    M.sm = mk; M.bi = rankOf(M.r).i; saveMe(M);
+    return msg;
+  }
+
+  // ---------- Sæsonpas: 30 levels a month, filled by playing (more for online and for winning) ----------
+  const PASS_N = 30, PASS_XP = 250;
+  const passReward = t => t % 10 === 0 ? { pk: t === 30 ? 2 : 1 } : t % 5 === 0 ? { pk: 0 } : { c: 30 + t * 4 };
+  const rwTxt = r => r.pk !== undefined ? ['Bronzepakke', 'Sølvpakke', 'Guldpakke'][r.pk] : `${r.c} mønter`;
+  function passLoad() {
+    let S = null; try { S = JSON.parse(localStorage.getItem('mf-pass') || 'null'); } catch (_) {}
+    const mk = monthKey();
+    if (!S || S.m !== mk) S = { m: mk, xp: 0, t: 0, free: (S && S.free) || [] }; // unopened packs carry over
+    return S;
+  }
+  const passSave = S => { try { localStorage.setItem('mf-pass', JSON.stringify(S)); } catch (_) {} };
+  function passXP(n) { // add XP; every level reached pays out at once. Returns lines for the end screen
+    const S = passLoad(), out = [];
+    S.xp += Math.max(0, n | 0);
+    while (S.t < PASS_N && S.xp >= (S.t + 1) * PASS_XP) {
+      S.t++; const r = passReward(S.t);
+      if (r.c) addCoins(r.c, 'pas'); else S.free.push(r.pk);
+      out.push(`Sæsonpas niveau ${S.t}: ${rwTxt(r)}${r.pk !== undefined ? ' (åbn den under Sæson og rang)' : ''}`);
+    }
+    passSave(S); paintProg();
+    return out;
+  }
+  function matchXP(won, draw, gf, online) { return Math.round((50 + Math.min(40, gf * 10) + (won ? 60 : draw ? 25 : 0)) * (online ? (quick ? 2 : 1.5) : 1)); }
+
+  // ---------- Daily login: a reward every day you play, growing for 7 days in a row ----------
+  const LOGIN = [20, 30, 40, 60, 80, 100, 'pk'];
+  function loginCheck() {
+    let L = null; try { L = JSON.parse(localStorage.getItem('mf-login') || 'null'); } catch (_) {}
+    const d = today(), y = new Date(); y.setDate(y.getDate() - 1);
+    const yd = `${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`;
+    if (L && L.d === d) return null;
+    const n = L && L.d === yd ? L.n + 1 : 1, r = LOGIN[(n - 1) % 7];
+    try { localStorage.setItem('mf-login', JSON.stringify({ d, n })); } catch (_) {}
+    if (r === 'pk') { const S = passLoad(); S.free.push(1); passSave(S); } else addCoins(r, 'login');
+    passXP(40);
+    return { n, r };
+  }
+  const loginStreak = () => { try { const L = JSON.parse(localStorage.getItem('mf-login') || 'null'); return L && L.d === today() ? L.n : 0; } catch (_) { return 0; } };
+  let giftQ = [];
+  function giftNext() {
+    const g = giftQ.shift(); if (!g) { $('giftOv').hidden = true; return; }
+    $('giftT').textContent = g.t; $('giftP').textContent = g.p;
+    const box = $('giftDays'); box.textContent = ''; box.hidden = !g.days;
+    if (g.days) for (let i = 0; i < 7; i++) {
+      const dd = document.createElement('div'), cyc = (g.days - 1) % 7, r = LOGIN[i];
+      dd.className = i < cyc ? 'got' : i === cyc ? 'got now' : '';
+      const b = document.createElement('b'); b.textContent = r === 'pk' ? 'Pakke' : r; dd.append(b, `Dag ${i + 1}`); box.appendChild(dd);
+    }
+    $('giftOv').hidden = false; sfx.win();
+  }
+  $('giftOk').onclick = giftNext;
+  function homeGifts() { // the first time the menu is shown today
+    const s = rankSeason(); if (s) giftQ.push({ t: 'Ny online-sæson', p: s });
+    const L = loginCheck();
+    if (L) giftQ.push({ t: L.n > 1 ? `${L.n} dage i træk!` : 'Velkommen tilbage!', p: (L.r === 'pk' ? 'Dagens belønning: en gratis Sølvpakke.' : `Dagens belønning: ${L.r} mønter.`) + ' Kom igen i morgen, så bliver den større. Dag 7 giver en pakke.', days: L.n });
+    if (giftQ.length && $('giftOv').hidden) giftNext();
+    paintProg();
+  }
+
+  // the strip on the home page and the overlay behind it
+  function paintProg() {
+    const el = $('homeProg'); if (!el) return;
+    const M = loadMe(), rk = rankOf(M.r), S = passLoad(), st = loginStreak();
+    $('hpRank').textContent = rk.n.slice(0, 3).toUpperCase(); $('hpRank').style.setProperty('--rk', rk.c);
+    $('hpPass').textContent = `Sæsonpas ${S.t}/${PASS_N}` + (S.free.length ? ` · ${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} at åbne` : '');
+    $('hpBar').style.width = (S.t >= PASS_N ? 100 : (S.xp - S.t * PASS_XP) / PASS_XP * 100) + '%';
+    $('hpStreak').textContent = st > 1 ? `${st} dage i træk` : `Rating ${Math.round(M.r)}`;
+  }
+  function passShow() {
+    const M = loadMe(), rk = rankOf(M.r), S = passLoad(), mi = new Date().getMonth();
+    $('pvTitle').textContent = `Sæson ${MONTHS[mi]}`;
+    $('pvBadge').textContent = rk.n.slice(0, 3).toUpperCase(); $('pvBadge').style.setProperty('--rk', rk.c);
+    $('pvRank').textContent = `${rk.n} · rating ${Math.round(M.r)}`;
+    $('pvRankTxt').textContent = rk.next ? `${rk.next - Math.round(M.r)} til ${rk.nn}. Slutter om ${daysLeftInMonth()} dage. Din bedste division giver ${RANKS[Math.max(M.bi | 0, rk.i)][3]} mønter.` : 'Den højeste division. Hold dig deroppe!';
+    $('pvRankBar').style.width = rk.p * 100 + '%';
+    $('pvLv').textContent = S.t;
+    $('pvPass').textContent = `Sæsonpas niveau ${S.t} af ${PASS_N}`;
+    $('pvPassTxt').textContent = S.t >= PASS_N ? 'Fuldført! Et nyt pas starter næste måned.' : `${(S.t + 1) * PASS_XP - S.xp} XP til næste niveau. Nyt pas om ${daysLeftInMonth()} dage.`;
+    $('pvPassBar').style.width = (S.t >= PASS_N ? 100 : (S.xp - S.t * PASS_XP) / PASS_XP * 100) + '%';
+    const box = $('pvTiers'); box.textContent = '';
+    for (let t = 1; t <= PASS_N; t++) {
+      const r = passReward(t), d = document.createElement('div'), b = document.createElement('b');
+      d.className = (t <= S.t ? 'got ' : '') + (r.pk !== undefined ? 'tpk ' : '') + (t === S.t + 1 ? 'now' : '');
+      b.textContent = t; d.append(b, r.pk !== undefined ? ['Bronze', 'Sølv', 'Guld'][r.pk] : r.c); box.appendChild(d);
+    }
+    $('pvHow').textContent = 'XP: hver kamp giver 50, plus mål og sejr. Online giver halvanden gang så meget, rangerede kampe dobbelt. Dagens udfordringer og at komme hver dag giver ekstra.';
+    $('pvOpen').hidden = !S.free.length;
+    $('pvOpen').textContent = `Åbn gratis ${['Bronze', 'Sølv', 'Guld'][S.free[0] | 0].toLowerCase()}pakke` + (S.free.length > 1 ? ` (${S.free.length})` : '');
+    $('pvQuick').hidden = !(room && room.peer);
+    $('passOv').hidden = false;
+  }
+  $('homeProg').onclick = passShow;
+  $('passClose').onclick = () => { $('passOv').hidden = true; paintProg(); };
+  $('pvOpen').onclick = () => {
+    const S = passLoad(); if (!S.free.length) return;
+    const k = S.free.shift(); passSave(S);
+    const [n, , lo, hi] = PACKS[k]; showCard(makeCard(lo, hi), n, passShow);
+  };
+  $('pvQuick').onclick = () => { $('passOv').hidden = true; page('pgOnline'); quickFind(); };
   // per-second rates for AI decisions
   const DIFF = [
   // iq (0..1) is how clever the choices are: where to shoot, who to pass to, when to slide in, cutting off passes
@@ -1868,7 +2048,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (kind !== 'train' && kind !== 'pen' && kind !== 'test') dailyEvent('match', { win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], mode, diff: matchDiff(), size, online });
       if (kind !== 'train' && kind !== 'pen' && kind !== 'test' && mode !== 'two') for (const l of evMatch({ win: win === me, gf: score[me], ga: score[1 - me], pa: S.pa[me], tk: S.tk[me], diff: matchDiff() })) lines.push(l);
       if (online) { const o = onlineSides(me); const r = rateOnline(o.opps, win === me ? 1 : win < 0 ? 0.5 : 0, score[me]); if (r) lines.push(r); }
-    }
+      if (kind !== 'train' && kind !== 'test') { const x = kind === 'pen' ? 30 : matchXP(win === me, win < 0, score[me], online); lines.push(`+${x} XP i sæsonpasset`); for (const l of passXP(x)) lines.push(l); }
+    } else if (mode === 'two' && kind !== 'train' && kind !== 'test') for (const l of passXP(40)) lines.push(l);
     for (const c of chWon) lines.push('Udfordring klaret: ' + c);
     if (kind !== 'train' && kind !== 'test') for (const l of seriesAfter(win, me)) lines.push(l);
     $('endCh').textContent = lines.join('\n'); $('endCh').hidden = !lines.length;
@@ -1996,7 +2177,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const press = (...ids) => { for (const id of ids) { const b = $(id); if (b && !b.hidden && b.offsetParent) { b.click(); return true; } } return false; };
     if (typing()) { document.activeElement.blur(); return true; }
     // the overlays from the top down (later in the page lies on top)
-    const OV = [['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
+    const OV = [['giftOv', 'giftOk'], ['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['passOv', 'passClose'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
       ['help', 'helpOk'], ['myteam', 'mtClose'], ['lobby', 'cancel'], ['season', 'seasonClose'], ['shop', 'shopClose'], ['prof', 'profClose']];
     if (state === 'hl') return press('hlClose') || true;
     for (const [ov, ...bs] of OV) if (shown(ov)) { if (!press(...bs)) $(ov).hidden = true; return true; }
@@ -2433,7 +2614,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (dist > 340 || dist < 0 || Math.abs(b.y - CY) > 200 || b.fx * dir < 0.3) return false;
     return !P.some(q => q.team === a.team && q !== a && on(q) && q.k !== 0 && (gx - q.x) * dir < dist + 10);
   }
-  const TEMPO = () => kind === 'train' ? 1 : cfg.calm === false ? 0.8 : 0.6; // FIFA-like tempo for the whole match ('Normalt' is still calmer than it used to be)
+  const TEMPO = () => kind === 'train' ? 1 : [0.72, 0.88, 1][cfg.tempo] || 0.88; // tempo for the whole match: Roligt / Normalt / Hurtigt
   let lastCard = '', pendCard = null; // a yellow under advantage is shown at the next stoppage, as in FIFA
   function foul(a, b, hard) {
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
@@ -2833,13 +3014,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     }
     if (o === p && keeper && (p.hands > 0 || (p.frozen > 0 && ball.rs === 'goal'))) { // keeper with it in his hands, or a goal kick
       p.think += dt;
-      if (p.think > (p.hands > 0 ? 0.9 : 2.0)) keeperPlan(p, dir, out);
+      if (p.think > (p.hands > 0 ? 0.7 : 1.4)) keeperPlan(p, dir, out);
       return out;
     }
     if (o === p && p.frozen > 0) {
       // taking a throw-in, corner or goal kick
       p.think += dt;
-      if (p.think > Math.max(ball.rs === 'corner' || ball.rs === 'free' ? 2.4 : ball.rs === 'kick' ? 0.9 : 1.6, setp ? setp.wait + 0.4 : 0)) {
+      if (p.think > Math.max(ball.rs === 'corner' || ball.rs === 'free' ? 1.5 : ball.rs === 'kick' ? 0.7 : 1.0, setp ? setp.wait + 0.3 : 0)) {
         if (ball.rs === 'free' && boxPiece() && Math.abs(goalX - p.x) < 430 && Math.random() < 0.55) { out.shoot = MAXCHARGE * (0.2 + Math.random() * 0.5); out.aim = [goalX - p.x, CY + (Math.random() < 0.5 ? -1 : 1) * MOUTH * (0.45 + Math.random() * 0.3) - p.y]; } // straight at goal, over the wall
         else if (ball.rs === 'corner' || (boxPiece() && Math.random() < 0.5)) { out.cross = true; out.aim = [goalX - dir * 100 - p.x, CY - p.y]; }
         else { const q = passTarget(p, dir, (CY - p.y) / 300); if (q) out.passTo = q; else { out.shoot = 0.5; out.aim = [dir, 0]; } }
@@ -3132,7 +3313,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         }
       } else if (pause <= 0) {
         if (so) { if (soDone()) { finish(); return; } startPenalty(so.turn); so.wait = 0; so.shot = false; return; }
-        if (banner === 'MÅL!') { kickoff(1 - lastGoalTeam); pause = 1.5; banner = 'Klar'; return; }
+        if (banner === 'MÅL!') { kickoff(1 - lastGoalTeam); pause = 1.0; banner = 'Klar'; return; }
         if (banner === 'Pause') { kickoff(half === 4 ? kickFirst : 1 - kickFirst); pause = 1.5; banner = 'Klar'; return; }
         if (banner === 'Forlænget') { kickoff(1 - kickFirst); pause = 1.5; banner = 'Klar'; return; }
         if (banner === 'Klar') sfx.whistle();
@@ -3361,7 +3542,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (setp) {
       // set piece: the taker stands still and can only aim; the other team keeps its distance until the ball is played
       const was = setp.t; setp.t += dt;
-      if (was < setp.wait && setp.t >= setp.wait && setp.wait > 1) sfx.whistle(); // everyone is in place: the referee whistles, now it can be taken
+      if (was < setp.wait && setp.t >= setp.wait && setp.wait > 0.6) sfx.whistle(); // everyone is in place: the referee whistles, now it can be taken
       const tk = owner();
       if (!tk || tk.team !== setp.team) setp = null;
       else {
@@ -3512,8 +3693,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       wait: type === 'throw' ? 1.1 : 0.3, place: 0 };
     if (type === 'free' || type === 'corner' || (type === 'goal' && size > 1)) { // as in FIFA: the referee runs over with the ball and puts it down, everyone jogs into place, then he whistles
       const d = Math.hypot(ref.x - x, ref.y - y);
-      setp.place = Math.max(0.6, Math.min(type === 'goal' ? 1.2 : 1.9, d / 260));
-      setp.wait = setp.place + (type === 'corner' ? 0.9 : type === 'free' ? 0.8 : 0.4);
+      setp.place = Math.max(0.35, Math.min(type === 'goal' ? 0.7 : 1.05, d / 480)); // he jogs over quickly: you see it, but it doesn't hold the game up
+      setp.wait = setp.place + (type === 'corner' ? 0.45 : type === 'free' ? 0.4 : 0.2);
     }
     if (type === 'free' && boxPiece() && size >= 2) { // a free kick near goal: the defenders put up a wall between the ball and the goal
       const n = size >= 5 ? 3 : size >= 3 ? 2 : 1;
@@ -3528,7 +3709,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const kp = size > 1 ? P[slotOf(1 - team, 0)] : null; if (kp && on(kp) && !isHuman(kp)) { const dir = team ? -1 : 1; far(kp, [(team ? PL : PR) - dir * 28, CY + (y - CY) * 0.15]); }
     }
     for (const p of P) if (p.team !== team && p.tackle > 0) { p.tackle = 0; p.recover = 0.2; }
-    if (type !== 'kick' && !banner) pause = Math.max(pause, 0.45); // the whistle: a short stop, then the referee brings the ball (no dead waiting)
+    if (type !== 'kick' && !banner) pause = Math.max(pause, 0.3); // the whistle: a short stop, then the referee brings the ball (no dead waiting)
     flash = { text: label || (type === 'throw' ? 'Indkast' : type === 'corner' ? 'Hjørnespark' : type === 'free' ? 'Frispark' : type === 'kick' ? 'Afspark' : 'Målspark'), t: 1.0 };
     showPendCard();
     sfx.whistle();
@@ -3833,8 +4014,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   let kind = null, teamPick = null, tD = [DIFF[1], DIFF[1]], myTeamNow = -1, wasBehind = false;
   const seasonLoad = () => { try { return JSON.parse(localStorage.getItem('mf-season') || 'null'); } catch (_) { return null; } };
   const seasonSaveS = v => { try { localStorage.setItem('mf-season', JSON.stringify(v)); } catch (_) {} };
-  function matchSize() { if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : kind === 'test' ? (cfg.tsize || 5) : cfg.size; }
-  function matchMins() { if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
+  function matchSize() { if (quick && (mode === 'host' || mode === 'guest')) return 5; if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : kind === 'test' ? (cfg.tsize || 5) : cfg.size; }
+  function matchMins() { if (quick && (mode === 'host' || mode === 'guest')) return 3; if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
   function matchDiff() { if (drill) return DRILL_DIFF[(drill.lv || 1) - 1]; if (comp) return comp.diff; if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
   const tn = t => (teamPick ? teamPick[t].n : KITN[kit][t]);
   const aiD = t => tD[t] || DIFF[1];
@@ -4530,7 +4711,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
 
   // ----- little helpers for pickers -----
   // match options, shown where you start a match (setup, cup, career, online lobby) instead of hidden in the settings
-  const MOPTS = [['lock', 'Styring', ['Skift', 'Låst']], ['calm', 'Tempo', ['Normalt', 'Roligt']], ['aim', 'Sigtelinje', ['Fra', 'Til']], ['adv', 'Knapper', ['Simpel', 'Avanceret']], ['et', 'Forlænget', ['Fra', 'Til']], ['inj', 'Skader', ['Fra', 'Til']], ['cam', 'Kamera', ['Normal', 'Tæt', 'Vid']], ['cine', 'Filmklip', ['Fra', 'Til']], ['pu', 'Power-ups', ['Fra', 'Til']]];
+  const MOPTS = [['lock', 'Styring', ['Skift', 'Låst']], ['tempo', 'Tempo', ['Roligt', 'Normalt', 'Hurtigt']], ['aim', 'Sigtelinje', ['Fra', 'Til']], ['adv', 'Knapper', ['Simpel', 'Avanceret']], ['et', 'Forlænget', ['Fra', 'Til']], ['inj', 'Skader', ['Fra', 'Til']], ['cam', 'Kamera', ['Normal', 'Tæt', 'Vid']], ['cine', 'Filmklip', ['Fra', 'Til']], ['pu', 'Power-ups', ['Fra', 'Til']]];
   function buildOpts() {
     for (const box of document.querySelectorAll('[data-mopts]')) {
       box.textContent = '';
@@ -5164,6 +5345,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // Same shape as the claude.ai room, built on PeerJS (WebRTC) for the plain web link.
   function peerRoom() {
     return {
+      peer: true,
       join: (name, role) => new Promise((resolve, reject) => {
         const id = 'minifootball-' + name;
         let mine = {}, subs = [], peer, done = false;
@@ -5211,7 +5393,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     try { room = window.claude && window.claude.use ? await window.claude.use('room') : null; } catch (_) { room = null; }
     if (!room && window.Peer) room = peerRoom();
     if (!room) { netmsg.textContent = 'Online virker på spillets eget link.'; return; }
-    $('host').disabled = false; $('join').disabled = false;
+    $('host').disabled = false; $('join').disabled = false; $('quick').disabled = !room.peer; if (!room.peer) $('quickSub').textContent = 'Find modstander virker på spillets eget link.';
     netmsg.textContent = netmsg.dataset.invite ? 'Du er inviteret. Tryk Deltag.' : 'Opret en kamp og send koden, eller skriv en vens kode.';
   })();
 
@@ -5221,10 +5403,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    hlReset(); leaveNet(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
+    hlReset(); leaveNet(); quickReset(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true;
-    $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm();
+    $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm(); homeGifts();
     page(text ? 'pgOnline' : 'pgHome');
     if (text) netmsg.textContent = text;
   }
@@ -5279,6 +5461,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const cl = v => Math.max(-1, Math.min(1, (Number(v) || 0) / 100));
       remoteIn.set(g.peer, { x: cl(i[0]), y: cl(i[1]), a: !!i[2], b: !!i[3], c: !!i[4], d: !!i[5], adv: !!i[6] });
       if (roster.some(r => r[0] === g.peer)) continue;
+      if (quick && (roster.length || state !== 'lobby')) continue; // a ranked match is one against one
       const taken = new Set(roster.map(r => r[1]));
       const hostSlot = P.findIndex(q => q.ctrl === 'L0'); taken.add(hostSlot >= 0 ? hostSlot : humanSlots(0)[0]);
       const humans = t => P.filter(q => q.team === t && (q.ctrl === 'L0' || roster.some(r => r[1] === q.i))).length;
@@ -5330,7 +5513,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function lobbyUI() {
     if (state !== 'lobby') return;
     const isHost = mode === 'host', n = isHost ? size : lobbySize;
-    $('lobbyOpts').hidden = !isHost; // the host decides how the match is played
+    $('lobbyOpts').hidden = !isHost || quick; // the host decides how the match is played
     const myT = isHost ? (P.find(q => q.ctrl === 'L0') || { team: 0 }).team : myTeam();
     const ct = capTeam();
     const cap = roster.find(r => P[r[1]] && P[r[1]].team === ct);
@@ -5349,16 +5532,16 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const b = $('startOnline');
     if (isHost) {
       const y = roster.length, x = roster.filter(r => lobbyReady.get(r[0])).length;
-      b.hidden = false;
+      b.hidden = quick;
       b.textContent = hostReady ? (x < y ? `Venter på venner (${x}/${y} klar)` : 'Starter…') : (y ? `Klar (${x}/${y} venner klar)` : 'Klar (spil mod computeren)');
       renderRoster(true);
     } else {
       const mine = roster.some(r => r[0] === myPeer);
-      b.hidden = !mine; b.textContent = gLr ? 'Du er klar (tryk for at fortryde)' : 'Klar';
+      b.hidden = !mine || quick; b.textContent = gLr ? 'Du er klar (tryk for at fortryde)' : 'Klar';
     }
   }
   function checkStart() {
-    if (mode === 'host' && state === 'lobby' && hostReady && roster.every(r => lobbyReady.get(r[0]))) startMatch('host');
+    if (mode === 'host' && state === 'lobby' && hostReady && roster.every(r => lobbyReady.get(r[0])) && (!quick || roster.length)) startMatch('host');
   }
 
   $('host').onclick = async () => {
@@ -5366,12 +5549,15 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const code = String(1000 + Math.floor(Math.random() * 9000));
     netmsg.textContent = 'Opretter kamp…';
     try { net = await room.join('mf-' + code, 'h'); } catch (e) { netmsg.textContent = 'Kunne ikke oprette kampen. Prøv igen.'; return; }
+    hostEnter(code);
+  };
+  function hostEnter(code) {
     mode = 'host'; state = 'lobby'; roster = [];
     makePlayers(matchSize()); assignLocal(); kickoff(); $('rosterR').dataset.key = '';
     $('menu').hidden = true; $('lobby').hidden = false;
-    $('lobbyCode').textContent = code;
-    $('lobbyMsg').textContent = comp ? `${comp.type === 'cup' ? 'Co-op-pokal' : 'Karriere'}: send koden til dem, der skal spille med (op til ${size - 1}). I er alle på ${comp.a.n} mod ${comp.b.n}.` : `Send koden til dine venner (op til ${size * 2 - 1}). Tomme pladser spilles af computeren.`;
-    $('startOnline').hidden = false; $('share').hidden = window.top !== window; $('share').textContent = 'Del invitationslink';
+    $('lobbyCode').textContent = code || 'Rangeret'; $('lobbyLbl').textContent = quick ? 'Online · 5 mod 5 · 3 min' : 'Kampkode';
+    $('lobbyMsg').textContent = quick ? 'Leder efter en modstander…' : comp ? `${comp.type === 'cup' ? 'Co-op-pokal' : 'Karriere'}: send koden til dem, der skal spille med (op til ${size - 1}). I er alle på ${comp.a.n} mod ${comp.b.n}.` : `Send koden til dine venner (op til ${size * 2 - 1}). Tomme pladser spilles af computeren.`;
+    $('startOnline').hidden = quick; $('share').hidden = quick || window.top !== window; $('share').textContent = 'Del invitationslink';
     net.onPeers(ch => {
       const me = ch.peers.find(p => p.sameTab); if (me) myPeer = me.peer;
       hostAssign(ch.peers);
@@ -5379,9 +5565,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (state === 'end') updateAgain();
     });
     net.presence({ r: 'h', s: pack('l') });
-    teamForm = [myForm(size), 0]; hostReady = false;
+    teamForm = [myForm(size), 0]; hostReady = quick; // a ranked match starts by itself as soon as somebody is found
     lobbyUI();
-  };
+  }
   $('startOnline').onclick = () => {
     if (mode === 'host') { hostReady = !hostReady; lobbyUI(); checkStart(); }
     else if (mode === 'guest') { gLr = gLr ? 0 : 1; sendG(); lobbyUI(); }
@@ -5410,18 +5596,95 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (code.length !== 4) { netmsg.textContent = 'Koden har 4 cifre.'; return; }
     netmsg.textContent = 'Forbinder…';
     try { net = await room.join('mf-' + code, 'g'); } catch (e) { netmsg.textContent = 'Kunne ikke finde kampen. Tjek koden, og at værten har trykket Opret kamp.'; return; }
+    joinEnter(code);
+  };
+  function joinEnter(code) {
     mode = 'guest'; state = 'lobby'; seenMatch = -1; tgt = null; gIn = [0, 0, 0, 0]; gRx = [0, 0]; gRd = -1; gLr = 0; gWs = -1; gFm = myForm(cfg.size); gZ = 0; rxGuestSeen = 0;
     $('menu').hidden = true; $('lobby').hidden = false; $('startOnline').hidden = true; $('share').hidden = true;
-    $('lobbyCode').textContent = code; $('lobbyMsg').textContent = 'Forbundet. Venter på at værten starter kampen…';
+    $('lobbyCode').textContent = code || 'Rangeret'; $('lobbyLbl').textContent = quick ? 'Online · 5 mod 5 · 3 min' : 'Kampkode'; $('lobbyMsg').textContent = quick ? 'Fandt en, der venter. Forbinder…' : 'Forbundet. Venter på at værten starter kampen…';
     $('rosterR').textContent = ''; $('rosterB').textContent = ''; $('rosterR').dataset.key = '';
     sendG();
     net.onPeers(ch => {
       const me = ch.peers.find(p => p.sameTab); if (me) myPeer = me.peer;
       const h = ch.peers.find(p => !p.sameTab && p.presence && p.presence.r === 'h');
-      if (h && h.presence.s) { lostAt = 0; applyState(h.presence.s); }
+      if (h && h.presence.s) { lostAt = 0; applyState(h.presence.s); quickCheck(h.presence.s); }
       else if (!h && !lostAt) lostAt = performance.now();
     });
-  };
+  }
+  function quickCheck(s) { // searching: did the waiting phone take us in, or was somebody quicker?
+    if (!quickJudge) return;
+    const j = quickJudge;
+    if (!s.q) { quickJudge = null; j(false); return; }
+    if (myPeer && roster.some(r => r[0] === myPeer)) {
+      quickJudge = null; j(true);
+      const n = (netCards.get('host') || {}).n || hostInfo[1] || 'en modstander';
+      $('lobbyMsg').textContent = `Modstander fundet: ${n}. Kampen starter om lidt…`; sfx.win();
+      setTimeout(() => { if (quick && mode === 'guest' && state === 'lobby') { gLr = 1; sendG(); lobbyUI(); } }, 2500);
+    } else if (roster.length || s.qo === 0) { quickJudge = null; j(false); }
+  }
+  // ---------- Find modstander: ranked online matches against anyone, without a server ----------
+  // The PeerJS broker only lets one phone own a name, so a few fixed names work as a waiting room: look for a phone
+  // waiting under one of them and join it; if nobody is waiting, take the first free name and wait there yourself.
+  // A phone waiting under a higher name keeps checking the lower ones, so two searching phones always find each other.
+  const QSLOTS = 8, qName = k => 'mf-qv1-' + k;
+  let quickBusy = false, quickStop = false, quickSince = 0, quickSlot = 0;
+  function quickReset() { quick = false; quickBusy = false; quickStop = false; quickJudge = null; quickSlot = 0; $('quick').textContent = 'Find modstander'; }
+  function quickBack(msg) { // back to the online page without leaving search mode
+    leaveNet(); state = 'menu'; mode = null; $('lobby').hidden = true; $('menu').hidden = false; page('pgOnline');
+    if (msg) netmsg.textContent = msg;
+  }
+  async function quickTry(k) { // join whoever waits under name k; true once the host has put you in the match
+    try { net = await room.join(qName(k), 'g'); } catch (_) { net = null; return false; }
+    if (quickStop) { quickBack(); return false; }
+    joinEnter('');
+    const ok = await new Promise(res => { quickJudge = res; setTimeout(() => { if (quickJudge === res) { quickJudge = null; res(false); } }, 4500); });
+    if (!ok) quickBack('Leder efter en modstander…');
+    return ok;
+  }
+  async function quickFind() {
+    if (!room || !room.peer) { netmsg.textContent = 'Find modstander virker på spillets eget link.'; return; }
+    if (quickBusy) { quickStop = true; netmsg.textContent = 'Stopper…'; return; }
+    audioOn(); unlockSpeech();
+    quick = true; quickBusy = true; quickStop = false; quickSince = performance.now();
+    $('quick').textContent = 'Stop søgning'; netmsg.textContent = 'Leder efter en modstander…';
+    for (let k = 1; k <= QSLOTS && !quickStop; k++) if (await quickTry(k)) { quickBusy = false; $('quick').textContent = 'Find modstander'; return; }
+    for (let k = 1; k <= QSLOTS && !quickStop; k++) { // nobody waiting: wait under the first free name
+      try { net = await room.join(qName(k), 'h'); } catch (_) { net = null; continue; }
+      if (quickStop) break;
+      quickSlot = k; quickBusy = false; $('quick').textContent = 'Find modstander';
+      hostEnter('');
+      quickProbe(k);
+      return;
+    }
+    const stopped = quickStop; leaveNet(); quickReset();
+    netmsg.textContent = stopped ? 'Søgningen er stoppet.' : 'Kunne ikke komme i kø lige nu. Prøv igen om lidt.';
+  }
+  async function quickProbe(k) { // while waiting under name k: is somebody waiting under a lower name? Then go to them
+    while (quick && mode === 'host' && state === 'lobby' && quickSlot === k) {
+      await new Promise(r => setTimeout(r, 4000 + Math.random() * 2000));
+      if (!(quick && mode === 'host' && state === 'lobby' && quickSlot === k) || roster.length) continue;
+      for (let j = 1; j < k; j++) {
+        let pr = null; try { pr = await room.join(qName(j), 'g'); } catch (_) { continue; }
+        const open = await new Promise(res => { let done = false; const t = setTimeout(() => { if (!done) { done = true; res(false); } }, 2500);
+          pr.onPeers(ch => { const h = ch.peers.find(p => !p.sameTab && p.presence && p.presence.r === 'h'); if (h && h.presence.s && !done) { done = true; clearTimeout(t); res(h.presence.s.qo === 1); } }); });
+        try { pr.leave(); } catch (_) {}
+        if (open && quick && mode === 'host' && state === 'lobby' && !roster.length) {
+          quickSlot = 0; leaveNet(); quickBusy = true; $('quick').textContent = 'Stop søgning';
+          $('lobby').hidden = true; $('menu').hidden = false; state = 'menu'; mode = null; page('pgOnline');
+          if (await quickTry(j)) { quickBusy = false; $('quick').textContent = 'Find modstander'; return; }
+          quickBusy = false; quickFind(); return;
+        }
+      }
+    }
+  }
+  $('quick').onclick = () => withHelp(quickFind);
+  setInterval(() => { // the waiting room's clock
+    if (!quick || state !== 'lobby' || mode !== 'host') return;
+    const s = Math.floor((performance.now() - quickSince) / 1000);
+    if (!roster.length) $('lobbyMsg').textContent = `Leder efter en modstander… ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}. Vælg formation imens. Kampen starter af sig selv, når der er fundet en.`;
+    else $('lobbyMsg').textContent = 'Modstander fundet! Kampen starter om lidt…';
+  }, 1000);
+
 
   const RND = v => Math.round(v);
   let packN = 0, cvN = 0;
@@ -5437,6 +5700,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       gs: [goalSeq, lastScorer, lastGk, lastGoalTeam], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
       rx: rxOut.filter(r => now - r[3] < 3000).map(r => [r[0], r[1], r[2]]),
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
+      q: quick ? 1 : 0, qo: quick && state === 'lobby' && !roster.length ? 1 : 0,
     };
     if (st === 'e' && stats) o.ss = stats;
     if (st === 'e' && serEnd) o.sr = serEnd;
@@ -5481,7 +5745,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (state === 'lobby') {
         renderRoster(false); lobbyUI();
         const mine = roster.some(r => r[0] === myPeer);
-        $('lobbyMsg').textContent = (gCoop ? 'Co-op: I er alle på samme hold mod computeren. ' : '') + (mine ? (gLr ? `Du er klar. Kampen starter, når alle er klar (${lobbyLr[0] + lobbyLr[2]}/${lobbyLr[1] + 1}).` : 'Du er med. Vælg formation og tryk Klar.') : 'Kampen er fuld, men du kan se med.');
+        if (quick) $('lobbyMsg').textContent = mine ? `Modstander fundet: ${hostInfo[1] || 'Vært'}. Kampen starter om lidt…` : 'Fandt en, der venter. Forbinder…';
+        else $('lobbyMsg').textContent = (gCoop ? 'Co-op: I er alle på samme hold mod computeren. ' : '') + (mine ? (gLr ? `Du er klar. Kampen starter, når alle er klar (${lobbyLr[0] + lobbyLr[2]}/${lobbyLr[1] + 1}).` : 'Du er med. Vælg formation og tryk Klar.') : 'Kampen er fuld, men du kan se med.');
       }
       return;
     }
@@ -6221,7 +6486,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     render(dt);
     requestAnimationFrame(frame);
   }
-  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset();
+  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset(); setTimeout(homeGifts, 700);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
   if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st) }; // only for automated tests
   requestAnimationFrame(frame);
