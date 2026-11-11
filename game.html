@@ -563,6 +563,11 @@ table.st tr.me td { color: var(--gold); }
 .mklist { display: flex; flex-direction: column; gap: 6px; }
 .mkrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
 .mkrow.deal { border-color: var(--gold); } .mkrow.deal .nm b::after { content: ' · TILBUD'; color: var(--gold); font-size: 10px; }
+.mkopt { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: -4px 0 4px 40px; padding: 8px 10px; border-radius: 0 0 10px 10px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-top: 0; }
+.mkopt button { min-height: 0; padding: 7px 12px; font-size: 13px; } .mkopt span { font-size: 12px; color: var(--muted); flex: 1 1 100%; }
+.mkrow.out { border-color: #7fd3ff; }
+.scbox { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
+.scbox b { font-size: 14px; } .scbox .big { font-size: 20px; font-weight: 800; color: var(--gold); }
 .mkrow.arm { border-color: #ff6b5e; } .mkrow.yo { border-color: var(--gold); }
 .mkrow .ovr { font-weight: 800; font-size: 17px; width: 30px; text-align: center; flex: none; }
 .mkrow .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; } .mkrow .nm b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .mkrow .nm small { color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -895,6 +900,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     <div class="card wide">
       <div class="top"><button class="alt back" id="mkClose">‹ Tilbage</button><h2>Transfermarked</h2><span class="coins big" data-coins>0</span></div>
       <div class="mklist" id="mkBuy"></div>
+      <div class="mklist" id="mkScout"></div>
       <div class="mklist" id="mkSell"></div>
       <div class="mktoast" id="mkToast" hidden></div>
     </div>
@@ -5968,49 +5974,132 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const r = document.createElement('div'); r.className = 'mkrow' + (cls ? ' ' + cls : '');
     const o = document.createElement('span'); o.className = 'ovr ' + (p.ev ? 'gold' : ovrTier(ovr(p))); o.textContent = ovr(p);
     const nm = document.createElement('span'); nm.className = 'nm'; const b = document.createElement('b'); b.textContent = p.n; const sm = document.createElement('small');
-    sm.textContent = `${DPOSN[dpOf(p)]} · ${flagOf(p.nat)}${NATS[p.nat] || 'Danmark'} · løn ${wageOf(p)}` + (abOf(p).length ? ' · ' + abOf(p).map(a => ABIL[a].i + ' ' + ABIL[a].n).join(', ') : '');
+    sm.textContent = `${DPOSN[dpOf(p)]} · ${flagOf(p.nat)}${NATS[p.nat] || 'Danmark'} · løn ${wageOf(p)}` + (p.age ? ` · ${p.age} år` : '') + (p.pot && ovr(p) < p.pot ? ` · 🌱 ${p.pot}` : '') + (abOf(p).length ? ' · ' + abOf(p).map(a => ABIL[a].i + ' ' + ABIL[a].n).join(', ') : '');
     nm.append(b, sm);
     const st = document.createElement('span'); st.className = 'st'; st.textContent = SKILLS.map(([k, n2]) => `${(p.pos === 'MV' && k === 'def' ? 'Refl' : n2).slice(0, 4)} ${p[k]}`).join('  ');
     const bt = document.createElement('button'); bt.textContent = btnTxt; bt.onclick = () => on(bt);
     r.append(o, nm, st, bt); return r;
+  }
+  // ---------- bids, the scout and selling to other clubs ----------
+  // You bid for a player instead of paying a fixed price: a low bid can be turned down, and two refusals make the club dig in.
+  const BIDS = [['Lavt bud', 0.72, 0.28], ['Fair bud', 0.86, 0.62], ['Fuld pris', 1, 1]];
+  let mkOpen = '';
+  function mktSign(list, i, c, price) { // list 'l' = today's players, 's' = the scout's finds
+    const pr2 = loadProf(), S2 = squadLoad(), M2 = mktLoad(), arr = list === 's' ? (M2.sc && M2.sc.res) || [] : M2.l;
+    if (S2.pl.length >= SQ_MAX) { showToast('Truppen er fuld: sælg en først'); return false; }
+    if (pr2.coins < price) { showToast(`Du mangler ${price - pr2.coins} mønter`); return false; }
+    const card = arr[i]; if (!card || card.n !== c.n) return false;
+    arr.splice(i, 1); mktSave(M2); addCoins(-price, 'køb');
+    const np = { ...card }; delete np.pr; delete np.deal; delete np.rej; np.mor = 80; S2.pl.push(np);
+    if (np.pos === 'MV' && ovr(np) > ovr(S2.pl[0])) { const k = S2.pl.length - 1; [S2.pl[0], S2.pl[k]] = [S2.pl[k], S2.pl[0]]; if (S2.xi) for (const n in S2.xi) S2.xi[n] = (S2.xi[n] || []).map(v => (v === 0 ? k : v === k ? 0 : v)); }
+    squadSave(S2); sfx.win(); buzz(30); showToast(`${np.n} har skrevet under for ${price} mønter!`); mkOpen = ''; return true;
+  }
+  function bidRows(box, c, list, i) {
+    const key = list + i + c.n, dug = (c.rej | 0) >= 2, full = dug ? Math.round(c.pr * 1.1 / 5) * 5 : c.pr;
+    box.appendChild(mktRow(c, mkOpen === key ? 'Luk' : dug ? `${full} mønter` : `Byd · ${c.pr}`, () => { mkOpen = mkOpen === key ? '' : key; mktShow(); }, (c.deal ? 'deal' : '') + (c.pot ? ' yo' : '')));
+    if (mkOpen !== key) return;
+    const o = document.createElement('div'); o.className = 'mkopt';
+    const tx = document.createElement('span'); tx.textContent = dug ? 'Klubben er træt af lave bud. Nu er det fuld pris, og lidt til.' : c.rej ? 'De sagde nej sidst. Et bud mere, og de bliver sure.' : 'Et lavt bud kan blive afvist. Fuld pris bliver altid sagt ja til.'; o.appendChild(tx);
+    (dug ? [['Betal ' + full, full / c.pr, 1]] : BIDS).forEach(([n, k, ch]) => {
+      const price = Math.max(10, Math.round(c.pr * k / 5) * 5), b = document.createElement('button'); b.className = ch < 1 ? 'alt' : ''; b.textContent = dug ? n : `${n} · ${price}`;
+      b.onclick = () => {
+        const pr2 = loadProf(); if (pr2.coins < price) { showToast(`Du mangler ${price - pr2.coins} mønter`); return; }
+        if (Math.random() < ch) { if (mktSign(list, i, c, price)) { mktShow(); hubPaint(); } return; }
+        const M2 = mktLoad(), arr = list === 's' ? (M2.sc && M2.sc.res) || [] : M2.l; if (arr[i] && arr[i].n === c.n) { arr[i].rej = (arr[i].rej | 0) + 1; mktSave(M2); }
+        tone(220, 0.08, 'triangle', 0.06); showToast(pick(['De siger nej tak til det bud.', 'Afvist. De vil have mere for ham.', 'Nej. Så billigt slipper han ikke.'])); mktShow();
+      };
+      o.appendChild(b);
+    });
+    box.appendChild(o);
+  }
+  // The scout: send him out for a kind of player in a line of the team; he comes home with three names.
+  const SCOUT = { tal: ['Ungt talent', '🌱', 40, 2, 'Ung spiller med plads til at vokse'], klar: ['Færdig spiller', '⭐', 70, 3, 'Bedre end dit hold lige nu'], bil: ['Billig reserve', '🪙', 20, 1, 'Lidt under dit niveau, til halv pris'] };
+  const SC_POS = [['MV', 'Målmand'], ['FO', 'Forsvar'], ['MB', 'Midtbane'], ['AN', 'Angreb']];
+  const SCOUT_H = 3600e3;
+  let scPos = 'AN', scKind = 'tal';
+  function scoutFind(pos, kind) {
+    const t = teamOvr(cfg.size || 7), out = [];
+    for (let k = 0; k < 3; k++) {
+      const c = kind === 'tal' ? makeCard(clamp(t - 9, 45, 84), clamp(t - 2, 47, 88), { pos }) : kind === 'klar' ? makeCard(clamp(t + 2, 50, 90), clamp(t + 8, 52, 95), { pos }) : makeCard(clamp(t - 7, 45, 84), clamp(t - 1, 46, 88), { pos });
+      if (kind === 'tal') { c.age = 17 + Math.floor(Math.random() * 4); c.pot = clamp(ovr(c) + 9 + Math.floor(Math.random() * 10), 62, 97); }
+      else c.age = kind === 'klar' ? 24 + Math.floor(Math.random() * 6) : 27 + Math.floor(Math.random() * 7);
+      c.pr = Math.max(15, Math.round(valOf(c) * (kind === 'bil' ? 0.5 : kind === 'tal' ? 1.15 + (c.pot - ovr(c)) * 0.02 : 1.05) / 5) * 5); out.push(c);
+    }
+    return out;
+  }
+  const hm = ms => { const m = Math.max(1, Math.round(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} t ${m % 60} min` : `${m} min`; };
+  function scoutPaint(M) {
+    const X = $('mkScout'); X.textContent = '';
+    const sc = M.sc, box = document.createElement('div'); box.className = 'scbox';
+    if (sc && !sc.res && Date.now() - sc.t >= sc.dur) { sc.res = scoutFind(sc.pos, sc.kind); mktSave(M); }
+    if (sc && !sc.res) {
+      const b = document.createElement('b'); b.textContent = `🔭 Scouten leder efter: ${SCOUT[sc.kind][0].toLowerCase()}, ${SC_POS.find(q => q[0] === sc.pos)[1].toLowerCase()}`;
+      const t = document.createElement('span'); t.className = 'big'; t.textContent = `Hjemme om ${hm(sc.t + sc.dur - Date.now())}`;
+      const n = document.createElement('span'); n.className = 'sqnote'; n.textContent = 'Han kommer hjem med tre navne. Du kan spille imens.'; box.append(b, t, n); X.appendChild(box); return;
+    }
+    if (sc && sc.res) {
+      const b = document.createElement('b'); b.textContent = sc.res.length ? '🔭 Scouten er hjemme med sine fund' : '🔭 Scouten er klar til en ny tur'; X.appendChild(b);
+      sc.res.forEach((c, i) => bidRows(X, c, 's', i));
+    }
+    const h = document.createElement('b'); h.textContent = sc && sc.res && sc.res.length ? 'Send ham ud igen (de gamle fund forsvinder)' : 'Hvad skal scouten lede efter?';
+    const s1 = document.createElement('div'); s1.className = 'seg'; SC_POS.forEach(([k, n]) => { const b = document.createElement('button'); b.textContent = n; b.setAttribute('aria-pressed', scPos === k); b.onclick = () => { scPos = k; mktShow(); }; s1.appendChild(b); });
+    const s2 = document.createElement('div'); s2.className = 'seg'; Object.keys(SCOUT).forEach(k => { const b = document.createElement('button'); b.textContent = `${SCOUT[k][1]} ${SCOUT[k][0]}`; b.setAttribute('aria-pressed', scKind === k); b.onclick = () => { scKind = k; mktShow(); }; s2.appendChild(b); });
+    const d = document.createElement('span'); d.className = 'sqnote'; d.textContent = `${SCOUT[scKind][4]}. Turen tager ${SCOUT[scKind][3]} ${SCOUT[scKind][3] === 1 ? 'time' : 'timer'}.`;
+    const go = document.createElement('button'); go.textContent = `Send scouten · ${SCOUT[scKind][2]} mønter`;
+    go.onclick = () => { const pr2 = loadProf(), cost = SCOUT[scKind][2]; if (pr2.coins < cost) { go.textContent = `Mangler ${cost - pr2.coins} mønter`; return; }
+      addCoins(-cost, 'scout'); const M2 = mktLoad(); M2.sc = { pos: scPos, kind: scKind, t: Date.now(), dur: SCOUT[scKind][3] * SCOUT_H, res: null }; mktSave(M2); sfx.win(); showToast('Scouten er taget afsted'); mktShow(); };
+    box.append(h, s1, s2, d, go); X.appendChild(box);
+  }
+  // Selling: take the quick money now, or put him on the list and wait for bids from other clubs (better the longer you wait).
+  const OUT_MAX = 3, OUT_STEPS = [[10 * 60e3, 0.5, 0.2], [SCOUT_H, 0.68, 0.24], [4 * SCOUT_H, 0.85, 0.3]];
+  function outOffer(o, p) { // the best bid so far, and when the next one may come
+    let h = o.s >>> 0; const rnd = () => { h = (h * 1103515245 + 12345) >>> 0; return (h >>> 8) / 16777216; };
+    const el = Date.now() - o.t, v = valOf(p), clubs = TEAMS.filter(t => !t.own).map(t => t.n); let best = null, next = 0;
+    for (const [t, a, b] of OUT_STEPS) { const amt = Math.round(v * (a + b * rnd()) / 5) * 5, club = clubs[Math.floor(rnd() * clubs.length)] || 'En klub'; if (el >= t) { if (!best || amt > best.amt) best = { amt, club }; } else if (!next) next = t - el; }
+    return { best, next };
+  }
+  function mktSold(i, worth, how) {
+    const S2 = squadLoad(), p2 = S2.pl[i]; if (S2.pl.length <= 11 || !p2 || i === 0) return;
+    S2.pl.splice(i, 1);
+    if (S2.xi) for (const n in S2.xi) { const x = S2.xi[n] || []; if (x.includes(i)) delete S2.xi[n]; else S2.xi[n] = x.map(v => (v > i ? v - 1 : v)); } // a starter sold: that line-up is picked again
+    const M2 = mktLoad(); M2.out = (M2.out || []).filter(o => o.n !== p2.n); mktSave(M2);
+    squadSave(S2); addCoins(worth, 'salg'); mkArm = -1; mkOpen = ''; sqSel = 0; sfx.win(); showToast(`${p2.n} er solgt${how ? ' til ' + how : ''} for ${worth} mønter`);
   }
   function mktShow() {
     const M = mktLoad(), S = squadLoad(), pr = loadProf(), B = $('mkBuy'), SL = $('mkSell');
     B.textContent = ''; SL.textContent = '';
     const info = document.createElement('p'); info.className = 'sqnote';
     const left = (() => { const n = new Date(), e = new Date(n); e.setHours(24, 0, 0, 0); const m = Math.round((e - n) / 60000); return `${Math.floor(m / 60)} t ${m % 60} min`; })();
-    info.textContent = `Dagens spillere. Nye om ${left}. Truppen: ${S.pl.length}/${SQ_MAX}.`; B.appendChild(info);
+    info.textContent = `Dagens spillere. Nye om ${left}. Truppen: ${S.pl.length}/${SQ_MAX}. Tryk på en spiller for at byde.`; B.appendChild(info);
     if (!M.l.length) { const e = document.createElement('p'); e.className = 'sqnote'; e.textContent = 'Du har købt dem alle. Kom igen i morgen, eller hent en ny liste.'; B.appendChild(e); }
-    M.l.forEach((c, i) => {
-      B.appendChild(mktRow(c, `${c.pr} mønter`, bt => {
-        const pr2 = loadProf(), S2 = squadLoad(), M2 = mktLoad();
-        if (S2.pl.length >= SQ_MAX) { bt.textContent = 'Truppen er fuld: sælg en først'; return; }
-        if (pr2.coins < c.pr) { bt.textContent = `Mangler ${c.pr - pr2.coins}`; return; }
-        const card = M2.l[i]; if (!card || card.n !== c.n) return;
-        M2.l.splice(i, 1); mktSave(M2); addCoins(-c.pr, 'køb');
-        const np = { ...card }; delete np.pr; delete np.deal; np.mor = 80; S2.pl.push(np);
-        if (np.pos === 'MV' && ovr(np) > ovr(S2.pl[0])) { const k = S2.pl.length - 1; [S2.pl[0], S2.pl[k]] = [S2.pl[k], S2.pl[0]]; if (S2.xi) for (const n in S2.xi) S2.xi[n] = (S2.xi[n] || []).map(v => (v === 0 ? k : v === k ? 0 : v)); }
-        squadSave(S2); sfx.win(); buzz(30); showToast(`${np.n} har skrevet under!`); mktShow(); hubPaint();
-      }, c.deal ? 'deal' : ''));
-    });
+    M.l.forEach((c, i) => bidRows(B, c, 'l', i));
     const nb = document.createElement('button'); nb.className = 'alt'; nb.textContent = `Ny liste nu · ${MKT_NEW} mønter`;
     nb.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MKT_NEW) { nb.textContent = `Mangler ${MKT_NEW - pr2.coins} mønter`; return; } addCoins(-MKT_NEW, 'scout'); mktSave(mktGen(mktLoad())); mktShow(); };
     B.appendChild(nb);
-    const inf2 = document.createElement('p'); inf2.className = 'sqnote'; inf2.textContent = 'Sælg dem du ikke bruger. Tryk to gange for at sælge. Du skal beholde mindst 11.'; SL.appendChild(inf2);
+    const inf2 = document.createElement('p'); inf2.className = 'sqnote'; inf2.textContent = 'Sælg dem du ikke bruger: hurtigt for en lav pris, eller sæt dem til salg og vent på bud. Du skal beholde mindst 11.'; SL.appendChild(inf2);
+    M.out = (M.out || []).filter(o => S.pl.some(q => q.n === o.n)); const outs = M.out;
+    scoutPaint(M);
     S.pl.map((p2, i) => ({ p2, i })).sort((a, b) => ovr(a.p2) - ovr(b.p2)).forEach(({ p2, i }) => {
-      const lock = i === 0 || S.pl.length <= 11;
-      const row = mktRow(p2, lock ? (i === 0 ? 'Din målmand' : 'Mindst 11') : mkArm === i ? `Sikker? +${sellOf(p2)}` : `Sælg +${sellOf(p2)}`, () => {
-        if (lock) return;
-        if (mkArm !== i) { mkArm = i; mktShow(); return; }
-        const S2 = squadLoad(); if (S2.pl.length <= 11 || !S2.pl[i] || S2.pl[i].n !== p2.n) return;
-        const worth = sellOf(S2.pl[i]); S2.pl.splice(i, 1);
-        if (S2.xi) for (const n in S2.xi) { const x = S2.xi[n] || []; if (x.includes(i)) delete S2.xi[n]; else S2.xi[n] = x.map(v => (v > i ? v - 1 : v)); } // a starter sold: that line-up is picked again
-        squadSave(S2); addCoins(worth, 'salg'); mkArm = -1; sqSel = 0; sfx.win(); showToast(`${p2.n} er solgt for ${worth} mønter`); mktShow(); hubPaint();
-      }, mkArm === i ? 'arm' : '');
+      const lock = i === 0 || S.pl.length <= 11, key = 'o' + i + p2.n, listed = outs.find(o => o.n === p2.n), of = listed ? outOffer(listed, p2) : null;
+      const row = mktRow(p2, lock ? (i === 0 ? 'Din målmand' : 'Mindst 11') : mkOpen === key ? 'Luk' : listed ? (of.best ? `Bud: ${of.best.amt}` : 'Til salg') : 'Sælg', () => { if (lock) return; mkOpen = mkOpen === key ? '' : key; mkArm = -1; mktShow(); }, listed ? 'out' : '');
       if (lock) row.querySelector('button').disabled = true;
       SL.appendChild(row);
+      if (lock || mkOpen !== key) return;
+      const o = document.createElement('div'), tx = document.createElement('span'); o.className = 'mkopt'; o.appendChild(tx);
+      const same = () => { const S2 = squadLoad(); return S2.pl[i] && S2.pl[i].n === p2.n; };
+      const quick = document.createElement('button'); quick.className = 'alt'; quick.textContent = mkArm === i ? `Sikker? +${sellOf(p2)}` : `Sælg nu · +${sellOf(p2)}`;
+      quick.onclick = () => { if (mkArm !== i) { mkArm = i; mktShow(); return; } if (!same()) return; mktSold(i, sellOf(p2), ''); mktShow(); hubPaint(); };
+      if (listed) {
+        tx.textContent = of.best ? `${of.best.club} byder ${of.best.amt} mønter.` + (of.next ? ` Et nyt bud kan komme om ${hm(of.next)}.` : ' Der kommer ikke flere bud.') : `Ingen bud endnu. Det første kan komme om ${hm(of.next)}.`;
+        if (of.best) { const acc = document.createElement('button'); acc.textContent = `Sig ja · +${of.best.amt}`; acc.onclick = () => { if (!same()) return; mktSold(i, of.best.amt, of.best.club); mktShow(); hubPaint(); }; o.appendChild(acc); }
+        const off = document.createElement('button'); off.className = 'alt'; off.textContent = 'Tag ham af listen'; off.onclick = () => { const M2 = mktLoad(); M2.out = (M2.out || []).filter(q => q.n !== p2.n); mktSave(M2); mktShow(); }; o.appendChild(off);
+      } else {
+        tx.textContent = outs.length >= OUT_MAX ? `Du har allerede ${OUT_MAX} til salg. Sælg ham nu, eller vent.` : 'Sæt ham til salg og vent på bud fra andre klubber. De bliver bedre, jo længere du venter (op til 4 timer).';
+        if (outs.length < OUT_MAX) { const put = document.createElement('button'); put.textContent = 'Sæt til salg'; put.onclick = () => { const M2 = mktLoad(); M2.out = (M2.out || []).filter(q => q.n !== p2.n).concat([{ n: p2.n, t: Date.now(), s: Math.floor(Math.random() * 1e9) }]); mktSave(M2); showToast(`${p2.n} er sat til salg`); mktShow(); }; o.appendChild(put); }
+      }
+      o.appendChild(quick); SL.appendChild(o);
     });
-    subTabs($('mktOv'), [['Køb', ['mkBuy']], ['Sælg', ['mkSell']]], 'mkt', B);
+    subTabs($('mktOv'), [['Køb', ['mkBuy']], ['Scout', ['mkScout']], ['Sælg', ['mkSell']]], 'mkt', B);
     paintCoins(); $('mktOv').hidden = false;
   }
   function showToast(t) { const e = $('mkToast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(showToast.t); showToast.t = setTimeout(() => { e.hidden = true; }, 2200); }
@@ -8092,7 +8181,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
