@@ -2941,9 +2941,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // offside is judged when the ball is played (ball.last.offs = the team-mates who stood offside then) and given when one of them plays it:
   // a pass along the ground, a high ball, a cross, a header or a first-time shot
   const offsNow = p => P.filter(q => q.team === p.team && q !== p && on(q) && isOffside(q, p)).map(q => q.i);
+  const savedOffs = k => { const L = ball.last, t = L ? (L.offT === undefined ? L.team : L.offT) : -1; return L && L.offs && L.offs.length && t !== k.team ? { offs: L.offs, offT: t } : {}; }; // a save does not play anyone onside
   function offsideCall(p) {
     const L = ball.last;
-    if (!L || L.team !== p.team || !L.offs || L.offs.indexOf(p.i) < 0) return false;
+    if (!L || (L.offT === undefined ? L.team : L.offT) !== p.team || !L.offs || L.offs.indexOf(p.i) < 0) return false; // offT: the shot was saved or came back off the keeper, it is still offside
     const x = p.x, y = p.y; p.recv = 0; p.ftArm = 0;
     restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return true;
   }
@@ -3066,8 +3067,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (p.ms) p.ms.sh++;
     ball.gk = r.gk; ball.fresh = false;
     ball.x = r.x; ball.y = r.y;
+    const offs = offsNow(p); // before the ball leaves his foot
     release(p, r.vx, r.vy, 0.3);
-    ball.last = { team: p.team, pass: false };
+    ball.last = { team: p.team, pass: false, offs }; // a rebound to a man who stood offside when it was hit is offside
     if (r.vz) ball.vz = r.vz;
     if (r.spinT) { ball.spin = r.spin; ball.spinT = r.spinT; }
     if (!isPen && r.gk === 'shot') { // evner on the shot: the keeper reads these worse (see keeperWatch)
@@ -3102,7 +3104,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // 5 a side is indoor football: boards all round, the ball bounces back off them, no throw-ins, corners, goal kicks or offside
   const INDOOR = () => size === 5 && kind !== 'train';
   function isOffside(q, p) {
-    if (size < 5 || INDOOR() || !q || p.frozen > 0 || kind === 'train') return false;
+    if (size < 5 || INDOOR() || !q || (p.frozen > 0 && ball.rs !== 'free') || kind === 'train') return false; // no offside from a corner, throw-in, goal kick or penalty, but there is from a free kick
     const dir = q.team ? -1 : 1;
     if ((q.x - CX) * dir <= 0 || (q.x - ball.x) * dir <= 0) return false;
     const foes = P.filter(f => f.team !== q.team).map(f => f.x * dir).sort((a, b) => b - a);
@@ -3205,7 +3207,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (lu) abPop(p, 'luft');
     p.fx = dx / d; p.fy = dy / d;
     ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < (lu ? 0.42 : 0.7) }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them
+    ball.last = { team: p.team, pass: false, offs: offsNow(p), head: near, ks: Math.random() < (lu ? 0.42 : 0.7) }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them
     ball.gk = 'head'; ball.fresh = false;
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Hovedstød!', t: 0.7 };
@@ -3332,21 +3334,21 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     saveKind = 'parry';
     const dir = p.team ? -1 : 1, s = Math.hypot(ball.vx, ball.vy), side = Math.sign(p.dvy || ball.y - p.y || 1);
     ball.vx = dir * s * 0.3; ball.vy = side * s * 0.36; ball.vz = 170; ball.z = Math.max(ball.z, 4);
-    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.4;
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = Object.assign({ team: p.team, pass: false, punt: true }, savedOffs(p)); p.nopick = 0.4;
     tone(150, 0.08, 'triangle', 0.14, -60); shake = Math.max(shake, 4);
   }
   function tipOver(p) { // fingertips: over the bar and behind for a corner
     saveKind = 'tip';
     const dir = p.team ? -1 : 1, gx = p.team ? PR : PL, side = Math.sign(p.dvy || ball.y - p.y || 1);
     ball.vx = -dir * Math.max(260, (Math.abs(ball.x - gx) + 20) / 0.4); ball.vy = side * 70; ball.z = Math.max(ball.z, BAR + 8); ball.vz = 300;
-    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.8;
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = Object.assign({ team: p.team, pass: false, punt: true }, savedOffs(p)); p.nopick = 0.8;
     tone(170, 0.07, 'triangle', 0.12, -40); shake = Math.max(shake, 3);
   }
   function spill(p) { // he gets his body behind it but can't hold it: a loose ball in the box
     saveKind = 'spill';
     const dir = p.team ? -1 : 1, a = (Math.random() - 0.5) * 1.6;
     ball.vx = dir * Math.cos(a) * 230; ball.vy = Math.sin(a) * 230; ball.vz = 150; ball.z = Math.max(ball.z, 6);
-    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.55; p.recover = Math.max(p.recover, 0.3);
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = Object.assign({ team: p.team, pass: false, punt: true }, savedOffs(p)); p.nopick = 0.55; p.recover = Math.max(p.recover, 0.3);
     tone(130, 0.08, 'triangle', 0.14, -50); shake = Math.max(shake, 4); crowd.ooh(true);
   }
   // ---------- Fouls, cards, penalties ----------
@@ -3568,7 +3570,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (i < 0) return null;
     const side = ball.y < CY ? -1 : 1, s = BOX_SPOTS[i];
     const wob = Math.sin(performance.now() / 700 + p.i) * 10; // keep moving a little, like real attackers
-    return [bp.gx - bp.dir * (s[0] + wob), CY + side * s[1] * MOUTH + wob * 0.6];
+    let x = bp.gx - bp.dir * (s[0] + wob);
+    if (ball.rs === 'free' && size >= 5 && !INDOOR()) { const ol = offsideLine(p.team) - bp.dir * 8; x = bp.dir > 0 ? Math.min(x, ol) : Math.max(x, ol); } // a free kick: stay onside
+    return [x, CY + side * s[1] * MOUTH + wob * 0.6];
   }
   function wallSpot(k, n) { // man k of an n-man wall: on the line from the ball to the goal, the set distance away
     const own = setp.team ? PL : PR, gx = own - ball.x, gy = CY - ball.y, gl = Math.hypot(gx, gy) || 1, ux = gx / gl, uy = gy / gl, off = (k - (n - 1) / 2) * (PRAD * 2 + 2);
