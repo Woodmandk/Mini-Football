@@ -1337,6 +1337,7 @@ button.setmore > span:last-child { min-width: 0; }
           <div class="mopts" data-mopts></div>
           <button id="carPlay" class="go">Play the match ›</button>
           <p id="carHist" class="carhist"></p>
+          <button id="carSwap" class="alt" hidden>Switch to my other career</button>
           <button id="carReset" class="alt">New career</button>
         </div>
       </div>
@@ -1357,6 +1358,7 @@ button.setmore > span:last-child { min-width: 0; }
       <div class="lbl" id="lobbyFormLbl">Your formation</div>
       <div class="seg" id="lobbyForm" role="group" aria-label="Formation"></div>
       <button id="lobbyMine" class="alt small">Make your own team</button>
+      <button id="lobbyComp" class="alt small" hidden>See the table</button>
       <div class="mopts" id="lobbyOpts" data-mopts></div>
       <div class="btns">
         <button id="startOnline" hidden>Ready</button>
@@ -5287,6 +5289,7 @@ button.setmore > span:last-child { min-width: 0; }
     const sh = mode === 'guest' && gCoop && me === 0 ? coG : null; // co-op on another phone: the host's competition result is yours too
     if (mode === 'guest' && gCoop && me === 0 && win === 0) give('coop');
     if (sh) { for (const id of sh.tr) give(id); coins += sh.p; if (sh.tx) extra = sh.tx; }
+    if (mode === 'guest' && gCoop && coHas()) { $('toComp').hidden = false; $('toComp').textContent = gCoKind === 2 ? 'See the table' : 'See the cup'; }
     coins += got.length * 50;
     if (me === 0 || me === 1) { // experience: the team levels up and the club pays a bonus
       const gf = score[me], won = win === me;
@@ -5602,7 +5605,7 @@ button.setmore > span:last-child { min-width: 0; }
   // ---------- Competitions: the co-op cup ('mf-ko') and the career ('mf-career') ----------
   // A competition match: comp = { type, a, b, size, mins, diff, how } where a is your side and b the computer.
   // how: 0 = together on one phone (both on the same team), 1 = together online (the host's phone keeps the competition), 2 = alone
-  let comp = null, coopTwo = false, hostRoom = null, coOut = null, coG = null; // coOut: what the host shares after a co-op match, coG: what a guest was told
+  let comp = null, coopTwo = false, hostRoom = null, coOut = null, coG = null, coBack = null, gCoKind = 0; // coOut: what the host shares after a co-op match, coG: what a guest was told
   const HOWN = ['Together on one phone', 'Together online', 'Alone'];
   function rr8(ids) { // 8 teams, everyone meets everyone once: 7 rounds of 4 matches (circle method)
     const t = ids.slice(), rounds = [];
@@ -5639,7 +5642,28 @@ button.setmore > span:last-child { min-width: 0; }
     comp = Object.assign(c, { how: comp ? comp.how : c.how });
     startMatch(mode);
   }
-  function compView() { const k = kind; toMenu(); page('pgComp'); compSubs(); if (k === 'cup') koShow(); else if (k === 'career') carShow(); }
+  function compView() { if (mode === 'host' || mode === 'guest') { coView(); return; } const k = kind; toMenu(); page('pgComp'); compSubs(); if (k === 'cup') koShow(); else if (k === 'career') carShow(); }
+  // a competition played together online: both phones can open the table or the cup tree from the lobby and the end screen without leaving the room
+  const coType = () => (mode === 'host' ? (comp ? comp.type : null) : mode === 'guest' && gCoop ? (gCoKind === 2 ? 'career' : 'cup') : null);
+  const coHas = () => { const t = coType(); return t === 'career' ? !!carLoad() : t === 'cup' ? !!koLoad() : false; };
+  function coView() {
+    const t = coType(); if (!t || !coHas()) return;
+    coBack = ['lobby', 'end'].find(id => !$(id).hidden) || 'x'; if (coBack !== 'x') $(coBack).hidden = true;
+    if (t === 'cup') koShow(); else carShow();
+  }
+  function coViewClose(gone) {
+    if (!coBack) return false;
+    const b = coBack; coBack = null; $('ko').hidden = $('career').hidden = true;
+    if (!gone && b !== 'x' && (state === 'lobby' || state === 'end')) $(b).hidden = false;
+    return true;
+  }
+  const coNote = () => (mode === 'host' ? ' You play this together: go back to start the match.' : ' You play this together: the match starts when everyone is ready.');
+  function coLabel() {
+    const t = coType();
+    if (t === 'career') { const C = carLoad(); return C ? `See the table · ${C.S.r >= 7 ? 'season over' : 'round ' + (C.S.r + 1) + ' of 7'}` : ''; }
+    if (t === 'cup') { const K = koLoad(); return K ? `See the cup · ${K.champ ? 'won' : K.out ? 'out' : KO_RN[K.r].toLowerCase()}` : ''; }
+    return '';
+  }
   function compApply(m) { // the teams of a competition match: you are always the home side, the computer the away side
     const A = comp.a, B = comp.b, [h, w] = kitColors(A, B);
     col.home = h; col.away = w;
@@ -5744,8 +5768,10 @@ button.setmore > span:last-child { min-width: 0; }
       $('koNext').textContent = `${TEAMS[K.me].n} v ${o.n}`;
       $('koMsg').textContent = `${o.n}: ${'★'.repeat(o.str)}${'☆'.repeat(5 - o.str)}${o.sty ? ' · ' + STYLES[o.sty].n : ''}. ${K.size} v ${K.size}, ${K.mins} min, ${DIFFN[K.diff]}. Rating: you ${teamOvr(K.size)}, them ${strOvr(o.str)}.`;
     }
-    $('koPlay').hidden = $('koHow').hidden = $('koHowLbl').hidden = done;
-    $('koP2').hidden = done || K.how !== 0;
+    $('koPlay').hidden = $('koHow').hidden = $('koHowLbl').hidden = done || !!coBack;
+    $('koP2').hidden = done || K.how !== 0 || !!coBack; $('koReset').hidden = !!coBack;
+    for (const e of $('ko').querySelectorAll('[data-mopts]')) e.style.display = coBack ? 'none' : '';
+    if (coBack && !done) $('koMsg').textContent += coNote();
     segPaints.forEach(f => f());
     $('ko').hidden = false;
   }
@@ -5857,18 +5883,18 @@ button.setmore > span:last-child { min-width: 0; }
   }
   function carShow() {
     syncOwn();
-    const C = carLoad(), T = TEAMS[OWN];
+    const C = carLoad(), T = C && C.gst && C.own ? Object.assign({}, TEAMS[OWN], { n: String(C.own.n || '').slice(0, 24) || TEAMS[OWN].n, s: String(C.own.s || TEAMS[OWN].s).slice(0, 3) }) : TEAMS[OWN]; // a friend's career you are part of keeps their club's name
     $('carSetup').hidden = !!C; $('carView').hidden = !C;
     $('carReset').textContent = 'New career'; $('carReset').dataset.sure = '';
     const bd = $('carBadge'); bd.textContent = T.s; bd.style.setProperty('--c1', T.c1); bd.style.setProperty('--c3', T.c3); $('carTeamName').textContent = T.n;
-    $('carTitle').textContent = C ? `Karriere: ${T.n}` : 'Career';
+    $('carTitle').textContent = C ? `Career: ${T.n}` : 'Career';
     if (!C) { segPaints.forEach(f => f()); paintCoins(); $('career').hidden = false; return; }
     const me = carMe(C), rows = carRows(C), over = C.S.r >= 7;
     $('carTabLbl').textContent = `Season ${C.no} · ${DIVS[C.div].n}` + (C.titles ? ` · ${C.titles} title${C.titles > 1 ? 's' : ''} 🏆` : '');
     const tbl = $('carTable'); fillTable(tbl, ['#', 'Team', 'K', 'V', 'U', 'T', 'Goals', 'P'], []); while (tbl.rows.length > 1) tbl.deleteRow(1);
     rows.forEach((x, n) => {
       const tr = tbl.insertRow(); tr.className = (x.i === me ? 'me ' : '') + (n < 2 && C.div > 0 ? 'up' : n >= 6 && C.div < 3 ? 'down' : '');
-      [n + 1, x.t.n + (x.t.str && x.i !== me ? ' ' + '★'.repeat(x.t.str) : ''), x.r.k, x.r.v, x.r.u, x.r.t, `${x.r.f}-${x.r.m}`, x.p].forEach((v, j) => { const td = tr.insertCell(); td.textContent = v; if (j === 1) td.className = 'l'; });
+      [n + 1, (x.i === me ? T.n : x.t.n) + (x.t.str && x.i !== me ? ' ' + '★'.repeat(x.t.str) : ''), x.r.k, x.r.v, x.r.u, x.r.t, `${x.r.f}-${x.r.m}`, x.p].forEach((v, j) => { const td = tr.insertCell(); td.textContent = v; if (j === 1) td.className = 'l'; });
     });
     $('carKeyUp').hidden = C.div === 0; $('carKeyDown').hidden = C.div === 3;
     const G = GOALS[C.goal];
@@ -5893,7 +5919,11 @@ button.setmore > span:last-child { min-width: 0; }
       if (C.rvn && !over) X.appendChild(el('span', 'rv', rr === C.S.r ? `🔥 Derby now: ${C.rvn} are your rivals. A win gives extra` : rr > C.S.r ? `🔥 Rival: ${C.rvn}. Derby in round ${rr + 1}` : `🔥 Rival: ${C.rvn}. The derby has been played`));
       (C.story || []).slice(0, 3).forEach(h => X.appendChild(el('span', 'hl', '📰 ' + h)));
       X.hidden = !C.story; }
-    $('carHow').hidden = $('carHowLbl').hidden = over; $('carP2').hidden = over || C.how !== 0;
+    $('carHow').hidden = $('carHowLbl').hidden = over || !!coBack; $('carP2').hidden = over || C.how !== 0 || !!coBack;
+    $('carPlay').hidden = $('carReset').hidden = !!coBack;
+    for (const e of $('career').querySelectorAll('[data-mopts]')) e.style.display = coBack ? 'none' : '';
+    if (coBack && !over) $('carMsg').textContent += coNote();
+    { let old = null; try { old = JSON.parse(localStorage.getItem('mf-career-old') || 'null'); } catch (_) {} $('carSwap').hidden = !!coBack || !old; }
     $('carHist').textContent = C.hist.length ? 'Earlier seasons\n' + C.hist.slice(-4).reverse().map(h => `Season ${h.no}: no. ${h.rank} in ${DIVS[h.div].n}, ${h.p} pts`).join('\n') : '';
     segPaints.forEach(f => f()); paintCoins();
     $('career').hidden = false;
@@ -5907,7 +5937,7 @@ button.setmore > span:last-child { min-width: 0; }
     howSeg($('koHow'), () => (koLoad() || { how: 0 }).how, v => { const K = koLoad(); if (K) { K.how = v; koSave(K); } }, $('koP2'));
     $('koStart').onclick = () => { koNew(teamOpen(kv.team) ? kv.team : 1, kv.size, kv.mins, kv.diff, 0); koShow(); compSubs(); };
     $('koPlay').onclick = () => compGo('cup');
-    $('koClose').onclick = () => { $('ko').hidden = true; compSubs(); };
+    $('koClose').onclick = () => { if (coViewClose()) return; $('ko').hidden = true; compSubs(); };
     $('koReset').onclick = () => {
       const b = $('koReset'), K = koLoad();
       if (!b.dataset.sure && K && !K.out && !K.champ) { b.dataset.sure = '1'; b.textContent = 'Tap again to start over'; return; }
@@ -5923,10 +5953,18 @@ button.setmore > span:last-child { min-width: 0; }
     $('carPlay').onclick = () => {
       const C = carLoad(); if (!C) return;
       if (C.S.r >= 7) { carNextSeason(); carShow(); compSubs(); return; }
+      if (C.gst) { delete C.gst; delete C.own; carSave(C); } // you carry it on yourself now, with your own club
       compGo('career');
     };
     $('carEdit').onclick = () => mtShow(cv2.size, null, carShow);
-    $('carClose').onclick = () => { $('career').hidden = true; compSubs(); };
+    $('carClose').onclick = () => { if (coViewClose()) return; $('career').hidden = true; compSubs(); };
+    $('carSwap').onclick = () => { // your own career and the one you share with a friend: keep both, switch between them
+      let old = null; try { old = JSON.parse(localStorage.getItem('mf-career-old') || 'null'); } catch (_) {}
+      if (!old) return; const cur = carLoad();
+      try { if (cur) localStorage.setItem('mf-career-old', JSON.stringify(cur)); else localStorage.removeItem('mf-career-old'); } catch (_) {}
+      carSave(old); carShow(); compSubs();
+    };
+    $('lobbyComp').onclick = coView;
     $('carReset').onclick = () => {
       const b = $('carReset');
       if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Tap again to delete the career'; return; }
@@ -7726,7 +7764,7 @@ button.setmore > span:last-child { min-width: 0; }
     names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    hlReset(); leaveNet(); quickReset(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; friendly = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
+    coBack = null; hlReset(); leaveNet(); quickReset(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; friendly = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true; vsT = 0; $('vs').hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm(); homeGifts();
@@ -7854,6 +7892,7 @@ button.setmore > span:last-child { min-width: 0; }
     $('lobbyTeams').textContent = tw[0] || tw[1] ? `${tw[0] ? tw[0].n : KITN[kit][0]} v ${tw[1] ? tw[1].n : KITN[kit][1]}` : '';
     $('lobbyTeams').hidden = !(tw[0] || tw[1]);
     $('lobbyMine').textContent = loadMT().made ? 'Edit my team and tactics' : 'Make your own team';
+    { const l = coLabel(); $('lobbyComp').hidden = !l; if (l) $('lobbyComp').textContent = l; }
     const b = $('startOnline');
     if (isHost) {
       const y = roster.length, x = roster.filter(r => lobbyReady.get(r[0])).length;
@@ -8033,9 +8072,10 @@ button.setmore > span:last-child { min-width: 0; }
     };
     if (st === 'e' && stats) o.ss = stats;
     if (st === 'e' && serEnd) o.sr = serEnd;
-    if (st === 'e' && comp && coOut) { o.co = coOut; if (kind === 'cup' && koN++ % 10 === 0) { const K = koLoad(); if (K) { if (!K.cid) { K.cid = Math.random().toString(36).slice(2, 10); koSave(K); } o.ko = K; } } } // the cup is shared like the career
-    if (st === 'e' && comp && kind === 'career' && ++cvN % 10 === 1) { const C = carLoad(); if (C) { if (!C.cid) { C.cid = Math.random().toString(36).slice(2, 10); carSave(C); } o.cv = C; } } // the career is shared: the other phone saves it too
-    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx, tf: teamForm, tm: [0, 1].map(t => teamWire(comp ? comp[t ? 'b' : 'a'] : t === hostTeam() ? myCardTeam() : netTeam)), cp: comp ? 1 : 0, nm: P.map(p => nameOf(p, true)), sq: P.map(p => (p.sq ? [p.sq, p.ovr | 0, (p.ab || []).map(a => ABK().indexOf(a))] : 0)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Host'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
+    if (st === 'e' && comp && coOut) o.co = coOut;
+    if (st !== 'p' && comp && kind === 'cup' && koN++ % 10 === 0) { const K = koLoad(); if (K) { if (!K.cid) { K.cid = Math.random().toString(36).slice(2, 10); koSave(K); } o.ko = K; } } // the cup is on every phone from the moment you are in the room
+    if (st !== 'p' && comp && kind === 'career' && ++cvN % 10 === 1) { const C = carLoad(); if (C) { if (!C.cid) { C.cid = Math.random().toString(36).slice(2, 10); carSave(C); } o.cv = Object.assign({}, C, { gst: 0, own: { n: TEAMS[OWN].n, s: TEAMS[OWN].s } }); } } // the career is shared from the moment you are in the room: the other phone saves it too
+    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx, tf: teamForm, tm: [0, 1].map(t => teamWire(comp ? comp[t ? 'b' : 'a'] : t === hostTeam() ? myCardTeam() : netTeam)), cp: comp ? (comp.type === 'career' ? 2 : 1) : 0, nm: P.map(p => nameOf(p, true)), sq: P.map(p => (p.sq ? [p.sq, p.ovr | 0, (p.ab || []).map(a => ABK().indexOf(a))] : 0)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Host'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
   }
   function myTeam() { const e = roster.find(r => r[0] === myPeer); return e && P[e[1]] ? P[e[1]].team : null; }
@@ -8048,7 +8088,7 @@ button.setmore > span:last-child { min-width: 0; }
     const j = JSON.stringify(cv); if (j === cvSeen || j.length > 60000) return; cvSeen = j;
     const mine = carLoad();
     if (mine && mine.cid !== cv.cid) { try { localStorage.setItem('mf-career-old', JSON.stringify(mine)); } catch (_) {} }
-    cv.how = 1; carSave(cv);
+    cv.how = 1; cv.gst = 1; carSave(cv);
   }
   let koSeen = '';
   function koShare(K) { // the co-op cup is kept on both phones too; a different cup still running here is kept aside in 'mf-ko-old'
@@ -8065,6 +8105,7 @@ button.setmore > span:last-child { min-width: 0; }
     if (s.cv) carShare(s.cv);
     if (s.ko) koShare(s.ko);
     if (s.st !== 'e') coG = null;
+    if (coBack && s.st === 'p') coViewClose(true);
     else if (s.co && typeof s.co === 'object') coG = { p: clamp(Number(s.co.p) | 0, 0, 800), c: clamp(Number(s.co.c) | 0, 0, 1500), tp: clamp(Number(s.co.tp) | 0, 0, 60), tx: String(s.co.tx || '').slice(0, 400), tr: (Array.isArray(s.co.tr) ? s.co.tr : []).filter(x => CO_TRO.includes(x)) };
     const z = [1, 2, 3, 5, 7, 11].includes(Number(s.z)) ? Number(s.z) : 1;
     if (P.length !== z * 2) makePlayers(z);
@@ -8076,7 +8117,7 @@ button.setmore > span:last-child { min-width: 0; }
     for (const [peer, slot] of roster) if (P[slot]) { P[slot].ctrl = peer === myPeer ? 'ME' : 'RV'; P[slot].peer = peer; }
     if (KITS[s.k]) setKit(Number(s.k));
     if (s.wx !== undefined) { const w = Number(s.wx) | 0; setWeather(w & 3); }
-    if (s.cp !== undefined) gCoop = !!s.cp;
+    if (s.cp !== undefined) { gCoop = !!s.cp; gCoKind = Number(s.cp) | 0; }
     if (Array.isArray(s.tm)) { lobbyTeams = [cleanTeam(s.tm[0]), cleanTeam(s.tm[1])]; netPick(lobbyTeams); }
     if (Array.isArray(s.tf)) teamForm = [Number(s.tf[0]) | 0, Number(s.tf[1]) | 0];
     if (Array.isArray(s.hs)) hostInfo = [Number(s.hs[0]) | 0, cleanName(s.hs[1]) || 'Host'];
