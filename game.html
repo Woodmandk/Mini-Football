@@ -579,6 +579,13 @@ table.st tr.me td { color: var(--gold); }
 .trgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 7px; }
 .trbtn { display: flex; align-items: center; gap: 9px; min-height: 0; padding: 8px 10px; text-align: left; font-size: 13px; line-height: 1.2; } .trbtn i { font-style: normal; font-size: 22px; } .trbtn small { display: block; font-size: 10.5px; opacity: .75; font-weight: 500; }
 .trmsg { margin: 0; padding: 7px 10px; border-radius: 10px; background: rgba(89,227,139,0.14); color: #b9f5cf; font-size: 12px; }
+.fingrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; } @media (max-width: 620px) { .fingrid { grid-template-columns: 1fr; } }
+.fingrid .scbox { gap: 6px; } .fingrid .scbox > b { font-size: 14px; } .fingrid .seg button { font-size: 12px; padding: 7px 4px; } .fingrid .scbox > button { min-height: 0; padding: 9px 10px; font-size: 13px; }
+.finbar { height: 10px; border-radius: 5px; background: rgba(255,255,255,0.14); overflow: hidden; } .finbar b { display: block; height: 100%; border-radius: 5px; background: linear-gradient(90deg, #3aa862, #7dffa8); }
+.finnet { font-size: 22px; font-weight: 800; } .finnet.pos { color: #7dffa8; } .finnet.neg { color: #ff9a8f; }
+.finbars { display: flex; align-items: center; gap: 4px; height: 64px; } .finbars span { flex: 1; display: flex; flex-direction: column; justify-content: center; height: 100%; position: relative; }
+.finbars i { display: block; position: absolute; left: 0; right: 0; border-radius: 2px; } .finbars i.pos { background: #59e38b; bottom: 50%; } .finbars i.neg { background: #ff6b5e; top: 50%; } .finbars::before { content: ""; position: absolute; }
+.spslot { display: flex; flex-direction: column; gap: 5px; padding: 7px 8px; border-radius: 10px; background: rgba(0,0,0,0.22); } .spslot > small { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--gold); } .spslot .trbtn { padding: 6px 8px; font-size: 12px; } .spslot.lock { opacity: 0.6; }
 .ecrow { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; } .ecrow b { text-align: right; } .ecrow.in b { color: #7dffa8; } .ecrow.out b { color: #ff9a8f; }
 .mklist { display: flex; flex-direction: column; gap: 6px; }
 .mkrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
@@ -5180,16 +5187,16 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     let eco = null;
     if (own && friendly) coins = got.length * 50; // a training match pays nothing (new trophies still do)
     else if (own) { // the match account: prize, gate and sponsor in, wages out
-      eco = matchEco(pr, win === me, score[me]);
-      eco.p = coins; coins = Math.max(-pr.coins, coins + eco.g + eco.s - eco.w);
-      if (eco.p + eco.g + eco.s - eco.w < -pr.coins) { eco.short = true; const S9 = squadLoad(); for (const q of S9.pl) q.mor = Math.max(10, morOf(q) - 3); squadSave(S9); }
-      const C9 = clubLoad(); C9.last = { p: eco.p, g: eco.g, s: eco.s, w: eco.w }; if (C9.sp) { C9.sp.left--; if (C9.sp.left <= 0) { delete C9.sp; eco.spEnd = true; } } clubSave(C9);
+      { const cc = kind === 'career' ? carLoad() : null; eco = matchEco(pr, win === me, score[me], { tv: cc ? TV[cc.div] || 0 : 0, big: !!cc }); }
+      eco.p = coins; coins = Math.max(-pr.coins, ecoNet(eco));
+      if (ecoNet(eco) < -pr.coins) { eco.short = true; const S9 = squadLoad(); for (const q of S9.pl) q.mor = Math.max(10, morOf(q) - 3); squadSave(S9); }
+      ecoBook(eco, win === me ? 1 : win < 0 || win == null ? 0 : -1);
     }
     pr.coins += coins; saveProf(pr);
     let tp = 0;
     if ((me === 0 || me === 1) && kind !== 'pen') { tp = Math.round((4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0)) * (1 + 0.1 * facLv('tr')) * (own && friendly ? 1.5 : 1)); addTP(tp); }
     if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Tired legs: ' + tired.slice(0, 3).join(', ') + '. Give them a rest'; for (const nw of tired.news || []) extra = (extra ? extra + ' · ' : '') + nw; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
-    if (eco) extra = `Prize +${eco.p}, gate +${eco.g}` + (eco.s ? `, sponsor +${eco.s}` : '') + `, wages −${eco.w}` + (eco.short ? '. There was not enough for all the wages: morale drops' : '') + (eco.spEnd ? '. The sponsor deal has ended: pick a new one under The club' : '') + (extra ? ' · ' + extra : '');
+    if (eco) extra = `${eco.att.toLocaleString('en')} fans · prize +${eco.p}, gate +${eco.g}` + (eco.s ? `, sponsors +${eco.s}` : '') + (eco.m ? `, shop +${eco.m}` : '') + (eco.tv ? `, TV +${eco.tv}` : '') + `, wages −${eco.w}` + (eco.u ? `, upkeep −${eco.u}` : '') + (eco.ln ? `, loan −${eco.ln}` : '') + (eco.loanEnd ? '. The loan is paid off' : '') + (eco.short ? '. There was not enough for all the wages: morale drops' : '') + (eco.spEnd ? '. The sponsor deal has ended: pick a new one under The club' : '') + (extra ? ' · ' + extra : '');
     if (own && friendly) extra = 'Friendly: no prize and no wages' + (extra ? ' · ' + extra : '');
     rw.textContent = `${coins >= 0 ? '+' : '−'}${Math.abs(coins)} coins` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · New trophy: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
     rw.hidden = false;
@@ -6158,11 +6165,41 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     maal: { n: 'The Goal Bank', i: '🥅', d: a => `${a} coins for every goal you score (max 6)`, amt: l => 9 + 2 * l, pay: (a, won, gf) => a * Math.min(6, gf) },
   };
   const SPON_LEN = 10;
-  function matchEco(pr, won, gf) {
-    const C = clubLoad(), lvl = pr.lvl || 1;
-    const g = Math.round(GATE[stadOf(lvl)] * (1 + Math.min(5, pr.streak || 0) * 0.1)); // a winning team draws a crowd
-    const s = C.sp && SPON[C.sp.id] ? SPON[C.sp.id].pay(C.sp.a, won, gf) : 0;
-    return { g, s, w: wagesAll() + staffWage() };
+  // The club's money, the broad way (as in Top Eleven and FIFA): fans fill the ground at the ticket price you set, three sponsor deals,
+  // merchandise, TV money in the career, wages and upkeep going out, stands you build, and a bank that lends.
+  const CAP0 = [300, 1200, 4000, 12000], SEAT_MAX = 5, SEAT_COST = [150, 400, 1000, 2500], TICKET = [['Cheap', 0.7, 1.3], ['Normal', 1, 1], ['Premium', 1.45, 0.72]]; // name, price, how many still come
+  const TV = [60, 35, 20, 10], LOANS = [[500, 10, 58, 1], [1500, 12, 145, 3], [4000, 15, 315, 6]]; // loan: amount, matches, paid back per match, club level needed
+  const SPON2 = { // the two extra deals: boards around the pitch (club level 3) and the kit maker (club level 5): [name, sign, coins on signing, per match, matches]
+    board: { n: 'Pitch-side boards', lvl: 3, o: l => [['Harbour Bank', '🏦', 0, 10 + 2 * l, 20], ['Kebab King', '🥙', 0, 16 + 3 * l, 8], ['North Energy', '⚡', 40 + 10 * l, 8 + 2 * l, 12]] },
+    kit: { n: 'Kit maker', lvl: 5, o: l => [['Stripe Sport', '👕', 150 + 40 * l, 5, 15], ['Vento', '🧵', 0, 14 + 3 * l, 15], ['Kappo', '🎽', 60 + 15 * l, 9 + 2 * l, 15]] },
+  };
+  const capOf = (C, lvl) => Math.round(CAP0[stadOf(lvl)] * (1 + 0.1 * clamp(C.seats | 0, 0, SEAT_MAX)));
+  const fansOf = (C, lvl) => (C.fans == null ? Math.round(CAP0[stadOf(lvl)] * 0.8) : C.fans);
+  const tkOf = C => TICKET[clamp(C.tk == null ? 1 : C.tk | 0, 0, 2)];
+  const upkeepOf = C => Object.keys(FAC).reduce((t, k) => t + clamp(C.f[k] | 0, 0, FAC_MAX), 0) * 2 + clamp(C.seats | 0, 0, SEAT_MAX) * 3;
+  function gateOf(C, pr, big) { // who comes, and what they pay
+    const lvl = pr.lvl || 1, cap = capOf(C, lvl), tk = tkOf(C);
+    const att = Math.round(Math.min(cap, fansOf(C, lvl) * tk[2] * (1 + Math.min(5, pr.streak || 0) * 0.06) * (big ? 1.2 : 1)));
+    return { att, cap, g: Math.round(GATE[stadOf(lvl)] * att / CAP0[stadOf(lvl)] * tk[1]) };
+  }
+  const merchOf = (C, pr, att) => Math.round(GATE[stadOf(pr.lvl || 1)] * 0.15 * facLv('fan') * att / CAP0[stadOf(pr.lvl || 1)]);
+  function matchEco(pr, won, gf, ctx) {
+    ctx = ctx || {};
+    const C = clubLoad(), G = gateOf(C, pr, ctx.big);
+    let s = C.sp && SPON[C.sp.id] ? SPON[C.sp.id].pay(C.sp.a, won, gf) : 0;
+    for (const k in SPON2) if (C.sps && C.sps[k]) s += C.sps[k].a;
+    return { g: G.g, att: G.att, cap: G.cap, s, m: merchOf(C, pr, G.att), tv: ctx.tv || 0, w: wagesAll() + staffWage(), u: upkeepOf(C), ln: C.loan ? C.loan.pay : 0 };
+  }
+  const ecoNet = e => e.p + e.g + e.s + e.m + e.tv - e.w - e.u - e.ln;
+  function ecoBook(eco, res) { // after the match: the deals run down, the loan shrinks, the fans react, and the match goes in the book
+    const C = clubLoad(), lvl = loadProf().lvl || 1, cap = capOf(C, lvl), tk = clamp(C.tk == null ? 1 : C.tk | 0, 0, 2);
+    C.last = { p: eco.p, g: eco.g, s: eco.s, w: eco.w };
+    if (C.sp) { C.sp.left--; if (C.sp.left <= 0) { delete C.sp; eco.spEnd = true; } }
+    for (const k in SPON2) if (C.sps && C.sps[k]) { C.sps[k].left--; if (C.sps[k].left <= 0) { delete C.sps[k]; eco.spEnd = true; } }
+    if (C.loan) { C.loan.left--; if (C.loan.left <= 0) { delete C.loan; eco.loanEnd = true; } }
+    C.fans = Math.round(clamp(fansOf(C, lvl) + cap * ((res > 0 ? 0.06 : res < 0 ? -0.03 : 0.01) + (tk === 0 ? 0.01 : tk === 2 ? -0.01 : 0)), cap * 0.2, cap * 1.5));
+    C.led = (C.led || []).concat([{ p: eco.p, g: eco.g, s: eco.s, m: eco.m, tv: eco.tv, w: eco.w, u: eco.u, l: eco.ln, a: eco.att }]).slice(-10);
+    clubSave(C);
   }
   // training sessions: the whole squad works on one thing. It costs legs, and there are three a day.
   const TRAIN = { spd: ['Running and sprints', '🏃', 'Pace'], sht: ['Finishing', '🎯', 'Shots'], pas: ['Passing game', '🔁', 'Passing'], def: ['Defence and duels', '🛡️', 'Defence'], rest: ['Recovery', '🧊', ''] };
@@ -6206,25 +6243,50 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
   }
   function clubEcoPaint() {
     const C = clubLoad(), pr = loadProf(), lvl = pr.lvl || 1, S = squadLoad(), E = $('clEco'); E.textContent = '';
-    const row = (k, v, cls) => { const d = document.createElement('div'); d.className = 'ecrow' + (cls ? ' ' + cls : ''); const a = document.createElement('span'); a.textContent = k; const b = document.createElement('b'); b.textContent = v; d.append(a, b); E.appendChild(d); };
-    const head = t => { const h = document.createElement('div'); h.className = 'sqh'; h.textContent = t; E.appendChild(h); };
-    head('Every match with your own team');
-    row(`Gate (${STAD[stadOf(lvl)][0]})`, `+${GATE[stadOf(lvl)]}` + (pr.streak ? ` (+${Math.min(5, pr.streak) * 10} % for ${pr.streak} wins in a row)` : ''), 'in');
-    row('Prize', 'for goals and the win' + (facLv('fan') ? `, +${facLv('fan') * 8} % from the fan shop` : ''), 'in');
-    const w = wagesAll(S), top = S.pl.slice().sort((a, b) => wageOf(b) - wageOf(a)).slice(0, 3).map(q => `${q.n.split(' ').slice(-1)[0]} ${wageOf(q)}`).join(', ');
-    row(`Wages for ${S.pl.length} players`, `−${w}`, 'out');
-    { const sm = document.createElement('p'); sm.className = 'sqnote'; sm.textContent = `Most expensive: ${top}. A better player costs more in wages, so sell the ones you do not use.`; E.appendChild(sm); }
-    if (C.last) row('Last match', `prize +${C.last.p}, gate +${C.last.g}, sponsor +${C.last.s}, wages −${C.last.w} = ${C.last.p + C.last.g + C.last.s - C.last.w >= 0 ? '+' : '−'}${Math.abs(C.last.p + C.last.g + C.last.s - C.last.w)}`);
-    head('Sponsor');
-    if (C.sp && SPON[C.sp.id]) { const A = SPON[C.sp.id]; row(`${A.i} ${A.n}`, A.d(C.sp.a), 'in'); row('The deal runs', `${C.sp.left} more matches`); }
-    else {
-      const sm = document.createElement('p'); sm.className = 'sqnote'; sm.textContent = `Pick a sponsor. The deal lasts ${SPON_LEN} matches, and the offers get better as the club levels up.`; E.appendChild(sm);
-      const g = document.createElement('div'); g.className = 'trgrid';
-      for (const id of Object.keys(SPON)) { const A = SPON[id], a = A.amt(lvl), b = document.createElement('button'); b.className = 'alt trbtn';
-        const i = document.createElement('i'); i.textContent = A.i; const t = document.createElement('span'); t.textContent = A.n; const sm2 = document.createElement('small'); sm2.textContent = A.d(a); t.appendChild(sm2); b.append(i, t);
-        b.onclick = () => { const C2 = clubLoad(); C2.sp = { id, a, left: SPON_LEN }; clubSave(C2); sfx.win(); clubShow(); hubPaint(); }; g.appendChild(b); }
-      E.appendChild(g);
-    }
+    const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+    const row = (to, k, v, cls) => { const d = el('div', 'ecrow' + (cls ? ' ' + cls : '')); d.append(el('span', '', k), el('b', '', v)); to.appendChild(d); };
+    const num = n => Math.round(n).toLocaleString('en'), again = () => { clubEcoPaint(); hubPaint(); };
+    const g = el('div', 'fingrid'), G = gateOf(C, pr), cc = (() => { try { return carLoad(); } catch (_) { return null; } })();
+    // match day: the fans, the ground and the ticket price
+    { const b = el('div', 'scbox'), bar = el('div', 'finbar'), fill = el('b'); fill.style.width = Math.round(G.att / G.cap * 100) + '%'; bar.appendChild(fill);
+      b.append(el('b', '', `🎟️ Match day · ${STAD[stadOf(lvl)][0]}`), el('span', '', `${num(G.att)} of ${num(G.cap)} seats filled · ${num(fansOf(C, lvl))} supporters`), bar);
+      const sg = el('div', 'seg'); TICKET.forEach(([t], k) => { const bt = el('button', '', t); bt.setAttribute('aria-pressed', String((C.tk == null ? 1 : C.tk) === k)); bt.onclick = () => { const C2 = clubLoad(); C2.tk = k; clubSave(C2); sfx.kick(0.2); again(); }; sg.appendChild(bt); });
+      b.append(el('span', 'sqnote', 'Ticket price'), sg, el('span', 'sqnote', `Gate about +${G.g} a match. Cheap tickets fill the ground and win new supporters; premium tickets earn more per seat but fewer come. Wins bring supporters, defeats lose them.`));
+      const seats = clamp(C.seats | 0, 0, SEAT_MAX), cost = Math.round(SEAT_COST[stadOf(lvl)] * (1 + seats * 0.5)), st = el('button', seats >= SEAT_MAX || G.att < G.cap ? 'alt' : '', seats >= SEAT_MAX ? 'No room for more stands' : `Build a stand · ${cost} coins (+${num(CAP0[stadOf(lvl)] * 0.1)} seats)`); st.disabled = seats >= SEAT_MAX;
+      st.onclick = () => { const p2 = loadProf(), C2 = clubLoad(); if (p2.coins < cost) { st.textContent = `Need ${cost - p2.coins} more coins`; return; } addCoins(-cost, 'stand'); C2.seats = clamp(C2.seats | 0, 0, SEAT_MAX) + 1; clubSave(C2); sfx.win(); buzz(30); again(); };
+      b.append(st, el('span', 'sqnote', G.att < G.cap ? 'The ground is not full yet, so a new stand can wait.' : 'Sold out! A new stand means more tickets every match.')); g.appendChild(b); }
+    // the match account
+    { const b = el('div', 'scbox'), e = matchEco(pr, false, 0, { tv: cc ? TV[cc.div] || 0 : 0 }), net = e.g + e.s + e.m + e.tv - e.w - e.u - e.ln;
+      b.append(el('b', '', '📒 Every match with your own team'));
+      row(b, 'Gate', `+${e.g}`, 'in'); row(b, 'Sponsors', e.s || !C.sp ? `+${e.s}` : 'depends on the result', 'in');
+      row(b, `Fan shop (level ${facLv('fan')})`, `+${e.m}`, 'in'); row(b, cc ? `TV money (${DIVS[cc.div].n})` : 'TV money (career matches)', cc ? `+${e.tv}` : '—', 'in');
+      row(b, 'Prize', 'for goals and the win', 'in');
+      row(b, `Wages: ${S.pl.length} players and staff`, `−${e.w}`, 'out'); row(b, 'Upkeep of buildings and stands', `−${e.u}`, 'out'); if (e.ln) row(b, `Loan (${C.loan.left} matches left)`, `−${e.ln}`, 'out');
+      b.append(el('span', 'finnet ' + (net >= 0 ? 'pos' : 'neg'), `${net >= 0 ? '+' : '−'}${Math.abs(net)} before prize money`));
+      const top = S.pl.slice().sort((a, b2) => wageOf(b2) - wageOf(a)).slice(0, 3).map(q => `${q.n.split(' ').slice(-1)[0]} ${wageOf(q)}`).join(', ');
+      b.append(el('span', 'sqnote', `Highest wages: ${top}. Friendlies cost and earn nothing.`)); g.appendChild(b); }
+    // sponsors: the shirt, the boards and the kit
+    { const b = el('div', 'scbox'); b.append(el('b', '', '🤝 Sponsors'));
+      const slot = (title, cur, lockTxt) => { const d = el('div', 'spslot' + (lockTxt ? ' lock' : '')); d.append(el('small', '', title)); if (lockTxt) d.append(el('span', 'sqnote', lockTxt)); else if (cur) row(d, cur[0], cur[1], 'in'); b.appendChild(d); return d; };
+      const offer = (d, ic, name, text, on) => { const bt = el('button', 'alt trbtn'), t = el('span', '', name); t.appendChild(el('small', '', text)); bt.append(el('i', '', ic), t); bt.onclick = on; d.appendChild(bt); };
+      { const A = C.sp && SPON[C.sp.id], d = slot('Shirt sponsor', A ? [`${A.i} ${A.n} · ${C.sp.left} matches left`, A.d(C.sp.a).split(',')[0].replace(' coins', '')] : null);
+        if (!A) for (const id of Object.keys(SPON)) { const B = SPON[id], a = B.amt(lvl); offer(d, B.i, B.n, `${B.d(a)}. ${SPON_LEN} matches`, () => { const C2 = clubLoad(); C2.sp = { id, a, left: SPON_LEN }; clubSave(C2); sfx.win(); again(); }); } }
+      for (const k in SPON2) { const D = SPON2[k], cur = C.sps && C.sps[k], d = slot(D.n, cur ? [`${cur.i} ${cur.n} · ${cur.left} matches left`, `+${cur.a} a match`] : null, lvl < D.lvl ? `Opens at club level ${D.lvl} (you are level ${lvl})` : '');
+        if (!cur && lvl >= D.lvl) for (const [n2, ic, sign, a, len] of D.o(lvl)) offer(d, ic, n2, (sign ? `${sign} coins now, ` : '') + `${a} a match for ${len} matches`, () => { const C2 = clubLoad(); C2.sps = C2.sps || {}; if (C2.sps[k]) return; C2.sps[k] = { n: n2, i: ic, a, left: len }; clubSave(C2); if (sign) addCoins(sign, 'sponsor'); sfx.win(); buzz(30); again(); }); }
+      g.appendChild(b); }
+    // the bank and the book
+    { const b = el('div', 'scbox'); b.append(el('b', '', '🏦 The bank'));
+      if (C.loan) { row(b, 'Your loan', `${C.loan.left} matches left`, ''); row(b, 'Paid back after every match', `−${C.loan.pay}`, 'out'); b.append(el('span', 'sqnote', 'You can take a new loan when this one is paid off.')); }
+      else { b.append(el('span', 'sqnote', 'Short of money for a player or a building? Borrow now and pay back a little after every match with your own team.'));
+        for (const [amt, n2, pay, need] of LOANS) { const bt = el('button', 'alt', lvl < need ? `${num(amt)} coins · club level ${need}` : `Borrow ${num(amt)} · pay ${pay} × ${n2} matches`); bt.disabled = lvl < need;
+          bt.onclick = () => { const C2 = clubLoad(); if (C2.loan) return; if (!bt.dataset.sure) { bt.dataset.sure = '1'; bt.textContent = `Sure? You pay back ${num(pay * n2)} in all`; return; } C2.loan = { left: n2, pay }; clubSave(C2); addCoins(amt, 'loan'); sfx.win(); again(); }; b.appendChild(bt); } }
+      const L = C.led || [];
+      if (L.length) { const nets = L.map(x => x.p + x.g + x.s + x.m + x.tv - x.w - x.u - x.l), mx = Math.max(1, ...nets.map(Math.abs)), bars = el('div', 'finbars'), sum = k => L.reduce((t, x) => t + (x[k] || 0), 0), tot = nets.reduce((a, c) => a + c, 0);
+        nets.forEach(v => { const sp = el('span'), i = el('i', v >= 0 ? 'pos' : 'neg'); i.style.height = Math.max(3, Math.abs(v) / mx * 48) + '%'; sp.appendChild(i); bars.appendChild(sp); });
+        b.append(el('b', '', `📈 The last ${L.length} match${L.length > 1 ? 'es' : ''}`), bars, el('span', 'finnet ' + (tot >= 0 ? 'pos' : 'neg'), `${tot >= 0 ? '+' : '−'}${num(Math.abs(tot))} coins`));
+        row(b, 'In: prize, gate, sponsors, shop, TV', `+${num(sum('p') + sum('g') + sum('s') + sum('m') + sum('tv'))}`, 'in'); row(b, 'Out: wages, upkeep, loan', `−${num(sum('w') + sum('u') + sum('l'))}`, 'out'); row(b, 'Average crowd', num(sum('a') / L.length), ''); }
+      g.appendChild(b); }
+    E.appendChild(g);
   }
   // ---------- the club ground, seen from above (as in Top Eleven): tap a building to see it and build it out ----------
   let facSel = 'stad';
@@ -6279,7 +6341,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     const hd = document.createElement('div'); hd.className = 'hd'; const ic = document.createElement('i'), b = document.createElement('b'); hd.append(ic, b); d.appendChild(hd);
     const sm = document.createElement('small'), nx = document.createElement('small'); nx.className = 'nx'; const bt = document.createElement('button');
     if (facSel === 'stad') { const t = stadOf(lvl);
-      ic.textContent = '🏟️'; b.textContent = stadName(); sm.textContent = `${STAD[t][0]}. The crowd gives ${GATE[t]} coins per match with your own team.`;
+      ic.textContent = '🏟️'; b.textContent = stadName(); sm.textContent = `${STAD[t][0]}. ${gateOf(C, pr).att.toLocaleString('en')} of ${capOf(C, lvl).toLocaleString('en')} seats are filled, which gives about ${gateOf(C, pr).g} coins a match.`;
       nx.textContent = t < 3 ? `Next: ${STAD[t + 1][0]} at club level ${STAD[t + 1][1]} (you are on ${lvl}). The ground grows by itself as the club levels up.` : 'The biggest possible ground.';
       bt.textContent = 'See the finances'; bt.className = 'alt'; bt.onclick = () => { subTab.club = 'Finances'; clubShow(); }; d.append(sm, nx, bt);
     } else if (facSel === 'sc') {
