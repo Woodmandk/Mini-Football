@@ -2320,7 +2320,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         if (on && (this.clapT = (this.clapT || 9) - dt) <= 0) { this.clapT = 12 + Math.random() * 14; this.claps(3 + Math.floor(Math.random() * 2)); } // the stands clap along now and then
         if (on && !banner && (this.chantT = (this.chantT || 20) - dt) <= 0) { this.chantT = 22 + Math.random() * 18; this.chant(); } // and sing
         const near = Math.max(0, 1 - Math.min(Math.abs(ball.x - PL), Math.abs(PR - ball.x)) / 320);
-        const target = on ? 0.025 + near * 0.035 + swell * 0.2 : 0;
+        const target = on ? 0.025 + near * 0.035 + swell * 0.2 + Math.max(mom[0], mom[1]) * 0.03 : 0;
         if (Math.abs(target - last) < 0.002) return; // nothing audible changed
         last = target;
         g.gain.setTargetAtTime(target, ac.currentTime, 0.15);
@@ -2561,7 +2561,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (m !== 'two') cupMatch = null;
     if (m !== 'host') { makePlayers(matchSize()); assignLocal(); }
     for (const q of P) { q.fit0 = 0; q.fat = 0; q.stamina = 1; } // fresh legs for a new match (your own squad's form is set in squadToPitch)
-    score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; addT = null; stopT = 0; subsUsed = [0, 0]; subOut = []; subChk = 0; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false;
+    score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; addT = null; stopT = 0; subsUsed = [0, 0]; subOut = []; subChk = 0; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false; mom = [0, 0]; momSaid = 0;
     for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; p.lay = 0; p.hands = 0; p.inj = 0; }
     particles = []; matchNo++; stadTier = kind === 'train' || kind === 'test' || drill ? 0 : stadOf(loadProf().lvl || 1);
     stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = []; hlReset(); lastGk = ''; lastGoalTeam = 0;
@@ -2901,6 +2901,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
 
   // ---------- Actions ----------
+  // momentum: a side that wins the ball, shoots and scores gets on top for a while (the stands get behind it, legs a touch quicker)
+  let mom = [0, 0], momSaid = 0;
+  const momAdd = (t, v) => { if (t === 0 || t === 1) mom[t] = Math.max(0, Math.min(1, mom[t] + v)); };
+  const momEdge = t => Math.max(0, Math.min(1, mom[t] - mom[1 - t]));
   const HEAVY_T = 0.55; // how long a knock-on first touch stays away from his feet
   function grab(p) {
     const prev = ball.owner;
@@ -3018,6 +3022,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     p.fx = r.fx; p.fy = r.fy;
     if (p.superShot) { p.superShot = false; flash = { text: 'Superskud!', t: 0.8 }; shake = Math.max(shake, 8); }
     if (stats) stats.sh[p.team]++;
+    momAdd(p.team, 0.07);
     if (p.ms) p.ms.sh++;
     ball.gk = r.gk; ball.fresh = false;
     ball.x = r.x; ball.y = r.y;
@@ -3206,6 +3211,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     a.tackle = 0; a.recover = 0.1; a.vx *= 0.4; a.vy *= 0.4; if (localHuman(a) && o) buzz(25);
     if (stats) stats.tk[a.team]++;
     if (a.ms) a.ms.tk++;
+    momAdd(a.team, 0.07);
     grab(a); ball.stealCd = Math.max(ball.stealCd || 0, 1.5); // the winner gets a moment to get away, no instant win-back (no ping-pong)
     sfx.win(); shake = Math.max(shake, 3);
   }
@@ -4018,6 +4024,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const c = P[celeb]; // the scorer runs off to celebrate
       if (banner === 'MÅL!' || banner === '') stopT += dt; // celebrations, cards, injuries
       if (banner === 'MÅL!' && c) { const cx = c.team ? PL + 60 : PR - 60, cy = c.y < CY ? PT + 40 : PB - 40, dx = cx - c.x, dy = cy - c.y, d = Math.hypot(dx, dy); if (d > 20) { c.x += dx / d * 220 * dt; c.y += dy / d * 220 * dt; c.fx = dx / d; c.fy = dy / d; } }
+      if (banner === 'MÅL!' && c && !(replay && replay.t >= 0)) { // his team-mates run over to him, the others trudge back to the middle
+        const ms = P.filter(q => q !== c && on(q) && q.team === c.team && !isKeeper(q) && !(q.stun > 0)).sort((a, b) => Math.hypot(a.x - c.x, a.y - c.y) - Math.hypot(b.x - c.x, b.y - c.y)).slice(0, 4);
+        ms.forEach((q, k) => { const a = k * 1.7 + 0.6, tx = c.x + Math.cos(a) * 30, ty = c.y + Math.sin(a) * 30, dx = tx - q.x, dy = ty - q.y, d = Math.hypot(dx, dy); if (d > 6) { const v = Math.min(d, 250 * dt); q.x += dx / d * v; q.y += dy / d * v; } const fl = Math.hypot(c.x - q.x, c.y - q.y) || 1; q.fx = (c.x - q.x) / fl; q.fy = (c.y - q.y) / fl; });
+        for (const q of P) { if (!on(q) || q.team === c.team || isKeeper(q) || q.stun > 0) continue; const tx = CX + (q.team ? 1 : -1) * 90, dx = tx - q.x, dy = (CY - q.y) * 0.3, d = Math.hypot(dx, dy); if (d > 40) { q.x += dx / d * 70 * dt; q.y += dy / d * 70 * dt; q.fx = dx / d; q.fy = dy / d; } }
+      }
       if (/^[1-4]$/.test(banner)) {
         const n = Math.ceil(pause / 0.8);
         if (n !== Math.ceil(was / 0.8) && n > 0) { banner = String(n); sfx.beep(); }
@@ -4098,7 +4109,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (p.sprint && p.ms) p.ms.spr += dt;
       if (p.sprint && p.turbo <= 0) { const mo = hasAb(p, 'motor') ? 0.6 : 1; p.stamina = Math.max(0, p.stamina - (ai ? 0.12 : 0.14) * mo * dt); p.fat = Math.min(0.4, p.fat + 0.004 * mo * dt); }
       else p.stamina = Math.min(1 - p.fat, p.stamina + (hasAb(p, 'motor') ? 0.25 : 0.18) * dt);
-      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has && !(p.heavy > 0) ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
+      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has && !(p.heavy > 0) ? 0.92 : 1) * (1 + 0.03 * momEdge(p.team)) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
       if (p.sprint && p.ab && hasAb(p, 'raket') && Math.hypot(p.vx, p.vy) > MAXV * 1.25 && performance.now() - (p.abAt || 0) > 14000) abPop(p, 'raket');
 
       if (mag > 0.2 && p.tackle <= 0 && !(p.dive > 0)) {
@@ -4292,6 +4303,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const dx = p.x - k.x, dy = p.y - k.y, d = Math.hypot(dx, dy) || 1;
       if (d < 85) { p.x = k.x + dx / d * 85; p.y = k.y + dy / d * 85; }
     } }
+    for (const t of [0, 1]) mom[t] = Math.max(0, mom[t] - 0.022 * dt);
+    { const k = owner(); if (k && !setp && Math.abs((k.team ? PL : PR) - k.x) < (PR - PL) * 0.33) momAdd(k.team, 0.035 * dt); // camped in their third
+      const t = momEdge(0) > 0.55 ? 0 : momEdge(1) > 0.55 ? 1 : -1;
+      if (t >= 0 && (!momSaid || momSaid - clock > 25)) { momSaid = clock; say(pick([`${teamIs(t)} er ovenpå lige nu`, `${teamIs(t)} presser på`, `Det er ${teamIs(t)}, der styrer kampen nu`]), 1.5); crowd.claps(4); } }
     // ball
     ball.stealCd -= dt;
     const o = owner();
@@ -4355,6 +4370,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
           const shooter = P[ball.lastIdx], near = shooter && Math.hypot(shooter.x - p.x, shooter.y - p.y) < 300, stretch = p.dive > 0 || dBall(p) > REACH;
           const ks = keeperSkill(p), rnd = Math.random();
+          if (save && shooter && shooter.team !== p.team) { shooter.rueAt = performance.now(); momAdd(shooter.team, 0.05); }
           if (save && stretch && sp2 > 700 && rnd < 0.8) { if (rnd < 0.3 && Math.abs(p.x - (p.team ? PR : PL)) < 130) tipOver(p); else parry(p); } // at full stretch: tipped over the bar for a corner, or palmed away
           else if (save && !stretch && sp2 > 880 && near && rnd < 0.62 - ks * 0.5) spill(p); // too hot to hold from close in: it drops in front of him
           else if (p.tackle > 0) tackleWins(p); else grab(p);
@@ -4417,7 +4433,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (!over) continue;
       const inMouth = Math.abs(ball.y - CY) < MOUTH - POSTR;
       if (inMouth && ball.z < BAR) { scoreOn(side); return; }
-      if (inMouth || (Math.abs(ball.y - CY) < MOUTH * 2.4 && ball.last && !ball.last.pass && Math.hypot(ball.vx, ball.vy) > 380)) crowd.ooh(); // over the bar or just wide
+      if (inMouth || (Math.abs(ball.y - CY) < MOUTH * 2.4 && ball.last && !ball.last.pass && Math.hypot(ball.vx, ball.vy) > 380)) { crowd.ooh(); const sh = P[ball.lastIdx]; if (sh && sh.team !== side) sh.rueAt = performance.now(); } // over the bar or just wide
       const gx = side ? PR : PL, top = ball.y < CY;
       if (ball.lastTeam === side) restart('corner', 1 - side, gx, top ? PT : PB);
       else restart('goal', side, gx + (side ? -70 : 70), CY + (top ? -50 : 50));
@@ -4491,6 +4507,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     lastGk = sp && sp.team === team ? (ball.gk || 'shot') : 'own'; lastGoalTeam = team;
     hlAdd(team, mode === 'host' ? lastScorer : sp && sp.team === team && sp.ctrl === 'L0' ? cfg.name || 'Spiller 1' : sp && sp.team === team && sp.ctrl === 'L1' ? 'Spiller 2' : sn, lastGk);
     if (kind !== 'train' && kind !== 'test' && team === (P.find(q => q.ctrl === 'L0') || { team: 0 }).team) dailyEvent('goal', lastGk);
+    momAdd(team, 0.45); mom[1 - team] *= 0.4;
     banner = 'MÅL!'; pause = cfg.replay ? 5.4 : 3.0; ball.owner = -1;
     if (cfg.replay) startReplay();
     goalFx(team);
@@ -7033,11 +7050,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const o = {
       m: matchNo, st, z: size, c: Math.ceil(clock * 10), g: golden ? 1 : 0, at: addT ? addT.mins : 0, sc: score, bn: banner, fl: flash ? flash.text : '', sp: setp ? setp.r : 0, sw: ball.rs === 'kick' ? 0 : spState(), rc: setp && setp.place && setp.t < setp.place ? 1 : 0,
       b: [RND(ball.x), RND(ball.y), ball.owner, RND(ball.z)],
-      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0) | (p.dive > 0 || p.lay > 0 ? 32 : 0) | (keeperKick(p) ? 64 : 0) | (calling(p) ? 128 : 0)]),
+      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0) | (p.dive > 0 || p.lay > 0 ? 32 : 0) | (keeperKick(p) ? 64 : 0) | (calling(p) ? 128 : 0) | (performance.now() - (p.rueAt || 0) < 1700 ? 256 : 0)]),
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
       // slow-changing fields go every 15th message (and always in the lobby)
       pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > BALL_R ? 1 : 0,
-      gs: [goalSeq, lastScorer, lastGk, lastGoalTeam], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
+      gs: [goalSeq, lastScorer, lastGk, lastGoalTeam], rp: cfg.replay ? 1 : 0, so: soSums() || 0, ce: celeb, mo: [RND(mom[0] * 100), RND(mom[1] * 100)], ou: P.map(p => (p.out > 0 ? 2 : 0) | (p.yc ? 1 : 0)),
       rx: rxOut.filter(r => now - r[3] < 3000).map(r => [r[0], r[1], r[2]]),
       lr: [roster.filter(r => lobbyReady.get(r[0])).length, roster.length, hostReady ? 1 : 0],
       q: quick ? 1 : 0, qo: quick && state === 'lobby' && !roster.length ? 1 : 0,
@@ -7091,7 +7108,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       return;
     }
     const big = !!s.bb; if (big !== (BRAD > BALL_R)) setBallSize(big);
-    soG = Array.isArray(s.so) ? s.so.map(v => Number(v) | 0) : null; celeb = Number(s.ce) | 0;
+    soG = Array.isArray(s.so) ? s.so.map(v => Number(v) | 0) : null; celeb = Number(s.ce) | 0; if (Array.isArray(s.mo)) mom = [(Number(s.mo[0]) || 0) / 100, (Number(s.mo[1]) || 0) / 100];
     if (Array.isArray(s.ou)) s.ou.forEach((v, i) => { if (P[i]) { P[i].out = v & 2 ? 1 : 0; P[i].yc = v & 1; } });
     item = Array.isArray(s.pu) ? { type: Object.keys(ITEMS)[Number(s.pu[0]) | 0] || 'super', x: Number(s.pu[1]) || 0, y: Number(s.pu[2]) || 0, t: 1 } : null;
     if (s.ss && Array.isArray(s.ss.sh)) { const n2 = a => (Array.isArray(a) ? [Number(a[0]) || 0, Number(a[1]) || 0] : [0, 0]); stats = { sh: n2(s.ss.sh), pos: n2(s.ss.pos), pa: n2(s.ss.pa), tk: n2(s.ss.tk), sv: n2(s.ss.sv), fo: n2(s.ss.fo), yc: n2(s.ss.yc), rc: n2(s.ss.rc) }; }
@@ -7161,7 +7178,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           p.x += (q[0] - p.x) * k; p.y += (q[1] - p.y) * k;
           p.fx = (Number(q[2]) || 0) / 100; p.fy = (Number(q[3]) || 0) / 100;
           p.hold = (Number(q[4]) || 0) / 100; p.stamina = (Number(q[5]) || 0) / 100;
-          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0; p.windup = f & 16 ? 0.1 : 0; p.lay = f & 32 ? 0.1 : 0; p.hands = f & 64 ? 1 : 0; p.call = f & 128 ? 1 : 0;
+          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0; p.windup = f & 16 ? 0.1 : 0; p.lay = f & 32 ? 0.1 : 0; p.hands = f & 64 ? 1 : 0; p.call = f & 128 ? 1 : 0; if (f & 256) p.rueAt = performance.now();
           if (p.tackle && Math.random() < 0.5) dust(p.x, p.y);
         });
       }
@@ -7323,6 +7340,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     return `rgb(${f(r)},${f(g)},${f(b)})`;
   }
   function drawFigure(p, sliding, down) {
+    p.rueHand = false;
     // the run cycle comes from how far he moved since the last frame, so it also works for online guests and replays
     const mv = p.lx === undefined ? 0 : Math.min(30, Math.hypot(p.x - p.lx, p.y - p.ly)); p.lx = p.x; p.ly = p.y;
     p.ph = (p.ph || 0) + mv * 0.17;
@@ -7330,10 +7348,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const sw = Math.sin(p.ph) * p.amp, keeper = size > 1 && p.k === 0 && !p.ref;
     const L = lookOf(p);
     const kitC = p.ref ? refKit() : p.team ? col.away : col.home;
-    const shirt = p.ref ? kitC : keeper ? (p.team ? '#ffd447' : '#9be23a') : kitC;
+    const shirt = p.coach ? '#e4e1d8' : p.ref ? kitC : keeper ? (p.team ? '#ffd447' : '#9be23a') : kitC;
     const light = parseInt(shirt.slice(1, 3), 16) + parseInt(shirt.slice(3, 5), 16) + parseInt(shirt.slice(5, 7), 16) > 560;
     let trim = !p.ref && teamPick && teamPick[p.team] && teamPick[p.team].c2 && !keeper ? teamPick[p.team].c2 : '';
     if (!trim || trim.toLowerCase() === shirt.toLowerCase()) trim = shade(shirt, light ? -0.3 : 0.35);
+    if (p.coach) trim = kitC; // the coach: a light coat with his team's colour on the collar and shoulders
     const sock = light ? '#2a2f36' : '#f4f4ef', skin = L.skin, hair = L.hair;
     // a disc on the grass in the team colour keeps him easy to spot, gold for the one you control
     ctx.globalAlpha = down || p.out > 0 ? 0.2 : 0.3;
@@ -7362,6 +7381,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     // arms swing against the legs; a keeper at full stretch reaches out
     for (const s of [-1, 1]) {
       const ask = !sliding && !down && s > 0 && !p.ref && calling(p); // on a run: one arm out in front, showing where he wants it
+      const joy = !sliding && !down && (p.coach ? p.joy > 0 : banner === 'MÅL!' && P[celeb] === p && !(replay && replay.t >= 0)); // scored: arms out wide
+      const rue = !joy && !sliding && !down && performance.now() - (p.rueAt || 0) < 1700; // missed: hands on his head
+      if (joy || rue) { const hx = joy ? 3 : 3.5, hy = joy ? s * 25 * (0.7 + 0.3 * W) : s * 6.5, sy = s * 11 * W, longS = keeper || L.sleeve || p.coach;
+        ctx.strokeStyle = longS ? shirt : skin; ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(0, sy); if (rue) ctx.quadraticCurveTo(-7, s * 15, hx, hy); else ctx.lineTo(hx, hy); ctx.stroke();
+        if (!longS) { ctx.strokeStyle = shirt; ctx.lineWidth = 5.6; ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(joy ? hx * 0.3 : -2, joy ? sy + (hy - sy) * 0.3 : s * 13); ctx.stroke(); }
+        if (joy) { ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(hx, hy, 3, 0, Math.PI * 2); ctx.fill(); } else p.rueHand = true;
+        continue; }
       const sy = s * 11 * W, hx = ask ? 21 : sliding ? (p.dive > 0 ? 6 : -9) : -sw * 8 * s + 1, hy = ask ? s * 9 :  s * (sliding && p.dive > 0 ? 21 : 16.5) * (0.7 + 0.3 * W);
       const longS = keeper || L.sleeve;
       ctx.strokeStyle = longS ? shirt : skin; ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(hx, hy); ctx.stroke();
@@ -7391,6 +7417,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       default: ctx.beginPath(); ctx.ellipse(-0.3 - L.style * 0.4, 0, 4.4 + L.style * 0.4, 5.6, 0, 0, Math.PI * 2); ctx.fill(); // short
     }
     if (L.band) { ctx.strokeStyle = trim === hair ? '#f4f4ef' : trim; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.arc(1.5, 0, 5.2, -1.2, 1.2); ctx.stroke(); } // a headband
+    if (p.rueHand) { ctx.fillStyle = skin; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(3.5, s * 6.2, 3, 0, Math.PI * 2); ctx.fill(); } } // both hands on his head
   }
   // ---------- the referee (as in FIFA): runs with play, a little behind the ball and off to the side, runs over to a
   // foul and holds up the card. Only for show: every phone works him out from the ball, so it needs nothing online.
@@ -7436,6 +7463,26 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (d > 30 && !cardOn) { ref.fx += (dx / d - ref.fx) * 0.2; ref.fy += (dy / d - ref.fy) * 0.2; } else { ref.fx += (bx / bl - ref.fx) * 0.2; ref.fy += (by / bl - ref.fy) * 0.2; }
     const fl = Math.hypot(ref.fx, ref.fy) || 1; ref.fx /= fl; ref.fy /= fl;
   }
+  // the two coaches in their technical areas by the touchline: they follow the play, jump at a goal and despair at a miss
+  const coaches = [0, 1].map(t => ({ x: 0, y: 0, fx: 0, fy: 1, team: t, k: 99, coach: true, joy: 0, i: -10 - t }));
+  function drawCoaches(dt) {
+    if (drill || kind === 'train' || kind === 'test' || INDOOR() || size < 5 || (shootoutOn() && state === 'play')) return;
+    for (const c of coaches) {
+      const base = CX + (c.team ? 1 : -1) * 120, tx = base + Math.max(-55, Math.min(55, (ball.x - CX) * 0.12));
+      if (!c.x || Math.abs(c.x - base) > 200) { c.x = base; }
+      c.x += Math.max(-60 * dt, Math.min(60 * dt, tx - c.x)); c.y = PT - 26;
+      const dx = ball.x - c.x, dy = ball.y - c.y, l = Math.hypot(dx, dy) || 1; c.fx += (dx / l - c.fx) * 0.1; c.fy += (dy / l - c.fy) * 0.1;
+      const goalNow = banner === 'MÅL!' && !(replay && replay.t >= 0);
+      c.joy = goalNow && lastGoalTeam === c.team ? 1 : 0;
+      if (goalNow && lastGoalTeam !== c.team) c.rueAt = performance.now();
+      const mine = P.find(q => q.team === c.team && performance.now() - (q.rueAt || 0) < 300); if (mine) c.rueAt = Math.max(c.rueAt || 0, performance.now() - 500);
+      const hop = c.joy ? Math.abs(Math.sin(performance.now() / 120)) * 8 : 0;
+      ctx.save(); ctx.translate(c.x, c.y - hop);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4 * FIG, 6 * FIG + hop, PRAD, PRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.save(); ctx.scale(FIG, FIG); drawFigure(c, false, false); ctx.restore();
+      ctx.globalAlpha = 1; ctx.restore();
+    }
+  }
   function drawRef() {
     if (drill || (shootoutOn() && state === 'play')) return;
     ctx.save(); ctx.translate(ref.x, ref.y);
@@ -7461,7 +7508,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (p.out > 1e5) return; // training: the missing opponents are not shown
     if (shootoutOn() && state === 'play' && Math.abs(p.x - soGoal()) > 240) return; // shootout: only the taker and the keeper
     const sliding = p.tackle > 0 || p.dive > 0 || p.lay > 0, down = p.stun > 0;
-    const hop = banner === 'MÅL!' && P[celeb] === p && !(replay && replay.t >= 0) ? Math.abs(Math.sin(performance.now() / 110)) * 10 : 0;
+    const cb = banner === 'MÅL!' && !(replay && replay.t >= 0) ? P[celeb] : null;
+    const hop = cb === p ? Math.abs(Math.sin(performance.now() / 110)) * 10 : cb && cb.team === p.team && Math.hypot(cb.x - p.x, cb.y - p.y) < 60 ? Math.abs(Math.sin(performance.now() / 120 + p.i * 1.3)) * 6 : 0;
     ctx.save(); ctx.translate(p.x, p.y - hop);
     if (p.out > 0) ctx.globalAlpha = 0.45;
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4 * FIG, 6 * FIG, PRAD, PRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
@@ -7706,6 +7754,14 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     ctx.font = `700 ${small ? fs * 0.6 : fs * 0.82}px ${col.font}`;
     const cw = Math.max(fs * 3.1, ctx.measureText(mid + plus).width + fs * 0.9), sw2 = fs * 1.7, tw = teamPick ? fs * 2.5 : fs * 0.5;
     const bw = cw + sw2 * 2 + tw * 2, x0 = sw / 2 - bw / 2;
+    if (mom[0] + mom[1] > 0.12 && !small && !ss) { // who is on top: a thin line under the scoreboard that leans toward the side with the momentum
+      const w = bw * 0.62, mx = sw / 2, e = Math.max(-1, Math.min(1, mom[0] - mom[1])), hgt = Math.max(2.5, bh * 0.09), yy = y + bh + hgt * 1.4;
+      ctx.globalAlpha = Math.min(1, (mom[0] + mom[1]) * 2.5) * 0.9;
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(mx - w / 2, yy, w, hgt);
+      ctx.fillStyle = e > 0 ? col.home : col.away; ctx.fillRect(e > 0 ? mx - w / 2 * e : mx, yy, w / 2 * Math.abs(e), hgt);
+      ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(mx - 0.75, yy - 1, 1.5, hgt + 2);
+      ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = 'rgba(0,0,0,0.3)'; rr(x0 + 1, y + 3, bw, bh, bh * 0.32); ctx.fill(); // its shadow
     const g = ctx.createLinearGradient(0, y, 0, y + bh); g.addColorStop(0, '#1d3328'); g.addColorStop(1, '#0a1510');
     ctx.fillStyle = g; rr(x0, y, bw, bh, bh * 0.32); ctx.fill();
@@ -7853,7 +7909,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (!saved) { drawItem(); drawSetPiece(); drawCones(); if (!shootoutOn()) drawPassHint(); drawAimLine(); }
     if (state === 'play' || state === 'end') updRef(dt);
     for (const p of P) if (p.stun > 0) drawPlayer(p);
-    drawRef();
+    drawCoaches(dt); drawRef();
     for (const p of P) if (p.stun <= 0) drawPlayer(p);
     if (ref.carry && state === 'play') { const bx = ball.x, by = ball.y, bz = ball.z; ball.x = ref.x + ref.fx * 9; ball.y = ref.y + ref.fy * 9; ball.z = 14; drawBall(); ball.x = bx; ball.y = by; ball.z = bz; } // the referee carries it over
     else drawBall(); // after the players so a lob is seen flying over them
