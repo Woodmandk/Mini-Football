@@ -887,6 +887,57 @@ button.tile.hot2 small { color: var(--muted); }
 #menu > .card:not(#pgHome), .overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help) > .card { max-width: none; }
 #wrap.n560 #pgHome .tabp { grid-template-columns: 1fr 1fr !important; grid-template-rows: none !important; overflow-y: auto; }
 #wrap.n560 #pgHome .tabp > * { grid-row: auto !important; grid-column: auto !important; min-height: 110px; }
+
+/* ---- sub-pages: one main thing, one main button, the rest behind a button ---- */
+#pgSetup { position: relative; }
+#pgSetup > .setup { grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+#pgSetup > .setup #diffBox, #pgSetup > .setup #coopBox { grid-column: 1 / -1; }
+.setfoot { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; margin-top: auto; }
+.setfoot .go { min-height: 60px; font-size: 22px; margin: 0; }
+button.setmore { display: flex; align-items: center; gap: 12px; text-align: left; padding: 8px 14px; min-height: 60px; background: var(--s2); border: 1px solid var(--line2); box-shadow: none; }
+button.setmore .ic { display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--r2); background: var(--s3); color: var(--chalk); flex: 0 0 auto; font-style: normal; }
+button.setmore b { display: block; font-family: var(--disp); font-size: 17px; color: var(--chalk); }
+button.setmore small { display: block; font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+button.setmore > span:last-child { min-width: 0; }
+.setsheet { position: fixed; inset: 0; z-index: 30; background: var(--bg); overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); text-align: left; animation: cardin 0.2s cubic-bezier(.2, .9, .3, 1); }
+.setsheet[hidden] { display: none; }
+.setsheet .setup { grid-template-columns: 1fr 1fr; gap: 12px 18px; }
+.setsheet .sheetok { flex: 0 0 auto; min-width: 120px; min-height: 44px; }
+#wrap.n560 .setfoot { grid-template-columns: 1fr; }
+
+.top:has(> .tabbar.sub) h2 { flex: 0 1 auto; max-width: 34%; }
+.top > .tabbar.sub { flex: 1 1 auto; max-width: 640px; margin: 0 0 0 auto; position: static; min-height: 44px; align-items: stretch; }
+.top > .tabbar.sub button { padding: 6px 4px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.top:has(> .tabbar.sub) > .sp:empty, .top:has(> .tabbar.sub) > .sp:not(:empty) { margin-left: 0; }
+
+.teams.tcard { display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: stretch; gap: 8px; flex-wrap: nowrap; }
+.teams.tcard .tcarr { min-height: 0; height: 100%; padding: 0; font-size: 30px; font-family: var(--disp); background: var(--s2); border: 1px solid var(--line); box-shadow: none; border-radius: var(--r2); }
+.teams.tcard .tcmid { display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto auto; column-gap: 12px; align-items: center; padding: 10px 12px; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r3); min-height: 96px; }
+.teams.tcard .tccr { grid-row: 1 / span 3; width: 64px; height: 72px; } .teams.tcard .tccr svg { width: 100%; height: 100%; }
+.teams.tcard .tcn { font-family: var(--disp); font-size: 20px; color: var(--chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.teams.tcard .tcst { color: var(--gold); font-size: 14px; letter-spacing: 1px; } .teams.tcard .tcsy { color: var(--muted); font-size: 13px; }
+
+/* The team: size in the header, formations next to the pitch, no bars above and below it */
+.mtcard .top { flex-wrap: nowrap; }
+.mtcard .top .mtsize { flex: 0 1 300px; margin-left: auto; padding: 3px; }
+.mtcard .top .mtsize button { padding: 7px 2px; font-size: 13px; }
+.mtcard:has(.mtgrid.tab-tac) .top .mtsize { visibility: hidden; }
+.mtside .mtfrom { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+.mtside .mtfrom button { font-size: 13px !important; padding: 8px 4px; }
+.mtside .mtfl { margin-top: 4px; }
+
+/* Training: five big cards, not a list of small buttons */
+.trsess { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.trsess .trbtn { flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 10px; min-height: 130px; padding: 14px; border-radius: var(--r3); background: var(--s1); border: 1px solid var(--line); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); font-family: var(--disp); font-size: 17px; }
+.trsess .trbtn i { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r2); background: var(--s3); color: var(--act-hi); }
+.trsess .trbtn i svg.i { width: 26px; height: 26px; }
+.trsess .trbtn small { display: block; font-family: var(--font); font-size: 13px; color: var(--muted); margin-top: 4px; }
+.trsess .trbtn:disabled { opacity: 0.45; }
+#clTrain .sqnote b { color: var(--chalk); font-size: 16px; font-family: var(--disp); }
+#wrap.n560 .trsess { grid-template-columns: 1fr 1fr; }
+
+.clhead { margin: 0; text-align: left; } .clhead > div { text-align: left; min-width: 0; } .clhead .clcr { width: 36px; height: 40px; } .clhead b { font-size: 16px; }
 </style>
 
 <div id="wrap">
@@ -989,12 +1040,22 @@ button.tile.hot2 small { color: var(--muted); }
     <div class="card wide" id="pgSetup" hidden>
       <div class="top"><button class="alt back" data-back>‹ Back</button><h2 id="setupTitle">Quick match</h2><span class="sp"></span></div>
       <div class="setup">
-        <div class="col" id="teamBoxA"><div class="lbl" id="teamLblA">Your team</div><div class="teams" id="teamsA" role="group" aria-label="Your team"></div></div>
-        <div class="col" id="teamBoxB"><div class="lbl" id="teamLblB">Opponent</div><div class="teams" id="teamsB" role="group" aria-label="Opponent"></div></div>
+        <div class="col" id="teamBoxA"><div class="lbl" id="teamLblA">Your team</div><div class="teams tcard" id="teamsA" role="group" aria-label="Your team"></div></div>
+        <div class="col" id="teamBoxB"><div class="lbl" id="teamLblB">Opponent</div><div class="teams tcard" id="teamsB" role="group" aria-label="Opponent"></div></div>
         <div class="col full" id="coopBox"><div class="lbl">How do you play?</div>
           <div class="seg" id="segCoop" role="group" aria-label="Against each other or together">
             <button data-v="0">Against each other</button><button data-v="1">Together vs the computer</button>
           </div></div>
+        <div class="col" id="diffBox"><div class="lbl" id="diffLbl">Level</div>
+          <div class="seg" id="segDiff" role="group" aria-label="Computer level">
+            <button data-v="0">Easy</button><button data-v="1">Normal</button><button data-v="2">Hard</button><button data-v="3">Legend</button>
+          </div></div>
+      </div>
+      <div class="setfoot"><button id="setupMore" class="alt setmore"><span class="ic smi"></span><span><b>Match settings</b><small id="setupSum"></small></span></button>
+      <button id="setupGo" class="go">Start match ›</button></div>
+      <div class="setsheet" id="setupSheet" hidden>
+        <div class="top"><button class="alt back" id="setupSheetX" aria-label="Back">‹ Back</button><h2>Match settings</h2><button id="setupSheetOk" class="sheetok">Done</button></div>
+        <div class="setup">
         <div class="col" id="sizeBox"><div class="lbl">Players per team</div>
           <div class="seg" id="segSize" role="group" aria-label="Team size">
             <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5" title="Indoor with boards">5 indoor</button><button data-v="7">7</button><button data-v="11">11</button>
@@ -1004,10 +1065,6 @@ button.tile.hot2 small { color: var(--muted); }
         <div class="col" id="minsBox"><div class="lbl">Match length</div>
           <div class="seg" id="segMins" role="group" aria-label="Match length">
             <button data-v="2">2 min</button><button data-v="3">3 min</button><button data-v="5">5 min</button>
-          </div></div>
-        <div class="col" id="diffBox"><div class="lbl" id="diffLbl">Level</div>
-          <div class="seg" id="segDiff" role="group" aria-label="Computer level">
-            <button data-v="0">Easy</button><button data-v="1">Normal</button><button data-v="2">Hard</button><button data-v="3">Legend</button>
           </div></div>
         <div class="col" id="serBox"><div class="lbl">Series</div>
           <div class="seg" id="segSer" role="group" aria-label="Series">
@@ -1025,8 +1082,8 @@ button.tile.hot2 small { color: var(--muted); }
             <button data-v="3" aria-label="White vs black"><span class="kit"><i style="background:#f1f1ec"></i><i style="background:#23262b"></i></span></button>
           </div></div>
         <div class="col full mopts" data-mopts id="setupOpts"></div>
+        </div>
       </div>
-      <button id="setupGo" class="go">Start match ›</button>
     </div>
 
     <!-- online: opret eller deltag -->
@@ -1316,7 +1373,7 @@ button.tile.hot2 small { color: var(--muted); }
   <!-- your own team: name, colours, tactics and a line-up you drag into place -->
   <div class="overlay" id="myteam" hidden>
     <div class="card wide mtcard">
-      <div class="top"><button class="alt back" id="mtClose">‹ Done</button><div class="seg mttabs" id="mtTabs" role="group" aria-label="Show"><button data-t="lay">Line-up</button><button data-t="tac">Tactics and kit</button></div><span class="sp mtovr" id="mtOvr"></span></div>
+      <div class="top"><button class="alt back" id="mtClose">‹ Done</button><div class="seg mttabs" id="mtTabs" role="group" aria-label="Show"><button data-t="lay">Line-up</button><button data-t="tac">Tactics and kit</button></div><div class="seg mtsize" id="mtSize" role="group" aria-label="Line-up for team size"></div><span class="sp mtovr" id="mtOvr"></span></div>
       <div class="mtgrid tab-lay">
         <div class="col mtleft">
           <div class="mtname">
@@ -1338,11 +1395,9 @@ button.tile.hot2 small { color: var(--muted); }
           <div class="crsym" id="crSy" role="group" aria-label="Badge symbol"></div>
         </div>
         <div class="col mtright" id="mtLay">
-          <div class="seg" id="mtSize" role="group" aria-label="Line-up for team size"></div>
           <div class="mtlay"><canvas id="mtCv" aria-label="Line-up. Tap two players to swap them, drag to move"></canvas>
             <div class="mtbcol"><div class="lbl">Bench</div><div class="mtbench" id="mtBench"></div></div>
-            <div class="mtside"><div class="mtacts"><button id="mtSwapB" class="small">⇄ Swap</button><button id="mtAuto" class="alt small">Best team</button></div><div class="mtsel" id="mtSel"></div><div id="mtPan"></div></div></div>
-          <div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start from a formation"></div>
+            <div class="mtside"><div class="mtacts"><button id="mtSwapB" class="small">⇄ Swap</button><button id="mtAuto" class="alt small">Best team</button></div><div class="lbl mtfl">Formation</div><div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start from a formation"></div><div class="mtsel" id="mtSel"></div><div id="mtPan"></div></div></div>
           <p class="mttip" id="mtLayTip"></p>
         </div>
       </div>
@@ -1543,7 +1598,7 @@ button.tile.hot2 small { color: var(--muted); }
     $('teamBoxA').hidden = $('teamBoxB').hidden = setupMode === 'host';
     $('kitBox').hidden = setupMode !== 'host';
     paintTeamPickers();
-    menuForm();
+    menuForm(); setupSum();
   }
   let friendly = false; // a træningskamp: half the tired legs, no wages or gate, no prize, more TP
   function showSetup(m, fr) {
@@ -1551,8 +1606,15 @@ button.tile.hot2 small { color: var(--muted); }
     $('setupTitle').textContent = friendly ? 'Friendly' : { cpu: 'Quick match', two: '2 on one phone', host: 'Create online match' }[m];
     $('setupGo').textContent = m === 'host' ? 'Create match ›' : 'Start match ›';
     segPaints.forEach(f => f()); setupVis(); page('pgSetup');
-    subTabs($('pgSetup'), [['Match', ['coopBox', 'sizeBox', 'formBox', 'minsBox', 'serBox', 'kitBox']], ['Team', ['teamBoxA', 'teamBoxB']], ['Rules', ['diffBox', 'wxBox', 'setupOpts']]], 'setup', $('pgSetup').querySelector('.setup'));
+    $('setupSheet').hidden = true; setupSum();
   }
+  function setupSum() { // the short line under Match settings: what is chosen now
+    const on = id => { const b = $(id) && $(id).querySelector('[aria-pressed="true"]'); return b ? b.textContent.trim() : ''; };
+    const sz = cfg.size || 7, l = [sz === 5 ? '5 v 5 indoor' : `${sz} v ${sz}`, $('formBox').hidden ? '' : on('segForm'), on('segMins'), on('segSer')];
+    if (setupMode === 'host') l.push(''); $('setupSum').textContent = l.filter(Boolean).join(' · ');
+  }
+  $('setupMore').onclick = () => { $('setupSheet').hidden = false; $('setupSheet').scrollTop = 0; };
+  $('setupSheetX').onclick = $('setupSheetOk').onclick = () => { $('setupSheet').hidden = true; setupSum(); };
   document.querySelectorAll('[data-back]').forEach(b => b.onclick = () => page(b.closest('#pgSetup') && setupMode === 'host' ? 'pgOnline' : 'pgHome'));
   $('goOnline').onclick = () => page('pgOnline');
   let hubTab = 'spil'; try { hubTab = localStorage.getItem('mf-tab') || 'spil'; } catch (_) {}
@@ -5909,6 +5971,18 @@ button.tile.hot2 small { color: var(--muted); }
   }
   function teamPicker(el, lbl, title, get, set) {
     el.textContent = '';
+    if (el.classList.contains('tcard')) { // a big team card with arrows instead of a row of small codes
+      el.innerHTML = '<button class="alt tcarr" aria-label="Previous team">‹</button><div class="tcmid"><span class="tccr"></span><b class="tcn"></b><span class="stars tcst"></span><small class="tcsy"></small></div><button class="alt tcarr" aria-label="Next team">›</button>';
+      const step = d => { const pr = loadProf(); let i = get(); for (let k = 0; k < TEAMS.length; k++) { i = (i + d + TEAMS.length) % TEAMS.length; if (teamOpen(i, pr)) break; } set(i); paint(); menuColors(); };
+      const [bp, , bn] = el.children; bp.onclick = () => step(-1); bn.onclick = () => step(1);
+      const paint = () => {
+        const t = TEAMS[get()] || TEAMS[0]; lbl.textContent = title();
+        el.querySelector('.tccr').innerHTML = crestSVG(t); el.querySelector('.tcn').textContent = t.n;
+        el.querySelector('.tcst').textContent = '★'.repeat(t.str) + '☆'.repeat(5 - t.str);
+        el.querySelector('.tcsy').textContent = t.sty ? STYLES[t.sty].n : '';
+      };
+      el._paint = paint; paint(); return;
+    }
     const paint = () => {
       const pr = loadProf();
       [...el.children].forEach((b, i) => { b.setAttribute('aria-pressed', String(i === get())); b.classList.toggle('lock', !teamOpen(i, pr)); });
@@ -6295,11 +6369,12 @@ button.tile.hot2 small { color: var(--muted); }
   let trainMsg = '';
   function clubTrainPaint() {
     const C = clubLoad(), T = $('clTrain'), left = trainLeft(C); T.textContent = '';
-    const h = document.createElement('p'); h.className = 'sqnote'; h.textContent = `Training session for the whole squad. ${left} of ${TRAIN_N} left today. A session costs ${TRAIN_FIT} form and lifts the chosen skill for everyone. Tired players (form under 45) sit out.`; T.appendChild(h);
-    const g = document.createElement('div'); g.className = 'trgrid';
+    const h = document.createElement('p'); h.className = 'sqnote'; h.innerHTML = `<b>${left} of ${TRAIN_N} sessions left today.</b> `; h.append(`Pick what the whole squad trains. Each session costs ${TRAIN_FIT} form; tired players (form under 45) sit out.`); T.appendChild(h);
+    const g = document.createElement('div'); g.className = 'trsess';
+    const TIC = { spd: 'cone', sht: 'goal', pas: 'swap', def: 'shield', rest: 'check' };
     for (const k of Object.keys(TRAIN)) {
       const [nm, ic, st] = TRAIN[k], b = document.createElement('button'); b.className = 'alt trbtn'; b.disabled = left <= 0;
-      const i = document.createElement('i'); i.textContent = ic; const t = document.createElement('span'); t.textContent = nm; const sm = document.createElement('small'); sm.textContent = k === 'rest' ? '+15 form for everyone' : `${st} up · −${TRAIN_FIT} form`;
+      const i = document.createElement('i'); if (window.mfIco) i.innerHTML = window.mfIco(TIC[k] || 'cone'); else i.textContent = ic; const t = document.createElement('span'); t.textContent = nm; const sm = document.createElement('small'); sm.textContent = k === 'rest' ? '+15 form for everyone' : `${st} up · −${TRAIN_FIT} form`;
       t.appendChild(sm); b.append(i, t);
       b.onclick = () => { const r = trainRun(k); if (!r) return; sfx.win(); buzz(30);
         trainMsg = k === 'rest' ? 'Recovery: everyone got 15 form.' : `${nm}: ${r.n} trained` + (r.tired ? `, ${r.tired} sat out` : '') + '. ' + (r.ups.length ? `${st} up: ${r.ups.slice(0, 6).join(', ')}` + (r.ups.length > 6 ? ` +${r.ups.length - 6}` : '') : 'Nobody went up yet, but they are closer.');
@@ -7103,7 +7178,7 @@ button.tile.hot2 small { color: var(--muted); }
   // ----- profile page -----
   function profShow() {
     const pr = loadProf();
-    $('profName').textContent = cfg.name || 'Your profile';
+    $('profName').textContent = 'Stats and trophies';
     const box = $('profStats'); box.textContent = '';
     const M = loadMe();
     [['Rank 7 v 7', rankOf(rpOf(M, '')).n], ['Rank 11 v 11', rankOf(rpOf(M, '11')).n], ['Matches', pr.games], ['Wins', pr.w], ['Draw', pr.d], ['Loss', pr.l], ['Goals scored', pr.gf], ['Goals against', pr.ga],
@@ -7131,7 +7206,8 @@ button.tile.hot2 small { color: var(--muted); }
     if (!bar) {
       bar = document.createElement('div'); bar.className = 'tabbar sub'; bar.style.gridTemplateColumns = `repeat(${groups.length}, 1fr)`;
       for (const [label] of groups) { const b = document.createElement('button'); b.textContent = label; b.onclick = () => { subTab[key] = label; paint(); }; bar.appendChild(b); }
-      if (before) card.insertBefore(bar, before); else card.appendChild(bar);
+      const top = card.querySelector(':scope > .top'), h = top && top.querySelector('h2'); // tabs sit in the header row, next to the title
+      if (h) h.after(bar); else if (before) card.insertBefore(bar, before); else card.appendChild(bar);
     }
     if (!groups.some(g => g[0] === subTab[key])) { try { subTab[key] = localStorage.getItem('mf-sub-' + key) || groups[0][0]; } catch (_) { subTab[key] = groups[0][0]; } if (!groups.some(g => g[0] === subTab[key])) subTab[key] = groups[0][0]; }
     function paint() {
@@ -7346,7 +7422,7 @@ button.tile.hot2 small { color: var(--muted); }
     sw($('mtC1'), 'c1'); sw($('mtC2'), 'c2');
     for (const [id, k] of [['mtM', 'm'], ['mtPr', 'pr'], ['mtW', 'w'], ['mtPt', 'pt']])
       mkSeg($(id), [0, 1, 2], TAC_TXT[k], () => loadMT().tac[k], v => { loadMT().tac[k] = v; mtMade(); mtTip(k); });
-    mkSeg($('mtSize'), mtSizes, mtSizes.map(n => n + ' v ' + n), () => mtN, v => { mtN = v; mtSel = mtSelB = -1; mtFrom(); mtPaintSide(); mtDraw(); });
+    mkSeg($('mtSize'), mtSizes, mtSizes.map(n => n + 'v' + n), () => mtN, v => { mtN = v; mtSel = mtSelB = -1; mtFrom(); mtPaintSide(); mtDraw(); });
     const crGet = () => (mt.cr && typeof mt.cr === 'object' ? mt.cr : (mt.cr = crOf(mt)));
     const crPaint = () => { crestInto($('crPrev'), mt); $('crName').textContent = mt.n; [...$('crSy').children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === crGet().sy))); };
     mkSeg($('crSh'), CR_SH.map((_, i) => i), CR_SH.map(x => x[0]), () => crGet().sh, v => { crGet().sh = v; mtMade(); crPaint(); });
@@ -8969,7 +9045,7 @@ button.tile.hot2 small { color: var(--muted); }
   window.mfIco = ico;
   const $ = id => document.getElementById(id);
   const put = (id, n) => { const b = $(id); const ic = b && b.querySelector('.ic'); if (ic && !ic.querySelector('svg.rkbadge')) ic.innerHTML = ico(n); };
-  [['goOnline', 'globe'], ['bCpu', 'chip'], ['goSeason', 'trophy'], ['bTwo', 'phone2'], ['goPractice', 'target'], ['goFriendly', 'whistle'], ['goItems', 'ball'],
+  [['goOnline', 'globe'], ['bCpu', 'ball'], ['setupMore', 'gear'], ['goSeason', 'trophy'], ['bTwo', 'phone2'], ['goPractice', 'target'], ['goFriendly', 'whistle'], ['goItems', 'pitch'],
    ['goMine', 'pitch'], ['goSquad', 'users'], ['goClub', 'club'], ['goMarket', 'swap'], ['goTac', 'shirt'],
    ['goShop', 'bag'], ['goFree', 'gift'], ['goPass', 'star'], ['bDaily', 'check'], ['goEvent', 'cal'],
    ['goProf', 'medal'], ['bFriends', 'users'], ['goLeague', 'table'], ['bHelp', 'help']].forEach(([id, n]) => put(id, n));
