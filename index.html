@@ -4878,6 +4878,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     });
     for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; }
     if (m === 'cpu' || (comp && m === 'host')) cpuRatings(1); // the computer's players each have their own rating too
+    if (m === 'host' && !comp && kind !== 'train' && kind !== 'test') { // online: both captains' own players, with their ratings and evner
+      const hT = hostTeam();
+      applySquad(hT, cleanSquad(squadWire(size, teamForm[hT]), size));
+      if (roster.some(r => P[r[1]] && P[r[1]].team === 1 - hT)) applySquad(1 - hT, netSq);
+    }
     if (m === 'cpu' || (comp && m === 'host')) { // your trained squad (always the home side against the computer): every player plays at his own rating
       const L = squadToPitch(); const d = tD[0], ck = (chemOf(size).v - 50) / 50; // kemi: a team that knows each other plays a little better
       tD[0] = { spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
@@ -5700,6 +5705,31 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   function xiFor(n, S) { S = S || squadLoad(); const m = xiManual(n, S); return m ? m.slice() : xiAuto(n, S); }
   function teamOvr(n) { const S = squadLoad(), L = layFor(n), xi = xiFor(n, S); return Math.round(xi.reduce((t, i, k) => t + fitOvr(S.pl[i], slotPos(L[k], k, n)), 0) / xi.length); }
+  // online: each captain brings his own eleven. On the wire, per place: [name, fart, skud, aflevering, forsvar, rating in that place, [evner]]
+  const ABK = () => Object.keys(ABIL);
+  function squadWire(n, v) {
+    try {
+      const S = squadLoad(), xi = xiFor(n, S), fl = formList(n), L = v === CUST ? (myLay(n) || layFor(n)) : (fl && fl[v] ? fl[v][1] : layFor(n));
+      return xi.map((i, k) => { const p = S.pl[i], o = fitOvr(p, slotPos(L[k] || [0.5, 0.5], k, n)), pen = ovr(p) - o; // out of position: he plays worse
+        return [String(p.n || '').slice(0, 18), ...SKILLS.map(([q]) => Math.round(p[q] - pen)), o, abOf(p).map(a => ABK().indexOf(a))]; });
+    } catch (_) { return 0; }
+  }
+  function cleanSquad(a, n) {
+    if (!Array.isArray(a) || a.length !== n) return null;
+    const st = v => Math.max(20, Math.min(99, Number(v) || 50)), out = [];
+    for (const r of a) {
+      if (!Array.isArray(r)) return null;
+      const nm = String(r[0] || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 18);
+      out.push({ n: nm || 'Spiller', spd: st(r[1]), sht: st(r[2]), pas: st(r[3]), def: st(r[4]), o: Math.round(st(r[5])), ab: (Array.isArray(r[6]) ? r[6] : []).map(i => ABK()[i | 0]).filter(Boolean).slice(0, 2) });
+    }
+    return out;
+  }
+  function applySquad(team, sq) { // the host plays both elevens at their own ratings and evner
+    if (!sq) return false;
+    for (const p of P) { if (p.team !== team) continue; const r = sq[p.k]; if (!r) continue;
+      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); }
+    return true;
+  }
   function squadToPitch() { // every man plays the place he has in your line-up (picked by you, or the best for each place)
     for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; p.ab = null; p.fit0 = 0; }
     const S0 = squadLoad(), xi = xiFor(size, S0), L = layFor(size), mine = P.filter(p => p.team === 0);
@@ -6789,7 +6819,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   let roster = []; // [[peer, slot]] (guests also get [peer, slot, name])
   let hostReady = false, hostInfo = [0, 'Vært'], lobbyLr = [0, 0, 0];
   let gSent = 0, gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null, gZ = 0;
-  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard(), ly: gFm === CUST ? packLay(myLay(lobbySize)) : 0, tc: tacWire(loadMT().tac), tm: teamWire(myCardTeam()) }).catch(() => {}); };
+  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard(), ly: gFm === CUST ? packLay(myLay(lobbySize)) : 0, sq: squadWire(lobbySize, gFm), tc: tacWire(loadMT().tac), tm: teamWire(myCardTeam()) }).catch(() => {}); };
   const netmsg = $('netmsg');
   (async () => {
     const framed = window.top !== window;
@@ -6890,11 +6920,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       teamForm[ct] = v === CUST ? (netLay ? CUST : 0) : formList(size) && formList(size)[v] ? v : 0;
       netTac = pr.tc ? cleanTac({ m: pr.tc[0], pr: pr.tc[1], w: pr.tc[2], pt: pr.tc[3] }) : null;
       netTeam = cleanTeam(pr.tm);
+      netSq = cleanSquad(pr.sq, size);
       teamForm[1 - ct] = myForm(size);
     }
   }
   // online helpers for your own team: what the host and the other captain bring
-  let netTeam = null, netTac = null, netLay = null, lobbyTeams = [null, null], gCoop = false;
+  let netSq = null, netTeam = null, netTac = null, netLay = null, lobbyTeams = [null, null], gCoop = false;
   const hostTeam = () => (P.find(q => q.ctrl === 'L0') || { team: 0 }).team;
   const capTeam = () => (mode === 'host' ? 1 - hostTeam() : P[hostInfo[0]] ? 1 - P[hostInfo[0]].team : 1);
   const hex = v => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v) : null);
@@ -7114,7 +7145,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (st === 'e' && stats) o.ss = stats;
     if (st === 'e' && serEnd) o.sr = serEnd;
     if (st === 'e' && comp && kind === 'career' && ++cvN % 10 === 1) { const C = carLoad(); if (C) { if (!C.cid) { C.cid = Math.random().toString(36).slice(2, 10); carSave(C); } o.cv = C; } } // the career is shared: the other phone saves it too
-    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx, tf: teamForm, tm: [0, 1].map(t => teamWire(comp ? comp[t ? 'b' : 'a'] : t === hostTeam() ? myCardTeam() : netTeam)), cp: comp ? 1 : 0, nm: P.map(p => nameOf(p, true)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
+    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx, tf: teamForm, tm: [0, 1].map(t => teamWire(comp ? comp[t ? 'b' : 'a'] : t === hostTeam() ? myCardTeam() : netTeam)), cp: comp ? 1 : 0, nm: P.map(p => nameOf(p, true)), sq: P.map(p => (p.sq ? [p.sq, p.ovr | 0, (p.ab || []).map(a => ABK().indexOf(a))] : 0)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Vært'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
   }
   function myTeam() { const e = roster.find(r => r[0] === myPeer); return e && P[e[1]] ? P[e[1]].team : null; }
@@ -7147,6 +7178,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (Array.isArray(s.tf)) teamForm = [Number(s.tf[0]) | 0, Number(s.tf[1]) | 0];
     if (Array.isArray(s.hs)) hostInfo = [Number(s.hs[0]) | 0, cleanName(s.hs[1]) || 'Vært'];
     if (Array.isArray(s.nm)) s.nm.forEach((n, i) => { if (P[i]) P[i].name = cleanName(n); });
+    if (Array.isArray(s.sq)) s.sq.forEach((r, i) => { const p = P[i]; if (!p) return; // the players' own names, ratings and evner, for the name under the man on the ball
+      if (Array.isArray(r)) { p.sq = String(r[0] || '').replace(/[^\p{L}\p{N} .'-]/gu, '').slice(0, 18); p.ovr = Math.max(0, Math.min(99, Number(r[1]) | 0)); p.ab = (Array.isArray(r[2]) ? r[2] : []).map(k => ABK()[k | 0]).filter(Boolean).slice(0, 2); }
+      else { p.sq = ''; p.ovr = 0; p.ab = null; } });
     if (Array.isArray(s.pf)) for (const e of s.pf.slice(0, 24)) if (Array.isArray(e) && typeof e[0] === 'string' && e[0] !== myPeer) seeCard(e[0], e.slice(1));
     if (Array.isArray(s.lr)) lobbyLr = s.lr.map(v => Number(v) | 0);
     if (Array.isArray(s.rx)) for (const r of s.rx) { if (Array.isArray(r) && Number(r[0]) > rxGuestSeen) { rxGuestSeen = Number(r[0]); if (state === 'play' || state === 'end') addRx(Number(r[1]) | 0, Number(r[2]) | 0); } }
@@ -7591,13 +7625,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     else if (p.ctrl === 'L1') tag = 'P2';
     else if (p.ctrl === 'ME') tag = 'DU';
     else if (p.ctrl === 'R' || p.ctrl === 'RV' || (mode === 'guest' && p.name)) tag = (mode === 'guest' ? p.name : nameOf(p)) || '•';
-    if (tag && p.ovr && (p.ctrl === 'L0' || p.ctrl === 'L1')) tag += ' ' + p.ovr; // your man's rating, as in FIFA
+    if (tag && p.ovr && (p.ctrl === 'L0' || p.ctrl === 'L1' || p.ctrl === 'ME')) tag += ' ' + p.ovr; // your man's rating, as in FIFA
     if (tag && !down) {
       ctx.font = `700 ${tag.length > 3 ? 13 : 15}px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
       ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillText(tag, p.x + 1, p.y - PRAD - 5);
       ctx.fillStyle = isMine(p) ? col.gold : col.chalk; ctx.fillText(tag, p.x, p.y - PRAD - 6);
     }
-    if (ball.owner === p.i && p.sq && !down && mode !== 'guest' && state === 'play' && !shootoutOn()) { // the man on the ball: his name under him, so you get to know your players
+    if (ball.owner === p.i && p.sq && !down && state === 'play' && !shootoutOn()) { // the man on the ball: his name under him, so you get to know your players
       const nm = p.sq.split(' ').pop() + (p.ab && p.ab.length ? ' ' + abIcons(p) : ''), ny = p.y + PRAD + (isMine(p) && p.stamina < 0.99 ? 15 : 5);
       ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(nm, p.x + 1, ny + 1); ctx.fillStyle = 'rgba(244,247,242,0.92)'; ctx.fillText(nm, p.x, ny);
