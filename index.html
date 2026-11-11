@@ -2905,8 +2905,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
 
   // ---------- Actions ----------
+  const HEAVY_T = 0.55; // how long a knock-on first touch stays away from his feet
   function grab(p) {
     const prev = ball.owner;
+    const inPass = prev !== p.i && ball.last && ball.last.pass && !ball.last.lp && ball.last.team === p.team, rv0 = Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
     if (prev !== p.i) p.asBy = ball.last && ball.last.pass && ball.last.team === p.team && ball.lastIdx !== p.i ? ball.lastIdx : -1; // who set him up, for the assist
     if (ball.last && ball.last.off && ball.last.to === p.i && ball.last.team === p.team) { // received while offside
       const x = p.x, y = p.y; p.recv = 0; restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return;
@@ -2921,11 +2923,19 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (size > 1 && p.k === 0 && !pen && !so && inBox(p.team, p.x, p.y)) { p.hands = 5; p.think = 0; } // the keeper has it in his hands
     if (prev !== ball.owner) {
       sfx.trap(); onPossession(p);
+      p.heavy = 0; p.touch = 0;
+      let knock = false;
       if (isHuman(p) && !(p.frozen > 0)) { // directional first touch (as in FIFA): the ball is taken the way you push the stick
         const i = p.ctrl === 'L0' ? localInput(0) : p.ctrl === 'L1' ? localInput(1) : p.ctrl === 'R' ? (remoteIn.get(p.peer) || ZERO) : null;
         const l = i ? Math.hypot(i.x, i.y) : 0;
         if (l > 0.3) { p.fx = i.x / l; p.fy = i.y / l; ball.x = p.x + p.fx * (REACH - 3); ball.y = p.y + p.fy * (REACH - 3); }
+        knock = !!i && l > 0.3 && (i.adv ? !!i.c : (i.sprint || l > 0.97)); // sprint held as it arrives: he knocks it on into his stride
+      } else if (!(p.frozen > 0)) { // the computer: a hard pass is harder to kill, and a good passer has the better touch
+        const pl = lvOf(p), tech = hasAb(p, 'tryl') || hasAb(p, 'dirigent') ? 0.25 : pl ? Math.max(0.4, 1 - pl.pas * 0.12) : 1;
+        knock = rv0 > 430 && Math.random() < ((rv0 - 430) / 600 + (p.sprint ? 0.15 : 0)) * tech;
       }
+      // a knock-on first touch: the ball runs a couple of metres ahead of him. Quicker away if there is room, easy to nick if there is not
+      if (knock && inPass && !(p.hands > 0) && !setp && !pen && !so) { p.heavy = HEAVY_T; ball.stealCd = 0; }
     }
   }
   function release(p, vx, vy, nopick) {
@@ -3029,6 +3039,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (pw > 0.8) shake = Math.max(shake, 5);
     if (localHuman(p)) buzz(Math.round(18 + pw * 32));
   }
+  const calling = p => !!p.call || (p.ctrl === 'ai' && p.run > 0 && ball.owner !== p.i && !(p.stun > 0)); // on a run in behind, arm out for the ball
   function passTarget(p, dx, dy, reach = 0) { // reach 0..1: the longer AFLEVER is held, the further away the man it picks (as in FIFA)
     const mates = P.filter(q => q.team === p.team && q !== p && on(q));
     if (!mates.length) return null;
@@ -3041,7 +3052,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const cos = (vx * dx + vy * dy) / d;
       // the longer you hold, the further out the man it looks for (tap: the nearest one that way)
       const want = 120 + reach * 620;
-      const s = cos * 2.6 - Math.abs(d - want) / (380 + reach * 120) - (isOffside(q, p) ? 0.6 : 0) - (cos < 0.2 ? 1 : 0);
+      const s = cos * 2.6 - Math.abs(d - want) / (380 + reach * 120) - (isOffside(q, p) ? 0.6 : 0) - (cos < 0.2 ? 1 : 0) + (calling(q) && cos > 0.5 ? 0.45 : 0); // a man making a run is easier to find
       if (s > bs) { bs = s; best = q; }
     }
     return best;
@@ -3107,6 +3118,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     release(p, p.fx * speed, p.fy * speed, 0.3);
     ball.last = { team: p.team, pass: true, to: q.i, off, pt };
     q.recv = 1.8; // the receiver runs to meet the ball by himself for a moment
+    // pass and go: a midfielder or forward who lays it off in their half keeps running, ready for it back
+    if (size >= 5 && !setp && !isKeeper(p) && formOf(p)[0] > 0.35 && (q.x - p.x) * dir > -60 && d < 330 && (p.x - CX) * dir > -120) { p.run = 1.5; p.runH = true; }
     if (stats) stats.pa[p.team]++;
     if (p.ms) p.ms.pa++;
     ball.gk = 'pass'; ball.fresh = false;
@@ -3807,7 +3820,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           let [x, y] = shape(0.06);
           const near = mates.filter(q => q !== o && q.k !== 0).sort((a, b) => Math.hypot(a.x - o.x, a.y - o.y) - Math.hypot(b.x - o.x, b.y - o.y));
           const rank = near.indexOf(p);
-          if (rank >= 0 && rank < 2 && !setp) { // the two nearest offer: find open grass 120-170 from the ball, a bit forward
+          if (rank >= 0 && rank < 2 && !setp && !(p.run > 0)) { // the two nearest offer: find open grass 120-170 from the ball, a bit forward
             let best = null, bsc = -1e9;
             const ol = offsideLine(p.team), prs = (o.plan && o.plan.shT > 0) || foeD0(o, foes) < 70; // he's under pressure: the nearest man comes short, behind or square, to give him the way out
             for (let a = 0; a < 10; a++) {
@@ -3827,13 +3840,22 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
             const sideOfBall = Math.sign(o.y - CY) === Math.sign(y - CY) && Math.abs(y - CY) > (PB - PT) * 0.22;
             if (p.run > 0) { // making a run in behind: sprint at goal and ask for the through ball
               p.run -= dt;
-              x = p.x + dir * 160; y = p.y + (CY - p.y) * 0.25;
+              // where to: a wide man goes down his flank, the others go for the widest gap between the defenders near them
+              const wide = Math.abs(homeOf(p).y - CY) > (PB - PT) * 0.27;
+              let gy = wide ? (p.y < CY ? PT + 75 : PB - 75) : p.y + (CY - p.y) * 0.25;
+              if (!wide) {
+                const ln = foes.filter(f => f.k !== 0 && Math.abs(f.x - ol) < 90).sort((a, b) => a.y - b.y); let bg = -1e9;
+                for (let k = 0; k + 1 < ln.length; k++) { const gap = ln[k + 1].y - ln[k].y, my = (ln[k].y + ln[k + 1].y) / 2, sc = Math.min(gap, 200) - Math.abs(my - p.y) * 0.8 - Math.abs(my - CY) * 0.2; if (gap > 70 && sc > bg) { bg = sc; gy = my; } }
+              }
+              x = p.x + dir * 160; y = p.y + Math.max(-110, Math.min(110, gy - p.y));
+              // he bends the run along the last line instead of straying offside, and goes when the ball is played
+              if (p.runH && size >= 5 && !INDOOR() && (x - ol) * dir > -10 && (ol - o.x) * dir > 0) { x = ol - dir * 10; y = gy; }
               if ((goalX - p.x) * dir < 90 || p.run <= 0) p.run = -2.5 - Math.random() * 2; // done: back to the line, rest a bit
             } else {
               if (p.run < 0) p.run = Math.min(0, p.run + dt);
               const onLine = (ol - p.x) * dir < 300 && (ol - p.x) * dir > -20 && (goalX - ol) * dir > 140, carrierFree = foeD0(o, foes) > 55 && (o.fx * dir > 0 || o.ctrl !== 'ai'); // room behind the line to run into
               // a forward on the last line times a run when the man on the ball has his head up
-              if (u0 > 0.7 && p.run === 0 && onLine && carrierFree && fwd > L * 0.25 && Math.random() < (1 + iq) * dt) p.run = 1.4 + Math.random() * 0.6;
+              if (u0 > 0.7 && p.run === 0 && onLine && carrierFree && fwd > L * 0.25 && mates.filter(q => q.run > 0).length < 2 && Math.random() < (1 + iq) * dt) { p.run = 2 + Math.random() * 0.8; p.runH = Math.random() < 0.6 + iq * 0.5; }
               else if (u0 < 0.4 && sideOfBall && fwd > L * 0.5 && size >= 7) { x = ownX + dir * Math.min(L * 0.78, (o.x - ownX) * dir + 60); y = y < CY ? PT + 40 : PB - 40; } // the full back overlaps on the ball side
               else if (u0 > 0.45 && u0 < 0.85 && Math.sin(clock * 0.8 + p.i * 2.1) > 0.6) { x += dir * 120; x = dir > 0 ? Math.min(x, ol - 8) : Math.max(x, ol + 8); } // a midfielder steps into the space behind the forwards
             }
@@ -4052,7 +4074,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         }
       }
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
-      p.tcd -= dt; p.swcd -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt;
+      p.tcd -= dt; p.swcd -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
       const has = ball.owner === p.i;
       const mag = Math.hypot(inp.x, inp.y);
       p.sprint = (inp.adv ? !!inp.c : (inp.sprint || mag > 0.97)) && p.stamina > 0.04 && mag > 0.2 && p.tackle <= 0;
@@ -4064,7 +4086,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (p.sprint && p.ms) p.ms.spr += dt;
       if (p.sprint && p.turbo <= 0) { const mo = hasAb(p, 'motor') ? 0.6 : 1; p.stamina = Math.max(0, p.stamina - (ai ? 0.12 : 0.14) * mo * dt); p.fat = Math.min(0.4, p.fat + 0.004 * mo * dt); }
       else p.stamina = Math.min(1 - p.fat, p.stamina + (hasAb(p, 'motor') ? 0.25 : 0.18) * dt);
-      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
+      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has && !(p.heavy > 0) ? 0.92 : 1) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
       if (p.sprint && p.ab && hasAb(p, 'raket') && Math.hypot(p.vx, p.vy) > MAXV * 1.25 && performance.now() - (p.abAt || 0) > 14000) abPop(p, 'raket');
 
       if (mag > 0.2 && p.tackle <= 0 && !(p.dive > 0)) {
@@ -4264,8 +4286,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (o.stun > 0) { ball.owner = -1; }
       else {
         // touches: close control when you jog, the ball knocked a little ahead when you sprint (easier to nick off you)
-        o.touch = (o.touch || 0) + dt * (o.sprint ? 8 : 6);
-        const off = REACH - 3 + (o.sprint ? 5 + 5 * Math.max(0, Math.sin(o.touch)) : Math.hypot(o.vx, o.vy) > 60 ? 1.5 * Math.sin(o.touch) : 0);
+        // each touch plays it ahead and he runs onto it: long strides when he sprints, small taps when he jogs
+        const mvO = Math.hypot(o.vx, o.vy), tpo = mvO / (o.sprint ? 105 : 70);
+        o.touch = ((o.touch || 0) + dt * tpo) % 1;
+        const off = REACH - 3 + (mvO > 60 && !(o.frozen > 0) && !(o.hands > 0) ? (o.sprint ? 14 : 4.5) * (1 - o.touch) : 0) + (o.heavy > 0 ? 24 * (o.heavy / HEAVY_T) : 0);
         const tx = o.x + o.fx * off, ty = o.y + o.fy * off;
         const k = Math.min(1, 28 * dt);
         ball.x += (tx - ball.x) * k; ball.y += (ty - ball.y) * k;
@@ -6993,7 +7017,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const o = {
       m: matchNo, st, z: size, c: Math.ceil(clock * 10), g: golden ? 1 : 0, at: addT ? addT.mins : 0, sc: score, bn: banner, fl: flash ? flash.text : '', sp: setp ? setp.r : 0, sw: ball.rs === 'kick' ? 0 : spState(), rc: setp && setp.place && setp.t < setp.place ? 1 : 0,
       b: [RND(ball.x), RND(ball.y), ball.owner, RND(ball.z)],
-      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0) | (p.dive > 0 || p.lay > 0 ? 32 : 0) | (keeperKick(p) ? 64 : 0)]),
+      p: P.map(p => [RND(p.x), RND(p.y), RND(p.fx * 100), RND(p.fy * 100), RND(p.hold * 100), RND(p.stamina * 100), (p.stun > 0 ? 1 : 0) | (p.tackle > 0 ? 2 : 0) | (p.superShot ? 4 : 0) | (p.turbo > 0 ? 8 : 0) | (p.windup > 0 ? 16 : 0) | (p.dive > 0 || p.lay > 0 ? 32 : 0) | (keeperKick(p) ? 64 : 0) | (calling(p) ? 128 : 0)]),
       ro: roster.map(r => [r[0], r[1], names.get(r[0]) || '', lobbyReady.get(r[0]) ? 1 : 0]),
       // slow-changing fields go every 15th message (and always in the lobby)
       pu: item ? [Object.keys(ITEMS).indexOf(item.type), RND(item.x), RND(item.y)] : 0, bb: BRAD > BALL_R ? 1 : 0,
@@ -7121,7 +7145,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           p.x += (q[0] - p.x) * k; p.y += (q[1] - p.y) * k;
           p.fx = (Number(q[2]) || 0) / 100; p.fy = (Number(q[3]) || 0) / 100;
           p.hold = (Number(q[4]) || 0) / 100; p.stamina = (Number(q[5]) || 0) / 100;
-          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0; p.windup = f & 16 ? 0.1 : 0; p.lay = f & 32 ? 0.1 : 0; p.hands = f & 64 ? 1 : 0;
+          const f = Number(q[6]) || 0; p.stun = f & 1 ? 0.1 : 0; p.tackle = f & 2 ? 0.1 : 0; p.superShot = !!(f & 4); p.turbo = f & 8 ? 1 : 0; p.windup = f & 16 ? 0.1 : 0; p.lay = f & 32 ? 0.1 : 0; p.hands = f & 64 ? 1 : 0; p.call = f & 128 ? 1 : 0;
           if (p.tackle && Math.random() < 0.5) dust(p.x, p.y);
         });
       }
@@ -7321,7 +7345,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     }
     // arms swing against the legs; a keeper at full stretch reaches out
     for (const s of [-1, 1]) {
-      const sy = s * 11 * W, hx = sliding ? (p.dive > 0 ? 6 : -9) : -sw * 8 * s + 1, hy = s * (sliding && p.dive > 0 ? 21 : 16.5) * (0.7 + 0.3 * W);
+      const ask = !sliding && !down && s > 0 && !p.ref && calling(p); // on a run: one arm out in front, showing where he wants it
+      const sy = s * 11 * W, hx = ask ? 21 : sliding ? (p.dive > 0 ? 6 : -9) : -sw * 8 * s + 1, hy = ask ? s * 9 :  s * (sliding && p.dive > 0 ? 21 : 16.5) * (0.7 + 0.3 * W);
       const longS = keeper || L.sleeve;
       ctx.strokeStyle = longS ? shirt : skin; ctx.lineWidth = 4.5; ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(hx, hy); ctx.stroke();
       if (!longS) { ctx.strokeStyle = shirt; ctx.lineWidth = 5.6; ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(hx * 0.3, sy + (hy - sy) * 0.3); ctx.stroke(); } // short sleeve
