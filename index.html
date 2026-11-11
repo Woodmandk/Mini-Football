@@ -503,6 +503,13 @@ table.st tr.me td { color: var(--gold); }
 #vs .vsm i { display: grid; place-items: center; width: calc(64px * var(--k, 1)); height: calc(64px * var(--k, 1)); margin: 0 auto; border-radius: 50%; background: #0b1510; border: 3px solid var(--gold); color: var(--gold); font-weight: 800; font-size: calc(22px * var(--k, 1)); font-style: italic; box-shadow: 0 6px 24px rgba(0,0,0,.6); }
 #vs .vsinfo { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center; font-size: calc(12px * var(--k, 1)); font-weight: 700; color: #fff; text-shadow: 0 1px 4px #000; letter-spacing: .08em; text-transform: uppercase; opacity: 0; transition: opacity .4s .5s; pointer-events: none; }
 #vs.in .vsinfo { opacity: .9; }
+#vs.md { cursor: default; } #vs.md .vsinfo { bottom: auto; top: 4%; } #vs.md .vss { padding-bottom: calc(120px * var(--k, 1)); } #vs.md .vsm { top: 34%; }
+.vsmd { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: grid; grid-template-columns: 1.1fr 1.4fr auto; gap: 12px; align-items: center; padding: 10px max(14px, env(safe-area-inset-left)) calc(10px + env(safe-area-inset-bottom, 0px)); background: rgba(6,14,10,0.93); border-top: 2px solid var(--gold); color: var(--chalk); text-align: left; zoom: var(--k, 1); }
+.vsmd[hidden] { display: none; }
+.mdtxt { display: flex; flex-direction: column; gap: 3px; font-size: 12px; line-height: 1.3; } .mdtxt b { font-size: 14px; color: var(--gold); } #mdWarn { color: #ff9a8f; font-weight: 700; } #mdWarn:empty { display: none; }
+.mdtac { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; } .mdtac label { font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: block; margin: 0 0 1px 4px; }
+.mdtac .seg { padding: 3px; } .mdtac .seg button { padding: 5px 2px; font-size: 11.5px; min-height: 0; }
+#mdGo { min-height: 0; padding: 14px 18px; font-size: 15px; white-space: nowrap; }
 /* klubmærke */
 .crestbox svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 3px 5px rgba(0,0,0,.45)); }
 #homeClub { display: flex; align-items: center; gap: 8px; min-height: 0; padding: 4px 12px 4px 6px; flex: 0 1 auto; min-width: 0; text-align: left; }
@@ -660,6 +667,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     <div class="vss vsa"><div class="crestbox" id="vsC0"></div><div class="vsn" id="vsN0"></div><div class="vsr" id="vsR0"></div><div class="vsst" id="vsS0"></div></div>
     <div class="vss vsb"><div class="crestbox" id="vsC1"></div><div class="vsn" id="vsN1"></div><div class="vsr" id="vsR1"></div><div class="vsst" id="vsS1"></div></div>
     <div class="vsm"><i>VS</i></div><div class="vsinfo" id="vsInfo"></div>
+    <div class="vsmd" id="vsMd" hidden><div class="mdtxt"><b id="mdOpp"></b><span id="mdTip"></span><span id="mdWarn"></span></div><div class="mdtac" id="mdTac"></div><button id="mdGo" class="go">Spark i gang ›</button></div>
   </div>
   <button id="pauseBtn" class="pausebtn" hidden aria-label="Pause">II</button>
   <button id="hlClose" class="hlclose" hidden>Luk ✕</button>
@@ -7867,6 +7875,24 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('vsInfo').textContent = [mode === 'cpu' || mode === 'two' ? stadName() : '', `${size} mod ${size}`, mode === 'guest' ? '' : `${matchMins()} min`, wx ? WX_NAME(wx) : '', quick ? 'Rangeret' : comp ? (comp.type === 'career' ? 'Karriere' : 'Pokal') : kind === 'season' ? 'Sæson' : ''].filter(Boolean).join(' · ');
     el.className = ''; el.hidden = false; void el.offsetWidth; el.classList.add('in');
     vsT = 3.4; el.onclick = () => { if (vsT > 0.3) vsT = 0.3; };
+    const md = mode === 'cpu' && !drill && P.some(p => p.team === 0 && p.sqi >= 0); // match day against the computer with your own squad: see them, set your tactics, then kick off
+    $('vsMd').hidden = !md;
+    if (md) {
+      el.classList.add('md'); el.onclick = null; vsT = 900;
+      const sty = teamSty[1] && STYLES[teamSty[1]] ? teamSty[1] : null, TIP = { pres: 'De presser højt. Lange bolde over dem giver plads.', kontra: 'De venter på kontra. Hold igen bagtil og vær tålmodig.', kort: 'De holder bolden. Højt pres kan tvinge dem til fejl.', kant: 'De går på kanterne. Stå bredt og luk for indlæggene.', angreb: 'De sender mange frem. Der er plads bag dem på kontra.', mur: 'De parkerer bussen. Spil bredt og vent på hullet.' };
+      $('mdOpp').textContent = sty ? `${tn(1)}: ${STYLES[sty].n}` : tn(1);
+      $('mdTip').textContent = sty ? TIP[sty] : 'Et hold uden fast stil. Spil jeres eget spil.';
+      const tired = P.filter(p => p.team === 0 && p.sqi >= 0 && p.fit0 > 0.16).map(p => (p.sq || '').split(' ').pop());
+      $('mdWarn').textContent = (friendly ? 'Træningskamp. ' : '') + (tired.length ? `Trætte ben: ${tired.slice(0, 3).join(', ')}${tired.length > 3 ? ' +' + (tired.length - 3) : ''}.` : '');
+      const T = $('mdTac'), tac = loadMT().tac, NAME = { m: 'Spillestil', pr: 'Pres', w: 'Bredde', pt: 'Afleveringer' }; T.textContent = '';
+      for (const k of ['m', 'pr', 'w', 'pt']) {
+        const box = document.createElement('div'), lb = document.createElement('label'), sg = document.createElement('div'); lb.textContent = NAME[k]; sg.className = 'seg';
+        TAC_TXT[k].forEach((t, v) => { const b = document.createElement('button'); b.textContent = t; b.setAttribute('aria-pressed', String(tac[k] === v));
+          b.onclick = e => { e.stopPropagation(); tac[k] = v; saveMT(); teamTac[0] = tac; [...sg.children].forEach((c, j) => c.setAttribute('aria-pressed', String(j === v))); sfx.kick(0.2); }; sg.appendChild(b); });
+        box.append(lb, sg); T.appendChild(box);
+      }
+      $('mdGo').onclick = e => { e.stopPropagation(); if (vsT > 0.3) vsT = 0.3; };
+    }
     noise(0.35, 0.25, 'bandpass', 900, 1.2); tone(196, 0.5, 'sawtooth', 0.04); tone(294, 0.5, 'sawtooth', 0.03, 120);
   }
   function frame(now) {
