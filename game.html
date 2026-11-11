@@ -3182,12 +3182,14 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (head) { ball.z = 30; ball.vz = -40; ball.last.head = true; ball.last.ks = Math.random() < (hasAb(p, 'luft') ? 0.3 : 0.55); abPop(p, 'luft'); flash = { text: 'Hovedstød!', t: 0.7 }; }
     else { ball.z = 4; ball.vz = 120; flash = { text: 'Volley!', t: 0.7 }; }
   }
+  // how far the ball is from the carrier's feet right now (0..1): just after a touch at full sprint, or a heavy first touch, it is there to be won
+  const exposed = o => o.skill > 0 ? 0 : o.heavy > 0 ? 1 : Math.hypot(o.vx, o.vy) > 60 ? (o.sprint ? 1 : 0.45) * (1 - (o.touch || 0)) : 0.25;
   function standTackle(p, o) { // as in FIFA: a poke at the ball instead of a slide
     if (p.tcd > 0 || p.recover > 0 || (setp && setp.team !== p.team)) return;
     p.tcd = 0.55; p.fx = (o.x - p.x) / (Math.hypot(o.x - p.x, o.y - p.y) || 1); p.fy = (o.y - p.y) / (Math.hypot(o.x - p.x, o.y - p.y) || 1);
     const rear = rearOf(p, o);
     if (rear > 0.5) { p.tdx = p.fx; p.tdy = p.fy; tackleBody(p, o); return; } // through the back of him: that is a foul
-    const chance = 0.32 + (o.sprint ? 0.2 : 0) + (rear < -0.3 ? 0.05 : 0) + ((lvOf(p) && lvOf(p).def) || 0) * 0.02 - (o.ctrl === 'ai' ? (aiD(o.team).iq || 0) * 0.15 : 0) + (hasAb(p, 'mur') ? 0.16 : 0) - (hasAb(o, 'bamse') ? 0.12 : 0);
+    const chance = 0.14 + exposed(o) * 0.55 + (rear < -0.3 ? 0.08 : 0) - (o.plan && o.plan.shT > 0 ? 0.12 : 0) + ((lvOf(p) && lvOf(p).def) || 0) * 0.02 - (o.ctrl === 'ai' ? (aiD(o.team).iq || 0) * 0.15 : 0) + (hasAb(p, 'mur') ? 0.16 : 0) - (hasAb(o, 'bamse') ? 0.12 : 0);
     if (Math.random() < chance) { abPop(p, 'mur'); tackleWins(p); flash = { text: 'Bolden vundet', t: 0.6 }; }
     else { p.recover = 0.35; p.vx *= 0.3; p.vy *= 0.3; tone(220, 0.05, 'triangle', 0.06); } // missed: he is past you for a moment
   }
@@ -3280,6 +3282,18 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     ball.vx = dir * s * 0.3; ball.vy = side * s * 0.36; ball.vz = 170; ball.z = Math.max(ball.z, 4);
     ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.4;
     tone(150, 0.08, 'triangle', 0.14, -60); shake = Math.max(shake, 4);
+  }
+  function tipOver(p) { // fingertips: over the bar and behind for a corner
+    const dir = p.team ? -1 : 1, gx = p.team ? PR : PL, side = Math.sign(p.dvy || ball.y - p.y || 1);
+    ball.vx = -dir * Math.max(260, (Math.abs(ball.x - gx) + 20) / 0.4); ball.vy = side * 70; ball.z = Math.max(ball.z, BAR + 8); ball.vz = 300;
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.8;
+    tone(170, 0.07, 'triangle', 0.12, -40); shake = Math.max(shake, 3);
+  }
+  function spill(p) { // he gets his body behind it but can't hold it: a loose ball in the box
+    const dir = p.team ? -1 : 1, a = (Math.random() - 0.5) * 1.6;
+    ball.vx = dir * Math.cos(a) * 230; ball.vy = Math.sin(a) * 230; ball.vz = 150; ball.z = Math.max(ball.z, 6);
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.55; p.recover = Math.max(p.recover, 0.3);
+    tone(130, 0.08, 'triangle', 0.14, -50); shake = Math.max(shake, 4); crowd.ooh(true);
   }
   // ---------- Fouls, cards, penalties ----------
   const inBox = (team, x, y) => Math.abs(x - (team ? PR : PL)) < G.bd && Math.abs(y - CY) < G.bhw; // team's own penalty area
@@ -3916,6 +3930,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         if (o && !wait && dBall(p) < 70 - 12 * iq && p.tcd <= 0 && Math.random() < d.tackle * [0.8, 1, 1.3][T.pr] * dt) { // clever defenders wait until they are close enough to win it
           if (rear < 0.15 || Math.random() < 0.06 * (1 - iq)) out.tackle = true; // only slide from the front or side; a clumsy one sometimes goes through the back (a foul)
         }
+        // right up against him: a clever defender stays on his feet and pokes at it when the ball is away from the carrier's feet
+        if (o && o.team !== p.team && !wait && !out.tackle && p.tcd <= 0 && !(o.hands > 0) && !(o.frozen > 0) && Math.hypot(o.x - p.x, o.y - p.y) < REACH + 24 && rearOf(p, o) < 0.4 && Math.random() < d.tackle * (0.3 + iq) * exposed(o) * 1.6 * dt) out.poke = true;
       } else if (keeper) {
         const cd = o && o.team !== p.team ? Math.hypot(o.x - ownX, o.y - CY) : 1e9;
         const free = o && o.team !== p.team && !mates.some(m => m !== p && laneGap(o.x, o.y, ownX, CY, [m]) < 30); // nobody of ours between him and the goal
@@ -4142,6 +4158,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         else if (has && inp.lob) lob(p, inp.aim[0], inp.aim[1]);
         else if (has && inp.shoot) shoot(p, inp.shoot, inp.aim[0], inp.aim[1]);
         else if (has && inp.passTo) pass(p, inp.passTo, inp.through);
+        else if (!has && inp.poke) { const o = owner(); if (o && o.team !== p.team && ball.stealCd <= 0) standTackle(p, o); }
         else if (!has && inp.tackle && !(p.windup > 0) && p.tcd <= 0) p.windup = 0.35; // a short warning before the slide
         if (p.windup > 0) {
           p.windup -= dt;
@@ -4336,7 +4353,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         if (rd) abPop(p, 'laeser');
         if (rv < 760 || rd || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
           const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
-          if (save && (p.dive > 0 || dBall(p) > REACH) && sp2 > 700 && Math.random() < 0.8) parry(p); // at full stretch: tipped away
+          const shooter = P[ball.lastIdx], near = shooter && Math.hypot(shooter.x - p.x, shooter.y - p.y) < 300, stretch = p.dive > 0 || dBall(p) > REACH;
+          const ks = keeperSkill(p), rnd = Math.random();
+          if (save && stretch && sp2 > 700 && rnd < 0.8) { if (rnd < 0.3 && Math.abs(p.x - (p.team ? PR : PL)) < 130) tipOver(p); else parry(p); } // at full stretch: tipped over the bar for a corner, or palmed away
+          else if (save && !stretch && sp2 > 880 && near && rnd < 0.62 - ks * 0.5) spill(p); // too hot to hold from close in: it drops in front of him
           else if (p.tackle > 0) tackleWins(p); else grab(p);
           if (save && p.abSave) abPop(p, p.abSave, true);
           if (save) { flash = { text: 'Redning!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; if (p.ms) p.ms.sv = (p.ms.sv || 0) + 1; }
