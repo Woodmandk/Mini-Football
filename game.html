@@ -586,6 +586,9 @@ table.st tr.me td { color: var(--gold); }
 .mkopt { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: -4px 0 4px 40px; padding: 8px 10px; border-radius: 0 0 10px 10px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-top: 0; }
 .mkopt button { min-height: 0; padding: 7px 12px; font-size: 13px; } .mkopt span { font-size: 12px; color: var(--muted); flex: 1 1 100%; }
 .mkrow.out { border-color: #7fd3ff; }
+.stgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .stgrid .scbox { text-align: center; align-items: stretch; } .stgrid .fc { font-size: 34px; line-height: 1; } .stgrid .stars { color: var(--gold); letter-spacing: 2px; } .stgrid .scbox > span { font-size: 13px; } .stgrid .scbox > span.fc { font-size: 30px; } .stgrid .scbox { gap: 5px; }
+@media (max-width: 620px) { .stgrid { grid-template-columns: 1fr; } }
+.ctrow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; } .ctrow span { flex: 1; } .ctrow.warn { background: rgba(255,107,94,0.18); } .ctrow button { min-height: 0; padding: 7px 10px; font-size: 12px; width: auto; }
 .trgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; } .trgrid .scbox { align-items: stretch; text-align: center; min-width: 0; }
 .trgrid .pk { animation: none; margin: 2px auto; } .trcode { font-size: 36px; font-weight: 800; letter-spacing: 0.22em; color: var(--gold); text-align: center; }
 .trjoin { display: flex; gap: 8px; } .trjoin input { flex: 1; min-width: 0; text-align: center; font-size: 18px; } .trgrid input[type=range] { width: 100%; }
@@ -918,6 +921,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       <div class="facgrid" id="clFac"></div>
       <div class="cltab" id="clTrain"></div>
       <div class="cltab" id="clEco"></div>
+      <div class="cltab" id="clStaff"></div>
     </div>
   </div>
 
@@ -1702,6 +1706,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const L = loginCheck();
     if (L && L.first && !cfg.name) giftQ.push({ t: 'Velkommen!', p: 'Hvad skal du hedde? Dit navn står på dine spillere og ses af dem, du spiller med online. Du kan altid ændre det under Indstillinger.', ask: true });
     if (L) giftQ.push({ t: L.n > 1 ? `${L.n} dage i træk!` : L.first ? 'Din første belønning' : 'Velkommen tilbage!', p: (L.r === 'pk' ? 'Dagens belønning: en gratis Sølvpakke.' : `Dagens belønning: ${L.r} mønter.`) + ' Kom igen i morgen, så bliver den større. Dag 7 giver en pakke.', days: L.n });
+    try { for (const o of squadSweep()) giftQ.push({ t: o.ret ? 'Tak for alt' : 'Kontrakten udløb', p: o.ret ? `${o.n} har indstillet karrieren som ${o.age}-årig. Han siger tak til klubben og fansene.` : `${o.n} fik ikke en ny kontrakt og har forladt klubben. Hold øje med kontrakterne under Form på hver spiller.` }); } catch (_) {}
     if (giftQ.length && $('giftOv').hidden) giftNext();
     paintProg();
   }
@@ -5023,7 +5028,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     pr.coins += coins; saveProf(pr);
     let tp = 0;
     if ((me === 0 || me === 1) && kind !== 'pen') { tp = Math.round((4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0)) * (1 + 0.1 * facLv('tr')) * (own && friendly ? 1.5 : 1)); addTP(tp); }
-    if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Trætte ben: ' + tired.slice(0, 3).join(', ') + '. Giv dem en pause'; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Udvikling: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
+    if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Trætte ben: ' + tired.slice(0, 3).join(', ') + '. Giv dem en pause'; for (const nw of tired.news || []) extra = (extra ? extra + ' · ' : '') + nw; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Udvikling: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
     if (eco) extra = `Præmie +${eco.p}, tilskuere +${eco.g}` + (eco.s ? `, sponsor +${eco.s}` : '') + `, løn −${eco.w}` + (eco.short ? '. Der var ikke råd til hele lønnen: humøret falder' : '') + (eco.spEnd ? '. Sponsoraftalen er udløbet: vælg en ny under Klubben' : '') + (extra ? ' · ' + extra : '');
     if (own && friendly) extra = 'Træningskamp: ingen præmie og ingen løn' + (extra ? ' · ' + extra : '');
     rw.textContent = `${coins >= 0 ? '+' : '−'}${Math.abs(coins)} mønter` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
@@ -5709,9 +5714,41 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const tpPrice = v => 3 + Math.max(0, Math.floor((v - 45) / 5));
   const ovrTier = o => (o >= 85 ? 'elite' : o >= 75 ? 'gold' : o >= 65 ? 'silver' : 'bronze');
   const strOvr = str => 50 + str * 6; // the computer teams' rating, from their stars
+  // ---------- years and contracts: a year passes every YEAR matches with your own squad, a contract runs for a number of matches ----------
+  function nameH(n) { let h = 7; for (const ch of String(n)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; }
+  const YEAR = 12, CT_NEW = 25, CT_GONE = -3;
+  const ctOf = p => (p.ct == null ? 10 + nameH(p.n) % 16 : p.ct);
+  const ctCost = p => Math.max(20, Math.round(wageOf(p) * 8 / 5) * 5), ctAdd = p => ((p.age || 25) >= 32 ? 12 : CT_NEW);
+  function sqDrop(S, i) { // he leaves: the line-ups he started in are picked again
+    S.pl.splice(i, 1);
+    if (S.xi) for (const n in S.xi) { const x = S.xi[n] || []; if (x.includes(i)) delete S.xi[n]; else S.xi[n] = x.map(v => (v > i ? v - 1 : v)); }
+  }
+  function squadYear(S) { // after a real match: contracts run down, and now and then everyone is a year older
+    const news = [];
+    for (const p of S.pl) { p.ct = ctOf(p) - 1; }
+    const soon = S.pl.filter(p => p.ct <= 3 && p.ct > 0).map(p => p.n.split(' ').pop()), outC = S.pl.filter(p => p.ct <= 0).map(p => p.n.split(' ').pop());
+    for (const p of S.pl) if (p.ct <= 0) p.mor = clamp(morOf(p) - 8, 10, 100); // no contract: he is unhappy until you sort it out
+    if (outC.length) news.push('Uden kontrakt: ' + outC.slice(0, 3).join(', ') + '. Forlæng, ellers går de');
+    else if (soon.length) news.push('Kontrakt udløber snart: ' + soon.slice(0, 3).join(', '));
+    S.gm = (S.gm | 0) + 1;
+    if (S.gm % YEAR === 0) {
+      const old = [];
+      for (const p of S.pl) { p.age = (p.age || 24) + 1;
+        if (p.age >= 31) { const d = p.age >= 35 ? 2 : 1; p.spd = Math.max(40, p.spd - d); if (p.age >= 33) { const k = ['sht', 'pas', 'def'][nameH(p.n + p.age) % 3]; p[k] = Math.max(40, p[k] - 1); } old.push(p.n.split(' ').pop()); }
+        if (p.age >= 35 && (p.age >= 39 || nameH(p.n + 'r' + p.age) % 100 < (p.age >= 37 ? 70 : 35))) p.ret = 1; }
+      news.push('Et år er gået: alle er blevet et år ældre' + (old.length ? '. Alderen trykker ' + old.slice(0, 3).join(', ') : ''));
+    }
+    return news;
+  }
+  function squadSweep() { // back in the menu: the ones whose time is up say goodbye
+    const S = squadLoad(), out = [];
+    for (let i = S.pl.length - 1; i > 0 && S.pl.length > 11; i--) { const p = S.pl[i]; if (p.ret || (p.ct != null && p.ct <= CT_GONE)) { out.push({ n: p.n, ret: !!p.ret, age: p.age }); sqDrop(S, i); } }
+    if (out.length) { for (const p of S.pl) if (p.ret) delete p.ret; squadSave(S); }
+    return out;
+  }
   function squadLoad() {
     let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
-    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) if (!p.nat) p.nat = 'DK'; if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
+    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) { if (!p.nat) p.nat = 'DK'; if (!p.age) p.age = 19 + nameH(p.n) % 12; } if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
     // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
     const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
     const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
@@ -5840,7 +5877,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const g = { sht: (m.g || 0) * 0.5 + Math.min(m.sh || 0, 8) * 0.1, pas: Math.min(m.pa || 0, 25) * 0.035, def: Math.min(m.tk || 0, 8) * 0.22, spd: Math.min(m.spr || 0, 60) * 0.01 };
       g[POSMAIN[pl.pos]] += 0.25;
       for (const [k, nm] of SKILLS) {
-        gx[k] = (gx[k] || 0) + g[k] / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1); // a better training ground, and a talent who has not reached his potential, grow faster
+        gx[k] = (gx[k] || 0) + g[k] / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1); // a better training ground, and a talent who has not reached his potential, grow faster
         while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${nm} ${pl[k]}`); }
         gx[k] = Math.round(gx[k] * 100) / 100;
       }
@@ -5864,11 +5901,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     for (const p of P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) {
       if (p.team !== 0 || !(p.sqi >= 0) || !S.pl[p.sqi] || played.has(p.sqi)) continue;
       played.add(p.sqi); const pl = S.pl[p.sqi], m = p.ms || {};
-      pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - (10 + Math.min(8, (m.spr || 0) * 0.13)) * (hasAb(pl, 'motor') ? 0.7 : 1) * (easy ? 0.5 : 1)));
+      pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - (10 + Math.min(8, (m.spr || 0) * 0.13)) * (hasAb(pl, 'motor') ? 0.7 : 1) * (easy ? 0.5 : 1) * (1 - 0.1 * stLv('fy'))));
       pl.mor = clamp(Math.round(morOf(pl) + (res > 0 ? (easy ? 3 : 6) : res < 0 ? (easy ? 0 : -5) : 1) + Math.min(4, (m.g || 0) * 2)), 10, 100);
       if (pl.fit < 60) tired.push(pl.n.split(' ').slice(-1)[0]);
     }
     S.pl.forEach((pl, i) => { if (!played.has(i) && morOf(pl) > 45) pl.mor = morOf(pl) - 1; }); // the ones left out sulk a little
+    tired.news = easy ? [] : squadYear(S);
     S.ft = S.ft || Date.now(); squadSave(S);
     return tired;
   }
@@ -5882,6 +5920,26 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   const FAC_MAX = 5, FAC_COST = [200, 450, 900, 1600, 2600], FAC_LVL = [1, 2, 4, 6, 8], AK_DAYS = [0, 4, 3, 3, 2, 2];
   function clubLoad() { let C = null; try { C = JSON.parse(localStorage.getItem('mf-club') || 'null'); } catch (_) {} C = C && typeof C === 'object' ? C : {}; C.f = C.f || {}; return C; }
   function clubSave(C) { try { localStorage.setItem('mf-club', JSON.stringify(C)); } catch (_) {} }
+  // the staff (as in Top Eleven): three people you hire, each better one costs more per match
+  const STAFF = { tr: { n: 'Assistenttræner', i: '🧑‍🏫', d: l => `Spillerne udvikler sig ${l * 8} % hurtigere af kampe` }, fy: { n: 'Fysioterapeut', i: '🧑‍⚕️', d: l => `Kampe koster ${l * 10} % mindre form` }, sc: { n: 'Chefscout', i: '🕵️', d: l => `Scoutens ture er ${l * 15} % kortere` } };
+  const ST_MAX = 3, ST_COST = [150, 400, 900], ST_WAGE = 4;
+  const stLv = k => { try { return clamp(((clubLoad().st || {})[k] || {}).l | 0, 0, ST_MAX); } catch (_) { return 0; } };
+  const staffWage = () => { const st = clubLoad().st || {}; return Object.keys(STAFF).reduce((t, k) => t + clamp((st[k] || {}).l | 0, 0, ST_MAX) * ST_WAGE, 0); };
+  function staffPaint() {
+    const X = $('clStaff'); if (!X) return; X.textContent = '';
+    const C = clubLoad(), st = C.st || {}, g = document.createElement('div'); g.className = 'stgrid';
+    const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+    for (const k in STAFF) {
+      const d = STAFF[k], l = clamp((st[k] || {}).l | 0, 0, ST_MAX), box = el('div', 'scbox');
+      box.append(el('span', 'fc', d.i), el('b', '', d.n), el('span', 'stars', '★'.repeat(l) + '☆'.repeat(ST_MAX - l)));
+      box.append(el('span', '', l ? `${st[k].n} · ${d.d(l)}` : 'Stillingen er ledig'), el('span', 'sqnote', l < ST_MAX ? `Næste: ${d.d(l + 1)}. Løn ${(l + 1) * ST_WAGE} mønter pr. kamp.` : `Løn ${l * ST_WAGE} mønter pr. kamp.`));
+      const bt = el('button', l ? 'alt' : '', l >= ST_MAX ? 'Den bedste i faget' : `${l ? 'Hent en bedre' : 'Ansæt'} · ${ST_COST[l]} mønter`); bt.disabled = l >= ST_MAX;
+      bt.onclick = () => { const pr2 = loadProf(), C2 = clubLoad(), cur = clamp(((C2.st || {})[k] || {}).l | 0, 0, ST_MAX); if (cur >= ST_MAX) return; if (pr2.coins < ST_COST[cur]) { bt.textContent = `Mangler ${ST_COST[cur] - pr2.coins} mønter`; return; }
+        addCoins(-ST_COST[cur], 'stab'); C2.st = C2.st || {}; C2.st[k] = { l: cur + 1, n: `${pk1(FIRSTN)} ${pk1(LASTN)}` }; clubSave(C2); sfx.win(); buzz(30); staffPaint(); clubEcoPaint(); };
+      box.append(bt); g.appendChild(box);
+    }
+    X.append(g, el('p', 'sqnote', 'Staben får løn efter hver kamp med dit eget hold, ligesom spillerne.'));
+  }
   let facMemo = null;
   const facLv = k => { if (!facMemo) facMemo = clubLoad().f; return clamp(facMemo[k] | 0, 0, FAC_MAX); };
   const dayNo = () => Math.floor((Date.now() - new Date().getTimezoneOffset() * 60000) / 86400000);
@@ -5909,7 +5967,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const C = clubLoad(), lvl = pr.lvl || 1;
     const g = Math.round(GATE[stadOf(lvl)] * (1 + Math.min(5, pr.streak || 0) * 0.1)); // a winning team draws a crowd
     const s = C.sp && SPON[C.sp.id] ? SPON[C.sp.id].pay(C.sp.a, won, gf) : 0;
-    return { g, s, w: wagesAll() };
+    return { g, s, w: wagesAll() + staffWage() };
   }
   // training sessions: the whole squad works on one thing. It costs legs, and there are three a day.
   const TRAIN = { spd: ['Løb og spurt', '🏃', 'Fart'], sht: ['Afslutninger', '🎯', 'Skud'], pas: ['Pasningsspil', '🔁', 'Aflevering'], def: ['Forsvar og dueller', '🛡️', 'Forsvar'], rest: ['Restitution', '🧊', ''] };
@@ -6059,14 +6117,14 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const row = mktRow(c, 'Skriv kontrakt', bt => {
         const S2 = squadLoad(), C2 = clubLoad(); if (!C2.y) return;
         if (S2.pl.length >= SQ_MAX) { bt.textContent = 'Truppen er fuld: sælg en først'; return; }
-        const np = { ...C2.y, mor: 85 }; S2.pl.push(np); squadSave(S2); delete C2.y; clubSave(C2); sfx.win(); buzz(30); clubShow(); hubPaint();
+        const np = { ...C2.y, mor: 85, ct: CT_NEW + 5 }; S2.pl.push(np); squadSave(S2); delete C2.y; clubSave(C2); sfx.win(); buzz(30); clubShow(); hubPaint();
       }, 'yo');
       const no = document.createElement('button'); no.className = 'alt'; no.textContent = `Sælg +${sellOf(c)}`;
       no.onclick = () => { const C2 = clubLoad(); if (!C2.y) return; addCoins(sellOf(C2.y), 'salg'); delete C2.y; clubSave(C2); clubShow(); hubPaint(); };
       row.appendChild(no); Y.appendChild(row);
     } else if (facLv('ak')) { const d = Math.max(1, AK_DAYS[facLv('ak')] - (dayNo() - (C.yd || 0))), e = document.createElement('p'); e.className = 'sqnote'; e.textContent = `🌱 Akademiet arbejder. Næste talent om ${d} dag${d > 1 ? 'e' : ''}.`; Y.appendChild(e); }
-    clubTrainPaint(); clubEcoPaint();
-    subTabs($('clubOv'), [['Klub', ['clYouth', 'clFac']], ['Træning', ['clTrain']], ['Økonomi', ['clEco']]], 'club', $('clYouth'));
+    clubTrainPaint(); clubEcoPaint(); staffPaint();
+    subTabs($('clubOv'), [['Klub', ['clYouth', 'clFac']], ['Træning', ['clTrain']], ['Stab', ['clStaff']], ['Økonomi', ['clEco']]], 'club', $('clYouth'));
     paintCoins(); $('clubOv').hidden = false;
   }
   const fitCol = v => (v >= 75 ? '#59e38b' : v >= 55 ? '#ffd447' : '#ff6b5e');
@@ -6112,7 +6170,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (pr2.coins < price) { showToast(`Du mangler ${price - pr2.coins} mønter`); return false; }
     const card = arr[i]; if (!card || card.n !== c.n) return false;
     arr.splice(i, 1); mktSave(M2); addCoins(-price, 'køb');
-    const np = { ...card }; delete np.pr; delete np.deal; delete np.rej; np.mor = 80; S2.pl.push(np);
+    const np = { ...card }; delete np.pr; delete np.deal; delete np.rej; np.mor = 80; np.ct = CT_NEW; S2.pl.push(np);
     if (np.pos === 'MV' && ovr(np) > ovr(S2.pl[0])) { const k = S2.pl.length - 1; [S2.pl[0], S2.pl[k]] = [S2.pl[k], S2.pl[0]]; if (S2.xi) for (const n in S2.xi) S2.xi[n] = (S2.xi[n] || []).map(v => (v === 0 ? k : v === k ? 0 : v)); }
     squadSave(S2); sfx.win(); buzz(30); showToast(`${np.n} har skrevet under for ${price} mønter!`); mkOpen = ''; return true;
   }
@@ -6166,10 +6224,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const h = document.createElement('b'); h.textContent = sc && sc.res && sc.res.length ? 'Send ham ud igen (de gamle fund forsvinder)' : 'Hvad skal scouten lede efter?';
     const s1 = document.createElement('div'); s1.className = 'seg'; SC_POS.forEach(([k, n]) => { const b = document.createElement('button'); b.textContent = n; b.setAttribute('aria-pressed', scPos === k); b.onclick = () => { scPos = k; mktShow(); }; s1.appendChild(b); });
     const s2 = document.createElement('div'); s2.className = 'seg'; Object.keys(SCOUT).forEach(k => { const b = document.createElement('button'); b.textContent = `${SCOUT[k][1]} ${SCOUT[k][0]}`; b.setAttribute('aria-pressed', scKind === k); b.onclick = () => { scKind = k; mktShow(); }; s2.appendChild(b); });
-    const d = document.createElement('span'); d.className = 'sqnote'; d.textContent = `${SCOUT[scKind][4]}. Turen tager ${SCOUT[scKind][3]} ${SCOUT[scKind][3] === 1 ? 'time' : 'timer'}.`;
+    const d = document.createElement('span'); d.className = 'sqnote'; d.textContent = `${SCOUT[scKind][4]}. Turen tager ${stLv('sc') ? hm(SCOUT[scKind][3] * SCOUT_H * (1 - 0.15 * stLv('sc'))) : SCOUT[scKind][3] + (SCOUT[scKind][3] === 1 ? ' time' : ' timer')}.`;
     const go = document.createElement('button'); go.textContent = `Send scouten · ${SCOUT[scKind][2]} mønter`;
     go.onclick = () => { const pr2 = loadProf(), cost = SCOUT[scKind][2]; if (pr2.coins < cost) { go.textContent = `Mangler ${cost - pr2.coins} mønter`; return; }
-      addCoins(-cost, 'scout'); const M2 = mktLoad(); M2.sc = { pos: scPos, kind: scKind, t: Date.now(), dur: SCOUT[scKind][3] * SCOUT_H, res: null }; mktSave(M2); sfx.win(); showToast('Scouten er taget afsted'); mktShow(); };
+      addCoins(-cost, 'scout'); const M2 = mktLoad(); M2.sc = { pos: scPos, kind: scKind, t: Date.now(), dur: SCOUT[scKind][3] * SCOUT_H * (1 - 0.15 * stLv('sc')), res: null }; mktSave(M2); sfx.win(); showToast('Scouten er taget afsted'); mktShow(); };
     box.append(h, s1, s2, d, go); X.appendChild(box);
   }
   // Selling: take the quick money now, or put him on the list and wait for bids from other clubs (better the longer you wait).
@@ -6223,7 +6281,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       trSend();
     }
     if (tr.buy && o.sold === tr.buy && tr.buyP) { // the seller has let him go: he is yours now
-      const S = squadLoad(), np = { ...tr.buyP.p, mor: 80 }, pr = tr.buyP.pr;
+      const S = squadLoad(), np = { ...tr.buyP.p, mor: 80, ct: CT_NEW }, pr = tr.buyP.pr;
       tr.buy = 0; tr.buyP = null;
       if (S.pl.some(q => q.n === np.n)) np.n = (np.n + ' II').slice(0, 22);
       S.pl.push(np); squadSave(S); addCoins(-pr, 'køb'); sfx.win(); buzz(30); trSend(); hubPaint();
@@ -6472,7 +6530,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('sqFace').innerHTML = faceSVG(p); $('sqOvr').textContent = o; $('sqPosS').textContent = dpOf(p);
     $('sqName').value = p.n;
     const T = $('sqTabs'); T.textContent = '';
-    ['Træning', 'Evner', 'Form', 'Rolle'].forEach((t, k) => { const b = document.createElement('button'); b.textContent = t + (k === 2 && fitOf(p) < 60 ? ' ⚠' : ''); b.setAttribute('aria-pressed', String(sqTab === k)); b.onclick = () => { sqTab = k; sqRefresh(); }; T.appendChild(b); });
+    ['Træning', 'Evner', 'Form', 'Rolle'].forEach((t, k) => { const b = document.createElement('button'); b.textContent = t + (k === 2 && (fitOf(p) < 60 || ctOf(p) <= 3 || p.ret) ? ' ⚠' : ''); b.setAttribute('aria-pressed', String(sqTab === k)); b.onclick = () => { sqTab = k; sqRefresh(); }; T.appendChild(b); });
     $('sqStats').hidden = sqTab !== 0; $('sqAb').hidden = sqTab !== 1; $('sqForm').hidden = sqTab !== 2; $('sqRole').hidden = sqTab !== 3;
     const box = $('sqStats'); box.textContent = '';
     for (const [k, name] of SKILLS) {
@@ -6496,6 +6554,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const bt = document.createElement('button'); bt.textContent = f >= 100 ? 'Frisk' : `Massage · ${MASSAGE[0]} mønter`; bt.disabled = f >= 100; if (f >= 100) bt.className = 'alt';
       bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins}`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1] + 5 * facLv('kl')); squadSave(S2); sfx.win(); sqRefresh(); };
       row('Form', f, fitCol(f), bt); row('Humør ' + morFace(m), m, m >= 60 ? '#59e38b' : m >= 35 ? '#ffd447' : '#ff6b5e');
+      { const c = ctOf(p), r = document.createElement('div'), tx = document.createElement('span'), cb = document.createElement('button'); r.className = 'ctrow' + (c <= 3 ? ' warn' : '');
+        tx.textContent = c > 0 ? `📄 Kontrakt: ${c} kamp${c === 1 ? '' : 'e'} tilbage` : `📄 Uden kontrakt. Han går om ${Math.max(1, c - CT_GONE)} kamp${c - CT_GONE === 1 ? '' : 'e'}`;
+        cb.textContent = `Forlæng +${ctAdd(p)} · ${ctCost(p)} mønter`; if (c > 12) cb.className = 'alt';
+        cb.onclick = () => { const pr2 = loadProf(), S2 = squadLoad(), q = S2.pl[sqSel]; if (!q) return; const cost = ctCost(q); if (pr2.coins < cost) { cb.textContent = `Mangler ${cost - pr2.coins} mønter`; return; }
+          addCoins(-cost, 'kontrakt'); q.ct = Math.max(0, ctOf(q)) + ctAdd(q); q.mor = clamp(morOf(q) + 10, 10, 100); delete q.ret; squadSave(S2); sfx.win(); sqRefresh(); };
+        r.append(tx, cb); FB.appendChild(r);
+        if (p.ret) { const rt = document.createElement('p'); rt.className = 'sqnote'; rt.textContent = `Han er ${p.age} år og vil stoppe karrieren. En ny kontrakt får ham til at tage et år mere.`; FB.appendChild(rt); } }
       const sm = document.createElement('p'); sm.className = 'sqnote';
       sm.textContent = (f < 70 ? 'Træt: han er langsommere og bliver hurtigere flad. ' : 'Friske ben. ') + `Formen kommer igen af sig selv, og massage giver +${MASSAGE[1] + 5 * facLv('kl')}. ` + (m >= 85 ? 'Han er i hopla og spiller over evne.' : m < 35 ? 'Han er utilfreds og spiller under evne. Sejre og spilletid hjælper.' : 'Sejre, mål og spilletid løfter humøret.');
       FB.appendChild(sm);
