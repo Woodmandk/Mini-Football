@@ -548,6 +548,11 @@ table.st tr.me td { color: var(--gold); }
 .fac small { grid-column: 2 / -1; font-size: 11px; line-height: 1.25; } .fac small.nx { color: var(--muted); }
 .fac button { grid-column: 1 / -1; min-height: 0; padding: 6px 10px; font-size: 13px; margin-top: 4px; }
 .yh { font-size: 13px; color: var(--gold); }
+.cltab { display: flex; flex-direction: column; gap: 7px; text-align: left; } .cltab.tabhide, .facgrid.tabhide, #clYouth.tabhide { display: none; }
+.trgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 7px; }
+.trbtn { display: flex; align-items: center; gap: 9px; min-height: 0; padding: 8px 10px; text-align: left; font-size: 13px; line-height: 1.2; } .trbtn i { font-style: normal; font-size: 22px; } .trbtn small { display: block; font-size: 10.5px; opacity: .75; font-weight: 500; }
+.trmsg { margin: 0; padding: 7px 10px; border-radius: 10px; background: rgba(89,227,139,0.14); color: #b9f5cf; font-size: 12px; }
+.ecrow { display: flex; justify-content: space-between; gap: 12px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; } .ecrow b { text-align: right; } .ecrow.in b { color: #7dffa8; } .ecrow.out b { color: #ff9a8f; }
 .mklist { display: flex; flex-direction: column; gap: 6px; }
 .mkrow { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
 .mkrow.deal { border-color: var(--gold); } .mkrow.deal .nm b::after { content: ' · TILBUD'; color: var(--gold); font-size: 10px; }
@@ -678,7 +683,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       <div class="tabp" data-tab="hold" hidden>
         <button id="goMine" class="big tile hot"><i class="ic">📋</i>Holdet<small id="holdSub">Opstilling, træning, evner og form. Tryk på en spiller</small></button>
         <button id="goSquad" class="big tile alt" style="display:none"><i class="ic">💪</i>Trup og træning<small id="squadSub">Træn dine spillere med TP</small></button>
-        <button id="goClub" class="big tile alt"><i class="ic">🏟️</i>Klubben<small id="clubSub">Træningsanlæg, klinik, akademi og fanshop</small></button>
+        <button id="goClub" class="big tile alt"><i class="ic">🏟️</i>Klubben<small id="clubSub">Træning, økonomi og faciliteter</small></button>
         <button id="goMarket" class="big tile alt"><i class="ic">🤝</i>Transfermarked<small id="mktSub">Køb og sælg spillere. Nye hver dag</small></button>
         <button id="goTac" class="big tile alt"><i class="ic">🎨</i>Taktik og trøje<small>Holdnavn, farver, spillestil og pres</small></button>
       </div>
@@ -873,6 +878,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       <div class="clhead"><span class="clcr" id="clCrest"></span><div><b id="clName"></b><small id="clSub"></small></div></div>
       <div class="mklist" id="clYouth"></div>
       <div class="facgrid" id="clFac"></div>
+      <div class="cltab" id="clTrain"></div>
+      <div class="cltab" id="clEco"></div>
     </div>
   </div>
 
@@ -1293,9 +1300,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     paintTeamPickers();
     menuForm();
   }
-  function showSetup(m) {
-    setupMode = m;
-    $('setupTitle').textContent = { cpu: 'Mod computeren', two: '2 på én telefon', host: 'Opret online kamp' }[m];
+  let friendly = false; // a træningskamp: half the tired legs, no wages or gate, no prize, more TP
+  function showSetup(m, fr) {
+    setupMode = m; friendly = !!fr && m === 'cpu';
+    $('setupTitle').textContent = friendly ? 'Træningskamp' : { cpu: 'Mod computeren', two: '2 på én telefon', host: 'Opret online kamp' }[m];
     $('setupGo').textContent = m === 'host' ? 'Opret kamp ›' : 'Start kamp ›';
     segPaints.forEach(f => f()); setupVis(); page('pgSetup');
     subTabs($('pgSetup'), [['Kamp', ['coopBox', 'sizeBox', 'formBox', 'minsBox', 'serBox', 'kitBox']], ['Hold', ['teamBoxA', 'teamBoxB']], ['Regler', ['diffBox', 'wxBox', 'setupOpts']]], 'setup', $('pgSetup').querySelector('.setup'));
@@ -1676,7 +1684,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Tryk på en spiller for at se og træne ham`;
       { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; if (tr) $('holdSub').textContent = `${tr} i startopstillingen er trætte. Skift dem ud eller giv massage`;
         { const Cl = youthTick(), pc = loadProf(), can = Object.keys(FAC).some(k => (Cl.f[k] | 0) < FAC_MAX && (pc.lvl || 1) >= FAC_LVL[Cl.f[k] | 0] && pc.coins >= FAC_COST[Cl.f[k] | 0]); facMemo = Cl.f;
-          $('clubSub').textContent = Cl.y ? `Et nyt talent venter i akademiet: ${Cl.y.n} (${ovr(Cl.y)}, potentiale ${Cl.y.pot})` : can ? 'Du har råd til at bygge ud' : 'Træningsanlæg, klinik, akademi og fanshop'; $('goClub').classList.toggle('hot', !!Cl.y); }
+          $('clubSub').textContent = Cl.y ? `Et nyt talent venter i akademiet: ${Cl.y.n} (${ovr(Cl.y)}, potentiale ${Cl.y.pot})` : !Cl.sp ? 'Vælg en sponsor og træn holdet' : trainLeft(Cl) ? `${trainLeft(Cl)} træningspas tilbage i dag` : can ? 'Du har råd til at bygge ud' : 'Træning, økonomi og faciliteter'; $('goClub').classList.toggle('hot', !!Cl.y || !Cl.sp); }
         const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = Mk.l.length ? `${Mk.l.length} spillere i dag` + (dl ? ` · tilbud: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Udsolgt i dag. Nye spillere i morgen'; }
       $('freeSub').textContent = S.free.length ? `${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} klar til at blive åbnet!` : 'Fra sæsonpasset og daglige belønninger';
       $('goFree').classList.toggle('hot', !!S.free.length);
@@ -4814,11 +4822,22 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       while (pr.xp >= pr.lvl * 100) { pr.xp -= pr.lvl * 100; pr.lvl++; coins += 40 * pr.lvl; extra = (extra ? extra + ' · ' : '') + `Klubniveau ${pr.lvl}!` + (stadOf(pr.lvl) > stadOf(pr.lvl - 1) ? ` Jeres bane er udbygget: ${STAD[stadOf(pr.lvl)][0]}!` : ''); }
     }
     if (me === 0 || me === 1) coins = Math.round(coins * (1 + 0.08 * facLv('fan'))); // the fan shop sells more on match days
+    const own = me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host')); // a match with your own squad
+    let eco = null;
+    if (own && friendly) coins = got.length * 50; // a training match pays nothing (new trophies still do)
+    else if (own) { // the match account: prize, gate and sponsor in, wages out
+      eco = matchEco(pr, win === me, score[me]);
+      eco.p = coins; coins = Math.max(-pr.coins, coins + eco.g + eco.s - eco.w);
+      if (eco.p + eco.g + eco.s - eco.w < -pr.coins) { eco.short = true; const S9 = squadLoad(); for (const q of S9.pl) q.mor = Math.max(10, morOf(q) - 3); squadSave(S9); }
+      const C9 = clubLoad(); C9.last = { p: eco.p, g: eco.g, s: eco.s, w: eco.w }; if (C9.sp) { C9.sp.left--; if (C9.sp.left <= 0) { delete C9.sp; eco.spEnd = true; } } clubSave(C9);
+    }
     pr.coins += coins; saveProf(pr);
     let tp = 0;
-    if ((me === 0 || me === 1) && kind !== 'pen') { tp = Math.round((4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0)) * (1 + 0.1 * facLv('tr'))); addTP(tp); }
-    if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Trætte ben: ' + tired.slice(0, 3).join(', ') + '. Giv dem en pause'; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Udvikling: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
-    rw.textContent = `+${coins} mønter` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
+    if ((me === 0 || me === 1) && kind !== 'pen') { tp = Math.round((4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0)) * (1 + 0.1 * facLv('tr')) * (own && friendly ? 1.5 : 1)); addTP(tp); }
+    if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Trætte ben: ' + tired.slice(0, 3).join(', ') + '. Giv dem en pause'; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Udvikling: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
+    if (eco) extra = `Præmie +${eco.p}, tilskuere +${eco.g}` + (eco.s ? `, sponsor +${eco.s}` : '') + `, løn −${eco.w}` + (eco.short ? '. Der var ikke råd til hele lønnen: humøret falder' : '') + (eco.spEnd ? '. Sponsoraftalen er udløbet: vælg en ny under Klubben' : '') + (extra ? ' · ' + extra : '');
+    if (own && friendly) extra = 'Træningskamp: ingen præmie og ingen løn' + (extra ? ' · ' + extra : '');
+    rw.textContent = `${coins >= 0 ? '+' : '−'}${Math.abs(coins)} mønter` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · Nyt trofæ: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
     rw.hidden = false;
   }
 
@@ -5624,13 +5643,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     let ch = false; for (const p of S.pl) if (p.fit != null && p.fit < 100) { p.fit = Math.min(100, Math.round((p.fit + mins / 4 * (1 + 0.25 * facLv('kl'))) * 10) / 10); if (p.fit >= 100) delete p.fit; ch = true; }
     S.ft = now; if (ch) squadSave(S);
   }
-  function squadAfter(res) { // after a match with your own squad: tired legs, and the mood follows the result
+  function squadAfter(res, easy) { // after a match with your own squad: tired legs, and the mood follows the result
     const S = squadLoad(), played = new Set(), tired = [];
     for (const p of P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) {
       if (p.team !== 0 || !(p.sqi >= 0) || !S.pl[p.sqi] || played.has(p.sqi)) continue;
       played.add(p.sqi); const pl = S.pl[p.sqi], m = p.ms || {};
-      pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - (10 + Math.min(8, (m.spr || 0) * 0.13)) * (hasAb(pl, 'motor') ? 0.7 : 1)));
-      pl.mor = clamp(Math.round(morOf(pl) + (res > 0 ? 6 : res < 0 ? -5 : 1) + Math.min(4, (m.g || 0) * 2)), 10, 100);
+      pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - (10 + Math.min(8, (m.spr || 0) * 0.13)) * (hasAb(pl, 'motor') ? 0.7 : 1) * (easy ? 0.5 : 1)));
+      pl.mor = clamp(Math.round(morOf(pl) + (res > 0 ? (easy ? 3 : 6) : res < 0 ? (easy ? 0 : -5) : 1) + Math.min(4, (m.g || 0) * 2)), 10, 100);
       if (pl.fit < 60) tired.push(pl.n.split(' ').slice(-1)[0]);
     }
     S.pl.forEach((pl, i) => { if (!played.has(i) && morOf(pl) > 45) pl.mor = morOf(pl) - 1; }); // the ones left out sulk a little
@@ -5659,6 +5678,84 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       C.y = c; C.yd = d; clubSave(C);
     }
     return C;
+  }
+  // ---------- the club's money (as in Top Eleven): every match with your own squad has an account ----------
+  const GATE = [15, 35, 70, 120]; // ticket money by the size of your ground
+  const wageOf = p => Math.max(1, Math.round(valOf(p) / 90));
+  const wagesAll = S => (S || squadLoad()).pl.reduce((t, p) => t + wageOf(p), 0);
+  const SPON = {
+    fast: { n: 'Hjørnebageren', i: '🥐', d: a => `${a} mønter efter hver kamp, uanset resultatet`, amt: l => 18 + 4 * l, pay: (a, won) => a },
+    sejr: { n: 'Sport & Fritid', i: '🏅', d: a => `${a} mønter for hver sejr, intet ellers`, amt: l => 40 + 9 * l, pay: (a, won) => (won ? a : 0) },
+    maal: { n: 'Målbanken', i: '🥅', d: a => `${a} mønter for hvert mål I scorer (højst 6)`, amt: l => 9 + 2 * l, pay: (a, won, gf) => a * Math.min(6, gf) },
+  };
+  const SPON_LEN = 10;
+  function matchEco(pr, won, gf) {
+    const C = clubLoad(), lvl = pr.lvl || 1;
+    const g = Math.round(GATE[stadOf(lvl)] * (1 + Math.min(5, pr.streak || 0) * 0.1)); // a winning team draws a crowd
+    const s = C.sp && SPON[C.sp.id] ? SPON[C.sp.id].pay(C.sp.a, won, gf) : 0;
+    return { g, s, w: wagesAll() };
+  }
+  // training sessions: the whole squad works on one thing. It costs legs, and there are three a day.
+  const TRAIN = { spd: ['Løb og spurt', '🏃', 'Fart'], sht: ['Afslutninger', '🎯', 'Skud'], pas: ['Pasningsspil', '🔁', 'Aflevering'], def: ['Forsvar og dueller', '🛡️', 'Forsvar'], rest: ['Restitution', '🧊', ''] };
+  const TRAIN_N = 3, TRAIN_FIT = 8;
+  function trainLeft(C) { return C.td === dayNo() ? Math.max(0, TRAIN_N - (C.tn | 0)) : TRAIN_N; }
+  function trainRun(k) {
+    const C = clubLoad(); if (trainLeft(C) <= 0) return null;
+    const S = squadLoad(), ups = []; let n = 0, tired = 0;
+    for (const pl of S.pl) {
+      if (k === 'rest') { pl.fit = Math.min(100, fitOf(pl) + 15); n++; continue; }
+      if (fitOf(pl) < 45) { tired++; continue; } // too tired to train
+      const gx = pl.gx = pl.gx || {};
+      gx[k] = (gx[k] || 0) + 0.45 / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1);
+      while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ').slice(-1)[0]} ${pl[k]}`); }
+      gx[k] = Math.round(gx[k] * 100) / 100;
+      pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - TRAIN_FIT)); n++;
+    }
+    if (C.td !== dayNo()) { C.td = dayNo(); C.tn = 0; } C.tn = (C.tn | 0) + 1; clubSave(C); squadSave(S);
+    return { ups, n, tired };
+  }
+  let trainMsg = '';
+  function clubTrainPaint() {
+    const C = clubLoad(), T = $('clTrain'), left = trainLeft(C); T.textContent = '';
+    const h = document.createElement('p'); h.className = 'sqnote'; h.textContent = `Træningspas for hele truppen. ${left} af ${TRAIN_N} tilbage i dag. Et pas koster ${TRAIN_FIT} form og løfter den valgte færdighed hos alle. Trætte spillere (form under 45) står over.`; T.appendChild(h);
+    const g = document.createElement('div'); g.className = 'trgrid';
+    for (const k of Object.keys(TRAIN)) {
+      const [nm, ic, st] = TRAIN[k], b = document.createElement('button'); b.className = 'alt trbtn'; b.disabled = left <= 0;
+      const i = document.createElement('i'); i.textContent = ic; const t = document.createElement('span'); t.textContent = nm; const sm = document.createElement('small'); sm.textContent = k === 'rest' ? '+15 form til alle' : `${st} op · −${TRAIN_FIT} form`;
+      t.appendChild(sm); b.append(i, t);
+      b.onclick = () => { const r = trainRun(k); if (!r) return; sfx.win(); buzz(30);
+        trainMsg = k === 'rest' ? 'Restitution: alle har fået 15 form.' : `${nm}: ${r.n} trænede` + (r.tired ? `, ${r.tired} stod over` : '') + '. ' + (r.ups.length ? `${st} steg: ${r.ups.slice(0, 6).join(', ')}` + (r.ups.length > 6 ? ` +${r.ups.length - 6}` : '') : 'Ingen steg endnu, men de er tættere på.');
+        clubShow(); hubPaint(); };
+      g.appendChild(b);
+    }
+    T.appendChild(g);
+    if (trainMsg) { const m = document.createElement('p'); m.className = 'trmsg'; m.textContent = trainMsg; T.appendChild(m); }
+    const fb = document.createElement('button'); fb.className = 'go'; fb.textContent = 'Spil en træningskamp ›';
+    fb.onclick = () => { $('clubOv').hidden = true; showSetup('cpu', true); };
+    const fs = document.createElement('p'); fs.className = 'sqnote'; fs.textContent = 'Træningskamp: halv træthed, ingen løn og ingen præmie, men 50 % flere TP, og spillerne udvikler sig af at spille.';
+    T.append(fb, fs);
+  }
+  function clubEcoPaint() {
+    const C = clubLoad(), pr = loadProf(), lvl = pr.lvl || 1, S = squadLoad(), E = $('clEco'); E.textContent = '';
+    const row = (k, v, cls) => { const d = document.createElement('div'); d.className = 'ecrow' + (cls ? ' ' + cls : ''); const a = document.createElement('span'); a.textContent = k; const b = document.createElement('b'); b.textContent = v; d.append(a, b); E.appendChild(d); };
+    const head = t => { const h = document.createElement('div'); h.className = 'sqh'; h.textContent = t; E.appendChild(h); };
+    head('Hver kamp med dit eget hold');
+    row(`Tilskuere (${STAD[stadOf(lvl)][0]})`, `+${GATE[stadOf(lvl)]}` + (pr.streak ? ` (+${Math.min(5, pr.streak) * 10} % for ${pr.streak} sejre i træk)` : ''), 'in');
+    row('Præmie', 'for mål og sejr' + (facLv('fan') ? `, +${facLv('fan') * 8} % fra fanshoppen` : ''), 'in');
+    const w = wagesAll(S), top = S.pl.slice().sort((a, b) => wageOf(b) - wageOf(a)).slice(0, 3).map(q => `${q.n.split(' ').slice(-1)[0]} ${wageOf(q)}`).join(', ');
+    row(`Løn til ${S.pl.length} spillere`, `−${w}`, 'out');
+    { const sm = document.createElement('p'); sm.className = 'sqnote'; sm.textContent = `Dyrest: ${top}. En bedre spiller koster mere i løn, så sælg dem, du ikke bruger.`; E.appendChild(sm); }
+    if (C.last) row('Sidste kamp', `præmie +${C.last.p}, tilskuere +${C.last.g}, sponsor +${C.last.s}, løn −${C.last.w} = ${C.last.p + C.last.g + C.last.s - C.last.w >= 0 ? '+' : '−'}${Math.abs(C.last.p + C.last.g + C.last.s - C.last.w)}`);
+    head('Sponsor');
+    if (C.sp && SPON[C.sp.id]) { const A = SPON[C.sp.id]; row(`${A.i} ${A.n}`, A.d(C.sp.a), 'in'); row('Aftalen løber', `${C.sp.left} kampe endnu`); }
+    else {
+      const sm = document.createElement('p'); sm.className = 'sqnote'; sm.textContent = `Vælg en sponsor. Aftalen gælder ${SPON_LEN} kampe, og tilbuddene bliver bedre, når klubben stiger i niveau.`; E.appendChild(sm);
+      const g = document.createElement('div'); g.className = 'trgrid';
+      for (const id of Object.keys(SPON)) { const A = SPON[id], a = A.amt(lvl), b = document.createElement('button'); b.className = 'alt trbtn';
+        const i = document.createElement('i'); i.textContent = A.i; const t = document.createElement('span'); t.textContent = A.n; const sm2 = document.createElement('small'); sm2.textContent = A.d(a); t.appendChild(sm2); b.append(i, t);
+        b.onclick = () => { const C2 = clubLoad(); C2.sp = { id, a, left: SPON_LEN }; clubSave(C2); sfx.win(); clubShow(); hubPaint(); }; g.appendChild(b); }
+      E.appendChild(g);
+    }
   }
   function clubShow() {
     const C = youthTick(), pr = loadProf(), mt = loadMT(), lvl = pr.lvl || 1; facMemo = C.f;
@@ -5693,6 +5790,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       no.onclick = () => { const C2 = clubLoad(); if (!C2.y) return; addCoins(sellOf(C2.y), 'salg'); delete C2.y; clubSave(C2); clubShow(); hubPaint(); };
       row.appendChild(no); Y.appendChild(row);
     } else if (facLv('ak')) { const d = Math.max(1, AK_DAYS[facLv('ak')] - (dayNo() - (C.yd || 0))), e = document.createElement('p'); e.className = 'sqnote'; e.textContent = `🌱 Akademiet arbejder. Næste talent om ${d} dag${d > 1 ? 'e' : ''}.`; Y.appendChild(e); }
+    clubTrainPaint(); clubEcoPaint();
+    subTabs($('clubOv'), [['Klub', ['clYouth', 'clFac']], ['Træning', ['clTrain']], ['Økonomi', ['clEco']]], 'club', $('clYouth'));
     paintCoins(); $('clubOv').hidden = false;
   }
   const fitCol = v => (v >= 75 ? '#59e38b' : v >= 55 ? '#ffd447' : '#ff6b5e');
@@ -5722,7 +5821,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const r = document.createElement('div'); r.className = 'mkrow' + (cls ? ' ' + cls : '');
     const o = document.createElement('span'); o.className = 'ovr ' + (p.ev ? 'gold' : ovrTier(ovr(p))); o.textContent = ovr(p);
     const nm = document.createElement('span'); nm.className = 'nm'; const b = document.createElement('b'); b.textContent = p.n; const sm = document.createElement('small');
-    sm.textContent = `${DPOSN[dpOf(p)]} · ${flagOf(p.nat)}${NATS[p.nat] || 'Danmark'}` + (abOf(p).length ? ' · ' + abOf(p).map(a => ABIL[a].i + ' ' + ABIL[a].n).join(', ') : '');
+    sm.textContent = `${DPOSN[dpOf(p)]} · ${flagOf(p.nat)}${NATS[p.nat] || 'Danmark'} · løn ${wageOf(p)}` + (abOf(p).length ? ' · ' + abOf(p).map(a => ABIL[a].i + ' ' + ABIL[a].n).join(', ') : '');
     nm.append(b, sm);
     const st = document.createElement('span'); st.className = 'st'; st.textContent = SKILLS.map(([k, n2]) => `${(p.pos === 'MV' && k === 'def' ? 'Refl' : n2).slice(0, 4)} ${p[k]}`).join('  ');
     const bt = document.createElement('button'); bt.textContent = btnTxt; bt.onclick = () => on(bt);
@@ -5970,7 +6069,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const ch = chemOf(n, S); $('sqChem').textContent = `Kemi ${ch.v}`;
     $('sqPos').textContent = DPOSN[dpOf(p)] + ' · ' + flagOf(p.nat) + (NATS[p.nat] || 'Danmark');
     evPaint();
-    $('sqXI').textContent = (inXI.has(sqSel) ? 'Starter' : 'På bænken') + (p.age ? ` · ${p.age} år` : '') + (p.pot && o < p.pot ? ` · 🌱 potentiale ${p.pot}` : '');
+    $('sqXI').textContent = (inXI.has(sqSel) ? 'Starter' : 'På bænken') + ` · løn ${wageOf(p)}` + (p.age ? ` · ${p.age} år` : '') + (p.pot && o < p.pot ? ` · 🌱 potentiale ${p.pot}` : '');
     paintTP(S);
   }
   function squadShow() {
@@ -6587,7 +6686,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
   }
   function toMenu(text) {
-    hlReset(); leaveNet(); quickReset(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
+    hlReset(); leaveNet(); quickReset(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; friendly = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true; vsT = 0; $('vs').hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm(); homeGifts();
