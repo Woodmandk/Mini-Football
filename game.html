@@ -6330,9 +6330,114 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     } else if (tr.buy && (!of || of.id !== tr.buy)) { tr.buy = 0; tr.buyP = null; showToast('Tilbuddet blev trukket tilbage'); trSend(); }
     tradePaint();
   }
+  // ---------- the shared market: every Banebold player sees the same list (a small database, plain web requests) ----------
+  const FB = (/[?&]mftest\b/.test(location.search) && window.__mfFB) || 'https://banebold-default-rtdb.europe-west1.firebasedatabase.app';
+  const GM_MAX = 3, GM_DAYS = 7;
+  let trMode = 'gm', gm = { list: null, busy: false, err: '', pick: -1, price: 0, at: 0 };
+  async function fb(method, path, body, hdr, q) {
+    const r = await fetch(`${FB}/${path}.json${q || ''}`, { method, headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(hdr || {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
+    return r;
+  }
+  const gmClean = (id, o) => { if (!o || typeof o !== 'object') return null; const p = cleanPl(o.p); if (!p) return null;
+    return { id, p, pr: Math.max(0, Math.min(99995, Math.round(Number(o.pr) / 5) * 5 || 0)), s: String(o.s || '').slice(0, 20), n: String(o.n || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 14) || 'En træner', t: Number(o.t) || 0, st: o.st ? 1 : 0, bn: String(o.bn || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 14) || 'en anden træner', b: String(o.b || '').slice(0, 20) }; };
+  const gmBack = p => { const S = squadLoad(); if (S.pl.some(q => q.n === p.n)) return true; if (S.pl.length >= SQ_MAX) return false; S.pl.push({ ...p }); squadSave(S); return true; }; // he comes home to your squad
+  async function gmSettle(map) { // your own listings: collect the money for the ones that are sold
+    const M = mktLoad(), mine = M.fm || []; if (!mine.length) return;
+    const keep = [];
+    for (const f of mine) {
+      try {
+        let e = map && map[f.id] !== undefined ? map[f.id] : await (await fb('GET', 'market/' + f.id)).json();
+        if (!e) { if (!gmBack(f.p)) { keep.push(f); continue; } showToast(`${f.p.n} er taget af markedet og er hjemme igen`); continue; }
+        if (e.st) { await fb('DELETE', 'market/' + f.id); addCoins(f.pr, 'salg'); sfx.win(); showToast(`${f.p.n} er solgt til ${gmClean(f.id, e).bn} for ${f.pr} mønter`); continue; }
+        keep.push(f);
+      } catch (_) { keep.push(f); }
+    }
+    const M2 = mktLoad(); M2.fm = keep; mktSave(M2); hubPaint();
+  }
+  async function gmRefresh() {
+    if (gm.busy) return; gm.busy = true; gm.err = ''; tradePaint();
+    try {
+      const r = await fb('GET', 'market', undefined, null, '?orderBy=%22%24key%22&limitToLast=80'); if (!r.ok) throw new Error('http');
+      const map = (await r.json()) || {}, me = loadMe().id, old = Date.now() - GM_DAYS * 864e5;
+      await gmSettle(map);
+      gm.list = Object.keys(map).map(id => gmClean(id, map[id])).filter(e => e && !e.st && e.s !== me && e.t > old).sort((a, b) => b.t - a.t); gm.at = Date.now();
+    } catch (_) { gm.err = 'Kunne ikke hente markedet. Tjek nettet, og prøv igen.'; }
+    gm.busy = false; tradePaint();
+  }
+  async function gmPut(i, price) {
+    const S = squadLoad(), p = S.pl[i], M = mktLoad(); if (!p || i === 0 || S.pl.length <= 11 || (M.fm || []).length >= GM_MAX || gm.busy) return;
+    gm.busy = true; tradePaint();
+    try {
+      const wire = cleanPl(p), r = await fb('POST', 'market', { p: wire, pr: price, s: loadMe().id, n: cfg.name || '', t: Date.now(), st: 0 }); if (!r.ok) throw new Error('http');
+      const id = (await r.json()).name, S2 = squadLoad(), j = S2.pl.findIndex(q => q.n === p.n);
+      if (j > 0) { const full = S2.pl[j]; sqDrop(S2, j); squadSave(S2); const M2 = mktLoad(); M2.out = (M2.out || []).filter(o => o.n !== p.n); M2.fm = (M2.fm || []).concat([{ id, p: full, pr: price, t: Date.now() }]); mktSave(M2); }
+      gm.pick = -1; sfx.win(); showToast(`${p.n} er sat til salg på det fælles marked`);
+    } catch (_) { gm.err = 'Kunne ikke sætte ham til salg. Prøv igen.'; }
+    gm.busy = false; mktShow(); hubPaint();
+  }
+  async function gmClaim(id, patch) { // take a listing only if nobody else got there first
+    try {
+      const r = await fb('GET', 'market/' + id, undefined, { 'X-Firebase-ETag': 'true' }), tag = r.headers.get('ETag'), e = await r.json();
+      if (!e || e.st) return false;
+      if (tag) { const w = await fb('PUT', 'market/' + id, patch ? { ...e, ...patch } : null, { 'if-match': tag }); return w.ok; }
+    } catch (_) {}
+    const e = await (await fb('GET', 'market/' + id)).json(); if (!e || e.st) return false; // the plain way: write, wait a moment, and see that it is still ours
+    if (!patch) return (await fb('DELETE', 'market/' + id)).ok;
+    await fb('PATCH', 'market/' + id, patch); await new Promise(r => setTimeout(r, 700));
+    const e2 = await (await fb('GET', 'market/' + id)).json(); return !!(e2 && e2.b === patch.b);
+  }
+  async function gmHome(f) {
+    if (gm.busy) return; if (squadLoad().pl.length >= SQ_MAX) { showToast('Truppen er fuld: sælg en først'); return; }
+    gm.busy = true; tradePaint();
+    try { if (await gmClaim(f.id, null)) { gmBack(f.p); const M2 = mktLoad(); M2.fm = (M2.fm || []).filter(q => q.id !== f.id); mktSave(M2); showToast(`${f.p.n} er hjemme igen`); } else await gmSettle(null); }
+    catch (_) { gm.err = 'Kunne ikke hente ham hjem. Prøv igen.'; }
+    gm.busy = false; mktShow(); hubPaint();
+  }
+  async function gmBuy(e) {
+    if (gm.busy) return; const S = squadLoad(); if (S.pl.length >= SQ_MAX || loadProf().coins < e.pr) return;
+    gm.busy = true; tradePaint(); let ok = false;
+    try { ok = await gmClaim(e.id, { st: 1, b: loadMe().id, bn: cfg.name || '' }); } catch (_) { gm.busy = false; gm.err = 'Kunne ikke købe. Prøv igen.'; tradePaint(); return; }
+    gm.busy = false; gm.list = (gm.list || []).filter(q => q.id !== e.id);
+    if (!ok) { showToast('En anden nåede at købe ham først'); tradePaint(); return; }
+    const S2 = squadLoad(), np = { ...e.p, mor: 80, ct: CT_NEW }; if (S2.pl.some(q => q.n === np.n)) np.n = (np.n + ' II').slice(0, 22);
+    S2.pl.push(np); squadSave(S2); addCoins(-e.pr, 'køb'); sfx.win(); buzz(30); hubPaint();
+    packFx(np, 'Fra ' + e.n, () => { showToast(`${np.n} er din nu`); mktShow(); });
+  }
+  function gmPaint(X) {
+    const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+    const S = squadLoad(), M = mktLoad(), mine = M.fm || [], coins = loadProf().coins;
+    if (X.classList.contains('tabhide')) return; // not looking at it: no need to ask the database
+    if (gm.list === null && !gm.busy && !gm.err) { gmRefresh(); return; }
+    if (gm.err) X.appendChild(el('p', 'sqnote', gm.err));
+    const box = el('div', 'scbox'); box.appendChild(el('b', '', `Dine spillere til salg (${mine.length}/${GM_MAX})`));
+    for (const f of mine) { const r = mktRow(f.p, 'Tag hjem', () => gmHome(f), 'out'); r.querySelector('.st').textContent = `${f.pr} mønter`; r.querySelector('button').disabled = gm.busy; box.appendChild(r); }
+    if (gm.pick > 0 && S.pl[gm.pick] && S.pl.length > 11 && mine.length < GM_MAX) {
+      const p = S.pl[gm.pick], v = valOf(p), max = Math.max(100, Math.round(v * 3 / 5) * 5); if (!(gm.price >= 0 && gm.price <= max)) gm.price = v;
+      const r = mktRow(p, 'Fortryd', () => { gm.pick = -1; tradePaint(); }), lab = el('span', 'big', `${gm.price} mønter`), sl = el('input'); sl.type = 'range'; sl.min = 0; sl.max = max; sl.step = 5; sl.value = gm.price; sl.setAttribute('aria-label', 'Pris');
+      sl.oninput = () => { gm.price = +sl.value; lab.textContent = `${gm.price} mønter`; };
+      const ok = el('button', '', gm.busy ? 'Sætter til salg…' : 'Sæt til salg for alle'); ok.disabled = gm.busy; ok.onclick = () => gmPut(gm.pick, gm.price);
+      box.append(r, lab, sl, el('span', 'sqnote', `Han er omkring ${v} mønter værd. Han forlader din trup nu, og du får pengene, når en anden træner køber ham. Du kan altid tage ham hjem igen.`), ok);
+    } else if (gm.pick === 0) {
+      box.appendChild(el('span', 'sqnote', 'Vælg den spiller, du vil sælge.'));
+      S.pl.map((p, i) => ({ p, i })).filter(q => q.i > 0).sort((a, b) => ovr(b.p) - ovr(a.p)).forEach(({ p, i }) => { const r = mktRow(p, 'Vælg', () => { gm.pick = i; gm.price = valOf(p); tradePaint(); }); r.querySelector('.st').remove(); box.appendChild(r); });
+      const no = el('button', 'alt', 'Fortryd'); no.onclick = () => { gm.pick = -1; tradePaint(); }; box.appendChild(no);
+    } else {
+      const can = S.pl.length > 11 && mine.length < GM_MAX, add = el('button', can ? '' : 'alt', mine.length >= GM_MAX ? `Du kan have ${GM_MAX} til salg ad gangen` : S.pl.length <= 11 ? 'Du skal beholde mindst 11 spillere' : '＋ Sæt en spiller til salg'); add.disabled = !can; add.onclick = () => { gm.pick = 0; tradePaint(); }; box.appendChild(add);
+    }
+    X.appendChild(box);
+    const hd = el('p', 'sqnote', gm.busy && gm.list === null ? 'Henter markedet…' : `Til salg fra andre trænere: ${(gm.list || []).length}. Truppen: ${S.pl.length}/${SQ_MAX}.`); X.appendChild(hd);
+    for (const e of gm.list || []) {
+      const full = S.pl.length >= SQ_MAX, poor = coins < e.pr, r = mktRow(e.p, full ? 'Trup fuld' : poor ? `Mangler ${e.pr - coins}` : e.pr ? `Køb · ${e.pr}` : 'Gratis', () => gmBuy(e));
+      r.querySelector('small').textContent += ` · sælges af ${e.n}`; r.querySelector('button').disabled = full || poor || gm.busy; X.appendChild(r);
+    }
+    if (gm.list && !gm.list.length) X.appendChild(el('p', 'sqnote', 'Der er ingen spillere til salg lige nu. Sæt en af dine egne til salg, så er du den første.'));
+    const up = el('button', 'alt', gm.busy ? 'Henter…' : 'Opdater'); up.disabled = gm.busy; up.onclick = gmRefresh; X.appendChild(up);
+  }
   function tradePaint() {
     const X = $('mkFriend'); if (!X) return; X.textContent = '';
     const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+    { const sg = el('div', 'seg'); for (const [k, t] of [['gm', '🌍 Fælles marked'], ['fr', '🤝 Handel med en ven']]) { const b = el('button', '', t); b.setAttribute('aria-pressed', String(trMode === k)); b.onclick = () => { trMode = k; tradePaint(); }; sg.appendChild(b); } X.appendChild(sg); }
+    if (trMode === 'gm') { gmPaint(X); return; }
     if (!tnet) {
       const box = el('div', 'scbox'); box.append(el('b', '', '🤝 Handel med en ven'), el('span', 'sqnote', room ? 'I skal begge have spillet åbent. Den ene åbner et handelsrum og siger koden højt, den anden skriver den. Så kan I sælge spillere til hinanden.' : 'Handel med en ven virker på spillets eget link.'));
       if (trMsg) box.append(el('span', 'sqnote', trMsg));
@@ -6411,7 +6516,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       }
       o.appendChild(quick); SL.appendChild(o);
     });
-    subTabs($('mktOv'), [['Køb', ['mkBuy']], ['Scout', ['mkScout']], ['Sælg', ['mkSell']], ['Ven', ['mkFriend']]], 'mkt', B);
+    subTabs($('mktOv'), [['Køb', ['mkBuy']], ['Scout', ['mkScout']], ['Sælg', ['mkSell']], ['Trænere', ['mkFriend']]], 'mkt', B);
+    { const bar = $('mktOv').querySelector('.tabbar.sub'); if (bar && !bar.dataset.gm) { bar.dataset.gm = '1'; bar.addEventListener('click', () => setTimeout(tradePaint, 0)); } }
+    tradePaint();
     paintCoins(); $('mktOv').hidden = false;
   }
   function showToast(t) { const e = $('mkToast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(showToast.t); showToast.t = setTimeout(() => { e.hidden = true; }, 2200); }
@@ -6698,7 +6805,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   function squadInit() {
     $('goClub').onclick = clubShow; $('clClose').onclick = () => { $('clubOv').hidden = true; hubPaint(); };
-    $('goMarket').onclick = () => { mkArm = -1; mktShow(); }; $('mkClose').onclick = () => { tradeLeave(); $('mktOv').hidden = true; hubPaint(); };
+    $('goMarket').onclick = () => { mkArm = -1; gm.pick = -1; if (Date.now() - gm.at > 60000 || (mktLoad().fm || []).length) { gm.list = null; gm.err = ''; } mktShow(); if ((mktLoad().fm || []).length && $('mkFriend').classList.contains('tabhide')) gmSettle(null).then(() => { paintCoins(); }); }; $('mkClose').onclick = () => { tradeLeave(); $('mktOv').hidden = true; hubPaint(); };
     $('abClose').onclick = () => { $('abOv').hidden = true; };
     $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { const old = S.pl[sqSel].n; if (S.cap === old) S.cap = v; if (S.sp) for (const k in S.sp) if (S.sp[k] === old) S.sp[k] = v; S.pl[sqSel].n = v; squadSave(S); } sqRefresh(); });
     $('sqClose').onclick = () => { $('squad').hidden = true; };
