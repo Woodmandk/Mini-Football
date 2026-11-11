@@ -129,6 +129,12 @@ table.st td.l, table.st th.l { text-align: left; }
 .hubtop .gear { flex: 0 0 auto; padding: 6px 11px; font-size: 18px; }
 .tabp { display: grid; grid-template-rows: repeat(2, minmax(92px, 1fr)); grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; text-align: left; }
 .tabp[hidden] { display: none; }
+.guide { display: flex; align-items: center; gap: 10px; padding: 6px 10px; margin: 0 0 8px; border-radius: 12px; background: linear-gradient(90deg, rgba(255,212,71,0.18), rgba(255,255,255,0.05)); border: 1px solid rgba(255,212,71,0.5); text-align: left; }
+.guide .gface { font-size: 24px; line-height: 1; } .guide .gtx { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; }
+.guide small { font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.08em; } .guide b { font-size: 13px; }
+.guide button { min-height: 0; width: auto; flex: none; padding: 8px 14px; font-size: 13px; } .guide .gpips { display: flex; gap: 3px; margin-top: 3px; } .guide .gpips i { width: 14px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.18); } .guide .gpips i.on { background: var(--gold); }
+@keyframes gpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255,212,71,0); } 50% { box-shadow: 0 0 0 7px rgba(255,212,71,0.8); } }
+.gpulse { animation: gpulse 1s ease-in-out 6; border-color: var(--gold) !important; }
 button.tile { min-height: 92px; justify-content: flex-end; font-size: 17px; }
 button.tile small { font-size: 11px; }
 button.tile.hot { grid-row: span 2; background: linear-gradient(160deg, #3aa862, #23784a); border-color: #6fd497; font-size: 21px; }
@@ -703,6 +709,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         <span class="chip"><span class="coins" data-coins>0</span></span>
         <button id="goSet" class="alt gear" aria-label="Indstillinger">⚙</button>
       </div>
+      <div class="guide" id="guide" hidden><span class="gface">🧑‍🏫</span><span class="gtx"><small id="guideN"></small><b id="guideT"></b><span class="gpips" id="guideP"></span></span><button id="guideGo"></button><button id="guideX" class="alt" aria-label="Skjul guiden">✕</button></div>
       <div class="tabp" data-tab="spil">
         <button id="goOnline" class="big tile hot"><i class="ic">🌐</i>Online<small id="onlSub">Rangeret mod hvem som helst, eller spil med venner via kode</small></button>
         <button id="bCpu" class="big tile alt"><i class="ic">⚽</i>Mod computeren<small>Hurtig kamp med dit eget hold</small></button>
@@ -1373,7 +1380,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     afterHelp = fn; $('help').hidden = false;
   }
   $('helpOk').onclick = () => { $('help').hidden = true; try { localStorage.setItem('mf-tut', '1'); } catch (_) {} const f = afterHelp; afterHelp = null; if (f) f(); };
-  $('bHelp').onclick = () => { afterHelp = null; $('help').hidden = false; };
+  $('bHelp').onclick = () => { afterHelp = null; $('help').hidden = false; try { const G2 = JSON.parse(localStorage.getItem('mf-guide') || '{}'); if (G2 && G2.off) { delete G2.off; localStorage.setItem('mf-guide', JSON.stringify(G2)); } } catch (_) {} };
 
   // league: every finished match on this phone
   function loadLeague() { try { return JSON.parse(localStorage.getItem('mf-league') || '') || { pl: {}, sc: {} }; } catch (_) { return { pl: {}, sc: {} }; } }
@@ -1710,7 +1717,38 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     hubPaint();
     $('hpStreak').textContent = st > 1 ? `🔥 ${st} dage` : '';
   }
+  // ---------- guidet start: assistenttræneren viser klubben frem, ét trin ad gangen, med en lille belønning for hvert ----------
+  const guideSteps = () => [
+    ['kamp', 'Spil din første kamp mod computeren', 50, 'spil', 'bCpu', () => loadProf().games >= 1],
+    ['hold', 'Åbn Holdet og tryk på en af dine spillere', 30, 'hold', 'goMine', null],
+    ['train', 'Træn en spiller: brug dine TP under Træning', 30, 'hold', 'goMine', null],
+    ['cap', 'Vælg en anfører under fanen Rolle', 30, 'hold', 'goMine', () => !!squadLoad().cap],
+    ['byg', 'Byg din første bygning på klubgrunden', 150, 'hold', 'goClub', () => Object.values(clubLoad().f).some(v => v > 0)],
+    ['scout', 'Send scouten ud efter en ny spiller', 50, 'hold', 'goMarket', () => !!mktLoad().sc],
+    ['tre', 'Spil tre kampe med dit hold', 200, 'spil', 'bCpu', () => loadProf().games >= 3],
+  ];
+  const guideLoad = () => { let G2 = null; try { G2 = JSON.parse(localStorage.getItem('mf-guide') || 'null'); } catch (_) {} G2 = G2 && typeof G2 === 'object' ? G2 : {}; G2.d = G2.d || {}; G2.c = G2.c || {}; return G2; };
+  const guideSave = G2 => { try { localStorage.setItem('mf-guide', JSON.stringify(G2)); } catch (_) {} };
+  function guideHit(k) { const G2 = guideLoad(); if (G2.d[k]) return; G2.d[k] = 1; guideSave(G2); guidePaint(); }
+  function guidePaint() {
+    const el = $('guide'); if (!el) return;
+    try {
+      const G2 = guideLoad(), L = guideSteps(), i = L.findIndex(s2 => !G2.c[s2[0]]);
+      if (G2.off || i < 0) { el.hidden = true; return; }
+      const [k, text, coins, tab, id, pred] = L[i], done = !!G2.d[k] || (pred ? !!pred() : false);
+      $('guideN').textContent = `Kom godt i gang · trin ${i + 1} af ${L.length}`; $('guideT').textContent = done ? 'Flot! ' + text + ' ✓' : text;
+      const P2 = $('guideP'); P2.textContent = ''; L.forEach((_, j) => { const d = document.createElement('i'); if (j < i || (j === i && done)) d.className = 'on'; P2.appendChild(d); });
+      const go = $('guideGo'); go.textContent = done ? `Hent ${coins} mønter` : 'Vis mig ›'; go.className = done ? '' : 'alt';
+      go.onclick = () => {
+        if (done) { const G3 = guideLoad(); if (G3.c[k]) return; G3.c[k] = 1; G3.d[k] = 1; guideSave(G3); addCoins(coins, 'guide'); sfx.win(); toast(i === L.length - 1 ? 'Du er klar. Held og lykke, træner!' : `+${coins} mønter`); guidePaint(); return; }
+        hubShow(tab); const t = $(id); if (t) { t.classList.remove('gpulse'); void t.offsetWidth; t.classList.add('gpulse'); try { t.scrollIntoView({ block: 'nearest' }); } catch (_) {} setTimeout(() => t.classList.remove('gpulse'), 6200); }
+      };
+      $('guideX').onclick = () => { const G3 = guideLoad(); G3.off = 1; guideSave(G3); guidePaint(); toast('Guiden er skjult. Du finder den igen under Profil'); };
+      el.hidden = false;
+    } catch (_) { el.hidden = true; }
+  }
   function hubPaint() { // live subtitles on the front page tiles
+    guidePaint();
     try {
       const n = cfg.size || 7, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
       $('hcSub').textContent = `Hold ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'Mit hold');
@@ -6446,7 +6484,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       bt.onclick = () => {
         const S2 = squadLoad(), q = S2.pl[sqSel];
         if (S2.tp < price) { bt.textContent = `Mangler ${price - S2.tp}`; return; }
-        S2.tp -= price; q[k] = Math.min(99, q[k] + 1); squadSave(S2); sfx.win(); sqRefresh();
+        S2.tp -= price; q[k] = Math.min(99, q[k] + 1); squadSave(S2); sfx.win(); guideHit('train'); sqRefresh();
       };
       r.append(b, bar, val, bt); box.appendChild(r);
     }
@@ -6897,7 +6935,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     sqHome('mt'); $('mtPan').hidden = !who;
     if (!who) sel.textContent = 'Tryk på en spiller for at se ham, træne ham og vælge evner. Tryk Byt for at skifte ham ud. Træk en spiller på banen for at flytte hans plads.';
     else {
-      sqSel = S.pl.indexOf(who); sqPanelPaint();
+      sqSel = S.pl.indexOf(who); sqPanelPaint(); guideHit('hold');
       if (mtArm) { sel.textContent = `Tryk på den, ${who.n.split(' ').slice(-1)[0]} skal bytte med.` + (mtSel >= 0 ? ' Grøn kant: passer til pladsen.' : ''); sel.classList.add('arm'); }
       else { sel.classList.remove('arm'); if (mtSel >= 0) { const sp = slotPos(L[mtSel], mtSel, mtN); if (sp !== dpOf(who)) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = `Spiller ${DPOSN[sp].toLowerCase()} her: ${fitOvr(who, sp)} i stedet for ${ovr(who)}`; sel.appendChild(w); } } }
     }
