@@ -547,7 +547,18 @@ table.st tr.me td { color: var(--gold); }
 .fmrow small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; line-height: 1.25; text-align: left; }
 .clhead { display: flex; align-items: center; gap: 12px; margin: 2px 0 10px; } .clhead .clcr { width: 46px; height: 52px; flex: none; } .clhead .clcr svg { width: 100%; height: 100%; }
 .clhead b { font-size: 18px; display: block; } .clhead small { color: var(--muted); font-size: 12px; }
-.facgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.facgrid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); gap: 10px; margin-top: 8px; align-items: stretch; }
+.ground { border-radius: 14px; overflow: hidden; border: 1px solid rgba(255,255,255,0.14); background: #2b7a4b; line-height: 0; }
+.ground svg { width: 100%; height: auto; display: block; touch-action: manipulation; }
+.ground g[data-k] { cursor: pointer; }
+.ground .lbl { font: 700 9px var(--font); fill: #fff; paint-order: stroke; stroke: rgba(0,0,0,0.6); stroke-width: 2.4px; text-anchor: middle; }
+.ground .lv { font: 800 9px var(--font); fill: #10221a; text-anchor: middle; }
+.facinfo { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); text-align: left; }
+.facinfo .hd { display: flex; align-items: center; gap: 8px; } .facinfo .hd i { font-style: normal; font-size: 26px; } .facinfo .hd b { font-size: 15px; }
+.facinfo .pips { display: flex; gap: 3px; } .facinfo .pips u { width: 16px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.16); } .facinfo .pips u.on { background: var(--gold); }
+.facinfo small { font-size: 12px; line-height: 1.3; } .facinfo small.nx { color: var(--muted); }
+.facinfo button { min-height: 0; padding: 9px 10px; font-size: 14px; margin-top: auto; }
+#wrap.n560 .facgrid { grid-template-columns: 1fr; }
 .fac { display: grid; grid-template-columns: 34px 1fr auto; gap: 2px 8px; align-items: center; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
 .fac.none { opacity: 0.85; border-style: dashed; }
 .fac > i { font-style: normal; font-size: 24px; grid-row: 1 / 3; } .fac > b { font-size: 14px; }
@@ -5910,27 +5921,86 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       E.appendChild(g);
     }
   }
-  function clubShow() {
-    const C = youthTick(), pr = loadProf(), mt = loadMT(), lvl = pr.lvl || 1; facMemo = C.f;
-    crestInto($('clCrest'), TEAMS[OWN]);
-    $('clName').textContent = mt.made ? mt.n : (cfg.name || 'Mit hold');
-    $('clSub').textContent = `Klubniveau ${lvl} · ${STAD[stadOf(lvl)][0]}` + (stadOf(lvl) < 3 ? ` · næste bane ved niveau ${STAD[stadOf(lvl) + 1][1]}` : '') + ` · Hold ${teamOvr(cfg.size || 7)}`;
-    const G = $('clFac'); G.textContent = '';
+  // ---------- the club ground, seen from above (as in Top Eleven): tap a building to see it and build it out ----------
+  let facSel = 'stad';
+  const GSPOT = { tr: [82, 62], kl: [398, 58], stad: [240, 112], ak: [84, 168], fan: [396, 170], sc: [240, 30] };
+  function groundSVG(C, lvl, coins) {
+    const E = [], box = (x, y, w, h, roof, wall) => { // a building: its shadow, the wall you see from the front, the roof
+      E.push(`<rect x="${x - w / 2 + 4}" y="${y - h / 2 + 5}" width="${w}" height="${h + 5}" rx="3" fill="rgba(0,0,0,0.25)"/><rect x="${x - w / 2}" y="${y - h / 2 + 5}" width="${w}" height="${h}" rx="3" fill="${wall}"/><rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="3" fill="${roof}"/><rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h * 0.42}" rx="3" fill="rgba(255,255,255,0.14)"/>`); };
+    const pitch = (x, y, w, h) => E.push(`<rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="2" fill="#3fa565" stroke="#eaf5ec" stroke-width="1.2"/><line x1="${x}" y1="${y - h / 2}" x2="${x}" y2="${y + h / 2}" stroke="#eaf5ec" stroke-width="1"/><circle cx="${x}" cy="${y}" r="${h * 0.16}" fill="none" stroke="#eaf5ec" stroke-width="1"/>`);
+    const tree = (x, y) => E.push(`<circle cx="${x + 2}" cy="${y + 3}" r="6" fill="rgba(0,0,0,0.2)"/><circle cx="${x}" cy="${y}" r="6" fill="#1f6a3c"/><circle cx="${x - 1.5}" cy="${y - 2}" r="3" fill="#2f8a50"/>`);
+    const badge = (x, y, l, up) => E.push(`<circle cx="${x}" cy="${y}" r="7.5" fill="${up ? '#ffd447' : '#f4f7f2'}" stroke="#10221a" stroke-width="1.2"/><text class="lv" x="${x}" y="${y + 3.2}">${up ? '▲' : l}</text>`);
+    const open = (k, x, y, w, h) => E.push(`<g data-k="${k}">` + (facSel === k ? `<ellipse cx="${x}" cy="${y + 4}" rx="${w / 2 + 12}" ry="${h / 2 + 12}" fill="rgba(255,212,71,0.22)" stroke="#ffd447" stroke-width="1.6" stroke-dasharray="5 4"/>` : '') + `<rect x="${x - w / 2 - 8}" y="${y - h / 2 - 8}" width="${w + 16}" height="${h + 24}" fill="transparent"/>`);
+    // the grass, the roads between the buildings, and a few trees
+    E.push('<rect width="480" height="224" fill="#2b7a4b"/>');
+    for (let i = 0; i < 8; i++) E.push(`<rect x="${i * 60}" y="0" width="30" height="224" fill="rgba(255,255,255,0.025)"/>`);
+    E.push('<path d="M240 30 V112 M82 62 H398 M84 168 H396 M82 62 V168 M398 58 V170" fill="none" stroke="#cdbb8c" stroke-width="9" stroke-linecap="round" opacity="0.8"/>');
+    [[20, 20], [150, 20], [330, 18], [462, 24], [18, 116], [462, 112], [160, 208], [320, 208], [20, 206], [462, 204]].forEach(([x, y]) => tree(x, y));
+    // the stadium in the middle grows with the club's level
+    { const [x, y] = GSPOT.stad, t = stadOf(lvl); open('stad', x, y, 150, 92);
+      const st = '#8d99a6', seat = TEAMS[OWN] && TEAMS[OWN].c1 ? TEAMS[OWN].c1 : '#2f6fe0';
+      if (t >= 2) E.push(`<rect x="${x - 78}" y="${y - 50}" width="156" height="100" rx="12" fill="rgba(0,0,0,0.25)" transform="translate(4 5)"/><rect x="${x - 78}" y="${y - 50}" width="156" height="100" rx="12" fill="${st}"/><rect x="${x - 72}" y="${y - 44}" width="144" height="88" rx="9" fill="${seat}"/>`);
+      else { E.push(`<rect x="${x - 60}" y="${y - 46}" width="120" height="14" rx="3" fill="${st}"/><rect x="${x - 58}" y="${y - 44}" width="116" height="9" rx="2" fill="${seat}"/>`); if (t >= 1) E.push(`<rect x="${x - 60}" y="${y + 32}" width="120" height="14" rx="3" fill="${st}"/><rect x="${x - 58}" y="${y + 35}" width="116" height="9" rx="2" fill="${seat}"/>`); }
+      pitch(x, y, 112, 58);
+      if (t >= 3) { E.push(`<rect x="${x - 78}" y="${y - 50}" width="156" height="100" rx="12" fill="none" stroke="#e9eef3" stroke-width="5"/>`); [[-80, -52], [80, -52], [-80, 52], [80, 52]].forEach(([a, b]) => E.push(`<circle cx="${x + a}" cy="${y + b}" r="5" fill="#fffbe0" stroke="#59636e" stroke-width="1.5"/>`)); }
+      E.push(`<text class="lbl" x="${x}" y="${y + 66}">${STAD[t][0]}</text></g>`); }
+    // the four things you build yourself
+    const KIT = { tr: ['#5f6f80', '#3e4a57'], kl: ['#f1f4f6', '#b9c3cb'], ak: ['#e08a3c', '#a35f22'], fan: ['#d9485a', '#96283a'] };
     for (const k of Object.keys(FAC)) {
-      const F = FAC[k], l = clamp(C.f[k] | 0, 0, FAC_MAX), d = document.createElement('div'); d.className = 'fac' + (l ? '' : ' none');
-      const ic = document.createElement('i'); ic.textContent = F.i;
-      const b = document.createElement('b'); b.textContent = F.n;
+      const [x, y] = GSPOT[k], l = clamp(C.f[k] | 0, 0, FAC_MAX), can = l < FAC_MAX && lvl >= FAC_LVL[l] && coins >= FAC_COST[l];
+      open(k, x, y, 96, 52);
+      if (!l) E.push(`<rect x="${x - 34}" y="${y - 20}" width="68" height="40" rx="5" fill="rgba(0,0,0,0.18)" stroke="#eaf5ec" stroke-width="1.4" stroke-dasharray="5 4"/><text x="${x}" y="${y + 7}" text-anchor="middle" font-size="20" fill="#eaf5ec" opacity="0.85">＋</text>`);
+      else {
+        if (k === 'tr') { pitch(x + 20, y + 4, 52 + l * 2, 32); if (l >= 2) [[-8, -14], [48, -14], [-8, 22], [48, 22]].forEach(([a, b]) => E.push(`<circle cx="${x + a}" cy="${y + b}" r="2.2" fill="#fffbe0"/>`)); if (l >= 4) for (let i = 0; i < 4; i++) E.push(`<circle cx="${x + 4 + i * 9}" cy="${y + 4}" r="1.6" fill="#ff9d2e"/>`); }
+        if (k === 'ak') { pitch(x + 26, y + 6, 40 + l * 2, 26); }
+        const w = (k === 'tr' || k === 'ak' ? 26 : 40) + l * 4, h = 24 + l * 2, bx = k === 'tr' || k === 'ak' ? x - 26 : x;
+        if (l >= 3) box(bx + (k === 'kl' || k === 'fan' ? w / 2 + 6 : -2), y - 16, 18, 14, KIT[k][1], KIT[k][1]); // a wing
+        if (l >= 5) box(bx - (k === 'kl' || k === 'fan' ? w / 2 + 6 : -2), y + 16, 16, 12, KIT[k][1], KIT[k][1]);
+        box(bx, y, w, h, KIT[k][0], KIT[k][1]);
+        if (k === 'fan') for (let i = 0; i < 5; i++) E.push(`<rect x="${bx - w / 2 + i * w / 5}" y="${y + h / 2 - 1}" width="${w / 5}" height="6" fill="${i % 2 ? '#f4f7f2' : '#d9485a'}"/>`); // the awning
+        if (k === 'kl') E.push(`<rect x="${bx - 2}" y="${y - 8}" width="4" height="14" fill="#e5483b"/><rect x="${bx - 7}" y="${y - 3}" width="14" height="4" fill="#e5483b"/>`);
+        else E.push(`<text x="${bx}" y="${y + 5}" text-anchor="middle" font-size="13">${FAC[k].i}</text>`);
+      }
+      E.push(`<text class="lbl" x="${x}" y="${y + 38}">${FAC[k].n}</text>`); badge(x + 44, y - 22, l, can); E.push('</g>');
+    }
+    { const [x, y] = GSPOT.sc; open('sc', x, y, 60, 26); box(x, y, 44, 20, '#3b6ea8', '#274b75'); E.push(`<text x="${x}" y="${y + 5}" text-anchor="middle" font-size="12">🔭</text><text class="lbl" x="${x + 62}" y="${y + 4}">Scoutkontor</text></g>`); }
+    return `<svg viewBox="0 0 480 224" xmlns="http://www.w3.org/2000/svg">${E.join('')}</svg>`;
+  }
+  function groundPaint(C, pr, lvl) {
+    const G = $('clFac'); G.textContent = '';
+    const map = document.createElement('div'); map.className = 'ground'; map.innerHTML = groundSVG(C, lvl, pr.coins);
+    map.querySelectorAll('g[data-k]').forEach(g => { g.onclick = () => { facSel = g.dataset.k; sfx.beep(); groundPaint(clubLoad(), loadProf(), loadProf().lvl || 1); }; });
+    const d = document.createElement('div'); d.className = 'facinfo';
+    const hd = document.createElement('div'); hd.className = 'hd'; const ic = document.createElement('i'), b = document.createElement('b'); hd.append(ic, b); d.appendChild(hd);
+    const sm = document.createElement('small'), nx = document.createElement('small'); nx.className = 'nx'; const bt = document.createElement('button');
+    if (facSel === 'stad') { const t = stadOf(lvl);
+      ic.textContent = '🏟️'; b.textContent = stadName(); sm.textContent = `${STAD[t][0]}. Tilskuerne giver ${GATE[t]} mønter pr. kamp med dit eget hold.`;
+      nx.textContent = t < 3 ? `Næste: ${STAD[t + 1][0]} ved klubniveau ${STAD[t + 1][1]} (du er på ${lvl}). Banen vokser af sig selv, når klubben stiger.` : 'Størst mulige bane.';
+      bt.textContent = 'Se økonomien'; bt.className = 'alt'; bt.onclick = () => { subTab.club = 'Økonomi'; clubShow(); }; d.append(sm, nx, bt);
+    } else if (facSel === 'sc') {
+      ic.textContent = '🔭'; b.textContent = 'Scoutkontor'; const M = mktLoad(), sc = M.sc;
+      sm.textContent = sc && !sc.res && Date.now() - sc.t < sc.dur ? `Scouten er ude. Hjemme om ${hm(sc.t + sc.dur - Date.now())}.` : sc && ((sc.res && sc.res.length) || !sc.res) ? 'Scouten er hjemme med nye navne.' : 'Scouten er hjemme og klar til en tur.';
+      nx.textContent = 'Send ham efter talenter, færdige spillere eller billige reserver.';
+      bt.textContent = 'Åbn transfermarkedet'; bt.onclick = () => { subTab.mkt = 'Scout'; $('clubOv').hidden = true; mktShow(); }; d.append(sm, nx, bt);
+    } else { const k = facSel, F = FAC[k], l = clamp(C.f[k] | 0, 0, FAC_MAX);
+      ic.textContent = F.i; b.textContent = F.n;
       const pips = document.createElement('span'); pips.className = 'pips'; for (let x = 0; x < FAC_MAX; x++) { const e = document.createElement('u'); if (x < l) e.className = 'on'; pips.appendChild(e); }
-      const sm = document.createElement('small'); sm.textContent = l ? F.d(l) : 'Ikke bygget endnu';
-      const nx = document.createElement('small'); nx.className = 'nx'; nx.textContent = l < FAC_MAX ? 'Næste: ' + F.d(l + 1) : 'Fuldt udbygget';
-      const bt = document.createElement('button');
+      sm.textContent = l ? F.d(l) : 'Ikke bygget endnu'; nx.textContent = l < FAC_MAX ? 'Næste: ' + F.d(l + 1) : 'Fuldt udbygget';
       if (l >= FAC_MAX) { bt.textContent = 'Max'; bt.disabled = true; bt.className = 'alt'; }
       else if (lvl < FAC_LVL[l]) { bt.textContent = `Kræver klubniveau ${FAC_LVL[l]}`; bt.disabled = true; bt.className = 'alt'; }
       else { bt.textContent = `${l ? 'Udbyg' : 'Byg'} · ${FAC_COST[l]} mønter`; if (pr.coins < FAC_COST[l]) bt.className = 'alt';
         bt.onclick = () => { const pr2 = loadProf(), C2 = clubLoad(), l2 = clamp(C2.f[k] | 0, 0, FAC_MAX); if (l2 !== l) return; if (pr2.coins < FAC_COST[l]) { bt.textContent = `Mangler ${FAC_COST[l] - pr2.coins} mønter`; return; }
           addCoins(-FAC_COST[l], 'byg'); C2.f[k] = l + 1; clubSave(C2); facMemo = C2.f; sfx.win(); buzz([30, 40, 60]); clubShow(); hubPaint(); }; }
-      d.append(ic, b, pips, sm, nx, bt); G.appendChild(d);
+      d.append(pips, sm, nx, bt);
     }
+    G.append(map, d);
+  }
+  function clubShow() {
+    const C = youthTick(), pr = loadProf(), mt = loadMT(), lvl = pr.lvl || 1; facMemo = C.f;
+    crestInto($('clCrest'), TEAMS[OWN]);
+    $('clName').textContent = mt.made ? mt.n : (cfg.name || 'Mit hold');
+    $('clSub').textContent = `Klubniveau ${lvl} · ${STAD[stadOf(lvl)][0]}` + (stadOf(lvl) < 3 ? ` · næste bane ved niveau ${STAD[stadOf(lvl) + 1][1]}` : '') + ` · Hold ${teamOvr(cfg.size || 7)}`;
+    groundPaint(C, pr, lvl);
     const Y = $('clYouth'); Y.textContent = '';
     if (C.y) { // the talent from the academy: sign him or let him go
       const c = C.y, h = document.createElement('b'); h.className = 'yh'; h.textContent = `🌱 Nyt talent fra akademiet: ${c.age} år, potentiale ${c.pot}`; Y.appendChild(h);
