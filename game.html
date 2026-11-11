@@ -2934,14 +2934,21 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   let mom = [0, 0], momSaid = 0;
   const momAdd = (t, v) => { if (t === 0 || t === 1) mom[t] = Math.max(0, Math.min(1, mom[t] + v)); };
   const momEdge = t => Math.max(0, Math.min(1, mom[t] - mom[1 - t]));
+  // offside is judged when the ball is played (ball.last.offs = the team-mates who stood offside then) and given when one of them plays it:
+  // a pass along the ground, a high ball, a cross, a header or a first-time shot
+  const offsNow = p => P.filter(q => q.team === p.team && q !== p && on(q) && isOffside(q, p)).map(q => q.i);
+  function offsideCall(p) {
+    const L = ball.last;
+    if (!L || L.team !== p.team || !L.offs || L.offs.indexOf(p.i) < 0) return false;
+    const x = p.x, y = p.y; p.recv = 0; p.ftArm = 0;
+    restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return true;
+  }
   const HEAVY_T = 0.55; // how long a knock-on first touch stays away from his feet
   function grab(p) {
     const prev = ball.owner;
     const inPass = prev !== p.i && ball.last && ball.last.pass && !ball.last.lp && ball.last.team === p.team, rv0 = Math.hypot(ball.vx - p.vx, ball.vy - p.vy);
     if (prev !== p.i) p.asBy = ball.last && ball.last.pass && ball.last.team === p.team && ball.lastIdx !== p.i ? ball.lastIdx : -1; // who set him up, for the assist
-    if (ball.last && ball.last.off && ball.last.to === p.i && ball.last.team === p.team) { // received while offside
-      const x = p.x, y = p.y; p.recv = 0; restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return;
-    }
+    if (offsideCall(p)) return; // received while offside
     for (const q of P) q.recv = 0; ball.spinT = 0;
     setp = null;
     if (ball.lastTeam !== p.team) wonAt[p.team] = clock; // we just won it (the clock counts down)
@@ -3124,7 +3131,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   function pass(p, q, through, hard, sx, sy) {
     if (!q || (ball.rs === 'pen' && p.frozen > 0 && (pen || so))) return; // no passing at a penalty
     const dir = q.team ? -1 : 1;
-    const off = isOffside(q, p); // judged when the ball is played
+    const off = isOffside(q, p), offs = offsNow(p); // judged when the ball is played
     let tx = q.x + q.vx * 0.15, ty = q.y + q.vy * 0.15, pt = null;
     if (through) { // into the space in front of him: the way you push the stick if that is forward, otherwise toward goal
       let ux = dir, uy = (CY - q.y) / 700;
@@ -3146,7 +3153,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (toKeeper) speed = Math.min(speed, 560); // gentle back-pass
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
     release(p, p.fx * speed, p.fy * speed, 0.3);
-    ball.last = { team: p.team, pass: true, to: q.i, off, pt };
+    ball.last = { team: p.team, pass: true, to: q.i, off, offs, pt };
     q.recv = 1.8; // the receiver runs to meet the ball by himself for a moment
     // pass and go: a midfielder or forward who lays it off in their half keeps running, ready for it back
     if (size >= 5 && !setp && !isKeeper(p) && formOf(p)[0] > 0.35 && (q.x - p.x) * dir > -60 && d < 330 && (p.x - CX) * dir > -120) { p.run = 1.5; p.runH = true; }
@@ -3159,6 +3166,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   // chip over the keeper: two quick taps on SKYD
   function lob(p, ax, ay, q, lp) {
+    const offs = offsNow(p); // before the ball leaves his foot (a set piece taker is never offside-passing)
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     const pt = q && ax !== undefined ? [p.x + ax, p.y + ay] : null;
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
@@ -3169,13 +3177,14 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const dd = Math.hypot(ax, ay), T = Math.max(0.5, Math.min(0.9, dd / 520)), sp = Math.max(160, dd / T);
       ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.vz = (30 + GRAV / 2 * T * T) / T;
     }
-    ball.last = { team: p.team, pass: false }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
+    ball.last = { team: p.team, pass: false, offs }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
     const gx = p.team ? PL : PR;
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
     if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; ball.last.kc = Math.random() < 0.3; ball.last.dw = Math.random() < 0.4; q.recv = 1.6; handOver(p, q); } // the keeper comes for about a third of them // the man it is aimed at runs onto it
     tone(200, 0.12, 'triangle', 0.12, 120);
   }
   function header(p) {
+    if (offsideCall(p)) return;
     const dir = p.team ? -1 : 1, gx = p.team ? PL : PR, near = (gx - p.x) * dir < 430 && (gx - p.x) * dir > 0;
     let tx, ty;
     if (near) { // head it toward the corner the keeper is furthest from
@@ -3192,7 +3201,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (lu) abPop(p, 'luft');
     p.fx = dx / d; p.fy = dy / d;
     ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < (lu ? 0.42 : 0.7) }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them ball.gk = 'head'; ball.fresh = false;
+    ball.last = { team: p.team, pass: false, head: near, ks: Math.random() < (lu ? 0.42 : 0.7) }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them
+    ball.gk = 'head'; ball.fresh = false;
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Hovedstød!', t: 0.7 };
     tone(180, 0.07, 'triangle', 0.12, -60);
@@ -3208,6 +3218,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     sfx.slide();
   }
   function firstTime(p, inp) {
+    if (offsideCall(p)) return;
     const gx = p.team ? PL : PR, l = Math.hypot(inp.x, inp.y);
     let ax = l > 0.3 ? inp.x : gx - p.x, ay = l > 0.3 ? inp.y : CY - p.y;
     const head = ball.z > 30;
