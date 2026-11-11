@@ -581,6 +581,9 @@ table.st tr.me td { color: var(--gold); }
 .mkopt { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: -4px 0 4px 40px; padding: 8px 10px; border-radius: 0 0 10px 10px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-top: 0; }
 .mkopt button { min-height: 0; padding: 7px 12px; font-size: 13px; } .mkopt span { font-size: 12px; color: var(--muted); flex: 1 1 100%; }
 .mkrow.out { border-color: #7fd3ff; }
+.trgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; } .trgrid .scbox { align-items: stretch; text-align: center; min-width: 0; }
+.trgrid .pk { animation: none; margin: 2px auto; } .trcode { font-size: 36px; font-weight: 800; letter-spacing: 0.22em; color: var(--gold); text-align: center; }
+.trjoin { display: flex; gap: 8px; } .trjoin input { flex: 1; min-width: 0; text-align: center; font-size: 18px; } .trgrid input[type=range] { width: 100%; }
 .scbox { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; }
 .scbox b { font-size: 14px; } .scbox .big { font-size: 20px; font-weight: 800; color: var(--gold); }
 .mkrow.arm { border-color: #ff6b5e; } .mkrow.yo { border-color: var(--gold); }
@@ -917,6 +920,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       <div class="mklist" id="mkBuy"></div>
       <div class="mklist" id="mkScout"></div>
       <div class="mklist" id="mkSell"></div>
+      <div class="mklist" id="mkFriend"></div>
       <div class="mktoast" id="mkToast" hidden></div>
     </div>
   </div>
@@ -6139,6 +6143,97 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const M2 = mktLoad(); M2.out = (M2.out || []).filter(o => o.n !== p2.n); mktSave(M2);
     squadSave(S2); addCoins(worth, 'salg'); mkArm = -1; mkOpen = ''; sqSel = 0; sfx.win(); showToast(`${p2.n} er solgt${how ? ' til ' + how : ''} for ${worth} mønter`);
   }
+  // ---------- handel med en ven, telefon til telefon (ingen server): begge går ind i det samme handelsrum ----------
+  let tnet = null, tr = null, trMsg = '';
+  function cleanPl(o) { // a player as he comes over the line: only what the game knows, within its limits
+    if (!o || typeof o !== 'object' || !['MV', 'FO', 'MB', 'AN'].includes(o.pos)) return null;
+    const p = { n: String(o.n || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 22) || 'Spiller', pos: o.pos, nat: NATS[o.nat] ? o.nat : 'DK' };
+    for (const [k] of SKILLS) p[k] = Math.max(40, Math.min(99, Math.round(Number(o[k])) || 50));
+    if (o.pos !== 'MV' && DPOS3[o.pos].includes(o.dp)) p.dp = o.dp;
+    const pool = abFor(o.pos), ab = [...new Set((Array.isArray(o.ab) ? o.ab : []).filter(a => typeof a === 'string' && pool.includes(a)))].slice(0, 2); if (ab.length) p.ab = ab;
+    const age = Math.round(Number(o.age)), pot = Math.round(Number(o.pot));
+    if (age >= 15 && age <= 40) p.age = age; if (pot >= 40 && pot <= 99) p.pot = pot;
+    return p;
+  }
+  const trSend = () => { if (tnet && tr) tnet.presence({ r: 't', n: cfg.name || '', of: tr.of ? { id: tr.of.id, p: cleanPl(tr.of.p), pr: tr.of.pr } : 0, buy: tr.buy || 0, sold: tr.sold || 0 }); };
+  function tradeLeave(msg) { if (tnet) { try { tnet.leave(); } catch (_) {} } tnet = null; tr = null; trMsg = msg || ''; }
+  async function tradeOpen(role, code) {
+    if (!room || tnet || (tr && tr.busy)) return;
+    tr = { busy: true, role, code, peer: null, of: null, buy: 0, buyP: null, sold: 0, pick: -1, price: 0 }; trMsg = ''; tradePaint();
+    let n2 = null; try { n2 = await room.join('mft-' + code, role); } catch (_) { n2 = null; }
+    if (!tr || tr.code !== code) { if (n2) { try { n2.leave(); } catch (_) {} } return; }
+    if (!n2) { tradeLeave(role === 'h' ? 'Kunne ikke åbne rummet. Prøv igen.' : 'Kunne ikke finde rummet. Tjek koden, og at din ven har åbnet det.'); tradePaint(); return; }
+    tnet = n2; tr.busy = false; trSend(); tnet.onPeers(trPeers); tradePaint();
+  }
+  function trPeers(ev) {
+    if (!tr || !tnet) return;
+    const o = ((ev && ev.peers) || []).map(q => !q.isMe && q.presence).find(q => q && q.r === 't');
+    if (!o) { if (tr.peer) { showToast(`${tr.peer.n} gik ud af rummet`); tr.buy = 0; tr.buyP = null; } tr.peer = null; tradePaint(); return; }
+    const nm = String(o.n || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 14) || 'Din ven';
+    let of = null; if (o.of && typeof o.of === 'object' && typeof o.of.id === 'number') { const p = cleanPl(o.of.p); if (p) of = { id: o.of.id, p, pr: Math.max(0, Math.min(99995, Math.round(Number(o.of.pr) / 5) * 5 || 0)) }; }
+    tr.peer = { n: nm, of };
+    if (tr.of && o.buy === tr.of.id) { // your friend says yes: he leaves your squad, the money arrives
+      const S = squadLoad(), i = S.pl.findIndex(q => q.n === tr.of.p.n), pr = tr.of.pr, id = tr.of.id;
+      tr.of = null; tr.pick = -1;
+      if (i > 0 && S.pl.length > 11) { mktSold(i, pr, nm); tr.sold = id; hubPaint(); }
+      trSend();
+    }
+    if (tr.buy && o.sold === tr.buy && tr.buyP) { // the seller has let him go: he is yours now
+      const S = squadLoad(), np = { ...tr.buyP.p, mor: 80 }, pr = tr.buyP.pr;
+      tr.buy = 0; tr.buyP = null;
+      if (S.pl.some(q => q.n === np.n)) np.n = (np.n + ' II').slice(0, 22);
+      S.pl.push(np); squadSave(S); addCoins(-pr, 'køb'); sfx.win(); buzz(30); trSend(); hubPaint();
+      packFx(np, 'Fra ' + nm, () => { showToast(`${np.n} er din nu`); mktShow(); }); return;
+    } else if (tr.buy && (!of || of.id !== tr.buy)) { tr.buy = 0; tr.buyP = null; showToast('Tilbuddet blev trukket tilbage'); trSend(); }
+    tradePaint();
+  }
+  function tradePaint() {
+    const X = $('mkFriend'); if (!X) return; X.textContent = '';
+    const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+    if (!tnet) {
+      const box = el('div', 'scbox'); box.append(el('b', '', '🤝 Handel med en ven'), el('span', 'sqnote', room ? 'I skal begge have spillet åbent. Den ene åbner et handelsrum og siger koden højt, den anden skriver den. Så kan I sælge spillere til hinanden.' : 'Handel med en ven virker på spillets eget link.'));
+      if (trMsg) box.append(el('span', 'sqnote', trMsg));
+      if (room) {
+        const op = el('button', '', tr && tr.busy ? 'Åbner…' : 'Åbn handelsrum'); op.disabled = !!(tr && tr.busy); op.onclick = () => tradeOpen('h', String(1000 + Math.floor(Math.random() * 9000)));
+        const row = el('div', 'trjoin'), inp = el('input'); inp.inputMode = 'numeric'; inp.maxLength = 4; inp.placeholder = 'Kode'; inp.setAttribute('aria-label', 'Handelskode'); inp.autocomplete = 'off';
+        const go = el('button', 'alt', 'Gå ind'); go.disabled = !!(tr && tr.busy); go.onclick = () => { const c = (inp.value || '').replace(/\D/g, ''); if (c.length !== 4) { trMsg = 'Koden er fire tal.'; tradePaint(); return; } tradeOpen('g', c); };
+        row.append(inp, go); box.append(op, row);
+      }
+      X.appendChild(box); return;
+    }
+    if (!tr.peer) {
+      const box = el('div', 'scbox'); box.append(el('b', '', tr.role === 'h' ? 'Sig koden til din ven' : 'Finder din ven…'), el('div', 'trcode', tr.code), el('span', 'sqnote', 'Venter på at din ven går ind i rummet.'));
+      const cl = el('button', 'alt', 'Luk rummet'); cl.onclick = () => { tradeLeave(); tradePaint(); }; box.append(cl); X.appendChild(box); return;
+    }
+    const g = el('div', 'trgrid'), A = el('div', 'scbox'), B = el('div', 'scbox'), S = squadLoad(), coins = loadProf().coins;
+    A.append(el('b', '', 'Du tilbyder'));
+    if (tr.of) {
+      const c = el('div'); cardHTML(c, tr.of.p); A.append(c, el('span', 'big', tr.of.pr ? `${tr.of.pr} mønter` : 'Gratis'), el('span', 'sqnote', `Venter på svar fra ${tr.peer.n}.`));
+      const w = el('button', 'alt', 'Træk tilbage'); w.onclick = () => { tr.of = null; trSend(); tradePaint(); }; A.append(w);
+    } else if (tr.pick > 0 && S.pl[tr.pick] && S.pl.length > 11) {
+      const p = S.pl[tr.pick], c = el('div'); cardHTML(c, p);
+      const v = valOf(p), max = Math.max(100, Math.round(v * 3 / 5) * 5); if (!(tr.price >= 0 && tr.price <= max)) tr.price = v;
+      const lab = el('span', 'big', tr.price ? `${tr.price} mønter` : 'Gratis'), sl = el('input'); sl.type = 'range'; sl.min = 0; sl.max = max; sl.step = 5; sl.value = tr.price; sl.setAttribute('aria-label', 'Pris');
+      sl.oninput = () => { tr.price = +sl.value; lab.textContent = tr.price ? `${tr.price} mønter` : 'Gratis'; };
+      const ok = el('button', '', `Tilbyd til ${tr.peer.n}`); ok.onclick = () => { const S2 = squadLoad(); if (!S2.pl[tr.pick] || S2.pl[tr.pick].n !== p.n) { tr.pick = -1; tradePaint(); return; } tr.of = { id: Math.floor(Math.random() * 1e9) + 1, p, pr: tr.price }; tr.sold = 0; trSend(); tradePaint(); };
+      const no = el('button', 'alt', 'Vælg en anden'); no.onclick = () => { tr.pick = -1; tradePaint(); };
+      A.append(c, lab, sl, el('span', 'sqnote', `Han er omkring ${v} mønter værd.`), ok, no);
+    } else if (S.pl.length <= 11) A.append(el('span', 'sqnote', 'Du skal beholde mindst 11 spillere, så du kan ikke sælge lige nu.'));
+    else {
+      A.append(el('span', 'sqnote', 'Vælg den spiller, du vil sælge.'));
+      S.pl.map((p, i) => ({ p, i })).filter(q => q.i > 0).sort((a, b) => ovr(b.p) - ovr(a.p)).forEach(({ p, i }) => { const r = mktRow(p, 'Vælg', () => { tr.pick = i; tr.price = valOf(p); tradePaint(); }); r.querySelector('.st').remove(); A.appendChild(r); });
+    }
+    B.append(el('b', '', `${tr.peer.n} tilbyder`));
+    const of = tr.peer.of;
+    if (of) {
+      const c = el('div'); cardHTML(c, of.p); B.append(c, el('span', 'big', of.pr ? `${of.pr} mønter` : 'Gratis'));
+      const full = S.pl.length >= SQ_MAX, poor = coins < of.pr, buy = el('button', '', tr.buy ? 'Handler…' : full ? 'Truppen er fuld' : poor ? `Mangler ${of.pr - coins} mønter` : of.pr ? `Køb · ${of.pr} mønter` : 'Tag imod');
+      buy.disabled = !!tr.buy || full || poor; buy.onclick = () => { tr.buy = of.id; tr.buyP = of; trSend(); tradePaint(); };
+      B.append(buy);
+    } else B.append(el('span', 'sqnote', `${tr.peer.n} har ikke tilbudt en spiller endnu.`));
+    g.append(A, B); X.appendChild(g);
+    const cl = el('button', 'alt', 'Forlad handelsrummet'); cl.onclick = () => { tradeLeave(); tradePaint(); }; X.appendChild(cl);
+  }
   function mktShow() {
     const M = mktLoad(), S = squadLoad(), pr = loadProf(), B = $('mkBuy'), SL = $('mkSell');
     B.textContent = ''; SL.textContent = '';
@@ -6152,7 +6247,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     B.appendChild(nb);
     const inf2 = document.createElement('p'); inf2.className = 'sqnote'; inf2.textContent = 'Sælg dem du ikke bruger: hurtigt for en lav pris, eller sæt dem til salg og vent på bud. Du skal beholde mindst 11.'; SL.appendChild(inf2);
     M.out = (M.out || []).filter(o => S.pl.some(q => q.n === o.n)); const outs = M.out;
-    scoutPaint(M);
+    scoutPaint(M); tradePaint();
     S.pl.map((p2, i) => ({ p2, i })).sort((a, b) => ovr(a.p2) - ovr(b.p2)).forEach(({ p2, i }) => {
       const lock = i === 0 || S.pl.length <= 11, key = 'o' + i + p2.n, listed = outs.find(o => o.n === p2.n), of = listed ? outOffer(listed, p2) : null;
       const row = mktRow(p2, lock ? (i === 0 ? 'Din målmand' : 'Mindst 11') : mkOpen === key ? 'Luk' : listed ? (of.best ? `Bud: ${of.best.amt}` : 'Til salg') : 'Sælg', () => { if (lock) return; mkOpen = mkOpen === key ? '' : key; mkArm = -1; mktShow(); }, listed ? 'out' : '');
@@ -6173,7 +6268,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       }
       o.appendChild(quick); SL.appendChild(o);
     });
-    subTabs($('mktOv'), [['Køb', ['mkBuy']], ['Scout', ['mkScout']], ['Sælg', ['mkSell']]], 'mkt', B);
+    subTabs($('mktOv'), [['Køb', ['mkBuy']], ['Scout', ['mkScout']], ['Sælg', ['mkSell']], ['Ven', ['mkFriend']]], 'mkt', B);
     paintCoins(); $('mktOv').hidden = false;
   }
   function showToast(t) { const e = $('mkToast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(showToast.t); showToast.t = setTimeout(() => { e.hidden = true; }, 2200); }
@@ -6433,7 +6528,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   }
   function squadInit() {
     $('goClub').onclick = clubShow; $('clClose').onclick = () => { $('clubOv').hidden = true; hubPaint(); };
-    $('goMarket').onclick = () => { mkArm = -1; mktShow(); }; $('mkClose').onclick = () => { $('mktOv').hidden = true; hubPaint(); };
+    $('goMarket').onclick = () => { mkArm = -1; mktShow(); }; $('mkClose').onclick = () => { tradeLeave(); $('mktOv').hidden = true; hubPaint(); };
     $('abClose').onclick = () => { $('abOv').hidden = true; };
     $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } sqRefresh(); });
     $('sqClose').onclick = () => { $('squad').hidden = true; };
