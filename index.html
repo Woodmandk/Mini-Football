@@ -2906,7 +2906,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     else if (mode === 'cpu' && size === 1) t.textContent = win === 0 ? 'You won' : 'The computer won';
     else t.textContent = win === me ? 'You won' : (mode === 'cpu' ? 'The computer won' : 'You lost');
     $('fh').textContent = score[0]; $('fa').textContent = score[1];
-    $('endMsg').textContent = (ss ? `Penalty shootout: ${ss[0]}-${ss[1]}. ` : '') + (mode === 'guest' ? 'The host can start a new match.' : '');
+    $('endMsg').textContent = (ss ? `Penalty shootout: ${ss[0]}-${ss[1]}. ` : '') + (mode === 'guest' ? (gCoop ? 'The host starts the next match.' : 'The host can start a new match.') : '');
     $('again').hidden = mode === 'guest';
     $('again').textContent = 'Play again';
     if (mode === 'host') updateAgain();
@@ -5179,7 +5179,14 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       extra = r.text; $('toSeason').hidden = false; $('again').hidden = true;
     }
     if (coopTwo && win === 0) give('coop');
-    if (comp) { const r = compAfter(win, give); coins += r.coins || 0; if (r.champ) give('kocup'); if (r.text) extra = r.text; }
+    coOut = null;
+    if (comp) {
+      const cg = [], r = compAfter(win, id => { cg.push(id); give(id); }); coins += r.coins || 0; if (r.champ) { give('kocup'); cg.push('kocup'); } if (r.text) extra = r.text;
+      if (mode === 'host') coOut = { p: r.coins || 0, tx: r.text || '', tr: cg, c: 0, tp: 0 }; // everyone on the team gets the same out of it
+    }
+    const sh = mode === 'guest' && gCoop && me === 0 ? coG : null; // co-op on another phone: the host's competition result is yours too
+    if (mode === 'guest' && gCoop && me === 0 && win === 0) give('coop');
+    if (sh) { for (const id of sh.tr) give(id); coins += sh.p; if (sh.tx) extra = sh.tx; }
     coins += got.length * 50;
     if (me === 0 || me === 1) { // experience: the team levels up and the club pays a bonus
       const gf = score[me], won = win === me;
@@ -5196,10 +5203,17 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       if (ecoNet(eco) < -pr.coins) { eco.short = true; const S9 = squadLoad(); for (const q of S9.pl) q.mor = Math.max(10, morOf(q) - 3); squadSave(S9); }
       ecoBook(eco, win === me ? 1 : win < 0 || win == null ? 0 : -1);
     }
+    if (sh) coins = Math.max(coins, sh.c); // never less than the one who started it
     pr.coins += coins; saveProf(pr);
     let tp = 0;
     if ((me === 0 || me === 1) && kind !== 'pen') { tp = Math.round((4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0)) * (1 + 0.1 * facLv('tr')) * (own && friendly ? 1.5 : 1)); addTP(tp); }
     if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Tired legs: ' + tired.slice(0, 3).join(', ') + '. Give them a rest'; for (const nw of tired.news || []) extra = (extra ? extra + ' · ' : '') + nw; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
+    if (sh && kind !== 'pen') { // your own squad was part of it: the same training points, and your starters develop too
+      if (sh.tp > tp) { addTP(sh.tp - tp); tp = sh.tp; }
+      const ups = squadGrowAway(win === me);
+      extra = (extra ? extra + ' · ' : '') + 'Shared with the whole team' + (ups.length ? ' · Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? '…' : '') : '');
+    }
+    if (coOut) { coOut.c = Math.max(0, coins); coOut.tp = tp; }
     if (eco) extra = `${eco.att.toLocaleString('en')} fans · prize +${eco.p}, gate +${eco.g}` + (eco.s ? `, sponsors +${eco.s}` : '') + (eco.m ? `, shop +${eco.m}` : '') + (eco.tv ? `, TV +${eco.tv}` : '') + `, wages −${eco.w}` + (eco.u ? `, upkeep −${eco.u}` : '') + (eco.ln ? `, loan −${eco.ln}` : '') + (eco.loanEnd ? '. The loan is paid off' : '') + (eco.short ? '. There was not enough for all the wages: morale drops' : '') + (eco.spEnd ? '. The sponsor deal has ended: pick a new one under The club' : '') + (extra ? ' · ' + extra : '');
     if (own && friendly) extra = 'Friendly: no prize and no wages' + (extra ? ' · ' + extra : '');
     rw.textContent = `${coins >= 0 ? '+' : '−'}${Math.abs(coins)} coins` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · New trophy: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
@@ -5488,7 +5502,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
   // ---------- Competitions: the co-op cup ('mf-ko') and the career ('mf-career') ----------
   // A competition match: comp = { type, a, b, size, mins, diff, how } where a is your side and b the computer.
   // how: 0 = together on one phone (both on the same team), 1 = together online (the host's phone keeps the competition), 2 = alone
-  let comp = null, coopTwo = false, hostRoom = null;
+  let comp = null, coopTwo = false, hostRoom = null, coOut = null, coG = null; // coOut: what the host shares after a co-op match, coG: what a guest was told
   const HOWN = ['Together on one phone', 'Together online', 'Alone'];
   function rr8(ids) { // 8 teams, everyone meets everyone once: 7 rounds of 4 matches (circle method)
     const t = ids.slice(), rounds = [];
@@ -5557,7 +5571,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
   function koNew(me, sz, mins, diff, how) {
     const pool = shuffle(TEAMS.filter(t => t.id !== me && !t.own).map(t => t.id)).slice(0, 7);
     const ids = shuffle([me, ...pool]);
-    koSave({ me, size: sz, mins, diff, how, R: [ids], sc: [], r: 0, out: false, champ: false });
+    koSave({ me, size: sz, mins, diff, how, R: [ids], sc: [], r: 0, out: false, champ: false, cid: Math.random().toString(36).slice(2, 10) });
   }
   function koOpp(K) { const R = K.R[K.r], i = R.indexOf(K.me); return R[i ^ 1]; }
   function koComp() {
@@ -5583,9 +5597,9 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     if (!won) {
       K.out = true;
       while (K.r < 3) koRound(K, null); // the rest of the cup is played without you
-      text = `Out of the cup in the ${KO_RN[rn].toLowerCase()}n. ${TEAMS[K.R[3][0]].n} won the trophy.`;
+      text = `Out of the cup in the ${KO_RN[rn].toLowerCase()}. ${TEAMS[K.R[3][0]].n} won the trophy.`;
     } else if (K.r >= 3) { K.champ = true; coins = 150; text = 'You won the cup! 🏆'; }
-    else { coins = rn === 0 ? 30 : 50; text = `On to ${KO_RN[K.r].toLowerCase()}n!`; }
+    else { coins = rn === 0 ? 30 : 50; text = `On to the ${KO_RN[K.r].toLowerCase()}!`; }
     koSave(K);
     return { text, coins, champ: K.champ };
   }
@@ -6075,6 +6089,18 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
   // (goals and shots: Skud, passes: Aflevering, tackles won: Forsvar, sprinting: Fart), a little for just playing his
   // position too. Slower the higher he is rated. Saved in 'mf-squad', so it carries on from match to match.
   const POSMAIN = { MV: 'def', FO: 'def', MB: 'pas', AN: 'sht' };
+  function squadGrowAway(won) { // a co-op match played with a friend's squad: your own starters trained along and grow a little
+    const S = squadLoad(), ups = [], n = [1, 2, 3, 5, 7, 11].includes(size) ? size : 7, xi = xiManual(n, S) || xiAuto(n, S) || [];
+    for (const i of xi) {
+      const pl = S.pl[i]; if (!pl) continue;
+      const gx = pl.gx = pl.gx || {}, k = POSMAIN[pl.pos]; if (!k) continue;
+      gx[k] = (gx[k] || 0) + (won ? 0.6 : 0.4) / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1);
+      while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${(SKILLS.find(x => x[0] === k) || [0, k])[1]} ${pl[k]}`); }
+      gx[k] = Math.round(gx[k] * 100) / 100;
+    }
+    squadSave(S);
+    return ups;
+  }
   function squadGrow() {
     const S = squadLoad(), ups = [];
     for (const p of P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) { // the men who were subbed off grow from their part too
@@ -7743,7 +7769,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     makePlayers(matchSize()); assignLocal(); kickoff(); $('rosterR').dataset.key = '';
     $('menu').hidden = true; $('lobby').hidden = false;
     $('lobbyCode').textContent = code || 'Ranked'; $('lobbyLbl').textContent = quick ? `Ranked online · ${quickN} v ${quickN} · ${quickN === 11 ? 6 : 4} min` : 'Match code';
-    $('lobbyMsg').textContent = quick ? 'Looking for an opponent…' : comp ? `${comp.type === 'cup' ? 'Co-op cup' : 'Career'}: send the code to the people playing with you (up to ${size - 1}). You are all on ${comp.a.n} v ${comp.b.n}.` : `Send the code to your friends (up to ${size * 2 - 1}). Empty spots are played by the computer.`;
+    $('lobbyMsg').textContent = quick ? 'Looking for an opponent…' : comp ? `${comp.type === 'cup' ? 'Co-op cup' : 'Career'}: send the code to the people playing with you (up to ${size - 1}). You are all on ${comp.a.n} v ${comp.b.n}. Everyone gets the same prize money, XP and trophies.` : `Send the code to your friends (up to ${size * 2 - 1}). Empty spots are played by the computer.`;
     $('startOnline').hidden = quick; $('share').hidden = quick || window.top !== window; $('share').textContent = 'Share invite link';
     net.onPeers(ch => {
       const me = ch.peers.find(p => p.sameTab); if (me) myPeer = me.peer;
@@ -7878,7 +7904,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
 
 
   const RND = v => Math.round(v);
-  let packN = 0, cvN = 0;
+  let packN = 0, cvN = 0, koN = 0;
   function pack(st) {
     const now = performance.now();
     const o = {
@@ -7895,6 +7921,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     };
     if (st === 'e' && stats) o.ss = stats;
     if (st === 'e' && serEnd) o.sr = serEnd;
+    if (st === 'e' && comp && coOut) { o.co = coOut; if (kind === 'cup' && koN++ % 10 === 0) { const K = koLoad(); if (K) { if (!K.cid) { K.cid = Math.random().toString(36).slice(2, 10); koSave(K); } o.ko = K; } } } // the cup is shared like the career
     if (st === 'e' && comp && kind === 'career' && ++cvN % 10 === 1) { const C = carLoad(); if (C) { if (!C.cid) { C.cid = Math.random().toString(36).slice(2, 10); carSave(C); } o.cv = C; } } // the career is shared: the other phone saves it too
     if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx, tf: teamForm, tm: [0, 1].map(t => teamWire(comp ? comp[t ? 'b' : 'a'] : t === hostTeam() ? myCardTeam() : netTeam)), cp: comp ? 1 : 0, nm: P.map(p => nameOf(p, true)), sq: P.map(p => (p.sq ? [p.sq, p.ovr | 0, (p.ab || []).map(a => ABK().indexOf(a))] : 0)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Host'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
@@ -7911,9 +7938,22 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     if (mine && mine.cid !== cv.cid) { try { localStorage.setItem('mf-career-old', JSON.stringify(mine)); } catch (_) {} }
     cv.how = 1; carSave(cv);
   }
+  let koSeen = '';
+  function koShare(K) { // the co-op cup is kept on both phones too; a different cup still running here is kept aside in 'mf-ko-old'
+    if (!K || typeof K !== 'object' || !Array.isArray(K.R) || !Array.isArray(K.sc) || typeof K.cid !== 'string' || !TEAMS[K.me] || TEAMS[K.me].own) return;
+    if (!K.R.every(r => Array.isArray(r) && r.every(i => Number.isInteger(i) && TEAMS[i]))) return;
+    const j = JSON.stringify(K); if (j === koSeen || j.length > 6000) return; koSeen = j;
+    const mine = koLoad();
+    if (mine && mine.cid !== K.cid && !mine.out && !mine.champ) { try { localStorage.setItem('mf-ko-old', JSON.stringify(mine)); } catch (_) {} }
+    K.how = 1; koSave(K);
+  }
+  const CO_TRO = ['coop', 'kocup', 'champ', 'promo'];
   function applyState(s) {
     if (!s || !Array.isArray(s.p) || !Array.isArray(s.b)) return;
     if (s.cv) carShare(s.cv);
+    if (s.ko) koShare(s.ko);
+    if (s.st !== 'e') coG = null;
+    else if (s.co && typeof s.co === 'object') coG = { p: clamp(Number(s.co.p) | 0, 0, 800), c: clamp(Number(s.co.c) | 0, 0, 1500), tp: clamp(Number(s.co.tp) | 0, 0, 60), tx: String(s.co.tx || '').slice(0, 400), tr: (Array.isArray(s.co.tr) ? s.co.tr : []).filter(x => CO_TRO.includes(x)) };
     const z = [1, 2, 3, 5, 7, 11].includes(Number(s.z)) ? Number(s.z) : 1;
     if (P.length !== z * 2) makePlayers(z);
     lobbySize = z;
@@ -7940,7 +7980,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
         renderRoster(false); lobbyUI();
         const mine = roster.some(r => r[0] === myPeer);
         if (quick) $('lobbyMsg').textContent = mine ? `Opponent found: ${hostInfo[1] || 'Host'}. The match starts shortly…` : 'Found someone waiting. Connecting…';
-        else $('lobbyMsg').textContent = (gCoop ? 'Co-op: you are all on the same team against the computer. ' : '') + (mine ? (gLr ? `You are ready. The match starts when everyone is ready (${lobbyLr[0] + lobbyLr[2]}/${lobbyLr[1] + 1}).` : 'You are in. Pick a formation and tap Ready.') : 'The match is full, but you can watch.');
+        else $('lobbyMsg').textContent = (gCoop ? 'Co-op: you are all on the same team against the computer, and everyone gets the same prize money, XP and trophies. ' : '') + (mine ? (gLr ? `You are ready. The match starts when everyone is ready (${lobbyLr[0] + lobbyLr[2]}/${lobbyLr[1] + 1}).` : 'You are in. Pick a formation and tap Ready.') : 'The match is full, but you can watch.');
       }
       return;
     }
