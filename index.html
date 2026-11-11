@@ -2321,10 +2321,22 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         if (on) start();
         if (!g) return;
         swell = Math.max(0, swell - dt / 2.5);
+        if (on && mode !== 'guest' && !banner && !setp && !(pause > 0)) { // the stands read the game
+          const o = ball.owner >= 0 ? P[ball.owner] : null, me = localTeam();
+          this.riseCd = (this.riseCd || 0) - dt; this.drumT = (this.drumT || 0) - dt;
+          if (o && o.team !== this.posTeam) { this.posTeam = o.team; this.posT = 0; } else if (o) this.posT = (this.posT || 0) + dt;
+          // through into their box: the stand rises with a long "ooooh"
+          if (o && size > 1 && this.riseCd <= 0 && Math.abs((o.team ? PL : PR) - o.x) < 190 && Math.abs(o.y - CY) < 170) { this.riseCd = 7; swell = Math.max(swell, 0.45); voices(150, o.team === me ? 265 : 205, 1.1, 0.04, 0, 520, 8); }
+          // the other side keeps the ball for ages: whistles from our stand
+          if (o && o.team !== me && this.posT > 11) { this.posT = 5; for (let i = 0; i < 3; i++) whistleAt(Math.random() * 0.8); }
+          // we are on top: the drum gets going
+          if (momEdge(me) > 0.45 && this.drumT <= 0) { this.drumT = 5.5; for (const a of [0, 0.35, 0.7, 0.95, 1.2]) drum(a); this.claps(2); }
+        }
         if (on && (this.clapT = (this.clapT || 9) - dt) <= 0) { this.clapT = 12 + Math.random() * 14; this.claps(3 + Math.floor(Math.random() * 2)); } // the stands clap along now and then
         if (on && !banner && (this.chantT = (this.chantT || 20) - dt) <= 0) { this.chantT = 22 + Math.random() * 18; this.chant(); } // and sing
         const near = Math.max(0, 1 - Math.min(Math.abs(ball.x - PL), Math.abs(PR - ball.x)) / 320);
-        const target = on ? 0.025 + near * 0.035 + swell * 0.2 + Math.max(mom[0], mom[1]) * 0.03 : 0;
+        const tense = clock < 45 && half >= 2 && Math.abs(score[0] - score[1]) <= 1 ? 0.02 : 0; // a tight finish: everyone is on their feet
+        const target = on ? 0.025 + near * 0.035 + swell * 0.2 + Math.max(mom[0], mom[1]) * 0.03 + tense : 0;
         if (Math.abs(target - last) < 0.002) return; // nothing audible changed
         last = target;
         g.gain.setTargetAtTime(target, ac.currentTime, 0.15);
@@ -2440,6 +2452,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     'Frispark': 'Frispark', 'Hjørnespark': 'Hjørnespark', 'Golden goal': '',
     'Regnvejr': 'Det regner. Bolden glider hurtigt på det våde græs.', 'Snevejr': 'Der ligger sne på banen. Bolden går hurtigt i stå.', };
   const pick = a => a[Math.floor(Math.random() * a.length)];
+  let saveKind = ''; // how the keeper saved the last one, for the commentator
+  const SAVE_SAY = { tip: ['Fingerspidserne! Over overliggeren.', 'Han får lige en hånd på den! Hjørnespark.', 'Sikke en parade! Over mål.'], spill: ['Han kan ikke holde den!', 'Den ligger løs i feltet!', 'Reddet, men bolden er fri!'], parry: ['Slået væk af målmanden!', 'Han bokser den til side!', 'Stor redning! Den er stadig i spil.'] };
   const comm = { last: 0, text: '', owner: -1, team: -1, shotAt: 0, missSaid: 0, alone: -1, prevClock: 999, prevBanner: '' };
   // Phones only let a page talk after the player has tapped something, so the first line is spoken from a tap.
   let voice = null, busyUntil = 0, speechUnlocked = false;
@@ -2492,16 +2506,26 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       else if (text === 'MÅL!') {
         let n = mode === 'guest' ? matchGoals[matchGoals.length - 1] : lastScorer; if (n === 'Computer') n = '';
         const t = score[0] + score[1] ? (comm.lastScore0 !== score[0] ? 0 : 1) : 0;
-        say((n ? pick([`Mål! ${n} scorer!`, `Mååål! Og det er ${n}!`, `Mål af ${n}!`]) : `Mål til ${teamIs(t)}!`) + ' ' + scoreLine() + '.', 2);
+        // what the goal means: an equaliser, the lead, his second or third, a late one, a header
+        const a = score[t], b = score[1 - t], times = n && mode !== 'guest' ? matchGoals.filter(x => x === n).length : 1, hd = lastGk === 'head' && mode !== 'guest';
+        let ctxL = a === b ? pick(['Udligning!', 'Så er der balance igen.']) : a === b + 1 ? pick([`${teamIs(t)} er foran!`, `Der kom føringen!`]) : a > b ? pick(['De trækker fra.', `${teamIs(t)} udbygger føringen.`]) : pick(['Reducering! Der er stadig håb.', 'De er med igen.']);
+        if (times === 2) ctxL = `Hans andet mål i dag! ` + ctxL; else if (times >= 3) ctxL = `Hattrick! ` + ctxL;
+        if (clock < 30 && Math.abs(a - b) <= 1) ctxL += ' Og det er lige før slutfløjtet!';
+        say((n ? pick(hd ? [`Mål! ${n} header den ind!`, `Hovedstødsmål af ${n}!`] : [`Mål! ${n} scorer!`, `Mååål! Og det er ${n}!`, `Mål af ${n}!`, `${n} sparker den i nettet!`]) : `Mål til ${teamIs(t)}!`) + ' ' + ctxL + ' ' + scoreLine() + '.', 2);
       } else if (comm.prevBanner === 'Pause' && text === 'Klar') say('Så er vi i gang med anden halvleg', 2);
       else if ((text === 'Målspark' || text === 'Hjørnespark') && now - comm.shotAt < 2500 && comm.missSaid !== comm.shotAt) { comm.missSaid = comm.shotAt; say(pick(['Lige forbi!', 'Tæt på!', 'Uh, det var tæt på!']), 2); }
       else if ((text === 'Gult kort' || text === 'Rødt kort') && lastCard && mode !== 'guest') say(text === 'Gult kort' ? pick([`Gult kort til ${lastCard}`, `Dommeren giver ${lastCard} et gult kort`]) : pick([`Rødt kort til ${lastCard}! Han er ude.`, `Rødt kort! ${lastCard} må gå af banen.`]), 2);
+      else if (text === 'Redning!' && saveKind) { say(pick(SAVE_SAY[saveKind] || ['Hvilken redning!']), 2); saveKind = ''; }
+      else if (text === 'Redning!') say(pick(['Hvilken redning!', 'Målmanden har den!', 'Flot reddet!']), 2);
+      else if (text === 'Pause') say('Så er der pause. ' + scoreLine() + '.', 2);
+      else if (text === 'Bolden vundet') say(pick(['Flot erobring!', 'Perfekt timet!', 'Der snuppede han den!']), 1.5);
       else if (SAY[text]) say(SAY[text], 2);
     }
     comm.prevBanner = banner; comm.lastScore0 = score[0];
     if (banner || pen) return;
     // clock
     if (comm.prevClock > 30 && clock <= 30 && clock > 0) say('Sidste halve minut!', 1.5);
+    if (comm.prevClock > 60 && clock <= 60 && half >= 2 && Math.abs(score[0] - score[1]) <= 1) say(score[0] === score[1] ? 'Et minut igen, og kampen er helt åben!' : `Et minut igen. ${teamIs(score[0] > score[1] ? 1 : 0)} jagter udligningen!`, 1.5);
     if (comm.prevClock > 10 && clock <= 10 && clock > 0) say('Ti sekunder tilbage!', 1.5);
     comm.prevClock = clock;
     const o = ball.owner >= 0 ? P[ball.owner] : null;
@@ -2525,7 +2549,12 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     // something to say when it's quiet
     if (now - comm.last > 13000) {
       const S = stats; let line = scoreLine();
-      if (S && Math.random() < 0.4) { const tot = (S.pos[0] + S.pos[1]) || 1, t = S.pos[0] > S.pos[1] ? 0 : 1; line = `${teamIs(t)} har haft bolden ${Math.round(S.pos[t] / tot * 100)} procent af tiden`; }
+      const r = Math.random();
+      if (S && r < 0.25) { const tot = (S.pos[0] + S.pos[1]) || 1, t = S.pos[0] > S.pos[1] ? 0 : 1; line = `${teamIs(t)} har haft bolden ${Math.round(S.pos[t] / tot * 100)} procent af tiden`; }
+      else if (S && r < 0.45 && S.sh[0] + S.sh[1] > 1) { const t = S.sh[0] >= S.sh[1] ? 0 : 1; line = S.sh[t] === S.sh[1 - t] ? `Lige mange afslutninger til de to hold: ${S.sh[t]} hver` : `${teamIs(t)} har ${S.sh[t]} afslutninger mod ${S.sh[1 - t]}`; }
+      else if (r < 0.62 && mode !== 'guest') { const best = P.filter(q => on(q) && q.ms && nameOf(q)).sort((x, y) => (y.ms.g * 3 + y.ms.tk + y.ms.pa * 0.15 + (y.ms.sv || 0) * 1.5) - (x.ms.g * 3 + x.ms.tk + x.ms.pa * 0.15 + (x.ms.sv || 0) * 1.5))[0]; if (best && best.ms.g * 3 + best.ms.tk + best.ms.pa * 0.15 > 2.5) line = pick([`${whoIs(best)} har været god i dag`, `${whoIs(best)} er overalt på banen`]); }
+      else if (r < 0.75 && mode !== 'guest') { const tired = P.filter(q => on(q) && q.fat > 0.28 && nameOf(q))[0]; if (tired) line = pick([`${whoIs(tired)} ser træt ud`, `${whoIs(tired)} har løbet meget i dag`]); }
+      else if (r < 0.85 && wx) line = wx === 1 ? 'Regnen gør banen hurtig og glat' : 'Sneen gør det svært at spille bolden langs jorden';
       say(line, 1);
     }
   }
@@ -2939,7 +2968,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         knock = rv0 > 430 && Math.random() < ((rv0 - 430) / 600 + (p.sprint ? 0.15 : 0)) * tech;
       }
       // a knock-on first touch: the ball runs a couple of metres ahead of him. Quicker away if there is room, easy to nick if there is not
-      if (knock && inPass && !(p.hands > 0) && !setp && !pen && !so) { p.heavy = HEAVY_T; ball.stealCd = 0; }
+      if (knock && inPass && !(p.hands > 0) && !setp && !pen && !so) { p.heavy = HEAVY_T; ball.stealCd = 0; tone(95, 0.07, 'sine', 0.09, -25); }
     }
   }
   function release(p, vx, vy, nopick) {
@@ -3216,6 +3245,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     if (stats) stats.tk[a.team]++;
     if (a.ms) a.ms.tk++;
     momAdd(a.team, 0.07);
+    if (a.team === localTeam() && !isKeeper(a)) crowd.claps(1);
     grab(a); ball.stealCd = Math.max(ball.stealCd || 0, 1.5); // the winner gets a moment to get away, no instant win-back (no ping-pong)
     sfx.win(); shake = Math.max(shake, 3);
   }
@@ -3288,18 +3318,21 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     dive(p, dx / l * 450, dy / l * 450);
   }
   function parry(p) { // a hard shot at full stretch: palmed away instead of held
+    saveKind = 'parry';
     const dir = p.team ? -1 : 1, s = Math.hypot(ball.vx, ball.vy), side = Math.sign(p.dvy || ball.y - p.y || 1);
     ball.vx = dir * s * 0.3; ball.vy = side * s * 0.36; ball.vz = 170; ball.z = Math.max(ball.z, 4);
     ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.4;
     tone(150, 0.08, 'triangle', 0.14, -60); shake = Math.max(shake, 4);
   }
   function tipOver(p) { // fingertips: over the bar and behind for a corner
+    saveKind = 'tip';
     const dir = p.team ? -1 : 1, gx = p.team ? PR : PL, side = Math.sign(p.dvy || ball.y - p.y || 1);
     ball.vx = -dir * Math.max(260, (Math.abs(ball.x - gx) + 20) / 0.4); ball.vy = side * 70; ball.z = Math.max(ball.z, BAR + 8); ball.vz = 300;
     ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.8;
     tone(170, 0.07, 'triangle', 0.12, -40); shake = Math.max(shake, 3);
   }
   function spill(p) { // he gets his body behind it but can't hold it: a loose ball in the box
+    saveKind = 'spill';
     const dir = p.team ? -1 : 1, a = (Math.random() - 0.5) * 1.6;
     ball.vx = dir * Math.cos(a) * 230; ball.vy = Math.sin(a) * 230; ball.vz = 150; ball.z = Math.max(ball.z, 6);
     ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = { team: p.team, pass: false, punt: true }; p.nopick = 0.55; p.recover = Math.max(p.recover, 0.3);
@@ -4373,7 +4406,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         if (rv < 760 || rd || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
           const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
           const shooter = P[ball.lastIdx], near = shooter && Math.hypot(shooter.x - p.x, shooter.y - p.y) < 300, stretch = p.dive > 0 || dBall(p) > REACH;
-          const ks = keeperSkill(p), rnd = Math.random();
+          const ks = keeperSkill(p), rnd = Math.random(); saveKind = '';
           if (save && shooter && shooter.team !== p.team) { shooter.rueAt = performance.now(); momAdd(shooter.team, 0.05); }
           if (save && stretch && sp2 > 700 && rnd < 0.8) { if (rnd < 0.3 && Math.abs(p.x - (p.team ? PR : PL)) < 130) tipOver(p); else parry(p); } // at full stretch: tipped over the bar for a corner, or palmed away
           else if (save && !stretch && sp2 > 880 && near && rnd < 0.62 - ks * 0.5) spill(p); // too hot to hold from close in: it drops in front of him
@@ -4409,7 +4442,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const dx = ball.x - px, dy = ball.y - py, d = Math.hypot(dx, dy), m = BRAD + POSTR;
       if (d < m && d > 0 && ball.z < BAR) {
         const nx = dx / d, ny = dy / d; ball.x = px + nx * m; ball.y = py + ny * m;
-        if (ball.owner < 0) { const rv = ball.vx * nx + ball.vy * ny; if (rv < 0) { ball.vx -= 1.7 * rv * nx; ball.vy -= 1.7 * rv * ny; sfx.post(); shake = Math.max(shake, 4); crowd.ooh(true); buzz([30, 40, 30]); } }
+        if (ball.owner < 0) { const rv = ball.vx * nx + ball.vy * ny; if (rv < 0) { ball.vx -= 1.7 * rv * nx; ball.vy -= 1.7 * rv * ny; sfx.post(); shake = Math.max(shake, 4); crowd.ooh(true); if (Math.hypot(ball.vx, ball.vy) > 300) say(pick(['Stolpen!', 'På træværket!', 'Den rammer stolpen!']), 2); buzz([30, 40, 30]); } }
       }
     }
     if (ball.owner < 0 && INDOOR()) { // indoors: the ball comes back off the boards (it only goes out through the goal)
