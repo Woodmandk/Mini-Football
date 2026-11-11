@@ -938,6 +938,52 @@ button.setmore > span:last-child { min-width: 0; }
 #wrap.n560 .trsess { grid-template-columns: 1fr 1fr; }
 
 .clhead { margin: 0; text-align: left; } .clhead > div { text-align: left; min-width: 0; } .clhead .clcr { width: 36px; height: 40px; } .clhead b { font-size: 16px; }
+
+/* ---- The team, rebuilt: big pitch, bench, one side column; the player opens on his own page ---- */
+#myteam > .mtcard { max-width: none; height: 100%; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); gap: 8px; position: relative; }
+.mtcard .top .mttabs { flex: 0 1 420px; }
+.mtgrid.tab-lay { flex: 1 1 auto; min-height: 0; }
+.mtgrid.tab-lay .mtright { height: 100%; align-items: stretch; }
+.mtgrid.tab-lay .mtlay { height: 100%; justify-content: flex-start; gap: 12px; }
+.mtgrid:not(.narrow).tab-lay .mtlay canvas { flex: 0 0 auto; }
+.mtbcol { flex: 0 0 72px; }
+.mtside { flex: 1 1 280px; max-width: none; gap: 10px; overflow-y: auto; }
+.mtside .mtsel { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r3); padding: 12px; font-size: 14px; display: flex; flex-direction: column; gap: 8px; }
+.mtside .mtsel.arm { background: var(--s1); color: inherit; font-weight: 400; }
+.mtwho { display: flex; align-items: center; gap: 12px; } .mtwho .face { width: 52px; height: 52px; border-radius: 50%; background: var(--s3); overflow: hidden; flex: 0 0 auto; } .mtwho .face svg { width: 100%; height: 100%; }
+.mtwho b { display: block; font-family: var(--disp); font-size: 19px; color: var(--chalk); } .mtwho small { color: var(--muted); font-size: 13px; }
+.mthint { font-size: 13px; color: var(--muted); }
+.mtside .mtacts { display: grid; grid-template-columns: 1.6fr 1fr; gap: 8px; }
+.mtside .mtacts button { min-height: 50px; font-size: 16px; margin: 0; }
+.mtside .mtacts button[hidden] { display: none; }
+.mtside .mtacts:has(#mtOpenB[hidden]) { display: none; }
+.mtnone { display: flex; flex-direction: column; gap: 8px; } .mtnone[hidden] { display: none; }
+.mtnone #mtAuto { min-height: 48px; font-size: 16px; }
+.mtnone .mtfrom { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 0; background: none; }
+.mtnone .mtfrom button { min-height: 44px; font-size: 15px !important; background: var(--s2); border-radius: var(--r2); }
+.mtnone .mttip { font-size: 13px; color: var(--muted); }
+/* tactics and kit are now two tabs */
+.mtgrid.tab-tonly { grid-template-columns: minmax(0, 640px); justify-content: center; }
+.mtgrid.tab-tonly .mtcrest, .mtgrid.tab-tonly .kitp { display: none !important; }
+.mtgrid.tab-kit .tacp { display: none !important; }
+.mtgrid.tab-tac .mtleft .mtrow { grid-template-columns: 130px 1fr; }
+.mtgrid.tab-tac .seg button { padding: 10px 4px; font-size: 14px; }
+/* the player page */
+.mtps { position: absolute; }
+.mtps #mtPan .sqpan { display: grid; grid-template-columns: 250px minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 10px 16px; align-items: start; }
+.mtps #mtPan .sqcard { grid-row: 1 / span 6; }
+.mtps #mtPan .sqpan > :not(.sqcard) { grid-column: 2; }
+#wrap.n560 .mtps #mtPan .sqpan { grid-template-columns: 1fr; } #wrap.n560 .mtps #mtPan .sqpan > * { grid-column: 1; grid-row: auto; }
+
+.mtps #mtPan .sqcard { display: grid; grid-template-columns: 1fr; justify-items: center; text-align: center; gap: 6px; padding: 16px 12px; border-radius: var(--r3); }
+.mtps #mtPan .sqcard .face { width: 110px; height: 110px; }
+.mtps #mtPan .sqcard .face svg { width: 100%; height: 100%; }
+.mtps #mtPan .sqcard .o { display: flex; align-items: baseline; gap: 8px; } .mtps #mtPan .sqcard .o b { font-size: 40px; }
+.mtps #mtPan .sqcard .who { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; }
+.mtps #mtPan .sqcard .who input { text-align: center; width: 100%; }
+
+#ko .setsheet .mopts, #career .setsheet .mopts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; }
+#ko > .card, #career > .card, #season > .card { position: relative; }
 </style>
 
 <div id="wrap">
@@ -970,7 +1016,7 @@ button.setmore > span:last-child { min-width: 0; }
         <button id="goOnline" class="big tile alt"><i class="ic">🌐</i>Online<small id="onlSub">Ranked, or play a friend with a code</small></button>
         <button id="goSeason" class="big tile alt"><i class="ic">🏆</i>Career and cups<small id="compSub">Career, co-op cup and season</small></button>
         <button id="bTwo" class="big tile alt"><i class="ic">👥</i>2 on one phone<small>Against each other or together</small></button>
-        <button id="goFriendly" class="big tile alt"><i class="ic">🤝</i>Friendly<small>More TP, less fatigue, no prize</small></button>
+        <button id="goFriendly" class="big tile alt"><i class="ic">🤝</i>Friendly<small>More TP, no wages, no prize</small></button>
       </div>
       <div class="tabp" data-tab="hold" hidden>
         <button id="goMine" class="big tile hot"><i class="ic">📋</i>The team<small id="holdSub">Line-up, players, tactics and kit. Tap a player</small></button>
@@ -1373,20 +1419,20 @@ button.setmore > span:last-child { min-width: 0; }
   <!-- your own team: name, colours, tactics and a line-up you drag into place -->
   <div class="overlay" id="myteam" hidden>
     <div class="card wide mtcard">
-      <div class="top"><button class="alt back" id="mtClose">‹ Done</button><div class="seg mttabs" id="mtTabs" role="group" aria-label="Show"><button data-t="lay">Line-up</button><button data-t="tac">Tactics and kit</button></div><div class="seg mtsize" id="mtSize" role="group" aria-label="Line-up for team size"></div><span class="sp mtovr" id="mtOvr"></span></div>
+      <div class="top"><button class="alt back" id="mtClose">‹ Done</button><div class="seg mttabs" id="mtTabs" role="group" aria-label="Show"><button data-t="lay">Line-up</button><button data-t="tac">Tactics</button><button data-t="kit">Kit and badge</button></div><div class="seg mtsize" id="mtSize" role="group" aria-label="Line-up for team size"></div><span class="sp mtovr" id="mtOvr"></span></div>
       <div class="mtgrid tab-lay">
         <div class="col mtleft">
-          <div class="mtname">
+          <div class="mtname kitp">
             <input id="mtName" class="namein" maxlength="16" placeholder="Team name" autocomplete="off" aria-label="Team name">
             <input id="mtShort" class="namein short" maxlength="3" placeholder="FCK" autocomplete="off" aria-label="Short name (3 letters)">
           </div>
-          <div class="mtrow"><span class="lbl">Kit</span><div class="swatches" id="mtC1" role="group" aria-label="Kit colour"></div></div>
-          <div class="mtrow"><span class="lbl">Away</span><div class="swatches" id="mtC2" role="group" aria-label="Away kit"></div></div>
-          <div class="mtrow"><span class="lbl">Playing style</span><div class="seg" id="mtM" role="group" aria-label="Playing style"></div></div>
-          <div class="mtrow"><span class="lbl">Pressing</span><div class="seg" id="mtPr" role="group" aria-label="Pressing"></div></div>
-          <div class="mtrow"><span class="lbl">Width</span><div class="seg" id="mtW" role="group" aria-label="Width"></div></div>
-          <div class="mtrow"><span class="lbl">Passing</span><div class="seg" id="mtPt" role="group" aria-label="Passes"></div></div>
-          <p id="mtTacTip" class="mttip"></p>
+          <div class="mtrow kitp"><span class="lbl">Kit</span><div class="swatches" id="mtC1" role="group" aria-label="Kit colour"></div></div>
+          <div class="mtrow kitp"><span class="lbl">Away</span><div class="swatches" id="mtC2" role="group" aria-label="Away kit"></div></div>
+          <div class="mtrow tacp"><span class="lbl">Playing style</span><div class="seg" id="mtM" role="group" aria-label="Playing style"></div></div>
+          <div class="mtrow tacp"><span class="lbl">Pressing</span><div class="seg" id="mtPr" role="group" aria-label="Pressing"></div></div>
+          <div class="mtrow tacp"><span class="lbl">Width</span><div class="seg" id="mtW" role="group" aria-label="Width"></div></div>
+          <div class="mtrow tacp"><span class="lbl">Passing</span><div class="seg" id="mtPt" role="group" aria-label="Passes"></div></div>
+          <p id="mtTacTip" class="mttip tacp"></p>
         </div>
         <div class="col mtcrest">
           <div class="crhead"><span class="crestbox" id="crPrev"></span><span><b id="crName">My team</b><small>The club badge is shown before the match, on the front page and to the people you meet online.</small></span></div>
@@ -1397,9 +1443,12 @@ button.setmore > span:last-child { min-width: 0; }
         <div class="col mtright" id="mtLay">
           <div class="mtlay"><canvas id="mtCv" aria-label="Line-up. Tap two players to swap them, drag to move"></canvas>
             <div class="mtbcol"><div class="lbl">Bench</div><div class="mtbench" id="mtBench"></div></div>
-            <div class="mtside"><div class="mtacts"><button id="mtSwapB" class="small">⇄ Swap</button><button id="mtAuto" class="alt small">Best team</button></div><div class="lbl mtfl">Formation</div><div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start from a formation"></div><div class="mtsel" id="mtSel"></div><div id="mtPan"></div></div></div>
-          <p class="mttip" id="mtLayTip"></p>
+            <div class="mtside"><div class="mtsel" id="mtSel"></div><div class="mtacts"><button id="mtOpenB" class="go">Player details ›</button><button id="mtSwapB" class="alt" hidden>Cancel</button></div><div class="mtnone" id="mtNone"><button id="mtAuto" class="alt">Pick the best team</button><div class="lbl mtfl">Formation</div><div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start from a formation"></div><p class="mttip" id="mtLayTip"></p></div></div></div>
         </div>
+      </div>
+      <div class="setsheet mtps" id="mtPS" hidden>
+        <div class="top"><button class="alt back" id="mtPSx" aria-label="Back">‹ Back</button><h2 id="mtPSn">Player</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+        <div id="mtPan"></div>
       </div>
     </div>
   </div>
@@ -1815,6 +1864,7 @@ button.setmore > span:last-child { min-width: 0; }
     M.g += gf;
     const oppRp = opps.reduce((a, c) => a + (L ? c.rp11 : c.rp), 0) / opps.length;
     lastRank = rankMatch(M, L, oppRp, res, gd, quick ? 1 : 0.5);
+    if (quick) rankedTired(quickN);
     saveMe(M);
     const F = loadFriends();
     for (const c of opps) { const f = F[c.id]; if (f) { f.h = f.h || [0, 0, 0]; f.h[res === 1 ? 0 : res === 0 ? 2 : 1]++; } }
@@ -2028,7 +2078,7 @@ button.setmore > span:last-child { min-width: 0; }
       const n = cfg.size || 7, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
       $('hcSub').textContent = `Team ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'My team');
       $('holdSub').textContent = `Team ${teamOvr(n)} · chemistry ${chemOf(n).v} · ${n} v ${n}. Tap a player to see and train him`;
-      { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; if (tr) $('holdSub').textContent = `${tr} in the starting line-up are tired. Sub them or give them a massage`;
+      { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; if (tr) $('holdSub').textContent = `${tr} starters are tired for ranked. Rest them or give them a massage`;
         const Cl = youthTick(); { const pc = loadProf(), can = Object.keys(FAC).some(k => (Cl.f[k] | 0) < FAC_MAX && (pc.lvl || 1) >= FAC_LVL[Cl.f[k] | 0] && pc.coins >= FAC_COST[Cl.f[k] | 0]); facMemo = Cl.f;
           $('clubSub').textContent = Cl.y ? `A new talent is waiting in the academy: ${Cl.y.n} (${ovr(Cl.y)}, potential ${Cl.y.pot})` : !Cl.sp ? 'Pick a sponsor' : can ? 'You can afford to build' : 'Grounds, staff and finances'; $('goClub').classList.toggle('hot', !!Cl.y || !Cl.sp); }
         const ctw = Sq.pl.filter(q => ctOf(q) <= 3).length, scHome = (() => { const M2 = mktLoad().sc; return !!(M2 && (M2.res ? M2.res.length : Date.now() - M2.t >= M2.dur)); })();
@@ -5132,6 +5182,7 @@ button.setmore > span:last-child { min-width: 0; }
   // sty: each team's way of playing (see STYLES), which also sets its tactics
   TEAMS.forEach((t, i) => { t.id = i; t.c3 = light(t.c1) ? '#0d1a14' : '#f4f7f2'; if (t.sty) t.tac = { ...STYLES[t.sty].tac }; });
   const OWN = TEAMS.length - 1;
+  const usesSquad = () => !!comp || cfg.team === OWN; // picking a computer team leaves your own players alone
   function syncOwn() {
     const mt = loadMT(), t = TEAMS[OWN];
     Object.assign(t, { n: mt.n, s: mt.s, c1: mt.c1, c2: mt.c2, c3: light(mt.c1) ? '#0d1a14' : '#f4f7f2', cr: mt.cr || null });
@@ -5226,7 +5277,7 @@ button.setmore > span:last-child { min-width: 0; }
       applySquad(hT, cleanSquad(squadWire(size, teamForm[hT]), size));
       if (roster.some(r => P[r[1]] && P[r[1]].team === 1 - hT)) applySquad(1 - hT, netSq);
     }
-    if (m === 'cpu' || (comp && m === 'host')) { // your trained squad (always the home side against the computer): every player plays at his own rating
+    if ((m === 'cpu' && usesSquad()) || (comp && m === 'host')) { // your trained squad (when you play as your own club): every player plays at his own rating
       const L = squadToPitch(); const d = tD[0], ck = (chemOf(size).v - 50) / 50; // kemi: a team that knows each other plays a little better
       tD[0] = { spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
       tD[0].pass *= 1 + 0.06 * ck; tD[0].tackle *= 1 + 0.04 * ck; tD[0].react *= 1 - 0.06 * ck;
@@ -5298,7 +5349,7 @@ button.setmore > span:last-child { min-width: 0; }
       while (pr.xp >= pr.lvl * 100) { pr.xp -= pr.lvl * 100; pr.lvl++; coins += 40 * pr.lvl; extra = (extra ? extra + ' · ' : '') + `Club level ${pr.lvl}!` + (stadOf(pr.lvl) > stadOf(pr.lvl - 1) ? ` Your ground has been expanded: ${STAD[stadOf(pr.lvl)][0]}!` : ''); }
     }
     if (me === 0 || me === 1) coins = Math.round(coins * (1 + 0.08 * facLv('fan'))); // the fan shop sells more on match days
-    const own = me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host')); // a match with your own squad
+    const own = me === 0 && kind !== 'pen' && ((mode === 'cpu' && usesSquad()) || (comp && mode === 'host')); // a match with your own squad (not when you picked a computer team)
     let eco = null;
     if (own && friendly) coins = got.length * 50; // a training match pays nothing (new trophies still do)
     else if (own) { // the match account: prize, gate and sponsor in, wages out
@@ -5311,7 +5362,7 @@ button.setmore > span:last-child { min-width: 0; }
     pr.coins += coins; saveProf(pr);
     let tp = 0;
     if ((me === 0 || me === 1) && kind !== 'pen') { tp = Math.round((4 + Math.min(10, score[me] * 2) + (win === me ? 6 : 0)) * (1 + 0.1 * facLv('tr')) * (own && friendly ? 1.5 : 1)); addTP(tp); }
-    if (me === 0 && kind !== 'pen' && (mode === 'cpu' || (comp && mode === 'host'))) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Tired legs: ' + tired.slice(0, 3).join(', ') + '. Give them a rest'; for (const nw of tired.news || []) extra = (extra ? extra + ' · ' : '') + nw; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
+    if (own) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Tired legs: ' + tired.slice(0, 3).join(', ') + '. Give them a rest'; for (const nw of tired.news || []) extra = (extra ? extra + ' · ' : '') + nw; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
     if (sh && kind !== 'pen') { // your own squad was part of it: the same training points, and your starters develop too
       if (sh.tp > tp) { addTP(sh.tp - tp); tp = sh.tp; }
       const ups = squadGrowAway(win === me);
@@ -5948,6 +5999,19 @@ button.setmore > span:last-child { min-width: 0; }
   // ----- little helpers for pickers -----
   // match options, shown where you start a match (setup, cup, career, online lobby) instead of hidden in the settings
   const MOPTS = [['lock', 'Controls', ['Switch', 'Locked']], ['tempo', 'Tempo', ['Calm', 'Normal', 'Fast']], ['aim', 'Aim line', ['Off', 'On']], ['adv', 'Buttons', ['Simple', 'Advanced']], ['et', 'Extra time', ['Off', 'On']], ['inj', 'Injuries', ['Off', 'On']], ['cam', 'Camera', ['Normal', 'Close', 'Wide']], ['cine', 'Film clips', ['Off', 'On']], ['pu', 'Power-ups', ['Off', 'On']]];
+  function optsBehindButton() { // in the cup and the career the match options sit behind one button, so the screen stays calm
+    if (!window.mfIco) { setTimeout(optsBehindButton, 60); return; } // the icon set loads in the last script
+    const ic = n => window.mfIco(n);
+    for (const box of document.querySelectorAll('#ko [data-mopts], #career [data-mopts]')) {
+      if (box.closest('.setsheet')) continue;
+      const card = box.closest('.card'), b = document.createElement('button'), sh = document.createElement('div');
+      b.className = 'alt setmore'; b.innerHTML = `<span class="ic smi">${ic('gear')}</span><span><b>Match settings</b><small>Controls, tempo, camera and more</small></span>`;
+      sh.className = 'setsheet'; sh.hidden = true;
+      sh.innerHTML = `<div class="top"><button class="alt back" aria-label="Back">${ic('back')}</button><h2>Match settings</h2><button class="sheetok">Done</button></div>`;
+      box.before(b); sh.appendChild(box); card.appendChild(sh);
+      const close = () => { sh.hidden = true; }; sh.querySelector('.back').onclick = close; sh.querySelector('.sheetok').onclick = close; b.onclick = () => { sh.hidden = false; sh.scrollTop = 0; };
+    }
+  }
   function buildOpts() {
     for (const box of document.querySelectorAll('[data-mopts]')) {
       box.textContent = '';
@@ -6175,7 +6239,7 @@ button.setmore > span:last-child { min-width: 0; }
       const i = xi[p.k], s = S0.pl[i]; if (!s) continue;
       const pen = (ovr(s) - fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size))) / 4.5; // out of position: he plays a bit worse
       p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size)); p.ab = abOf(s); sqMeta(p, s, S0); if (size > 1 && p.k === 0) p.rl = 0;
-      { const fi = fitOf(s), mo = morOf(s), mb = mo >= 85 ? 0.4 : mo < 35 ? -0.5 : 0, fb = Math.max(0, 70 - fi) / 20; // tired legs are slower and tire sooner, a happy player plays a little above himself
+      { const fi = 100, mo = morOf(s), mb = mo >= 85 ? 0.4 : mo < 35 ? -0.5 : 0, fb = Math.max(0, 70 - fi) / 20; // tired legs are slower and tire sooner, a happy player plays a little above himself
         for (const [k] of SKILLS) p.lv[k] += mb - (k === 'spd' ? fb : fb * 0.4);
         p.fit0 = (100 - fi) / 100 * 0.4; p.fat = p.fit0; p.stamina = 1 - p.fat; }
     }
@@ -6244,14 +6308,16 @@ button.setmore > span:last-child { min-width: 0; }
     let ch = false; for (const p of S.pl) if (p.fit != null && p.fit < 100) { p.fit = Math.min(100, Math.round((p.fit + mins / 4 * (1 + 0.25 * facLv('kl'))) * 10) / 10); if (p.fit >= 100) delete p.fit; ch = true; }
     S.ft = now; if (ch) squadSave(S);
   }
+  function rankedTired(n) { // a ranked match is the only one that costs form: the starters lose some, it comes back with time
+    try { const S = squadLoad(); for (const i of xiFor(n, S)) { const pl = S.pl[i]; if (pl) pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - 12 * (hasAb(pl, 'motor') ? 0.7 : 1) * (1 - 0.1 * stLv('fy')))); } S.ft = S.ft || Date.now(); squadSave(S); } catch (_) {}
+  }
   function squadAfter(res, easy) { // after a match with your own squad: tired legs, and the mood follows the result
     const S = squadLoad(), played = new Set(), tired = [];
     for (const p of P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) {
       if (p.team !== 0 || !(p.sqi >= 0) || !S.pl[p.sqi] || played.has(p.sqi)) continue;
       played.add(p.sqi); const pl = S.pl[p.sqi], m = p.ms || {};
-      pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - (10 + Math.min(8, (m.spr || 0) * 0.13)) * (hasAb(pl, 'motor') ? 0.7 : 1) * (easy ? 0.5 : 1) * (1 - 0.1 * stLv('fy'))));
+      // no tired legs here: form only counts in ranked matches (see rankedTired)
       pl.mor = clamp(Math.round(morOf(pl) + (res > 0 ? (easy ? 3 : 6) : res < 0 ? (easy ? 0 : -5) : 1) + Math.min(4, (m.g || 0) * 2)), 10, 100);
-      if (pl.fit < 60) tired.push(pl.n.split(' ').slice(-1)[0]);
     }
     S.pl.forEach((pl, i) => { if (!played.has(i) && morOf(pl) > 45) pl.mor = morOf(pl) - 1; }); // the ones left out sulk a little
     tired.news = easy ? [] : squadYear(S);
@@ -6369,7 +6435,7 @@ button.setmore > span:last-child { min-width: 0; }
   let trainMsg = '';
   function clubTrainPaint() {
     const C = clubLoad(), T = $('clTrain'), left = trainLeft(C); T.textContent = '';
-    const h = document.createElement('p'); h.className = 'sqnote'; h.innerHTML = `<b>${left} of ${TRAIN_N} sessions left today.</b> `; h.append(`Pick what the whole squad trains. Each session costs ${TRAIN_FIT} form; tired players (form under 45) sit out.`); T.appendChild(h);
+    const h = document.createElement('p'); h.className = 'sqnote'; h.innerHTML = `<b>${left} of ${TRAIN_N} sessions left today.</b> `; h.append(`Pick what the whole squad trains. Each session costs ${TRAIN_FIT} form. Form only counts in ranked matches; everything else is played with fresh legs.`); T.appendChild(h);
     const g = document.createElement('div'); g.className = 'trsess';
     const TIC = { spd: 'cone', sht: 'goal', pas: 'swap', def: 'shield', rest: 'check' };
     for (const k of Object.keys(TRAIN)) {
@@ -7479,7 +7545,7 @@ button.setmore > span:last-child { min-width: 0; }
     addEventListener('resize', () => { if (!$('myteam').hidden) mtDraw(); });
   }
   function mtTabs() {
-    const g = $('mtTabs').closest('.card').querySelector('.mtgrid'); g.classList.toggle('tab-lay', mtTab === 'lay'); g.classList.toggle('tab-tac', mtTab === 'tac');
+    const g = $('mtTabs').closest('.card').querySelector('.mtgrid'); g.classList.toggle('tab-lay', mtTab === 'lay'); g.classList.toggle('tab-tac', mtTab === 'tac' || mtTab === 'kit'); g.classList.toggle('tab-kit', mtTab === 'kit'); g.classList.toggle('tab-tonly', mtTab === 'tac');
     for (const b of $('mtTabs').children) b.setAttribute('aria-pressed', String(b.dataset.t === mtTab));
     if (mtTab === 'lay') requestAnimationFrame(mtDraw);
   }
@@ -7490,31 +7556,35 @@ button.setmore > span:last-child { min-width: 0; }
     S.xi = S.xi || {}; S.xi[mtN] = xi; squadSave(S); sfx.kick(0.3);
   }
   let mtArm = false; // Byt is pressed: the next man you tap changes place with the chosen one
-  function mtTap(i) { // tap a man to see him; press Byt and tap another (on the pitch or the bench) to swap them
-    if (mtArm && (mtSel >= 0 || mtSelB >= 0)) { if (mtSelB >= 0) mtSwap(i, -1 - mtSelB); else if (mtSel !== i) mtSwap(mtSel, i); mtArm = false; mtSel = i; mtSelB = -1; }
-    else { mtSel = mtSel === i && mtSelB < 0 ? -1 : i; mtSelB = -1; mtArm = false; }
-    mtPaintSide(); mtDraw();
+  function mtTap(i) { // tap a man to pick him, tap another (on the pitch or the bench) and they swap
+    if (mtSelB >= 0) { mtSwap(i, -1 - mtSelB); mtSel = mtSelB = -1; }
+    else if (mtSel >= 0 && mtSel !== i) { mtSwap(mtSel, i); mtSel = -1; }
+    else mtSel = mtSel === i ? -1 : i;
+    mtArm = mtSel >= 0 || mtSelB >= 0; mtPaintSide(); mtDraw();
   }
   function mtBenchTap(i) {
-    if (mtArm && mtSel >= 0) { mtSwap(mtSel, -1 - i); mtArm = false; mtSelB = -1; }
-    else { mtSelB = mtSelB === i && mtSel < 0 ? -1 : i; mtSel = -1; mtArm = false; }
-    mtPaintSide(); mtDraw();
+    if (mtSel >= 0) { mtSwap(mtSel, -1 - i); mtSel = mtSelB = -1; }
+    else mtSelB = mtSelB === i ? -1 : i;
+    mtArm = mtSel >= 0 || mtSelB >= 0; mtPaintSide(); mtDraw();
   }
   function mtPaintSide() { // the chosen man's panel, the bench and the team rating
     const S = squadLoad(), xi = xiFor(mtN, S), L = mtLayNow(), on = new Set(xi);
     const ch = chemOf(mtN, S); $('mtOvr').innerHTML = `Team <b>${teamOvr(mtN)}</b> · chemistry ${ch.v}`;
     const sel = $('mtSel'); sel.textContent = '';
     const who = mtSel >= 0 ? S.pl[xi[mtSel]] : mtSelB >= 0 ? S.pl[mtSelB] : null;
-    const sb = $('mtSwapB'); sb.hidden = !who; sb.textContent = mtArm ? 'Undo' : '⇄ Swap'; sb.classList.toggle('alt', mtArm);
-    sb.onclick = () => { mtArm = !mtArm; mtPaintSide(); mtDraw(); };
-    sqHome('mt'); $('mtPan').hidden = !who;
-    if (!who) sel.textContent = 'Tap a player to see him, train him and pick skills. Tap Swap to sub him out. Drag a player on the pitch to move his spot.';
-    else {
-      sqSel = S.pl.indexOf(who); sqPanelPaint(); guideHit('hold');
-      if (mtArm) { sel.textContent = `Tap the one ${who.n.split(' ').slice(-1)[0]} should swap with.` + (mtSel >= 0 ? ' Green edge: fits the spot.' : ''); sel.classList.add('arm'); }
-      else { sel.classList.remove('arm'); if (mtSel >= 0) { const sp = slotPos(L[mtSel], mtSel, mtN); if (sp !== dpOf(who)) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = `Player ${DPOSN[sp].toLowerCase()} her: ${fitOvr(who, sp)} instead of ${ovr(who)}`; sel.appendChild(w); } } }
+    const sb = $('mtSwapB'); sb.hidden = !who; sb.onclick = () => { mtSel = mtSelB = -1; mtArm = false; mtPaintSide(); mtDraw(); };
+    $('mtOpenB').hidden = !who; $('mtNone').hidden = !!who;
+    $('mtOpenB').onclick = () => { $('mtPS').hidden = false; $('mtPS').scrollTop = 0; };
+    $('mtPSx').onclick = () => { $('mtPS').hidden = true; mtPaintSide(); mtDraw(); };
+    sqHome('mt'); $('mtPan').hidden = !who; if (!who) $('mtPS').hidden = true;
+    if (who) {
+      sqSel = S.pl.indexOf(who); sqPanelPaint(); guideHit('hold'); $('mtPSn').textContent = who.n;
+      const o = ovr(who), hd = document.createElement('div'); hd.className = 'mtwho';
+      hd.innerHTML = `<span class="face">${faceSVG(who)}</span><span><b>${who.n}</b><small>${DPOSN[dpOf(who)]} · rating ${o} · form ${fitOf(who)}</small></span>`; sel.appendChild(hd);
+      const t = document.createElement('p'); t.className = 'mthint'; t.textContent = `Tap another player, on the pitch or the bench, to swap him with ${who.n.split(' ').slice(-1)[0]}.` + (mtSel >= 0 ? ' A green edge means he fits the spot.' : ''); sel.appendChild(t);
+      if (mtSel >= 0) { const sp = slotPos(L[mtSel], mtSel, mtN); if (sp !== dpOf(who)) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = `Playing ${DPOSN[sp].toLowerCase()} here: ${fitOvr(who, sp)} instead of ${o}`; sel.appendChild(w); } }
     }
-    sel.hidden = !sel.textContent;
+    sel.hidden = !who;
     const B = $('mtBench'); B.textContent = '';
     const tsp = mtArm && mtSel >= 0 ? slotPos(L[mtSel], mtSel, mtN) : null, rate = p => (tsp ? fitOvr(p, tsp) : ovr(p));
     const bench = S.pl.map((p, i) => ({ p, i })).filter(x => !on.has(x.i)).sort((a, b) => rate(b.p) - rate(a.p));
@@ -7542,7 +7612,7 @@ button.setmore > span:last-child { min-width: 0; }
       b.onclick = () => { loadMT().lay[mtN] = f.map(q => q.slice()); saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
       el.appendChild(b);
     });
-    $('mtLayTip').textContent = 'A red spot on the card means he is playing out of position.';
+    $('mtLayTip').textContent = 'Tap a player to pick him, then tap another to swap them. Drag a player to move his spot. Red position text: he is out of position.';
   }
   function mtDraw() {
     const c = $('mtCv'), mt = loadMT();
@@ -7550,8 +7620,9 @@ button.setmore > span:last-child { min-width: 0; }
     // as big as the screen allows next to the tactics (stacked under them on a narrow screen)
     const narrow = sw / uiK <= 560, card = c.closest('.card');
     c.closest('.mtgrid').classList.toggle('narrow', narrow);
-    let ph = narrow ? 300 : Math.max(170, Math.min(420, sh / uiK - 150)), pw = ph * asp;
-    const maxW = narrow ? card.clientWidth - 30 : card.clientWidth - 440;
+    const tp = card.querySelector('.top'), avail = card.clientHeight - (tp ? tp.offsetHeight : 44) - 34;
+    let ph = narrow ? 300 : Math.max(170, Math.min(520, avail)), pw = ph * asp;
+    const maxW = narrow ? card.clientWidth - 30 : card.clientWidth - 420;
     if (pw > maxW) { pw = maxW; ph = pw / asp; }
     c.style.width = Math.round(pw) + 'px'; c.style.height = Math.round(ph) + 'px';
     const w = Math.round(pw), h = Math.round(ph);
@@ -7612,7 +7683,7 @@ button.setmore > span:last-child { min-width: 0; }
     $('mtC1')._paint(); $('mtC2')._paint();
     segPaints.forEach(f => f());
     mtTip(''); mtFrom(); if (mtCrest) mtCrest();
-    $('myteam').hidden = false; mtSel = mtSelB = -1; mtArm = false; mtTab = focus === 'tac' ? 'tac' : 'lay'; mtTabs(); mtPaintSide();
+    $('myteam').hidden = false; mtSel = mtSelB = -1; mtArm = false; mtTab = focus === 'tac' ? 'tac' : focus === 'kit' ? 'kit' : 'lay'; $('mtPS').hidden = true; mtTabs(); mtPaintSide();
     requestAnimationFrame(() => { mtDraw(); if (focus === 'lay') $('mtLay').scrollIntoView({ block: 'nearest' }); });
   }
   function mtClose() {
@@ -9001,7 +9072,7 @@ button.setmore > span:last-child { min-width: 0; }
     render(dt);
     requestAnimationFrame(frame);
   }
-  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
+  makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); setTimeout(optsBehindButton, 0); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
   if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
   requestAnimationFrame(frame);
