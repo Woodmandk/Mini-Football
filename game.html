@@ -560,7 +560,7 @@ table.st tr.me td { color: var(--gold); }
 .linkbtn { font: 500 11px/1 var(--font); letter-spacing: 0.04em; text-transform: none; padding: 2px 4px; margin-left: 6px; border: 0; background: none; color: var(--gold); text-decoration: underline; }
 button.small { font-size: 13px; padding: 9px 10px; }
 #lobbyTeams { font-size: 15px; }
-.mtcard { padding: 10px 14px; gap: 8px; max-width: 820px; }
+.mtcard { padding: 10px 14px; gap: 8px; max-width: 980px; }
 .mtgrid { display: grid; grid-template-columns: 1fr auto; gap: 8px 16px; text-align: left; align-items: start; }
 .mtleft { gap: 6px; }
 .mtrow { display: grid; grid-template-columns: 74px 1fr; gap: 6px; align-items: center; }
@@ -585,18 +585,20 @@ button.small { font-size: 13px; padding: 9px 10px; }
 .mtgrid.tab-lay .mtleft, .mtgrid.tab-tac .mtright { display: none; }
 .mtgrid.tab-tac .mtleft { max-width: 520px; width: 100%; justify-self: center; }
 .mtlay { display: flex; gap: 10px; align-items: stretch; width: 100%; justify-content: center; }
-.mtside { flex: 0 0 200px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
-.mtsel { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 8px; font-size: 12px; line-height: 1.35; min-height: 70px; }
+.mtside { flex: 1 1 300px; max-width: 400px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.mtacts { display: flex; gap: 6px; } .mtacts button { flex: 1; min-height: 0; padding: 7px 8px; font-size: 13px; }
+.mtbcol { flex: 0 0 66px; display: flex; flex-direction: column; gap: 4px; min-height: 0; } .mtbcol .lbl { text-align: center; }
+.pc.s { padding: 3px 2px 4px; border-radius: 8px; } .pc.s .o { font-size: 13px; left: 4px; top: 2px; } .pc.s .ps { font-size: 8px; left: 4px; top: 16px; } .pc.s .face { width: 32px; height: 32px; margin: 0 0 0 16px; } .pc.s .n { font-size: 9px; margin-top: 1px; } .pc.s .fm { width: 34px; height: 3px; } .pc.s .ft { margin-top: 1px; }
+.pc.fit { box-shadow: 0 0 0 2px #59e38b; } .mtbench .pc { flex: none; }
+.mtsel.arm { background: rgba(255,212,71,0.16); color: var(--gold); font-weight: 700; }
+#mtPan .sqpan { position: static; } #abOv { z-index: 60; }
+.mtsel { background: rgba(0,0,0,0.3); border-radius: 10px; padding: 8px; font-size: 12px; line-height: 1.35; } .mtsel[hidden], #mtPan[hidden] { display: none; }
 .mtsel b.o { font-size: 22px; float: left; margin-right: 8px; line-height: 1; padding: 4px 6px; border-radius: 6px; color: #14181c; }
 .mtsel .warn { color: #ff9f5a; }
 .mtsel .sts { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; clear: both; margin-top: 4px; color: var(--muted); }
-.mtbench { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; overflow-y: auto; flex: 1 1 0; min-height: 60px; }
-.mtbench button { display: grid; grid-template-columns: 30px 28px 1fr; gap: 6px; align-items: center; padding: 5px 8px; font-size: 12px; text-align: left; }
-.mtbench button .o { font-weight: 800; border-radius: 5px; text-align: center; color: #14181c; padding: 2px 0; }
-.mtbench button[aria-pressed="true"] { outline: 2px solid var(--gold); }
-.mtbench button.fit { border-color: #59e38b; }
+.mtbench { font-size: 11px; color: var(--muted); display: flex; flex-direction: column; gap: 5px; overflow-y: auto; flex: 1 1 0; min-height: 60px; padding: 2px; }
 .t-bronze { background: #c98a4b; } .t-silver { background: #c4ccd6; } .t-gold { background: #e3b23c; } .t-elite { background: #b57bff; }
-.mtgrid.narrow .mtlay { flex-direction: column; align-items: center; } .mtgrid.narrow .mtside { flex: 0 0 auto; width: 100%; } .mtgrid.narrow .mtbench { max-height: 160px; }
+.mtgrid.narrow .mtlay { flex-direction: column; align-items: center; } .mtgrid.narrow .mtside { flex: 0 0 auto; width: 100%; max-width: none; } .mtgrid.narrow .mtbcol { flex: 0 0 auto; width: 100%; } .mtgrid.narrow .mtbench { flex-direction: row; overflow-x: auto; flex: 0 0 auto; } .mtgrid.narrow .mtbench .pc { flex: 0 0 60px; }
 .mtgrid.narrow { grid-template-columns: 1fr; } .mtgrid.narrow .mtright { justify-self: center; } /* set from script: the game may be turned */
 .toast { position: absolute; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 50; background: rgba(9,20,15,0.92); border: 1px solid rgba(244,247,242,0.3); border-radius: 999px; padding: 8px 16px; font-size: 14px; white-space: nowrap; pointer-events: none; }
 @media (prefers-reduced-motion: reduce) { button:active { transform: none; } }
@@ -674,8 +676,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         <button id="goPractice" class="big tile alt"><i class="ic">🎯</i>Træning<small>Færdighedsspil, straffe og træningsbane</small></button>
       </div>
       <div class="tabp" data-tab="hold" hidden>
-        <button id="goMine" class="big tile hot"><i class="ic">📋</i>Opstilling<small id="holdSub">Dine spillere på banen. Byt med et tryk</small></button>
-        <button id="goSquad" class="big tile alt"><i class="ic">💪</i>Trup og træning<small id="squadSub">Træn dine spillere med TP</small></button>
+        <button id="goMine" class="big tile hot"><i class="ic">📋</i>Holdet<small id="holdSub">Opstilling, træning, evner og form. Tryk på en spiller</small></button>
+        <button id="goSquad" class="big tile alt" style="display:none"><i class="ic">💪</i>Trup og træning<small id="squadSub">Træn dine spillere med TP</small></button>
         <button id="goClub" class="big tile alt"><i class="ic">🏟️</i>Klubben<small id="clubSub">Træningsanlæg, klinik, akademi og fanshop</small></button>
         <button id="goMarket" class="big tile alt"><i class="ic">🤝</i>Transfermarked<small id="mktSub">Køb og sælg spillere. Nye hver dag</small></button>
         <button id="goTac" class="big tile alt"><i class="ic">🎨</i>Taktik og trøje<small>Holdnavn, farver, spillestil og pres</small></button>
@@ -1086,7 +1088,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         <div class="col mtright" id="mtLay">
           <div class="seg" id="mtSize" role="group" aria-label="Opstilling til holdstørrelse"></div>
           <div class="mtlay"><canvas id="mtCv" aria-label="Opstilling. Tryk på to spillere for at bytte dem, træk for at flytte"></canvas>
-            <div class="mtside"><div class="mtsel" id="mtSel"></div><div class="lbl">Bænk</div><div class="mtbench" id="mtBench"></div><button id="mtAuto" class="alt small">Sæt bedste hold</button></div></div>
+            <div class="mtbcol"><div class="lbl">Bænk</div><div class="mtbench" id="mtBench"></div></div>
+            <div class="mtside"><div class="mtacts"><button id="mtSwapB" class="small">⇄ Byt</button><button id="mtAuto" class="alt small">Bedste hold</button></div><div class="mtsel" id="mtSel"></div><div id="mtPan"></div></div></div>
           <div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start fra en formation"></div>
           <p class="mttip" id="mtLayTip"></p>
         </div>
@@ -1670,8 +1673,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     try {
       const n = cfg.size || 7, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
       $('hcSub').textContent = `Hold ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'Mit hold');
-      $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Byt spillere med et tryk`;
-      { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; $('squadSub').textContent = tr ? `${tr} i startopstillingen er trætte. Skift ud eller giv massage` : 'Træn dine spillere med TP. Se form og humør'; $('goSquad').classList.toggle('hot', !!tr);
+      $('holdSub').textContent = `Hold ${teamOvr(n)} · kemi ${chemOf(n).v} · ${n} mod ${n}. Tryk på en spiller for at se og træne ham`;
+      { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; if (tr) $('holdSub').textContent = `${tr} i startopstillingen er trætte. Skift dem ud eller giv massage`;
         { const Cl = youthTick(), pc = loadProf(), can = Object.keys(FAC).some(k => (Cl.f[k] | 0) < FAC_MAX && (pc.lvl || 1) >= FAC_LVL[Cl.f[k] | 0] && pc.coins >= FAC_COST[Cl.f[k] | 0]); facMemo = Cl.f;
           $('clubSub').textContent = Cl.y ? `Et nyt talent venter i akademiet: ${Cl.y.n} (${ovr(Cl.y)}, potentiale ${Cl.y.pot})` : can ? 'Du har råd til at bygge ud' : 'Træningsanlæg, klinik, akademi og fanshop'; $('goClub').classList.toggle('hot', !!Cl.y); }
         const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = Mk.l.length ? `${Mk.l.length} spillere i dag` + (dl ? ` · tilbud: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Udsolgt i dag. Nye spillere i morgen'; }
@@ -5909,36 +5912,19 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     return `<svg viewBox="0 0 60 60" aria-hidden="true"><path d="M6 60c0-13 10-19 24-19s24 6 24 19z" fill="${sh}"/><path d="M22 42c2 4 14 4 16 0l-1 4c-3 3-11 3-14 0z" fill="${tr}"/><rect x="25" y="33" width="10" height="10" rx="4" fill="${L.skin}"/><ellipse cx="30" cy="25" rx="12.500" ry="14" fill="${L.skin}"/>${hair}${L.band ? `<rect x="17.500" y="17" width="25" height="3.500" rx="1.500" fill="${tr}"/>` : ''}<circle cx="25" cy="26" r="1.600" fill="#1c1c1c"/><circle cx="35" cy="26" r="1.600" fill="#1c1c1c"/><path d="M26 32c2 2 6 2 8 0" stroke="#1c1c1c" stroke-width="1.300" fill="none" stroke-linecap="round" opacity=".7"/></svg>`.replace(/(\d)\.(\d)00/g, '$1.$2');
   }
   let sqFilter = '', sqTab = 0;
-  function squadShow() {
-    const S = squadLoad(), n = Math.max(1, cfg.size), xi = squadXI(n, S), inXI = new Set(xi.map(x => x.i));
+  // the panel for one player (card, Træning / Evner / Form): the same one in the squad list and beside the line-up
+  let sqAt = 'sq';
+  function sqHome(w) { sqAt = w; const pan = document.querySelector('.sqpan'), to = w === 'mt' ? $('mtPan') : $('squad').querySelector('.sqgrid'); if (pan && to && pan.parentNode !== to) to.appendChild(pan); }
+  function sqRefresh() { if (sqAt === 'mt' && !$('myteam').hidden) { mtPaintSide(); mtDraw(); } else squadShow(); }
+  function sqPanelPaint() {
+    const S = squadLoad(), n = sqAt === 'mt' ? mtN : Math.max(1, cfg.size), inXI = new Set(xiFor(n, S));
     if (!S.pl[sqSel]) sqSel = 0;
-    const F = $('sqFil'); F.textContent = '';
-    for (const [k, t] of [['', 'Alle'], ['MV', 'Mål'], ['FO', 'Forsvar'], ['MB', 'Midtbane'], ['AN', 'Angreb']]) { const b = document.createElement('button'); b.textContent = t; b.setAttribute('aria-pressed', String(sqFilter === k)); b.onclick = () => { sqFilter = k; const S3 = squadLoad(); if (k && S3.pl[sqSel] && S3.pl[sqSel].pos !== k) { const j = S3.pl.findIndex(q => q.pos === k); if (j >= 0) sqSel = j; } squadShow(); }; F.appendChild(b); }
-    const L = $('sqList'); L.textContent = '';
-    const lineNo = { MV: 0, FO: 1, MB: 2, AN: 3 }, all = S.pl.map((p, i) => ({ p, i })).filter(x => !sqFilter || x.p.pos === sqFilter);
-    const mk = ({ p, i }) => {
-      const o = ovr(p), b = document.createElement('button'); b.className = 'pc ' + (p.ev ? 'event' : ovrTier(o)) + (i === sqSel ? ' sel' : '') + (inXI.has(i) ? '' : ' bench');
-      const add = (tag, cls, txt) => { const e = document.createElement(tag); e.className = cls; if (txt !== undefined) e.textContent = txt; b.appendChild(e); return e; };
-      add('b', 'o', o); add('span', 'ps', dpOf(p)); add('span', 'face').innerHTML = faceSVG(p);
-      add('span', 'n', p.n.split(' ').slice(-1)[0]);
-      const ft = add('span', 'ft'); const fm = document.createElement('span'); fm.className = 'fm'; const fi = document.createElement('i'); fi.style.width = fitOf(p) + '%'; fi.style.background = fitCol(fitOf(p)); fm.appendChild(fi);
-      const mo = document.createElement('span'); mo.textContent = morFace(morOf(p)); ft.append(fm, mo);
-      if (abOf(p).length) add('span', 'ab', abIcons(p));
-      if (p.pot && o < p.pot) add('span', 'tal', '🌱');
-      b.onclick = () => { sqSel = i; squadShow(); };
-      return b;
-    };
-    const head = t => { const h = document.createElement('div'); h.className = 'sqh'; h.textContent = t; L.appendChild(h); };
-    const st = all.filter(x => inXI.has(x.i)).sort((a, b) => lineNo[a.p.pos] - lineNo[b.p.pos] || ovr(b.p) - ovr(a.p)), be = all.filter(x => !inXI.has(x.i)).sort((a, b) => ovr(b.p) - ovr(a.p));
-    if (st.length) { head(`Starter ved ${n} mod ${n}`); const g = document.createElement('div'); g.className = 'pcs'; st.forEach(x => g.appendChild(mk(x))); L.appendChild(g); }
-    if (be.length) { head(`Bænken (${be.length})`); const g = document.createElement('div'); g.className = 'pcs'; be.forEach(x => g.appendChild(mk(x))); L.appendChild(g); }
-    if (!all.length) head('Ingen spillere her');
     const p = S.pl[sqSel], o = ovr(p);
     const card = $('sqCard'); card.className = 'sqcard ' + (p.ev ? 'event' : ovrTier(o));
     $('sqFace').innerHTML = faceSVG(p); $('sqOvr').textContent = o; $('sqPosS').textContent = dpOf(p);
     $('sqName').value = p.n;
     const T = $('sqTabs'); T.textContent = '';
-    ['Træning', 'Evner', 'Form'].forEach((t, k) => { const b = document.createElement('button'); b.textContent = t + (k === 2 && fitOf(p) < 60 ? ' ⚠' : ''); b.setAttribute('aria-pressed', String(sqTab === k)); b.onclick = () => { sqTab = k; squadShow(); }; T.appendChild(b); });
+    ['Træning', 'Evner', 'Form'].forEach((t, k) => { const b = document.createElement('button'); b.textContent = t + (k === 2 && fitOf(p) < 60 ? ' ⚠' : ''); b.setAttribute('aria-pressed', String(sqTab === k)); b.onclick = () => { sqTab = k; sqRefresh(); }; T.appendChild(b); });
     $('sqStats').hidden = sqTab !== 0; $('sqAb').hidden = sqTab !== 1; $('sqForm').hidden = sqTab !== 2;
     const box = $('sqStats'); box.textContent = '';
     for (const [k, name] of SKILLS) {
@@ -5950,7 +5936,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       bt.onclick = () => {
         const S2 = squadLoad(), q = S2.pl[sqSel];
         if (S2.tp < price) { bt.textContent = `Mangler ${price - S2.tp}`; return; }
-        S2.tp -= price; q[k] = Math.min(99, q[k] + 1); squadSave(S2); sfx.win(); squadShow();
+        S2.tp -= price; q[k] = Math.min(99, q[k] + 1); squadSave(S2); sfx.win(); sqRefresh();
       };
       r.append(b, bar, val, bt); box.appendChild(r);
     }
@@ -5960,7 +5946,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const f = Math.round(fitOf(p)), m = Math.round(morOf(p));
       const row = (name, v, colr, btn) => { const r = document.createElement('div'); r.className = 'strow'; const b = document.createElement('span'); b.textContent = name; const bar = document.createElement('div'); bar.className = 'lvbar'; const i2 = document.createElement('i'); i2.style.width = v + '%'; i2.style.background = colr; bar.appendChild(i2); const val = document.createElement('b'); val.textContent = v; r.append(b, bar, val); if (btn) r.appendChild(btn); else r.classList.add('nob'); FB.appendChild(r); };
       const bt = document.createElement('button'); bt.textContent = f >= 100 ? 'Frisk' : `Massage · ${MASSAGE[0]} mønter`; bt.disabled = f >= 100; if (f >= 100) bt.className = 'alt';
-      bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins}`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1] + 5 * facLv('kl')); squadSave(S2); sfx.win(); squadShow(); };
+      bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins}`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1] + 5 * facLv('kl')); squadSave(S2); sfx.win(); sqRefresh(); };
       row('Form', f, fitCol(f), bt); row('Humør ' + morFace(m), m, m >= 60 ? '#59e38b' : m >= 35 ? '#ffd447' : '#ff6b5e');
       const sm = document.createElement('p'); sm.className = 'sqnote';
       sm.textContent = (f < 70 ? 'Træt: han er langsommere og bliver hurtigere flad. ' : 'Friske ben. ') + `Formen kommer igen af sig selv, og massage giver +${MASSAGE[1] + 5 * facLv('kl')}. ` + (m >= 85 ? 'Han er i hopla og spiller over evne.' : m < 35 ? 'Han er utilfreds og spiller under evne. Sejre og spilletid hjælper.' : 'Sejre, mål og spilletid løfter humøret.');
@@ -5985,6 +5971,33 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('sqPos').textContent = DPOSN[dpOf(p)] + ' · ' + flagOf(p.nat) + (NATS[p.nat] || 'Danmark');
     evPaint();
     $('sqXI').textContent = (inXI.has(sqSel) ? 'Starter' : 'På bænken') + (p.age ? ` · ${p.age} år` : '') + (p.pot && o < p.pot ? ` · 🌱 potentiale ${p.pot}` : '');
+    paintTP(S);
+  }
+  function squadShow() {
+    const S = squadLoad(), n = Math.max(1, cfg.size), xi = squadXI(n, S), inXI = new Set(xi.map(x => x.i));
+    if (!S.pl[sqSel]) sqSel = 0;
+    const F = $('sqFil'); F.textContent = '';
+    for (const [k, t] of [['', 'Alle'], ['MV', 'Mål'], ['FO', 'Forsvar'], ['MB', 'Midtbane'], ['AN', 'Angreb']]) { const b = document.createElement('button'); b.textContent = t; b.setAttribute('aria-pressed', String(sqFilter === k)); b.onclick = () => { sqFilter = k; const S3 = squadLoad(); if (k && S3.pl[sqSel] && S3.pl[sqSel].pos !== k) { const j = S3.pl.findIndex(q => q.pos === k); if (j >= 0) sqSel = j; } squadShow(); }; F.appendChild(b); }
+    const L = $('sqList'); L.textContent = '';
+    const lineNo = { MV: 0, FO: 1, MB: 2, AN: 3 }, all = S.pl.map((p, i) => ({ p, i })).filter(x => !sqFilter || x.p.pos === sqFilter);
+    const mk = ({ p, i }) => {
+      const o = ovr(p), b = document.createElement('button'); b.className = 'pc ' + (p.ev ? 'event' : ovrTier(o)) + (i === sqSel ? ' sel' : '') + (inXI.has(i) ? '' : ' bench');
+      const add = (tag, cls, txt) => { const e = document.createElement(tag); e.className = cls; if (txt !== undefined) e.textContent = txt; b.appendChild(e); return e; };
+      add('b', 'o', o); add('span', 'ps', dpOf(p)); add('span', 'face').innerHTML = faceSVG(p);
+      add('span', 'n', p.n.split(' ').slice(-1)[0]);
+      const ft = add('span', 'ft'); const fm = document.createElement('span'); fm.className = 'fm'; const fi = document.createElement('i'); fi.style.width = fitOf(p) + '%'; fi.style.background = fitCol(fitOf(p)); fm.appendChild(fi);
+      const mo = document.createElement('span'); mo.textContent = morFace(morOf(p)); ft.append(fm, mo);
+      if (abOf(p).length) add('span', 'ab', abIcons(p));
+      if (p.pot && o < p.pot) add('span', 'tal', '🌱');
+      b.onclick = () => { sqSel = i; squadShow(); };
+      return b;
+    };
+    const head = t => { const h = document.createElement('div'); h.className = 'sqh'; h.textContent = t; L.appendChild(h); };
+    const st = all.filter(x => inXI.has(x.i)).sort((a, b) => lineNo[a.p.pos] - lineNo[b.p.pos] || ovr(b.p) - ovr(a.p)), be = all.filter(x => !inXI.has(x.i)).sort((a, b) => ovr(b.p) - ovr(a.p));
+    if (st.length) { head(`Starter ved ${n} mod ${n}`); const g = document.createElement('div'); g.className = 'pcs'; st.forEach(x => g.appendChild(mk(x))); L.appendChild(g); }
+    if (be.length) { head(`Bænken (${be.length})`); const g = document.createElement('div'); g.className = 'pcs'; be.forEach(x => g.appendChild(mk(x))); L.appendChild(g); }
+    if (!all.length) head('Ingen spillere her');
+    sqHome('sq'); sqPanelPaint();
     paintTP(S); paintCoins();
     $('squad').hidden = false;
   }
@@ -6003,7 +6016,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
         const S2 = squadLoad(), q = S2.pl[i];
         if (S2.tp < price) { sm.textContent = `Mangler ${price - S2.tp} TP. Spil kampe eller færdighedsspil.`; return; }
         S2.tp -= price; const nb = abOf(q); nb[k] = a; q.ab = nb.filter(Boolean); squadSave(S2); sfx.win(); buzz(30);
-        $('abOv').hidden = true; squadShow();
+        $('abOv').hidden = true; sqRefresh();
       };
       L.appendChild(bt);
     }
@@ -6013,7 +6026,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('goClub').onclick = clubShow; $('clClose').onclick = () => { $('clubOv').hidden = true; hubPaint(); };
     $('goMarket').onclick = () => { mkArm = -1; mktShow(); }; $('mkClose').onclick = () => { $('mktOv').hidden = true; hubPaint(); };
     $('abClose').onclick = () => { $('abOv').hidden = true; };
-    $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } squadShow(); });
+    $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } sqRefresh(); });
     $('sqClose').onclick = () => { $('squad').hidden = true; };
     $('goSquad').onclick = squadShow;
     $('sqDrills').onclick = () => { $('squad').hidden = true; page('pgPractice'); drillList(); };
@@ -6316,7 +6329,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       if (mtDrag >= 0) { mtDrag = -1; saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); return; }
       mtTap(d.i);
     };
-    $('mtAuto').onclick = () => { const S = squadLoad(); if (S.xi) delete S.xi[mtN]; squadSave(S); mtSel = mtSelB = -1; mtPaintSide(); mtDraw(); };
+    $('mtAuto').onclick = () => { const S = squadLoad(); if (S.xi) delete S.xi[mtN]; squadSave(S); mtSel = mtSelB = -1; mtArm = false; mtPaintSide(); mtDraw(); };
     for (const b of $('mtTabs').children) b.onclick = () => { mtTab = b.dataset.t; mtTabs(); };
     cv2.addEventListener('pointerup', up); cv2.addEventListener('pointercancel', up);
     $('mtClose').onclick = mtClose;
@@ -6333,45 +6346,50 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     else { const sl = a >= 0 ? a : b, bi = a >= 0 ? -1 - b : -1 - a; xi[sl] = bi; }
     S.xi = S.xi || {}; S.xi[mtN] = xi; squadSave(S); sfx.kick(0.3);
   }
-  function mtTap(i) { // tap one man, then another (on the pitch or the bench) to swap them
-    if (mtSelB >= 0) { mtSwap(i, -1 - mtSelB); mtSelB = -1; mtSel = -1; }
-    else if (mtSel === i) mtSel = -1;
-    else if (mtSel >= 0) { mtSwap(mtSel, i); mtSel = -1; }
-    else mtSel = i;
+  let mtArm = false; // Byt is pressed: the next man you tap changes place with the chosen one
+  function mtTap(i) { // tap a man to see him; press Byt and tap another (on the pitch or the bench) to swap them
+    if (mtArm && (mtSel >= 0 || mtSelB >= 0)) { if (mtSelB >= 0) mtSwap(i, -1 - mtSelB); else if (mtSel !== i) mtSwap(mtSel, i); mtArm = false; mtSel = i; mtSelB = -1; }
+    else { mtSel = mtSel === i && mtSelB < 0 ? -1 : i; mtSelB = -1; mtArm = false; }
     mtPaintSide(); mtDraw();
   }
-  function mtPaintSide() { // the chosen man's card, the bench and the team rating
+  function mtBenchTap(i) {
+    if (mtArm && mtSel >= 0) { mtSwap(mtSel, -1 - i); mtArm = false; mtSelB = -1; }
+    else { mtSelB = mtSelB === i && mtSel < 0 ? -1 : i; mtSel = -1; mtArm = false; }
+    mtPaintSide(); mtDraw();
+  }
+  function mtPaintSide() { // the chosen man's panel, the bench and the team rating
     const S = squadLoad(), xi = xiFor(mtN, S), L = mtLayNow(), on = new Set(xi);
     const ch = chemOf(mtN, S); $('mtOvr').innerHTML = `Hold <b>${teamOvr(mtN)}</b> · kemi ${ch.v}`;
     const sel = $('mtSel'); sel.textContent = '';
     const who = mtSel >= 0 ? S.pl[xi[mtSel]] : mtSelB >= 0 ? S.pl[mtSelB] : null;
-    if (!who) sel.textContent = 'Tryk på en spiller for at se ham. Tryk så på en anden, eller på en fra bænken, for at bytte. Træk en spiller for at flytte hans plads.';
+    const sb = $('mtSwapB'); sb.hidden = !who; sb.textContent = mtArm ? 'Fortryd' : '⇄ Byt'; sb.classList.toggle('alt', mtArm);
+    sb.onclick = () => { mtArm = !mtArm; mtPaintSide(); mtDraw(); };
+    sqHome('mt'); $('mtPan').hidden = !who;
+    if (!who) sel.textContent = 'Tryk på en spiller for at se ham, træne ham og vælge evner. Tryk Byt for at skifte ham ud. Træk en spiller på banen for at flytte hans plads.';
     else {
-      const o = ovr(who), b = document.createElement('b'); b.className = 'o t-' + ovrTier(o); b.textContent = o;
-      const t = document.createElement('div'); t.innerHTML = ''; const nm = document.createElement('strong'); nm.textContent = who.n;
-      t.append(nm, document.createElement('br'), `${DPOSN[dpOf(who)]} (${dpOf(who)}) · ${flagOf(who.nat)}${NATS[who.nat] || 'Danmark'}`);
-      sel.append(b, t);
-      if (mtSel >= 0) { const sp = slotPos(L[mtSel], mtSel, mtN); if (sp !== dpOf(who)) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = `Spiller ${DPOSN[sp].toLowerCase()} (${sp}) her: ${fitOvr(who, sp)} i stedet for ${ovr(who)}`; sel.appendChild(w); } }
-      const st = document.createElement('div'); st.className = 'sts';
-      for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${who.pos === 'MV' && k === 'def' ? 'Reflekser' : name} ${who[k]}`; st.appendChild(d); }
-      sel.appendChild(st);
-      if (abOf(who).length) { const ab = document.createElement('div'); ab.className = 'abs'; for (const a of abOf(who)) { const d = document.createElement('span'); d.className = 'abchip'; d.textContent = ABIL[a].i + ' ' + ABIL[a].n; d.title = ABIL[a].d; ab.appendChild(d); } sel.appendChild(ab); }
-      const tr = document.createElement('button'); tr.className = 'linkbtn'; tr.textContent = 'Træn ham og vælg evner ›';
-      tr.onclick = () => { sqSel = S.pl.indexOf(who); squadShow(); }; sel.appendChild(tr);
+      sqSel = S.pl.indexOf(who); sqPanelPaint();
+      if (mtArm) { sel.textContent = `Tryk på den, ${who.n.split(' ').slice(-1)[0]} skal bytte med.` + (mtSel >= 0 ? ' Grøn kant: passer til pladsen.' : ''); sel.classList.add('arm'); }
+      else { sel.classList.remove('arm'); if (mtSel >= 0) { const sp = slotPos(L[mtSel], mtSel, mtN); if (sp !== dpOf(who)) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = `Spiller ${DPOSN[sp].toLowerCase()} her: ${fitOvr(who, sp)} i stedet for ${ovr(who)}`; sel.appendChild(w); } } }
     }
+    sel.hidden = !sel.textContent;
     const B = $('mtBench'); B.textContent = '';
-    const tsp = mtSel >= 0 ? slotPos(L[mtSel], mtSel, mtN) : null, rate = p => (tsp ? fitOvr(p, tsp) : ovr(p));
+    const tsp = mtArm && mtSel >= 0 ? slotPos(L[mtSel], mtSel, mtN) : null, rate = p => (tsp ? fitOvr(p, tsp) : ovr(p));
     const bench = S.pl.map((p, i) => ({ p, i })).filter(x => !on.has(x.i)).sort((a, b) => rate(b.p) - rate(a.p));
     for (const { p, i } of bench) {
-      const bt = document.createElement('button'); bt.className = 'alt'; bt.setAttribute('aria-pressed', String(i === mtSelB));
-      const o = document.createElement('span'); o.className = 'o t-' + ovrTier(ovr(p)); o.textContent = rate(p);
-      const ps = document.createElement('span'); ps.textContent = dpOf(p); if (tsp) bt.classList.toggle('fit', dpOf(p) === tsp); const nm = document.createElement('span'); nm.textContent = p.n;
-      bt.append(o, ps, nm);
-      if (fitOf(p) < 90) { const fm = document.createElement('span'); fm.textContent = ` ▮ ${Math.round(fitOf(p))}`; fm.style.color = fitCol(fitOf(p)); fm.style.fontSize = '11px'; bt.appendChild(fm); }
-      bt.onclick = () => { if (mtSel >= 0) { mtSwap(mtSel, -1 - i); mtSel = -1; mtSelB = -1; } else mtSelB = mtSelB === i ? -1 : i; mtPaintSide(); mtDraw(); };
-      B.appendChild(bt);
+      const o = ovr(p), b = document.createElement('button'); b.className = 'pc s ' + (p.ev ? 'event' : ovrTier(o)) + (i === mtSelB ? ' sel' : '') + (mtArm && tsp && dpOf(p) === tsp ? ' fit' : '');
+      const add = (tag, cls, txt) => { const e = document.createElement(tag); e.className = cls; if (txt !== undefined) e.textContent = txt; b.appendChild(e); return e; };
+      add('b', 'o', rate(p)); add('span', 'ps', dpOf(p)); add('span', 'face').innerHTML = faceSVG(p); add('span', 'n', p.n.split(' ').slice(-1)[0]);
+      const ft = add('span', 'ft'), fm = document.createElement('span'); fm.className = 'fm'; const fi = document.createElement('i'); fi.style.width = fitOf(p) + '%'; fi.style.background = fitCol(fitOf(p)); fm.appendChild(fi); ft.appendChild(fm);
+      b.onclick = () => mtBenchTap(i);
+      B.appendChild(b);
     }
-    if (!bench.length) B.textContent = 'Ingen på bænken. Køb pakker i butikken for flere spillere.';
+    if (!bench.length) B.textContent = 'Tom. Hent spillere på transfermarkedet.';
+  }
+  const faceC = new Map();
+  function faceImg(p) { // the same portrait, as a picture the line-up canvas can draw
+    const k = p.n + '|' + p.pos + '|' + loadMT().c1; let im = faceC.get(k);
+    if (!im) { im = new Image(); im.onload = () => { if (!$('myteam').hidden) mtDraw(); }; im.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(faceSVG(p).replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" ')); faceC.set(k, im); }
+    return im.complete && im.naturalWidth ? im : null;
   }
   function mtFrom() { // start from one of the ready-made formations
     const el = $('mtFrom'), l = formList(mtN), cur = myForm(mtN);
@@ -6381,7 +6399,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       b.onclick = () => { loadMT().lay[mtN] = f.map(q => q.slice()); saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
       el.appendChild(b);
     });
-    $('mtLayTip').textContent = 'Tryk på to spillere for at bytte dem, eller på en spiller og så en fra bænken. Træk en spiller for at flytte hans plads. Rød position betyder, at han spiller uden for sin position.';
+    $('mtLayTip').textContent = 'Rød plads på kortet betyder, at han spiller uden for sin position.';
   }
   function mtDraw() {
     const c = $('mtCv'), mt = loadMT();
@@ -6390,7 +6408,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const narrow = sw / uiK <= 560, card = c.closest('.card');
     c.closest('.mtgrid').classList.toggle('narrow', narrow);
     let ph = narrow ? 300 : Math.max(170, Math.min(420, sh / uiK - 150)), pw = ph * asp;
-    const maxW = narrow ? card.clientWidth - 30 : card.clientWidth - 250;
+    const maxW = narrow ? card.clientWidth - 30 : card.clientWidth - 440;
     if (pw > maxW) { pw = maxW; ph = pw / asp; }
     c.style.width = Math.round(pw) + 'px'; c.style.height = Math.round(ph) + 'px';
     const w = Math.round(pw), h = Math.round(ph);
@@ -6422,11 +6440,13 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       g.fillStyle = mt.c1; g.fillRect(cx - cw / 2 + 3, cy + chh * 0.16, cw - 6, 3);
       g.lineWidth = sel ? 3 : 1.5; g.strokeStyle = sel ? '#ffffff' : 'rgba(0,0,0,0.35)'; g.beginPath(); g.roundRect(cx - cw / 2, cy - chh / 2, cw, chh, 6); g.stroke();
       g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#14181c';
-      g.font = `800 ${Math.round(cw * 0.42)}px ${FT}`; g.fillText(o, cx, cy - chh * 0.14);
-      g.font = `800 ${Math.round(cw * 0.22)}px ${FT}`; g.fillStyle = bad ? '#b3261e' : side ? '#7a4a00' : '#14181c'; g.fillText(role, cx, cy + chh * 0.33);
-      if (mtSel >= 0 && !sel || mtSelB >= 0) { const who = mtSelB >= 0 ? S.pl[mtSelB] : S.pl[xi[mtSel]]; if (who && dpOf(who) === spos) { g.strokeStyle = '#59e38b'; g.lineWidth = 2.5; g.beginPath(); g.roundRect(cx - cw / 2 - 3, cy - chh / 2 - 3, cw + 6, chh + 6, 8); g.stroke(); } } // where the chosen man would fit
+      const fim = faceImg(sp);
+      if (fim) { const fs = cw * 0.66; g.drawImage(fim, cx - fs / 2 + cw * 0.14, cy - chh / 2 + 1, fs, fs); g.textAlign = 'left'; g.font = `800 ${Math.round(cw * 0.33)}px ${FT}`; g.fillText(o, cx - cw / 2 + 3, cy - chh / 2 + cw * 0.22); g.textAlign = 'center'; }
+      else { g.font = `800 ${Math.round(cw * 0.42)}px ${FT}`; g.fillText(o, cx, cy - chh * 0.14); }
+      g.font = `800 ${Math.round(cw * 0.22)}px ${FT}`; g.fillStyle = bad ? '#b3261e' : side ? '#7a4a00' : '#14181c'; g.fillText(role, cx, cy + chh * 0.3);
+      if (mtArm && (mtSel >= 0 && !sel || mtSelB >= 0)) { const who = mtSelB >= 0 ? S.pl[mtSelB] : S.pl[xi[mtSel]]; if (who && dpOf(who) === spos) { g.strokeStyle = '#59e38b'; g.lineWidth = 2.5; g.beginPath(); g.roundRect(cx - cw / 2 - 3, cy - chh / 2 - 3, cw + 6, chh + 6, 8); g.stroke(); } } // where the chosen man would fit
       if (abOf(sp).length) { g.font = `${Math.round(cw * 0.24)}px ${FT}`; g.fillStyle = '#fff'; g.fillText(abIcons(sp), cx + cw / 2 - 2, cy - chh / 2 + 1); } // his evner on the corner of the card
-      if (fitOf(sp) < 90) { const fv = fitOf(sp); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(cx - cw / 2 + 3, cy - chh / 2 + 3, cw - 6, 4); g.fillStyle = fitCol(fv); g.fillRect(cx - cw / 2 + 3, cy - chh / 2 + 3, (cw - 6) * fv / 100, 4); } // tired legs: a form bar across the top
+      if (fitOf(sp) < 90) { const fv = fitOf(sp); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(cx - cw / 2 + 3, cy + chh / 2 - 6, cw - 6, 4); g.fillStyle = fitCol(fv); g.fillRect(cx - cw / 2 + 3, cy + chh / 2 - 6, (cw - 6) * fv / 100, 4); } // tired legs: a form bar across the top
       const sn = sp.n.split(' ').slice(-1)[0]; g.font = `700 ${Math.max(9, Math.round(cw * 0.21))}px ${FT}`; g.fillStyle = '#fff';
       g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 3; g.strokeText(sn, cx, cy + chh / 2 + 8); g.fillText(sn, cx, cy + chh / 2 + 8);
     });
@@ -6449,7 +6469,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('mtC1')._paint(); $('mtC2')._paint();
     segPaints.forEach(f => f());
     mtTip(''); mtFrom(); if (mtCrest) mtCrest();
-    $('myteam').hidden = false; mtSel = mtSelB = -1; mtTab = focus === 'tac' ? 'tac' : 'lay'; mtTabs(); mtPaintSide();
+    $('myteam').hidden = false; mtSel = mtSelB = -1; mtArm = false; mtTab = focus === 'tac' ? 'tac' : 'lay'; mtTabs(); mtPaintSide();
     requestAnimationFrame(() => { mtDraw(); if (focus === 'lay') $('mtLay').scrollIntoView({ block: 'nearest' }); });
   }
   function mtClose() {
