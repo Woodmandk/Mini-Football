@@ -435,7 +435,32 @@ table.st tr.me td { color: var(--gold); }
 .nat { font-size: 10px; padding: 1px 4px; border-radius: 4px; background: rgba(255,255,255,0.15); margin-left: 4px; }
 .evbox { margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(32,179,122,0.15); border: 1px solid rgba(32,179,122,0.5); font-size: 12px; }
 .evbox b { font-size: 13px; } .evbox div { display: flex; justify-content: space-between; gap: 8px; }
-.sqgrid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; text-align: left; align-items: start; }
+.sqgrid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; text-align: left; align-items: start; }
+.sqbar { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; flex-wrap: wrap; }
+.chip2 { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 99px; background: rgba(255,255,255,0.1); white-space: nowrap; }
+.sqfil { display: flex; gap: 4px; flex: 1; justify-content: center; } .sqfil button { min-height: 0; padding: 5px 11px; font-size: 12px; border-radius: 99px; background: rgba(0,0,0,0.3); color: var(--chalk); border: 1px solid rgba(255,255,255,0.14); box-shadow: none; }
+.sqfil button[aria-pressed="true"] { background: var(--chalk); color: #10231a; }
+.sqbar > button.alt { min-height: 0; padding: 6px 12px; font-size: 12px; }
+.sqh { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 2px 2px 5px; } .pcs + .sqh { margin-top: 10px; }
+.pcs { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 7px; }
+.pc { position: relative; display: flex; flex-direction: column; align-items: center; min-height: 0; padding: 5px 4px 5px; border-radius: 10px 10px 12px 12px; border: 2px solid rgba(0,0,0,0.25); box-shadow: 0 3px 8px rgba(0,0,0,0.35); line-height: 1.1; overflow: hidden; }
+.pc.bronze { background: linear-gradient(160deg, #b07a4c, #7a4c2a); color: #fff; } .pc.silver { background: linear-gradient(160deg, #cfd8df, #8d98a3); color: #14181c; }
+.pc.gold { background: linear-gradient(160deg, #f6d267, #c9952a); color: #1a1408; } .pc.elite { background: linear-gradient(160deg, #3a2478, #7b3fe4); color: #ffe27a; } .pc.event { background: linear-gradient(160deg, #0d4d3a, #20b37a); color: #fff7c2; }
+.pc.sel { border-color: #fff; box-shadow: 0 0 0 2px var(--gold), 0 4px 12px rgba(0,0,0,0.5); transform: translateY(-2px); }
+.pc.bench { filter: saturate(0.75) brightness(0.9); }
+.pc .o { position: absolute; left: 5px; top: 4px; font-size: 17px; font-weight: 800; } .pc .ps { position: absolute; left: 5px; top: 23px; font-size: 9px; font-weight: 700; opacity: .85; }
+.pc .face { width: 44px; height: 44px; margin: 2px 0 0 16px; } .face svg { width: 100%; height: 100%; display: block; }
+.pc .n { font-size: 11px; font-weight: 700; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.pc .ft { display: flex; align-items: center; gap: 3px; font-size: 10px; margin-top: 2px; } .pc .fm { width: 30px; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.35); overflow: hidden; } .pc .fm i { display: block; height: 100%; }
+.pc .ab { position: absolute; right: 3px; top: 3px; font-size: 11px; display: flex; flex-direction: column; line-height: 1.15; } .pc .tal { position: absolute; left: 4px; top: 36px; font-size: 10px; }
+.sqpan { position: sticky; top: 0; display: flex; flex-direction: column; gap: 6px; } .sqpan .sqcard { padding: 6px 10px; }
+.sqtabs { grid-template-columns: repeat(3, 1fr); margin: 0; }
+.strow { display: grid; grid-template-columns: 78px 1fr 26px 104px; gap: 8px; align-items: center; padding: 3px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; }
+.strow.nob { grid-template-columns: 78px 1fr 26px; } .strow b { text-align: right; } .strow .lvbar { grid-column: auto; height: 7px; }
+.strow button { min-height: 0; padding: 5px 4px; font-size: 12px; white-space: nowrap; }
+.sqstats, .sqform { display: flex; flex-direction: column; gap: 5px; } .sqstats[hidden], .sqform[hidden], .abrow[hidden] { display: none; }
+.sqcard .face { width: 54px; height: 54px; flex: none; } .sqcard .who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; } .sqcard .who small { font-size: 11px; opacity: .9; }
+.sqcard.event { background: linear-gradient(135deg, #0d4d3a, #20b37a); color: #fff7c2; }
 .sqlist { display: flex; flex-direction: column; gap: 3px; }
 .pausecard { max-width: 640px; }
 .pscore { display: flex; align-items: baseline; justify-content: center; gap: 12px; font-weight: 700; font-size: 15px; }
@@ -459,8 +484,7 @@ table.st tr.me td { color: var(--gold); }
 .ovr.gold, .sqcard.gold { background: #e3b23c; color: #1a1408; } .ovr.elite, .sqcard.elite { background: linear-gradient(135deg, #2b1a5c, #7b3fe4); color: #ffe27a; }
 .sqcard { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: 10px; }
 .sqcard .o { display: flex; flex-direction: column; align-items: center; line-height: 1; } .sqcard .o b { font-size: 30px; } .sqcard .o span { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; }
-.sqcard .namein { flex: 1; min-width: 0; font-size: 15px; padding: 6px 8px; background: rgba(0,0,0,0.25); color: inherit; }
-.sqstats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sqcard .namein { box-sizing: border-box; min-width: 0; width: 100%; font-size: 15px; font-weight: 700; padding: 4px 8px; background: rgba(0,0,0,0.22); color: inherit; }
 .sqnote { font-size: 12px; color: var(--muted); margin: 0; }
 /* kampintro: the two sides slide in before kick-off */
 #vs { position: absolute; inset: 0; z-index: 30; display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; cursor: pointer; background: rgba(4,10,7,.55); transition: opacity .3s; }
@@ -497,7 +521,7 @@ table.st tr.me td { color: var(--gold); }
 #motm .mr { font-size: 22px; font-weight: 800; color: var(--gold); } #motm .mt { flex: 1; line-height: 1.2; font-size: 14px; } #motm .mt small { display: block; font-size: 11px; opacity: .75; font-weight: 500; }
 #motm .mg { font-size: 11px; opacity: .7; white-space: nowrap; }
 /* evner */
-.abrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.abrow { display: grid; grid-template-columns: 1fr; gap: 6px; }
 .abslot { display: flex; align-items: center; gap: 8px; min-height: 0; padding: 6px 10px; text-align: left; font-size: 13px; border-radius: 10px; line-height: 1.15; }
 .abslot i { font-style: normal; font-size: 20px; } .abslot small { display: block; font-size: 10px; opacity: .7; font-weight: 500; }
 .abslot.has { border-color: var(--gold); background: linear-gradient(180deg, rgba(255,212,71,.16), rgba(0,0,0,.25)); }
@@ -829,16 +853,17 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
 
   <div class="overlay" id="squad" hidden>
     <div class="card wide">
-      <div class="top"><button class="alt back" id="sqClose">‹ Tilbage</button><h2>Trup og træning</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+      <div class="top"><button class="alt back" id="sqClose">‹ Tilbage</button><h2>Truppen</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+      <div class="sqbar"><span class="chip2" id="sqTeam"></span><span class="chip2" id="sqChem"></span><div class="sqfil" id="sqFil"></div><button id="sqDrills" class="alt">Færdighedsspil ›</button></div>
       <div class="sqgrid">
-        <div class="sqlist" id="sqList"></div>
-        <div class="col">
-          <div class="sqcard" id="sqCard"><div class="o"><b id="sqOvr">60</b><span id="sqPos">Angreb</span></div>
-            <input id="sqName" class="namein" maxlength="16" aria-label="Spillerens navn" autocomplete="off"></div>
+        <div class="sqcards" id="sqList"></div>
+        <div class="sqpan">
+          <div class="sqcard" id="sqCard"><span class="face" id="sqFace"></span><div class="o"><b id="sqOvr">60</b><span id="sqPosS"></span></div>
+            <div class="who"><input id="sqName" class="namein" maxlength="16" aria-label="Spillerens navn" autocomplete="off"><small id="sqPos"></small><small id="sqXI"></small></div></div>
+          <div class="tabbar sqtabs" id="sqTabs"></div>
           <div class="sqstats" id="sqStats"></div>
           <div class="abrow" id="sqAb"></div>
-          <p class="sqnote"><b id="sqTeam"></b> · <span id="sqChem"></span> · <span id="sqXI"></span> TP får du i kampe og færdighedsspil.</p>
-          <button id="sqDrills" class="go">Færdighedsspil ›</button>
+          <div class="sqform" id="sqForm"></div>
         </div>
       </div>
     </div>
@@ -5873,51 +5898,77 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     T.tasks.forEach(([, txt, need], i) => { const r = document.createElement('div'); const a = document.createElement('span'); a.textContent = txt; const b = document.createElement('span'); b.textContent = `${Math.min(need, E.p[i])}/${need}`; r.append(a, b); box.appendChild(r); });
   }
   let sqSel = 1;
+  // a little portrait of the player, the same man you see on the pitch: skin, hair colour and hairstyle, in your shirt
+  function faceSVG(p) {
+    const L = lookOf({ sq: p.n, team: 0, k: 1 }), mt = loadMT(), sh = p.pos === 'MV' ? '#9be23a' : (mt.c1 || '#2f6fd6'), tr = mt.c2 || '#ffffff', hc = L.hair, st = L.style;
+    let hair = '';
+    if (st <= 1) hair = `<path d="M17 25c-2-13 7-18 13-18s15 5 13 18c-2-6-5-9-13-9s-11 3-13 9z" fill="${hc}"/>`;
+    else if (st === 2) hair = `<path d="M17.5 24c-1-11 6-15 12.500-15s13.500 4 12.500 15c-2-7-6-10-12.500-10s-10.500 3-12.500 10z" fill="${hc}" opacity=".75"/>`;
+    else if (st === 4) hair = `<path d="M15 38c-4-20 5-31 15-31s19 11 15 31c-1-12-3-21-15-21s-14 9-15 21z" fill="${hc}"/>`;
+    else if (st === 5) hair = [[19, 16], [25, 11], [31, 10], [37, 12], [42, 17], [16, 22], [44, 23]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5.200" fill="${hc}"/>`).join('');
+    else if (st === 6) hair = `<path d="M26 20c-1-9 1-15 4-16 3 1 5 7 4 16z" fill="${hc}"/>`;
+    else if (st === 7) hair = `<circle cx="30" cy="6" r="4.500" fill="${hc}"/><path d="M17 25c-2-13 7-18 13-18s15 5 13 18c-2-6-5-9-13-9s-11 3-13 9z" fill="${hc}"/>`;
+    else if (st === 8) hair = `<path d="M42 16c6 2 8 12 5 20-2-7-4-11-7-13z" fill="${hc}"/><path d="M17 25c-2-13 7-18 13-18s15 5 13 18c-2-6-5-9-13-9s-11 3-13 9z" fill="${hc}"/>`;
+    hair = hair.replace(/(\d)\.(\d)00/g, '$1.$2');
+    return `<svg viewBox="0 0 60 60" aria-hidden="true"><path d="M6 60c0-13 10-19 24-19s24 6 24 19z" fill="${sh}"/><path d="M22 42c2 4 14 4 16 0l-1 4c-3 3-11 3-14 0z" fill="${tr}"/><rect x="25" y="33" width="10" height="10" rx="4" fill="${L.skin}"/><ellipse cx="30" cy="25" rx="12.500" ry="14" fill="${L.skin}"/>${hair}${L.band ? `<rect x="17.500" y="17" width="25" height="3.500" rx="1.500" fill="${tr}"/>` : ''}<circle cx="25" cy="26" r="1.600" fill="#1c1c1c"/><circle cx="35" cy="26" r="1.600" fill="#1c1c1c"/><path d="M26 32c2 2 6 2 8 0" stroke="#1c1c1c" stroke-width="1.300" fill="none" stroke-linecap="round" opacity=".7"/></svg>`.replace(/(\d)\.(\d)00/g, '$1.$2');
+  }
+  let sqFilter = '', sqTab = 0;
   function squadShow() {
     const S = squadLoad(), n = Math.max(1, cfg.size), xi = squadXI(n, S), inXI = new Set(xi.map(x => x.i));
+    if (!S.pl[sqSel]) sqSel = 0;
+    const F = $('sqFil'); F.textContent = '';
+    for (const [k, t] of [['', 'Alle'], ['MV', 'Mål'], ['FO', 'Forsvar'], ['MB', 'Midtbane'], ['AN', 'Angreb']]) { const b = document.createElement('button'); b.textContent = t; b.setAttribute('aria-pressed', String(sqFilter === k)); b.onclick = () => { sqFilter = k; const S3 = squadLoad(); if (k && S3.pl[sqSel] && S3.pl[sqSel].pos !== k) { const j = S3.pl.findIndex(q => q.pos === k); if (j >= 0) sqSel = j; } squadShow(); }; F.appendChild(b); }
     const L = $('sqList'); L.textContent = '';
-    S.pl.forEach((p, i) => {
-      const b = document.createElement('button'); b.className = 'alt sqrow' + (i === sqSel ? ' sel' : '');
-      const ps = document.createElement('span'); ps.className = 'pos'; ps.textContent = dpOf(p);
-      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = p.n;
-      const na = document.createElement('span'); na.className = 'nat'; na.textContent = p.nat || 'DK'; nm.appendChild(na);
-      if (p.ev) { const e = document.createElement('span'); e.className = 'nat'; e.textContent = '★'; nm.appendChild(e); }
-      if (abOf(p).length) { const e = document.createElement('span'); e.className = 'abi'; e.textContent = abIcons(p); nm.appendChild(e); }
-      const o = document.createElement('span'); o.className = 'ovr ' + (p.ev ? 'gold' : ovrTier(ovr(p))); o.textContent = ovr(p);
-      if (!inXI.has(i)) b.classList.add('bench');
-      const fm = document.createElement('span'); fm.className = 'fm'; fm.title = 'Form'; const fi = document.createElement('i'); fi.style.width = fitOf(p) + '%'; fi.style.background = fitCol(fitOf(p)); fm.appendChild(fi);
-      const mf = document.createElement('span'); mf.className = 'mo'; mf.textContent = morFace(morOf(p));
-      b.append(ps, nm, fm, mf, o); b.onclick = () => { sqSel = i; squadShow(); };
-      L.appendChild(b);
-    });
+    const lineNo = { MV: 0, FO: 1, MB: 2, AN: 3 }, all = S.pl.map((p, i) => ({ p, i })).filter(x => !sqFilter || x.p.pos === sqFilter);
+    const mk = ({ p, i }) => {
+      const o = ovr(p), b = document.createElement('button'); b.className = 'pc ' + (p.ev ? 'event' : ovrTier(o)) + (i === sqSel ? ' sel' : '') + (inXI.has(i) ? '' : ' bench');
+      const add = (tag, cls, txt) => { const e = document.createElement(tag); e.className = cls; if (txt !== undefined) e.textContent = txt; b.appendChild(e); return e; };
+      add('b', 'o', o); add('span', 'ps', dpOf(p)); add('span', 'face').innerHTML = faceSVG(p);
+      add('span', 'n', p.n.split(' ').slice(-1)[0]);
+      const ft = add('span', 'ft'); const fm = document.createElement('span'); fm.className = 'fm'; const fi = document.createElement('i'); fi.style.width = fitOf(p) + '%'; fi.style.background = fitCol(fitOf(p)); fm.appendChild(fi);
+      const mo = document.createElement('span'); mo.textContent = morFace(morOf(p)); ft.append(fm, mo);
+      if (abOf(p).length) add('span', 'ab', abIcons(p));
+      if (p.pot && o < p.pot) add('span', 'tal', '🌱');
+      b.onclick = () => { sqSel = i; squadShow(); };
+      return b;
+    };
+    const head = t => { const h = document.createElement('div'); h.className = 'sqh'; h.textContent = t; L.appendChild(h); };
+    const st = all.filter(x => inXI.has(x.i)).sort((a, b) => lineNo[a.p.pos] - lineNo[b.p.pos] || ovr(b.p) - ovr(a.p)), be = all.filter(x => !inXI.has(x.i)).sort((a, b) => ovr(b.p) - ovr(a.p));
+    if (st.length) { head(`Starter ved ${n} mod ${n}`); const g = document.createElement('div'); g.className = 'pcs'; st.forEach(x => g.appendChild(mk(x))); L.appendChild(g); }
+    if (be.length) { head(`Bænken (${be.length})`); const g = document.createElement('div'); g.className = 'pcs'; be.forEach(x => g.appendChild(mk(x))); L.appendChild(g); }
+    if (!all.length) head('Ingen spillere her');
     const p = S.pl[sqSel], o = ovr(p);
-    const card = $('sqCard'); card.className = 'sqcard ' + ovrTier(o);
-    $('sqOvr').textContent = o; $('sqPos').textContent = POS[p.pos];
+    const card = $('sqCard'); card.className = 'sqcard ' + (p.ev ? 'event' : ovrTier(o));
+    $('sqFace').innerHTML = faceSVG(p); $('sqOvr').textContent = o; $('sqPosS').textContent = dpOf(p);
     $('sqName').value = p.n;
+    const T = $('sqTabs'); T.textContent = '';
+    ['Træning', 'Evner', 'Form'].forEach((t, k) => { const b = document.createElement('button'); b.textContent = t + (k === 2 && fitOf(p) < 60 ? ' ⚠' : ''); b.setAttribute('aria-pressed', String(sqTab === k)); b.onclick = () => { sqTab = k; squadShow(); }; T.appendChild(b); });
+    $('sqStats').hidden = sqTab !== 0; $('sqAb').hidden = sqTab !== 1; $('sqForm').hidden = sqTab !== 2;
     const box = $('sqStats'); box.textContent = '';
-    { // form and humør: what he brings into the next match
-      const f = Math.round(fitOf(p)), m = Math.round(morOf(p)), r = document.createElement('div'); r.className = 'lvrow fmrow';
-      const b = document.createElement('b'); b.textContent = `Form ${f}`;
-      const bt = document.createElement('button'); bt.className = 'alt'; bt.textContent = f >= 100 ? 'Frisk' : `Massage +${MASSAGE[1] + 5 * facLv('kl')} · ${MASSAGE[0]} mønter`; bt.disabled = f >= 100;
-      bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins} mønter`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1] + 5 * facLv('kl')); squadSave(S2); sfx.win(); squadShow(); };
-      const bar = document.createElement('div'); bar.className = 'lvbar'; const i2 = document.createElement('i'); i2.style.width = f + '%'; i2.style.background = fitCol(f); bar.appendChild(i2);
-      r.append(b, bt, bar); box.appendChild(r);
-      const r2 = document.createElement('div'); r2.className = 'lvrow fmrow'; const b2 = document.createElement('b'); b2.textContent = `Humør ${m} ${morFace(m)}`;
-      const sm = document.createElement('small'); sm.textContent = f < 70 ? 'Træt: langsommere og hurtigere flad. Formen kommer igen af sig selv.' : m >= 85 ? 'I hopla: spiller over evne.' : m < 35 ? 'Utilfreds: spiller under evne. Sejre og spilletid hjælper.' : 'Sejre og spilletid løfter humøret.';
-      r2.append(b2, sm); box.appendChild(r2);
-    }
     for (const [k, name] of SKILLS) {
-      const v = p[k], price = tpPrice(v), r = document.createElement('div'); r.className = 'lvrow';
-      const b = document.createElement('b'); b.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflekser' : k === 'pas' ? 'Aflevering' : name} ${v}`;
-      const bt = document.createElement('button'); bt.className = 'alt';
-      bt.textContent = v >= 99 ? 'Max' : `+1 · ${price} TP`; bt.disabled = v >= 99;
+      const v = p[k], price = tpPrice(v), r = document.createElement('div'); r.className = 'strow';
+      const b = document.createElement('span'); b.textContent = p.pos === 'MV' && k === 'def' ? 'Reflekser' : k === 'pas' ? 'Aflevering' : name;
+      const bar = document.createElement('div'); bar.className = 'lvbar'; const f = document.createElement('i'); f.style.width = Math.round((v - 40) / 59 * 100) + '%'; bar.appendChild(f);
+      const val = document.createElement('b'); val.textContent = v;
+      const bt = document.createElement('button'); bt.textContent = v >= 99 ? 'Max' : `+1 · ${price} TP`; bt.disabled = v >= 99; if (S.tp < price) bt.className = 'alt';
       bt.onclick = () => {
         const S2 = squadLoad(), q = S2.pl[sqSel];
-        if (S2.tp < price) { bt.textContent = `Mangler ${price - S2.tp} TP`; return; }
+        if (S2.tp < price) { bt.textContent = `Mangler ${price - S2.tp}`; return; }
         S2.tp -= price; q[k] = Math.min(99, q[k] + 1); squadSave(S2); sfx.win(); squadShow();
       };
-      const bar = document.createElement('div'); bar.className = 'lvbar'; const f = document.createElement('i'); f.style.width = Math.round((v - 40) / 59 * 100) + '%'; bar.appendChild(f);
-      r.append(b, bt, bar); box.appendChild(r);
+      r.append(b, bar, val, bt); box.appendChild(r);
+    }
+    { const h = document.createElement('p'); h.className = 'sqnote'; h.textContent = 'TP får du i kampe og færdighedsspil. Spillerne udvikler sig også af at spille.'; box.appendChild(h); }
+    { // form and humør: what he brings into the next match
+      const FB = $('sqForm'); FB.textContent = '';
+      const f = Math.round(fitOf(p)), m = Math.round(morOf(p));
+      const row = (name, v, colr, btn) => { const r = document.createElement('div'); r.className = 'strow'; const b = document.createElement('span'); b.textContent = name; const bar = document.createElement('div'); bar.className = 'lvbar'; const i2 = document.createElement('i'); i2.style.width = v + '%'; i2.style.background = colr; bar.appendChild(i2); const val = document.createElement('b'); val.textContent = v; r.append(b, bar, val); if (btn) r.appendChild(btn); else r.classList.add('nob'); FB.appendChild(r); };
+      const bt = document.createElement('button'); bt.textContent = f >= 100 ? 'Frisk' : `Massage · ${MASSAGE[0]} mønter`; bt.disabled = f >= 100; if (f >= 100) bt.className = 'alt';
+      bt.onclick = () => { const pr2 = loadProf(); if (pr2.coins < MASSAGE[0]) { bt.textContent = `Mangler ${MASSAGE[0] - pr2.coins}`; return; } const S2 = squadLoad(), q = S2.pl[sqSel]; addCoins(-MASSAGE[0], 'massage'); q.fit = Math.min(100, fitOf(q) + MASSAGE[1] + 5 * facLv('kl')); squadSave(S2); sfx.win(); squadShow(); };
+      row('Form', f, fitCol(f), bt); row('Humør ' + morFace(m), m, m >= 60 ? '#59e38b' : m >= 35 ? '#ffd447' : '#ff6b5e');
+      const sm = document.createElement('p'); sm.className = 'sqnote';
+      sm.textContent = (f < 70 ? 'Træt: han er langsommere og bliver hurtigere flad. ' : 'Friske ben. ') + `Formen kommer igen af sig selv, og massage giver +${MASSAGE[1] + 5 * facLv('kl')}. ` + (m >= 85 ? 'Han er i hopla og spiller over evne.' : m < 35 ? 'Han er utilfreds og spiller under evne. Sejre og spilletid hjælper.' : 'Sejre, mål og spilletid løfter humøret.');
+      FB.appendChild(sm);
     }
     { // his evner: two places, the second opens at rating 70
       const A = $('sqAb'), ab = abOf(p); A.textContent = '';
@@ -5934,10 +5985,10 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       }
     }
     $('sqTeam').textContent = `Hold ${teamOvr(n)}`;
-    const ch = chemOf(n, S); $('sqChem').textContent = `kemi ${ch.v}`;
-    $('sqPos').textContent = DPOSN[dpOf(p)] + ' · ' + (NATS[p.nat] || 'Danmark') + (p.pot && o < p.pot ? ` · talent, potentiale ${p.pot}` : '');
+    const ch = chemOf(n, S); $('sqChem').textContent = `Kemi ${ch.v}`;
+    $('sqPos').textContent = DPOSN[dpOf(p)] + ' · ' + flagOf(p.nat) + (NATS[p.nat] || 'Danmark');
     evPaint();
-    $('sqXI').textContent = inXI.has(sqSel) ? `starter ved ${n} mod ${n}.` : `på bænken ved ${n} mod ${n}.`;
+    $('sqXI').textContent = (inXI.has(sqSel) ? 'Starter' : 'På bænken') + (p.age ? ` · ${p.age} år` : '') + (p.pot && o < p.pot ? ` · 🌱 potentiale ${p.pot}` : '');
     paintTP(S); paintCoins();
     $('squad').hidden = false;
   }
