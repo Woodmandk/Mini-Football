@@ -848,6 +848,41 @@ table.st td { border-bottom-color: var(--line); }
 h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h1 .b { text-shadow: none; }
 .final { text-shadow: none; }
 @media (prefers-reduced-motion: reduce) { .overlay > .card, #menu > .card { animation: none; } }
+
+/* ---- full screen menus (rewrite): the front page fills the phone, Play sits in the middle ---- */
+#menu:has(> #pgHome:not([hidden])) { padding: 0; }
+#pgHome { max-width: none; width: 100%; height: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; overflow: hidden;
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); gap: 10px; }
+#pgHome .tabp { flex: 1 1 auto; min-height: 0; grid-auto-flow: row; grid-auto-columns: auto; grid-template-rows: none; gap: 10px; }
+#pgHome .tabp[hidden] { display: none; }
+#pgHome .tabp[data-tab="spil"], #pgHome .tabp[data-tab="profil"] { grid-template-columns: 1.5fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+#pgHome .tabp[data-tab="spil"] .hot, #pgHome .tabp[data-tab="profil"] .hot { grid-row: 1 / span 2; grid-column: 1; }
+#pgHome .tabp[data-tab="hold"], #pgHome .tabp[data-tab="klub"], #pgHome .tabp[data-tab="butik"] { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; }
+#pgHome .tabp > button { min-height: 0; height: 100%; }
+#pgHome .tabp > .hot, #pgHome .tabp > .hot2 { justify-content: flex-end; padding: 18px 20px; font-size: 30px; }
+#pgHome .tabp > .hot small, #pgHome .tabp > .hot2 small { font-size: 15px; max-width: 34ch; }
+#pgHome .tabp[data-tab="spil"] > .hot { font-size: 50px; letter-spacing: 0.04em; text-transform: uppercase; }
+#pgHome .tabp > .hot small { text-transform: none; letter-spacing: 0; }
+#pgHome .hubtop .chip { margin-left: auto; }
+#pgHome .tabp > .hot .ic, #pgHome .tabp > .hot2 .ic { width: 64px; height: 64px; }
+#pgHome .tabp > .hot .ic svg.i, #pgHome .tabp > .hot2 .ic svg.i { width: 38px; height: 38px; }
+#pgHome .tabp > .alt { font-size: 19px; }
+/* the second big choice on a tab: same size, quieter surface, so there is still one green button */
+button.tile.hot2 { display: flex; flex-direction: column; align-items: flex-start; text-align: left; color: var(--chalk); border-radius: var(--r3);
+  background: radial-gradient(circle at 100% 50%, transparent 0 58px, rgba(243, 241, 231, 0.07) 59px 61px, transparent 62px), var(--s2);
+  border: 1px solid var(--line2); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35); font-family: var(--disp); gap: 4px; }
+button.tile.hot2:hover { background-color: var(--s3); filter: brightness(1.06); }
+button.tile.hot2 .ic { display: grid; place-items: center; margin-bottom: auto; border-radius: var(--r2); background: var(--s3); color: var(--act-hi); }
+button.tile.hot2 small { color: var(--muted); }
+/* bottom bar: Play is the middle tab and a little bigger */
+#pgHome #tabbar { flex: 0 0 auto; }
+#tabbar button.mid { font-size: 15px; }
+#tabbar button.mid[aria-pressed="true"] { background: var(--act); color: #fff; box-shadow: inset 0 -3px 0 var(--act-lo); }
+#tabbar button.mid:not([aria-pressed="true"]) svg.i { color: var(--act-hi); }
+/* every other screen uses the full width of the phone too */
+#menu > .card:not(#pgHome), .overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help) > .card { max-width: none; }
+#wrap.n560 #pgHome .tabp { grid-template-columns: 1fr 1fr !important; grid-template-rows: none !important; overflow-y: auto; }
+#wrap.n560 #pgHome .tabp > * { grid-row: auto !important; grid-column: auto !important; min-height: 110px; }
 </style>
 
 <div id="wrap">
@@ -870,43 +905,42 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
-        <button id="homeProg" class="alt prog" aria-label="Season pass"><span class="pp"><span id="hpPass">Season pass 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
+        <button id="homeProg" class="alt prog" hidden aria-label="Season pass"><span class="pp"><span id="hpPass">Season pass 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
         <span class="chip"><span class="coins" data-coins>0</span></span>
         <button id="goSet" class="alt gear" aria-label="Settings">⚙</button>
       </div>
       <div class="guide" id="guide" hidden><span class="gface">🧑‍🏫</span><span class="gtx"><small id="guideN"></small><b id="guideT"></b><span class="gpips" id="guideP"></span></span><button id="guideGo"></button><button id="guideX" class="alt" aria-label="Hide the guide">✕</button></div>
       <div class="tabp" data-tab="spil">
-        <button id="goOnline" class="big tile hot"><i class="ic">🌐</i>Online<small id="onlSub">Ranked against anyone, or play friends with a code</small></button>
-        <button id="bCpu" class="big tile alt"><i class="ic">⚽</i>Vs computer<small>Quick match with your own team</small></button>
+        <button id="bCpu" class="big tile hot"><i class="ic">⚽</i>Play<small>Quick match with your team against the computer</small></button>
+        <button id="goOnline" class="big tile alt"><i class="ic">🌐</i>Online<small id="onlSub">Ranked, or play a friend with a code</small></button>
         <button id="goSeason" class="big tile alt"><i class="ic">🏆</i>Career and cups<small id="compSub">Career, co-op cup and season</small></button>
-        <button id="bTwo" class="big tile alt"><i class="ic">👥</i>2 on one phone<small>Against each other or together vs the computer</small></button>
-        <button id="goPractice" class="big tile alt"><i class="ic">🎯</i>Training<small>Skill games, penalties and training pitch</small></button>
+        <button id="bTwo" class="big tile alt"><i class="ic">👥</i>2 on one phone<small>Against each other or together</small></button>
+        <button id="goFriendly" class="big tile alt"><i class="ic">🤝</i>Friendly<small>More TP, less fatigue, no prize</small></button>
       </div>
       <div class="tabp" data-tab="hold" hidden>
-        <button id="goMine" class="big tile hot"><i class="ic">📋</i>The team<small id="holdSub">Line-up, training, skills and form. Tap a player</small></button>
-        <button id="goSquad" class="big tile alt" style="display:none"><i class="ic">💪</i>Squad and training<small id="squadSub">Train your players with TP</small></button>
-        <button id="goClub" class="big tile alt"><i class="ic">🏟️</i>The club<small id="clubSub">Training, finances and facilities</small></button>
-        <button id="goMarket" class="big tile alt"><i class="ic">🤝</i>Transfer market<small id="mktSub">Buy and sell players. New ones every day</small></button>
-        <button id="goTac" class="big tile alt"><i class="ic">🎨</i>Tactics and kit<small>Team name, colours, playing style and pressing</small></button>
+        <button id="goMine" class="big tile hot"><i class="ic">📋</i>The team<small id="holdSub">Line-up, players, tactics and kit. Tap a player</small></button>
+        <button id="goPractice" class="big tile hot2"><i class="ic">🎯</i>Training<small id="trainSub">Squad sessions, skill games, penalties and training points</small></button>
+      </div>
+      <div class="tabp" data-tab="klub" hidden>
+        <button id="goClub" class="big tile hot"><i class="ic">🏟️</i>The club<small id="clubSub">Grounds, staff and finances</small></button>
+        <button id="goMarket" class="big tile hot2"><i class="ic">🤝</i>Transfer market<small id="mktSub">Buy and sell players. New ones every day</small></button>
       </div>
       <div class="tabp" data-tab="butik" hidden>
-        <button id="goShop" class="big tile hot"><i class="ic">🛒</i>Shop<small>Player packs, balls, pitches and teams. You have <span data-coins>0</span> coins</small></button>
-        <button id="goFree" class="big tile alt"><i class="ic">🎁</i>Free packs<small id="freeSub">From the season pass and daily rewards</small></button>
-      </div>
-      <div class="tabp" data-tab="saeson" hidden>
-        <button id="goRank" class="big tile hot"><span class="ic" id="rankIc"></span>Rank<small id="rankSub">Divisions, rank points and rewards</small></button>
-        <button id="goPass" class="big tile alt"><i class="ic">⭐</i>Season pass<small id="passSub">30 levels every month</small></button>
-        <button id="bDaily" class="big tile alt"><i class="ic">✅</i>Daily challenges<small>3 new every day. Give coins and XP</small></button>
-        <button id="goEvent" class="big tile alt"><i class="ic">📅</i>Weekly event<small id="evSub">Complete this week's tasks and get an event card</small></button>
+        <button id="goShop" class="big tile hot"><i class="ic">🛒</i>Player packs<small id="shopSub">New players for your squad. You have <span data-coins>0</span> coins</small></button>
+        <button id="goItems" class="big tile hot2"><i class="ic">⚽</i>Balls, pitches and teams<small>Change how your matches look</small></button>
       </div>
       <div class="tabp" data-tab="profil" hidden>
-        <button id="goProf" class="big tile hot"><i class="ic">🏅</i>Profile and trophies<small>Your stats and all trophies</small></button>
-        <button id="bFriends" class="big tile alt"><i class="ic">🤝</i>Friends<small>Rating and head-to-head against people you have played</small></button>
-        <button id="goLeague" class="big tile alt"><i class="ic">📊</i>Table<small>Matches played on this phone</small></button>
-        <button id="bHelp" class="big tile alt"><i class="ic">❓</i>How to play<small>Buttons and rules</small></button>
+        <button id="goRank" class="big tile hot"><span class="ic" id="rankIc"></span>Rank<small id="rankSub">Divisions, rank points and rewards</small></button>
+        <button id="goPass" class="big tile alt"><i class="ic">⭐</i>Season pass<small id="passSub">30 levels every month</small></button>
+        <button id="bDaily" class="big tile alt"><i class="ic">✅</i>Challenges<small id="evSub">Daily challenges and the weekly event</small></button>
+        <button id="goProf" class="big tile alt"><i class="ic">🏅</i>Stats and trophies<small>Your numbers and every trophy</small></button>
+        <button id="bFriends" class="big tile alt"><i class="ic">🤝</i>Friends<small>People you have played online</small></button>
+      </div>
+      <div hidden>
+        <button id="goSquad"></button><button id="goTac"></button><button id="goFree"><small id="freeSub"></small></button><button id="goEvent"></button><button id="bHelp"></button>
       </div>
       <div class="tabbar" id="tabbar" role="tablist">
-        <button data-t="spil">Play</button><button data-t="hold">Team</button><button data-t="butik">Shop</button><button data-t="saeson">Season</button><button data-t="profil">Profile</button>
+        <button data-t="butik">Shop</button><button data-t="hold">Team</button><button data-t="spil" class="mid">Play</button><button data-t="klub">Club</button><button data-t="profil">Profile</button>
       </div>
     </div>
 
@@ -924,13 +958,13 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
           <p id="seasonSub">7 matches for the trophy</p>
           <button id="goSeason2" class="go">Season ›</button></div>
       </div>
-      <div class="comprow"><span>With friends on one phone:</span><button id="bCup" class="alt">Friends tournament</button><button id="bLeague" class="alt">Table</button></div>
+      <div class="comprow"><span>With friends on one phone:</span><button id="bCup" class="alt">Friends tournament</button><button id="bLeague" class="alt">Table</button><button id="goLeague" hidden></button></div>
     </div>
 
     <!-- straffe og træning -->
     <div class="card wide" id="pgPractice" hidden>
-      <div class="top"><button class="alt back" data-back>‹ Back</button><h2>Training and skill games</h2><span class="sp"></span></div>
-      <div class="ow three">
+      <div class="top"><button class="alt back" data-back>‹ Back</button><h2>Training</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+      <div class="ow three" id="prSkill">
         <div class="col"><div class="lbl">Penalties</div>
           <p>5 penalties each against the computer. Aim with the joystick and tap SHOOT. In goal the joystick decides where you dive.</p>
           <button id="bPens" class="go">Start penalties</button></div>
@@ -949,7 +983,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
 
     <!-- kampopsætning: kun de valg der passer til kampen -->
     <div class="card wide" id="pgSetup" hidden>
-      <div class="top"><button class="alt back" data-back>‹ Back</button><h2 id="setupTitle">Vs computer</h2><span class="sp"></span></div>
+      <div class="top"><button class="alt back" data-back>‹ Back</button><h2 id="setupTitle">Quick match</h2><span class="sp"></span></div>
       <div class="setup">
         <div class="col" id="teamBoxA"><div class="lbl" id="teamLblA">Your team</div><div class="teams" id="teamsA" role="group" aria-label="Your team"></div></div>
         <div class="col" id="teamBoxB"><div class="lbl" id="teamLblB">Opponent</div><div class="teams" id="teamsB" role="group" aria-label="Opponent"></div></div>
@@ -1510,7 +1544,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
   let friendly = false; // a træningskamp: half the tired legs, no wages or gate, no prize, more TP
   function showSetup(m, fr) {
     setupMode = m; friendly = !!fr && m === 'cpu';
-    $('setupTitle').textContent = friendly ? 'Friendly' : { cpu: 'Vs computer', two: '2 on one phone', host: 'Create online match' }[m];
+    $('setupTitle').textContent = friendly ? 'Friendly' : { cpu: 'Quick match', two: '2 on one phone', host: 'Create online match' }[m];
     $('setupGo').textContent = m === 'host' ? 'Create match ›' : 'Start match ›';
     segPaints.forEach(f => f()); setupVis(); page('pgSetup');
     subTabs($('pgSetup'), [['Match', ['coopBox', 'sizeBox', 'formBox', 'minsBox', 'serBox', 'kitBox']], ['Team', ['teamBoxA', 'teamBoxB']], ['Rules', ['diffBox', 'wxBox', 'setupOpts']]], 'setup', $('pgSetup').querySelector('.setup'));
@@ -1529,7 +1563,14 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
   $('goSet').onclick = () => { page('pgSet'); $('setName').value = cfg.name || ''; $('fsRow').hidden = $('fs').hidden; subTabs($('pgSet'), [['Match', ['setGame']], ['Sound and vibration', ['setSnd']], ['Account', ['setAcc']]], 'set', $('setGame')); };
   $('setName').addEventListener('input', () => { cfg.name = cleanName($('setName').value); $('name').value = cfg.name; saveCfg(); });
   $('setHelp').onclick = () => { $('help').hidden = false; };
-  $('goPractice').onclick = () => page('pgPractice');
+  $('goPractice').onclick = () => practiceShow();
+  $('goFriendly').onclick = () => showSetup('cpu', true);
+  function practiceShow() { // ONE place for all training: squad sessions, skill games and buying training points
+    const pg = $('pgPractice');
+    if ($('clTrain').parentNode !== pg) { pg.appendChild($('clTrain')); pg.appendChild($('shopTr')); }
+    clubTrainPaint(); tpShopPaint(); paintTP(); page('pgPractice');
+    subTabs(pg, [['Squad sessions', ['clTrain']], ['Skill games', ['prSkill']], ['Training points', ['shopTr']]], 'train', $('clTrain'));
+  }
   const cleanName = v => String(v || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 12);
   $('name').value = cfg.name || '';
   $('name').addEventListener('input', () => { cfg.name = cleanName($('name').value); saveCfg(); });
@@ -1891,8 +1932,8 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     ['hold', 'Open The team and tap one of your players', 30, 'hold', 'goMine', null],
     ['train', 'Train a player: spend your TP under Training', 30, 'hold', 'goMine', null],
     ['cap', 'Pick a captain under the Role tab', 30, 'hold', 'goMine', () => !!squadLoad().cap],
-    ['byg', 'Build your first building on the club grounds', 150, 'hold', 'goClub', () => Object.values(clubLoad().f).some(v => v > 0)],
-    ['scout', 'Send the scout out for a new player', 50, 'hold', 'goMarket', () => !!mktLoad().sc],
+    ['byg', 'Build your first building on the club grounds', 150, 'klub', 'goClub', () => Object.values(clubLoad().f).some(v => v > 0)],
+    ['scout', 'Send the scout out for a new player', 50, 'klub', 'goMarket', () => !!mktLoad().sc],
     ['three', 'Play three matches with your team', 200, 'spil', 'bCpu', () => loadProf().games >= 3],
   ];
   const guideLoad = () => { let G2 = null; try { G2 = JSON.parse(localStorage.getItem('mf-guide') || 'null'); } catch (_) {} G2 = G2 && typeof G2 === 'object' ? G2 : {}; G2.d = G2.d || {}; G2.c = G2.c || {}; return G2; };
@@ -1922,12 +1963,13 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       $('hcSub').textContent = `Team ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'My team');
       $('holdSub').textContent = `Team ${teamOvr(n)} · chemistry ${chemOf(n).v} · ${n} v ${n}. Tap a player to see and train him`;
       { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; if (tr) $('holdSub').textContent = `${tr} in the starting line-up are tired. Sub them or give them a massage`;
-        { const Cl = youthTick(), pc = loadProf(), can = Object.keys(FAC).some(k => (Cl.f[k] | 0) < FAC_MAX && (pc.lvl || 1) >= FAC_LVL[Cl.f[k] | 0] && pc.coins >= FAC_COST[Cl.f[k] | 0]); facMemo = Cl.f;
-          $('clubSub').textContent = Cl.y ? `A new talent is waiting in the academy: ${Cl.y.n} (${ovr(Cl.y)}, potential ${Cl.y.pot})` : !Cl.sp ? 'Pick a sponsor and train the team' : trainLeft(Cl) ? `${trainLeft(Cl)} training sessions left today` : can ? 'You can afford to build' : 'Training, finances and facilities'; $('goClub').classList.toggle('hot', !!Cl.y || !Cl.sp); }
+        const Cl = youthTick(); { const pc = loadProf(), can = Object.keys(FAC).some(k => (Cl.f[k] | 0) < FAC_MAX && (pc.lvl || 1) >= FAC_LVL[Cl.f[k] | 0] && pc.coins >= FAC_COST[Cl.f[k] | 0]); facMemo = Cl.f;
+          $('clubSub').textContent = Cl.y ? `A new talent is waiting in the academy: ${Cl.y.n} (${ovr(Cl.y)}, potential ${Cl.y.pot})` : !Cl.sp ? 'Pick a sponsor' : can ? 'You can afford to build' : 'Grounds, staff and finances'; $('goClub').classList.toggle('hot', !!Cl.y || !Cl.sp); }
         const ctw = Sq.pl.filter(q => ctOf(q) <= 3).length, scHome = (() => { const M2 = mktLoad().sc; return !!(M2 && (M2.res ? M2.res.length : Date.now() - M2.t >= M2.dur)); })();
         if (!tr && ctw) $('holdSub').textContent = `${ctw} contract${ctw > 1 ? 's' : ''} expires soon. Tap the player and extend under Form`;
         $('goMine').classList.toggle('dot', !!(tr || ctw)); $('goClub').classList.toggle('dot', !!Cl.y); $('goMarket').classList.toggle('dot', scHome);
-        { const b = document.querySelector('#tabbar [data-t="hold"]'); if (b) b.classList.toggle('dot', !!(ctw || Cl.y || scHome)); }
+        { const b = document.querySelector('#tabbar [data-t="hold"]'); if (b) b.classList.toggle('dot', !!(tr || ctw)); const b2 = document.querySelector('#tabbar [data-t="klub"]'); if (b2) b2.classList.toggle('dot', !!(Cl.y || scHome)); }
+        { const tl = trainLeft(clubLoad()); $('trainSub').textContent = tl ? `${tl} squad sessions left today · ${Sq.tp | 0} TP to spend` : `${Sq.tp | 0} TP to spend on your players · skill games and penalties`; }
         const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = scHome ? 'The scout is back with his finds' : Mk.l.length ? `${Mk.l.length} players today` + (dl ? ` · offer: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Sold out today. New players tomorrow'; }
       $('freeSub').textContent = S.free.length ? `${S.free.length} pack${S.free.length > 1 ? 's' : ''} ready to open!` : 'From the season pass and daily rewards';
       $('goFree').classList.toggle('hot', !!S.free.length);
@@ -1935,11 +1977,11 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       const k7 = rankOf(rpOf(M, '')), k11 = rankOf(rpOf(M, '11')), kb = k11.step > k7.step ? k11 : k7;
       $('rankIc').innerHTML = badgeSVG(kb);
       $('rankSub').textContent = `${k7.n} in 7 v 7 · ${k11.n} in 11 v 11. See the rank road and how you climb`;
-      $('onlSub').textContent = `${k7.n} in 7 v 7 · ${k11.n} in 11 v 11. Or play friends via code`;
+      $('onlSub').textContent = `${k7.n} · ranked, or play a friend with a code`;
       const dseen = (() => { try { return localStorage.getItem('mf-dseen') === today(); } catch (_) { return true; } })();
       const dot = (t, on) => { const b = document.querySelector(`#tabbar [data-t="${t}"]`); if (b) b.classList.toggle('dot', !!on); };
-      dot('butik', S.free.length); dot('saeson', !dseen); $('goFree').classList.toggle('dot', !!S.free.length); $('bDaily').classList.toggle('dot', !dseen);
-      $('evSub').textContent = `${T.n}: ` + (E.got ? 'klaret!' : T.tasks.map(([, , need], i) => `${Math.min(need, E.p[i])}/${need}`).join(' · '));
+      dot('butik', S.free.length); dot('profil', !dseen); $('goShop').classList.toggle('dot', !!S.free.length); $('goFree').classList.toggle('dot', !!S.free.length); $('bDaily').classList.toggle('dot', !dseen);
+      $('evSub').textContent = `${T.n}: ` + (E.got ? 'done!' : T.tasks.map(([, , need], i) => `${Math.min(need, E.p[i])}/${need}`).join(' · '));
     } catch (_) {}
   }
   function passShow() {
@@ -6256,16 +6298,14 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       const i = document.createElement('i'); i.textContent = ic; const t = document.createElement('span'); t.textContent = nm; const sm = document.createElement('small'); sm.textContent = k === 'rest' ? '+15 form for everyone' : `${st} up · −${TRAIN_FIT} form`;
       t.appendChild(sm); b.append(i, t);
       b.onclick = () => { const r = trainRun(k); if (!r) return; sfx.win(); buzz(30);
-        trainMsg = k === 'rest' ? 'Recovery: everyone got 15 form.' : `${nm}: ${r.n} trained` + (r.tired ? `, ${r.tired} sat out` : '') + '. ' + (r.ups.length ? `${st} steg: ${r.ups.slice(0, 6).join(', ')}` + (r.ups.length > 6 ? ` +${r.ups.length - 6}` : '') : 'Nobody went up yet, but they are closer.');
-        clubShow(); hubPaint(); };
+        trainMsg = k === 'rest' ? 'Recovery: everyone got 15 form.' : `${nm}: ${r.n} trained` + (r.tired ? `, ${r.tired} sat out` : '') + '. ' + (r.ups.length ? `${st} up: ${r.ups.slice(0, 6).join(', ')}` + (r.ups.length > 6 ? ` +${r.ups.length - 6}` : '') : 'Nobody went up yet, but they are closer.');
+        clubTrainPaint(); paintTP(); hubPaint(); };
       g.appendChild(b);
     }
     T.appendChild(g);
     if (trainMsg) { const m = document.createElement('p'); m.className = 'trmsg'; m.textContent = trainMsg; T.appendChild(m); }
-    const fb = document.createElement('button'); fb.className = 'go'; fb.textContent = 'Play a friendly ›';
-    fb.onclick = () => { $('clubOv').hidden = true; showSetup('cpu', true); };
-    const fs = document.createElement('p'); fs.className = 'sqnote'; fs.textContent = 'Friendly: half the fatigue, no wages and no prize, but 50 % more TP, and the players develop from playing.';
-    T.append(fb, fs);
+    const fs = document.createElement('p'); fs.className = 'sqnote'; fs.textContent = 'Each player can also be trained on his own: open The team, tap him and spend TP under Training. A friendly (under Play) gives 50 % more TP.';
+    T.append(fs);
   }
   function clubEcoPaint() {
     const C = clubLoad(), pr = loadProf(), lvl = pr.lvl || 1, S = squadLoad(), E = $('clEco'); E.textContent = '';
@@ -6406,8 +6446,8 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       no.onclick = () => { const C2 = clubLoad(); if (!C2.y) return; addCoins(sellOf(C2.y), 'salg'); delete C2.y; clubSave(C2); clubShow(); hubPaint(); };
       row.appendChild(no); Y.appendChild(row);
     } else if (facLv('ak')) { const d = Math.max(1, AK_DAYS[facLv('ak')] - (dayNo() - (C.yd || 0))), e = document.createElement('p'); e.className = 'sqnote'; e.textContent = `🌱 The academy is working. Next talent in ${d} day${d > 1 ? 'e' : ''}.`; Y.appendChild(e); }
-    clubTrainPaint(); clubEcoPaint(); staffPaint();
-    subTabs($('clubOv'), [['Club', ['clYouth', 'clFac']], ['Training', ['clTrain']], ['Staff', ['clStaff']], ['Finances', ['clEco']]], 'club', $('clYouth'));
+    clubEcoPaint(); staffPaint();
+    subTabs($('clubOv'), [['Club', ['clYouth', 'clFac']], ['Staff', ['clStaff']], ['Finances', ['clEco']]], 'club', $('clYouth'));
     paintCoins(); $('clubOv').hidden = false;
   }
   const fitCol = v => (v >= 75 ? '#59e38b' : v >= 55 ? '#ffd447' : '#ff6b5e');
@@ -7119,20 +7159,6 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       };
       box.appendChild(b);
     };
-    const TR = $('shopTrain'); TR.textContent = '';
-    const sqB = document.createElement('button'); sqB.className = 'alt'; sqB.innerHTML = '<span class="nm">Squad and training</span><span class="pr">›</span>';
-    sqB.onclick = () => { $('shop').hidden = true; squadShow(); }; TR.appendChild(sqB);
-    for (const [n, price] of [[25, 100], [60, 220], [150, 500]]) { // træningspoint for coins
-      const b = document.createElement('button'); const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${n} training points`;
-      const pp = document.createElement('span'); pp.className = 'pr coins'; pp.textContent = String(price); b.append(nm, pp);
-      b.onclick = () => {
-        const p2 = loadProf();
-        if (p2.coins < price) { pp.textContent = `Need ${price - p2.coins}`; return; }
-        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; pp.textContent = 'Tap again'; return; }
-        p2.coins -= price; saveProf(p2); addTP(n); sfx.win(); shopShow();
-      };
-      TR.appendChild(b);
-    }
     const PK = $('shopPacks'); PK.textContent = '';
     const fr = passLoad().free;
     if (fr.length) { const b = document.createElement('button'); b.className = 'packtile free'; b.style.setProperty('--pk', '#2f9d55'); b.innerHTML = `<i class="ic">🎁</i><b>Free pack</b><small>${fr.length} ready to open</small><span class="pr">Open</span>`; b.onclick = () => { $('shop').hidden = true; $('pvOpen').onclick(); }; PK.appendChild(b); }
@@ -7147,15 +7173,29 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
       };
       PK.appendChild(b);
     });
-    $('lvLbl').textContent = `Training · You have ${squadLoad().tp} TP · Team rating ${teamOvr(Math.max(1, cfg.size))}`;
     const T = $('shopTeams'), B = $('shopBalls'), Pp = $('shopPitch');
     T.textContent = B.textContent = Pp.textContent = '';
     TEAMS.filter(t => t.price).forEach(t => row(T, 'team:' + t.id, `${t.n} ${'★'.repeat(t.str)}`, t.price, t.c1, cfg.team === t.id, () => { cfg.team = t.id; saveCfg(); menuColors(); }));
     BALLS.forEach((x, i) => row(B, 'ball:' + i, x.n, x.p, x.c, cfg.ball === i, () => { cfg.ball = i; saveCfg(); }));
     PITCHES.forEach((x, i) => row(Pp, 'pitch:' + i, x.n, x.p, x.a, cfg.pitch === i, () => { cfg.pitch = i; saveCfg(); pitchLook(); }));
     paintCoins(pr);
-    subTabs($('shop'), [['Packs', ['shopPk']], ['Training', ['shopTr']], ['Team', ['shopTm']], ['Balls', ['shopBl']], ['Pitches', ['shopPi']]], 'shop', $('shop').querySelector('.shopgrid'));
+    subTabs($('shop'), [['Packs', ['shopPk']], ['Balls', ['shopBl']], ['Pitches', ['shopPi']], ['Teams', ['shopTm']]], 'shop', $('shop').querySelector('.shopgrid'));
     $('shop').hidden = false;
+  }
+  function tpShopPaint() { // training points for coins, on the Training screen
+    const TR = $('shopTrain'); TR.textContent = '';
+    for (const [n, price] of [[25, 100], [60, 220], [150, 500]]) { // træningspoint for coins
+      const b = document.createElement('button'); const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${n} training points`;
+      const pp = document.createElement('span'); pp.className = 'pr coins'; pp.textContent = String(price); b.append(nm, pp);
+      b.onclick = () => {
+        const p2 = loadProf();
+        if (p2.coins < price) { pp.textContent = `Need ${price - p2.coins}`; return; }
+        if (b.dataset.sure !== '1') { b.dataset.sure = '1'; pp.textContent = 'Tap again'; return; }
+        p2.coins -= price; saveProf(p2); addTP(n); sfx.win(); tpShopPaint(); paintCoins();
+      };
+      TR.appendChild(b);
+    }
+    $('lvLbl').textContent = `Buy training points · You have ${squadLoad().tp} TP · Team rating ${teamOvr(Math.max(1, cfg.size))}`;
   }
   function pitchLook() { const x = PITCHES[cfg.pitch] || PITCHES[0]; col.a = x.a; col.b = x.b; }
   function menuColors() {
@@ -7535,7 +7575,7 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
     $('goTac').onclick = () => mtShow(cfg.size, 'tac');
     $('goPass').onclick = passShow; $('goEvent').onclick = () => { subTab.daily = 'Weekly event'; showDaily(); }; $('goLeague').onclick = showLeague;
     $('goFree').onclick = () => { if (passLoad().free.length) $('pvOpen').onclick(); else { passShow(); toast('No free packs right now. The season pass, the rank road and day 7 in a row give packs.'); } };
-    $('goShop').onclick = shopShow; $('shopClose').onclick = () => { $('shop').hidden = true; paintTeamPickers(); };
+    $('goShop').onclick = () => { subTab.shop = 'Packs'; shopShow(); }; $('goItems').onclick = () => { subTab.shop = 'Balls'; shopShow(); }; $('shopClose').onclick = () => { $('shop').hidden = true; paintTeamPickers(); };
     // sound: unlock audio on the first tap, soft click on menu buttons
     $('wrap').addEventListener('click', e => {
       if (state === 'play') return;
@@ -8925,11 +8965,11 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
   window.mfIco = ico;
   const $ = id => document.getElementById(id);
   const put = (id, n) => { const b = $(id); const ic = b && b.querySelector('.ic'); if (ic && !ic.querySelector('svg.rkbadge')) ic.innerHTML = ico(n); };
-  [['goOnline', 'globe'], ['bCpu', 'chip'], ['goSeason', 'trophy'], ['bTwo', 'phone2'], ['goPractice', 'target'],
+  [['goOnline', 'globe'], ['bCpu', 'chip'], ['goSeason', 'trophy'], ['bTwo', 'phone2'], ['goPractice', 'target'], ['goFriendly', 'whistle'], ['goItems', 'ball'],
    ['goMine', 'pitch'], ['goSquad', 'users'], ['goClub', 'club'], ['goMarket', 'swap'], ['goTac', 'shirt'],
    ['goShop', 'bag'], ['goFree', 'gift'], ['goPass', 'star'], ['bDaily', 'check'], ['goEvent', 'cal'],
    ['goProf', 'medal'], ['bFriends', 'users'], ['goLeague', 'table'], ['bHelp', 'help']].forEach(([id, n]) => put(id, n));
-  const NAV = { spil: 'ball', hold: 'shirt', butik: 'bag', saeson: 'star', profil: 'user' };
+  const NAV = { spil: 'ball', hold: 'shirt', klub: 'club', butik: 'bag', profil: 'user' };
   for (const b of ($('tabbar') || { children: [] }).children) if (NAV[b.dataset.t] && !b.querySelector('svg')) b.insertAdjacentHTML('afterbegin', ico(NAV[b.dataset.t]));
   document.querySelectorAll('.top .back').forEach(b => { if (!b.getAttribute('aria-label')) b.setAttribute('aria-label', b.textContent.replace(/[‹›]/g, '').trim() || 'Back'); b.innerHTML = ico('back'); });
   const g = $('goSet'); if (g) g.innerHTML = ico('gear');
