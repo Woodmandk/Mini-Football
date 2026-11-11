@@ -590,6 +590,9 @@ table.st tr.me td { color: var(--gold); }
 .mkopt { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: -4px 0 4px 40px; padding: 8px 10px; border-radius: 0 0 10px 10px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.1); border-top: 0; }
 .mkopt button { min-height: 0; padding: 7px 12px; font-size: 13px; } .mkopt span { font-size: 12px; color: var(--muted); flex: 1 1 100%; }
 .mkrow.out { border-color: #7fd3ff; }
+.carstory { display: flex; flex-direction: column; gap: 5px; margin: 4px 0 8px; padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); text-align: left; font-size: 12px; }
+.carstory .tr { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font-weight: 700; } .carstory .tr i { height: 7px; border-radius: 4px; background: rgba(255,255,255,0.14); overflow: hidden; display: block; } .carstory .tr i b { display: block; height: 100%; border-radius: 4px; }
+.carstory .hl { font-style: italic; color: var(--muted); } .carstory .hl:first-of-type { color: inherit; font-weight: 600; font-style: normal; } .carstory .rv { color: var(--gold); font-weight: 700; }
 .stgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .stgrid .scbox { text-align: center; align-items: stretch; } .stgrid .fc { font-size: 34px; line-height: 1; } .stgrid .stars { color: var(--gold); letter-spacing: 2px; } .stgrid .scbox > span { font-size: 13px; } .stgrid .scbox > span.fc { font-size: 30px; } .stgrid .scbox { gap: 5px; }
 @media (max-width: 620px) { .stgrid { grid-template-columns: 1fr; } }
 .ctrow { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; } .ctrow span { flex: 1; } .ctrow.warn { background: rgba(255,107,94,0.18); } .ctrow button { min-height: 0; padding: 7px 10px; font-size: 12px; width: auto; }
@@ -1081,6 +1084,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <div class="lbl" id="carNextLbl">Runde 1 af 7</div>
           <div class="vs" id="carNext"></div>
           <p id="carMsg"></p>
+          <div class="carstory" id="carStory"></div>
           <div class="lbl" id="carHowLbl">Hvordan spiller I?</div>
           <div class="seg how" id="carHow"></div>
           <input id="carP2" class="namein p2" maxlength="12" placeholder="Medspillerens navn" autocomplete="off" aria-label="Medspillerens navn">
@@ -1765,7 +1769,11 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; if (tr) $('holdSub').textContent = `${tr} i startopstillingen er trætte. Skift dem ud eller giv massage`;
         { const Cl = youthTick(), pc = loadProf(), can = Object.keys(FAC).some(k => (Cl.f[k] | 0) < FAC_MAX && (pc.lvl || 1) >= FAC_LVL[Cl.f[k] | 0] && pc.coins >= FAC_COST[Cl.f[k] | 0]); facMemo = Cl.f;
           $('clubSub').textContent = Cl.y ? `Et nyt talent venter i akademiet: ${Cl.y.n} (${ovr(Cl.y)}, potentiale ${Cl.y.pot})` : !Cl.sp ? 'Vælg en sponsor og træn holdet' : trainLeft(Cl) ? `${trainLeft(Cl)} træningspas tilbage i dag` : can ? 'Du har råd til at bygge ud' : 'Træning, økonomi og faciliteter'; $('goClub').classList.toggle('hot', !!Cl.y || !Cl.sp); }
-        const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = Mk.l.length ? `${Mk.l.length} spillere i dag` + (dl ? ` · tilbud: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Udsolgt i dag. Nye spillere i morgen'; }
+        const ctw = Sq.pl.filter(q => ctOf(q) <= 3).length, scHome = (() => { const M2 = mktLoad().sc; return !!(M2 && (M2.res ? M2.res.length : Date.now() - M2.t >= M2.dur)); })();
+        if (!tr && ctw) $('holdSub').textContent = `${ctw} kontrakt${ctw > 1 ? 'er' : ''} udløber snart. Tryk på spilleren og forlæng under Form`;
+        $('goMine').classList.toggle('dot', !!(tr || ctw)); $('goClub').classList.toggle('dot', !!Cl.y); $('goMarket').classList.toggle('dot', scHome);
+        { const b = document.querySelector('#tabbar [data-t="hold"]'); if (b) b.classList.toggle('dot', !!(ctw || Cl.y || scHome)); }
+        const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = scHome ? 'Scouten er hjemme med sine fund' : Mk.l.length ? `${Mk.l.length} spillere i dag` + (dl ? ` · tilbud: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Udsolgt i dag. Nye spillere i morgen'; }
       $('freeSub').textContent = S.free.length ? `${S.free.length} pakke${S.free.length > 1 ? 'r' : ''} klar til at blive åbnet!` : 'Fra sæsonpasset og daglige belønninger';
       $('goFree').classList.toggle('hot', !!S.free.length);
       $('passSub').textContent = `Niveau ${S.t} af ${PASS_N} · ${S.t >= PASS_N ? 'fuldført' : `${(S.t + 1) * PASS_XP - S.xp} XP til næste`} · nyt pas om ${daysLeftInMonth()} dage`;
@@ -5498,6 +5506,22 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const tab = {}; for (let i = 0; i < 8; i++) tab[i] = { k: 0, v: 0, u: 0, t: 0, f: 0, m: 0 };
     C.S = { rounds: rr8([0, 1, 2, 3, 4, 5, 6, 7]), r: 0, tab };
     C.goal = C.div === 3 ? 'up' : C.fresh ? 'stay' : C.div === 0 ? 'win' : 'up';
+    // the season's story: a rival in your division, the board's trust, and what the paper writes
+    const me = C.divs[C.div].indexOf('ME'), others = C.divs[C.div].map((e, i) => i).filter(i => i !== me);
+    const old = C.rvn && others.find(i => C.divs[C.div][i].n === C.rvn); // an old rival stays your rival while you share a division
+    C.rv = old != null && old !== false && old !== undefined ? old : others[Math.floor(Math.random() * others.length)]; C.rvn = C.divs[C.div][C.rv].n;
+    C.trust = C.trust == null ? 55 : Math.round((C.trust + 55) / 2); C.story = [`Sæson ${C.no} i ${DIVS[C.div].n} står for døren. Alle taler om opgøret mod ${C.rvn}.`];
+  }
+  const carRivalRound = C => { const me = carMe(C); return C.rv == null ? -1 : C.S.rounds.findIndex(r => r.some(g => g.includes(me) && g.includes(C.rv))); };
+  function carHeadline(C, T, o, isRv, gMe, gOpp, rank) { // what the paper writes after your match
+    const d = gMe - gOpp, pick = a => a[(C.S.r + gMe * 3 + gOpp) % a.length], sc = `${gMe}-${gOpp}`;
+    if (isRv) return d > 0 ? pick([`Derbysejr! ${T.n} sender ${o.n} hjem med ${sc}`, `Byen er ${T.s}: ${sc} over ærkerivalen ${o.n}`]) : d < 0 ? pick([`${o.n} tager derbyet. Fansene kræver revanche`, `Bitter aften: derbyet tabt ${sc}`]) : `Derbyet ender uden vinder: ${sc}`;
+    if (d >= 3) return pick([`${T.n} i målhumør: ${sc} over ${o.n}`, `Magtdemonstration mod ${o.n}`]);
+    if (d > 0 && o.str >= 4) return pick([`Sensation! ${T.n} vælter favoritterne fra ${o.n}`, `Ingen havde set den komme: ${sc} over ${o.n}`]);
+    if (d > 0) return pick([`Tre point til ${T.n} mod ${o.n}`, `${T.n} holder kursen: ${sc}`, rank <= 2 ? `${T.n} med i toppen efter sejr over ${o.n}` : `Sejr over ${o.n} giver ro`]);
+    if (d === 0) return pick([`Pointdeling mod ${o.n}`, `${T.n} må nøjes med ét point`]);
+    if (d <= -3) return pick([`Sort dag: ${sc} mod ${o.n}`, `${o.n} udstiller ${T.n}`]);
+    return pick([`${o.n} var for stærke i dag`, `Smalt nederlag til ${o.n}`, rank >= 7 ? `${T.n} er i farezonen efter nederlag` : `En skuffende aften mod ${o.n}`]);
   }
   const carMe = C => C.divs[C.div].indexOf('ME');
   function carOpp(C) { const me = carMe(C), g = C.S.rounds[Math.min(C.S.r, 6)].find(x => x.includes(me)); return g[0] === me ? g[1] : g[0]; }
@@ -5515,20 +5539,29 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const C = carLoad(); if (!C || C.S.r >= 7) return { text: '', coins: 0 };
     const me = carMe(C), T = C.divs[C.div];
     for (const [a, b] of C.S.rounds[C.S.r]) {
-      if (a === me || b === me) { const o = a === me ? b : a; seasonApply(C.S, me, o, gMe, gOpp); continue; }
+      if (a === me || b === me) { const o = a === me ? b : a; seasonApply(C.S, me, o, gMe, gOpp); C._o = o; continue; }
       const g = simGame(T[a].str, T[b].str); seasonApply(C.S, a, b, g.ga, g.gb);
     }
     C.S.r++;
     let text = `Runde ${C.S.r} af 7. I ligger nr. ${carRows(C).findIndex(x => x.i === me) + 1}.`, coins = 0;
+    if (C._o != null && T[C._o]) { // the story moves on: the board's trust and the headline
+      const o = T[C._o], isRv = C._o === C.rv, d = gMe - gOpp, rk = carRows(C).findIndex(x => x.i === me) + 1;
+      C.trust = clamp((C.trust == null ? 55 : C.trust) + (d > 0 ? 6 : d < 0 ? -6 : 1) * (isRv ? 2 : 1) + (d > 0 && o.str >= 4 ? 3 : 0), 0, 100);
+      const hl = carHeadline(C, TEAMS[OWN], o, isRv, gMe, gOpp, rk); C.story = [hl].concat(C.story || []).slice(0, 4);
+      if (isRv && d > 0) { coins += 60; text += ' Derbysejr: fansene fester (+60).'; }
+      text += ` Avisen: »${hl}«.`;
+    }
+    delete C._o;
     if (C.S.r >= 7) { // season over: prize money, the board's verdict, promotion or relegation
       const rank = carRows(C).findIndex(x => x.i === me) + 1, G = GOALS[C.goal], met = G[1](rank);
-      coins = Math.round(DIVS[C.div].prize * (1 - (rank - 1) * 0.1)) + (met ? 100 : 0);
+      const bonus = met ? 60 + Math.round((C.trust == null ? 55 : C.trust) * 0.8 / 5) * 5 : 0; // a board that trusts you pays a bigger bonus
+      coins += Math.round(DIVS[C.div].prize * (1 - (rank - 1) * 0.1)) + bonus; C.trust = clamp((C.trust == null ? 55 : C.trust) + (met ? 15 : -15), 0, 100);
       const champ = rank === 1, up = rank <= 2 && C.div > 0, down = rank >= 7 && C.div < 3;
       if (champ && C.div === 0) { C.titles++; give('champ'); }
       if (up) give('promo');
       C.hist.push({ no: C.no, div: C.div, rank, p: carRows(C)[rank - 1].p });
       text = (champ && C.div === 0 ? 'Danmarksmestre! 🏆 ' : champ ? `Vindere af ${DIVS[C.div].n}! ` : `Sæsonen er slut: nr. ${rank}. `) +
-        (up ? 'I rykker op! ' : down ? 'I rykker ned. ' : '') + (met ? 'Bestyrelsen er glad (+100). ' : 'Bestyrelsens mål blev ikke nået. ') + `Præmiepenge: ${coins}.`;
+        (up ? 'I rykker op! ' : down ? 'I rykker ned. ' : '') + (met ? `Bestyrelsen er glad (+${bonus}). ` : 'Bestyrelsens mål blev ikke nået. ') + `Præmiepenge: ${coins}.`;
     }
     carSave(C);
     return { text, coins };
@@ -5579,6 +5612,14 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       $('carMsg').textContent = `${o.n}: ${'★'.repeat(o.str)}${'☆'.repeat(5 - o.str)} · ${STYLES[o.sty] ? STYLES[o.sty].n : ''}. ${C.size} mod ${C.size}, ${C.mins} min, ${DIVS[C.div].n.toLowerCase().startsWith('super') ? 'Superliga' : 'niveau'}: ${DIFFN[carDiff(C)]}. Bestyrelsens mål: ${G[0].toLowerCase()}. Rating: jer ${teamOvr(C.size)}, dem ${strOvr(o.str)}.`;
       $('carPlay').textContent = 'Spil kampen ›';
     }
+    if (C.rv == null && !over) { const ot = C.divs[C.div].map((e, i) => i).filter(i => i !== me); C.rv = ot[Math.floor(Math.random() * ot.length)]; C.rvn = C.divs[C.div][C.rv].n; C.trust = C.trust == null ? 55 : C.trust; C.story = C.story || [`Alle taler om opgøret mod ${C.rvn}.`]; carSave(C); } // a career from before the story began
+    { const X = $('carStory'), tr = C.trust == null ? 55 : C.trust, rr = carRivalRound(C); X.textContent = '';
+      const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+      const row = el('div', 'tr'), bar = el('i'), fill = el('b'); fill.style.width = tr + '%'; fill.style.background = tr >= 60 ? '#59e38b' : tr >= 35 ? '#ffd447' : '#ff6b5e'; bar.appendChild(fill);
+      row.append(el('span', '', 'Bestyrelsens tillid'), bar, el('span', '', tr >= 75 ? 'Stor' : tr >= 50 ? 'God' : tr >= 30 ? 'Vaklende' : 'Lav')); X.appendChild(row);
+      if (C.rvn && !over) X.appendChild(el('span', 'rv', rr === C.S.r ? `🔥 Derby nu: ${C.rvn} er jeres rival. En sejr giver ekstra` : rr > C.S.r ? `🔥 Rival: ${C.rvn}. Derby i runde ${rr + 1}` : `🔥 Rival: ${C.rvn}. Derbyet er spillet`));
+      (C.story || []).slice(0, 3).forEach(h => X.appendChild(el('span', 'hl', '📰 ' + h)));
+      X.hidden = !C.story; }
     $('carHow').hidden = $('carHowLbl').hidden = over; $('carP2').hidden = over || C.how !== 0;
     $('carHist').textContent = C.hist.length ? 'Tidligere sæsoner\n' + C.hist.slice(-4).reverse().map(h => `Sæson ${h.no}: nr. ${h.rank} i ${DIVS[h.div].n}, ${h.p} point`).join('\n') : '';
     segPaints.forEach(f => f()); paintCoins();
