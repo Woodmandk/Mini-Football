@@ -450,7 +450,10 @@ table.st tr.me td { color: var(--gold); }
 .pc .ft { display: flex; align-items: center; gap: 3px; font-size: 10px; margin-top: 2px; } .pc .fm { width: 30px; height: 4px; border-radius: 2px; background: rgba(0,0,0,0.35); overflow: hidden; } .pc .fm i { display: block; height: 100%; }
 .pc .ab { position: absolute; right: 3px; top: 3px; font-size: 11px; display: flex; flex-direction: column; line-height: 1.15; } .pc .tal { position: absolute; left: 4px; top: 36px; font-size: 10px; }
 .sqpan { position: sticky; top: 0; display: flex; flex-direction: column; gap: 6px; } .sqpan .sqcard { padding: 6px 10px; }
-.sqtabs { grid-template-columns: repeat(3, 1fr); margin: 0; }
+.sqtabs { grid-template-columns: repeat(4, 1fr); margin: 0; }
+.sqrole { display: flex; flex-direction: column; gap: 8px; } .sqrole .seg button { font-size: 12px; padding: 7px 4px; }
+.rlgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .rlgrid button { min-height: 0; padding: 8px 6px; font-size: 13px; line-height: 1.15; } .rlgrid button small { display: block; font-size: 10px; opacity: 0.75; font-weight: 500; }
+.rlgrid button[aria-pressed=true] { background: var(--gold); color: #1a1408; border-color: transparent; }
 .strow { display: grid; grid-template-columns: 78px 1fr 26px 104px; gap: 8px; align-items: center; padding: 3px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); font-size: 13px; }
 .strow.nob { grid-template-columns: 78px 1fr 26px; } .strow b { text-align: right; } .strow .lvbar { grid-column: auto; height: 7px; }
 .strow button { min-height: 0; padding: 5px 4px; font-size: 12px; white-space: nowrap; }
@@ -894,6 +897,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
           <div class="sqstats" id="sqStats"></div>
           <div class="abrow" id="sqAb"></div>
           <div class="sqform" id="sqForm"></div>
+          <div class="sqrole" id="sqRole"></div>
         </div>
       </div>
     </div>
@@ -1945,8 +1949,9 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   };
   function formOf(p) {
     const L = teamForm[p.team] === CUST && teamLay[p.team];
-    if (L && L[p.k]) return p.team ? [L[p.k][0], 1 - L[p.k][1]] : L[p.k]; // blue plays the other way: its left is our right
-    return (FORMS[size] ? (FORMS[size][teamForm[p.team]] || FORMS[size][0])[1] : FORM[size])[p.k];
+    if (L && L[p.k]) { const r = p.team ? [L[p.k][0], 1 - L[p.k][1]] : L[p.k]; return p.rl ? [Math.max(0.08, Math.min(0.95, r[0] + p.rl * 0.06)), r[1]] : r; } // blue plays the other way: its left is our right
+    const f = (FORMS[size] ? (FORMS[size][teamForm[p.team]] || FORMS[size][0])[1] : FORM[size])[p.k];
+    return p.rl && f ? [Math.max(0.08, Math.min(0.95, f[0] + p.rl * 0.06)), f[1]] : f; // his role: he holds a little deeper, or plays a little higher
   }
   const myForm = n => { const v = (cfg.forms || {})[n] | 0; if (v === CUST) return myLay(n) ? CUST : 0; const l = formList(n); return l && l[v] ? v : 0; };
   function setMyForm(n, v) { cfg.forms = { ...(cfg.forms || {}), [n]: v }; saveCfg(); }
@@ -2953,7 +2958,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
   // ---------- Actions ----------
   // momentum: a side that wins the ball, shoots and scores gets on top for a while (the stands get behind it, legs a touch quicker)
   let mom = [0, 0], momSaid = 0;
-  const momAdd = (t, v) => { if (t === 0 || t === 1) mom[t] = Math.max(0, Math.min(1, mom[t] + v)); };
+  const momAdd = (t, v) => { if (v > 0 && P.some(p => p.team === t && p.cap && !(p.out > 0))) v *= 1.25; if (t === 0 || t === 1) mom[t] = Math.max(0, Math.min(1, mom[t] + v)); };
   const momEdge = t => Math.max(0, Math.min(1, mom[t] - mom[1 - t]));
   // offside is judged when the ball is played (ball.last.offs = the team-mates who stood offside then) and given when one of them plays it:
   // a pass along the ground, a high ball, a cross, a header or a first-time shot
@@ -3179,7 +3184,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     ball.last = { team: p.team, pass: true, to: q.i, off, offs, pt };
     q.recv = 1.8; // the receiver runs to meet the ball by himself for a moment
     // pass and go: a midfielder or forward who lays it off in their half keeps running, ready for it back
-    if (size >= 5 && !setp && !isKeeper(p) && formOf(p)[0] > 0.35 && (q.x - p.x) * dir > -60 && d < 330 && (p.x - CX) * dir > -120) { p.run = 1.5; p.runH = true; }
+    if (size >= 5 && !setp && !isKeeper(p) && p.rl !== -1 && formOf(p)[0] > 0.35 && (q.x - p.x) * dir > -60 && d < 330 && (p.x - CX) * dir > -120) { p.run = 1.5; p.runH = true; }
     if (stats) stats.pa[p.team]++;
     if (p.ms) p.ms.pa++;
     ball.gk = 'pass'; ball.fresh = false;
@@ -3425,6 +3430,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const people = ours.filter(q => isHuman(q)).sort((a, b) => (a.ctrl + (a.peer || '')).localeCompare(b.ctrl + (b.peer || '')));
     const turn = so ? so.k[team].length : 0;
     let taker = people.length ? people[turn % people.length] : ours.reduce((a, b) => (formOf(b)[0] > formOf(a)[0] ? b : a));
+    { const own = !so && ours.find(q => q.spk & 4); if (own) taker = own; } // the man you picked for penalties steps up
     for (const p of P) {
       p.vx = p.vy = 0; p.tackle = 0; p.stun = 0; p.windup = 0; p.recover = 0; p.dive = 0; p.frozen = 0; p.charging = false; p.hold = 0;
       if (on(p) && Math.abs(p.x - gx) < Math.max(280, G.bd + 30)) { p.x = gx - dir * (Math.max(290, G.bd + G.circ * 0.5 + 20) + Math.random() * 90); p.y = Math.max(PT + 30, Math.min(PB - 30, p.y)); }
@@ -3500,8 +3506,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     const outN = p.sq || '';
     subOut.push({ team: t, sqi: p.sqi, ms: p.ms });
     const b = benchFor(p);
-    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); p.ab = abOf(b.s); p.fit0 = (100 - fitOf(b.s)) / 100 * 0.4; }
-    else { p.ab = null; // a reserve from the bench: fresh, a touch less good
+    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); p.ab = abOf(b.s); p.fit0 = (100 - fitOf(b.s)) / 100 * 0.4; sqMeta(p, b.s, squadLoad()); if (size > 1 && p.k === 0) p.rl = 0; }
+    else { p.ab = null; p.rl = 0; p.cap = false; p.spk = 0; // a reserve from the bench: fresh, a touch less good
       if (p.lv) p.lv = Object.fromEntries(Object.entries(p.lv).map(([k, v]) => [k, v - 0.6]));
       if (p.ovr) p.ovr = Math.max(40, p.ovr - 3);
       p.sq = FIRSTN[Math.floor(Math.random() * FIRSTN.length)] + ' ' + LASTN[Math.floor(Math.random() * LASTN.length)]; p.sqi = -1;
@@ -3940,7 +3946,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
               if (p.run < 0) p.run = Math.min(0, p.run + dt);
               const onLine = (ol - p.x) * dir < 300 && (ol - p.x) * dir > -20 && (goalX - ol) * dir > 140, carrierFree = foeD0(o, foes) > 55 && (o.fx * dir > 0 || o.ctrl !== 'ai'); // room behind the line to run into
               // a forward on the last line times a run when the man on the ball has his head up
-              if (u0 > 0.7 && p.run === 0 && onLine && carrierFree && fwd > L * 0.25 && mates.filter(q => q.run > 0).length < 2 && Math.random() < (1 + iq) * dt) { p.run = 2 + Math.random() * 0.8; p.runH = Math.random() < 0.6 + iq * 0.5; }
+              if ((u0 > 0.7 || (p.rl === 1 && u0 > 0.42)) && p.rl !== -1 && p.run === 0 && onLine && carrierFree && fwd > L * 0.25 && mates.filter(q => q.run > 0).length < 2 && Math.random() < (1 + iq) * (p.rl === 1 ? 1.8 : 1) * dt) { p.run = 2 + Math.random() * 0.8; p.runH = Math.random() < 0.6 + iq * 0.5; }
               else if (u0 < 0.4 && sideOfBall && fwd > L * 0.5 && size >= 7) { x = ownX + dir * Math.min(L * 0.78, (o.x - ownX) * dir + 60); y = y < CY ? PT + 40 : PB - 40; } // the full back overlaps on the ball side
               else if (u0 > 0.45 && u0 < 0.85 && Math.sin(clock * 0.8 + p.i * 2.1) > 0.6) { x += dir * 120; x = dir > 0 ? Math.min(x, ol - 8) : Math.max(x, ol + 8); } // a midfielder steps into the space behind the forwards
             }
@@ -4517,6 +4523,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     let taker;
     if (type === 'goal' && size > 1) taker = P[slotOf(team, 0)];
     else { const c = P.filter(p => p.team === team && on(p) && !(size > 1 && p.k === 0 && type !== 'goal')); taker = (c.length ? c : P.filter(p => p.team === team && on(p))).reduce((a, b) => (Math.hypot(b.x - x, b.y - y) < Math.hypot(a.x - x, a.y - y) ? b : a)); }
+    { const bit = type === 'corner' ? 2 : type === 'free' && (x - CX) * (team ? -1 : 1) > (PR - PL) * 0.12 ? 1 : 0; // your man for corners, and for free kicks within range
+      const own = bit && P.find(p => p.team === team && on(p) && (p.spk & bit) && !(size > 1 && p.k === 0)); if (own) taker = own; }
     // stand just outside the line, facing into the pitch
     let fx = CX - x, fy = CY - y; const l = Math.hypot(fx, fy) || 1; fx /= l; fy /= l;
     if (type === 'throw') { fx = 0; fy = y < CY ? 1 : -1; }
@@ -4893,7 +4901,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const f = teamPick[t].str - 3;
       return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
-    for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; }
+    for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.rl = 0; p.cap = false; p.spk = 0; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; }
     if (m === 'cpu' || (comp && m === 'host')) cpuRatings(1); // the computer's players each have their own rating too
     if (m === 'host' && !comp && kind !== 'train' && kind !== 'test') { // online: both captains' own players, with their ratings and evner
       const hT = hostTeam();
@@ -5747,13 +5755,15 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); }
     return true;
   }
+  // what you told him in Holdet: his role, the armband, and the set pieces that are his
+  const sqMeta = (p, s, S) => { p.rl = s.pos === 'MV' ? 0 : Math.max(-1, Math.min(1, s.rl | 0)); p.cap = !!S.cap && S.cap === s.n; const sp = S.sp || {}; p.spk = (sp.fk === s.n ? 1 : 0) | (sp.ck === s.n ? 2 : 0) | (sp.pn === s.n ? 4 : 0); };
   function squadToPitch() { // every man plays the place he has in your line-up (picked by you, or the best for each place)
-    for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; p.ab = null; p.fit0 = 0; }
+    for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; p.ab = null; p.fit0 = 0; p.rl = 0; p.cap = false; p.spk = 0; }
     const S0 = squadLoad(), xi = xiFor(size, S0), L = layFor(size), mine = P.filter(p => p.team === 0);
     for (const p of mine) {
       const i = xi[p.k], s = S0.pl[i]; if (!s) continue;
       const pen = (ovr(s) - fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size))) / 4.5; // out of position: he plays a bit worse
-      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size)); p.ab = abOf(s);
+      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size)); p.ab = abOf(s); sqMeta(p, s, S0); if (size > 1 && p.k === 0) p.rl = 0;
       { const fi = fitOf(s), mo = morOf(s), mb = mo >= 85 ? 0.4 : mo < 35 ? -0.5 : 0, fb = Math.max(0, 70 - fi) / 20; // tired legs are slower and tire sooner, a happy player plays a little above himself
         for (const [k] of SKILLS) p.lv[k] += mb - (k === 'spd' ? fb : fb * 0.4);
         p.fit0 = (100 - fi) / 100 * 0.4; p.fat = p.fit0; p.stamina = 1 - p.fat; }
@@ -6424,8 +6434,8 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('sqFace').innerHTML = faceSVG(p); $('sqOvr').textContent = o; $('sqPosS').textContent = dpOf(p);
     $('sqName').value = p.n;
     const T = $('sqTabs'); T.textContent = '';
-    ['Træning', 'Evner', 'Form'].forEach((t, k) => { const b = document.createElement('button'); b.textContent = t + (k === 2 && fitOf(p) < 60 ? ' ⚠' : ''); b.setAttribute('aria-pressed', String(sqTab === k)); b.onclick = () => { sqTab = k; sqRefresh(); }; T.appendChild(b); });
-    $('sqStats').hidden = sqTab !== 0; $('sqAb').hidden = sqTab !== 1; $('sqForm').hidden = sqTab !== 2;
+    ['Træning', 'Evner', 'Form', 'Rolle'].forEach((t, k) => { const b = document.createElement('button'); b.textContent = t + (k === 2 && fitOf(p) < 60 ? ' ⚠' : ''); b.setAttribute('aria-pressed', String(sqTab === k)); b.onclick = () => { sqTab = k; sqRefresh(); }; T.appendChild(b); });
+    $('sqStats').hidden = sqTab !== 0; $('sqAb').hidden = sqTab !== 1; $('sqForm').hidden = sqTab !== 2; $('sqRole').hidden = sqTab !== 3;
     const box = $('sqStats'); box.textContent = '';
     for (const [k, name] of SKILLS) {
       const v = p[k], price = tpPrice(v), r = document.createElement('div'); r.className = 'strow';
@@ -6451,6 +6461,26 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       const sm = document.createElement('p'); sm.className = 'sqnote';
       sm.textContent = (f < 70 ? 'Træt: han er langsommere og bliver hurtigere flad. ' : 'Friske ben. ') + `Formen kommer igen af sig selv, og massage giver +${MASSAGE[1] + 5 * facLv('kl')}. ` + (m >= 85 ? 'Han er i hopla og spiller over evne.' : m < 35 ? 'Han er utilfreds og spiller under evne. Sejre og spilletid hjælper.' : 'Sejre, mål og spilletid løfter humøret.');
       FB.appendChild(sm);
+    }
+    { // his role in the team: where he plays from, the armband, and the set pieces
+      const R = $('sqRole'); R.textContent = '';
+      const upd = fn => { const S2 = squadLoad(), q = S2.pl[sqSel]; if (!q) return; fn(S2, q); squadSave(S2); sfx.kick(0.2); sqRefresh(); };
+      if (p.pos !== 'MV') {
+        const RL = { FO: [['Bliv hjemme', 'Han bliver bagude og går ikke med frem.'], ['Normal', 'Han følger holdets taktik.'], ['Gå med frem', 'Han rykker højere op og løber med i angrebene.']],
+          MB: [['Defensiv', 'Han ligger dybere og dækker foran forsvaret.'], ['Normal', 'Han følger holdets taktik.'], ['Offensiv', 'Han ligger højere og løber i dybden.']],
+          AN: [['Fald ned', 'Han kommer ned og henter bolden i stedet for at løbe i dybden.'], ['Normal', 'Han følger holdets taktik.'], ['Løb i dybden', 'Han ligger helt fremme og stikker tit i dybden.']] }[p.pos];
+        const sg = document.createElement('div'), cur = Math.max(-1, Math.min(1, p.rl | 0)); sg.className = 'seg';
+        RL.forEach(([t], k) => { const b = document.createElement('button'); b.textContent = t; b.setAttribute('aria-pressed', String(cur === k - 1)); b.onclick = () => upd((S2, q) => { q.rl = k - 1; }); sg.appendChild(b); });
+        const tip = document.createElement('p'); tip.className = 'sqnote'; tip.textContent = RL[cur + 1][1]; R.append(sg, tip);
+      }
+      const sp = S.sp || {}, g = document.createElement('div'); g.className = 'rlgrid';
+      const last = n2 => (n2 && S.pl.some(q => q.n === n2) ? n2.split(' ').pop() : 'Ingen valgt');
+      const tog = (ic, name, cur, set) => { const b = document.createElement('button'), sm = document.createElement('small'); b.className = 'alt'; b.textContent = `${ic} ${name}`; sm.textContent = cur === p.n ? 'Det er ham' : last(cur); b.appendChild(sm);
+        b.setAttribute('aria-pressed', String(cur === p.n)); b.onclick = () => upd((S2, q) => set(S2, cur === q.n ? '' : q.n)); g.appendChild(b); };
+      tog('Ⓒ', 'Anfører', S.cap, (S2, v) => { S2.cap = v; });
+      if (p.pos !== 'MV') for (const [k, ic, name] of [['fk', '🎯', 'Frispark'], ['ck', '🚩', 'Hjørnespark'], ['pn', '⚽', 'Straffespark']]) tog(ic, name, sp[k], (S2, v) => { S2.sp = { ...(S2.sp || {}), [k]: v }; });
+      const nt = document.createElement('p'); nt.className = 'sqnote'; nt.textContent = 'Anføreren giver holdet mere medvind, når det går godt. Vælg også hvem der tager frispark, hjørnespark og straffe.';
+      R.append(g, nt);
     }
     { // his evner: two places, the second opens at rating 70
       const A = $('sqAb'), ab = abOf(p); A.textContent = '';
@@ -6526,7 +6556,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
     $('goClub').onclick = clubShow; $('clClose').onclick = () => { $('clubOv').hidden = true; hubPaint(); };
     $('goMarket').onclick = () => { mkArm = -1; mktShow(); }; $('mkClose').onclick = () => { tradeLeave(); $('mktOv').hidden = true; hubPaint(); };
     $('abClose').onclick = () => { $('abOv').hidden = true; };
-    $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { S.pl[sqSel].n = v; squadSave(S); } sqRefresh(); });
+    $('sqName').addEventListener('change', () => { const S = squadLoad(), v = cleanName($('sqName').value).slice(0, 16); if (v) { const old = S.pl[sqSel].n; if (S.cap === old) S.cap = v; if (S.sp) for (const k in S.sp) if (S.sp[k] === old) S.sp[k] = v; S.pl[sqSel].n = v; squadSave(S); } sqRefresh(); });
     $('sqClose').onclick = () => { $('squad').hidden = true; };
     $('goSquad').onclick = squadShow;
     $('sqDrills').onclick = () => { $('squad').hidden = true; page('pgPractice'); drillList(); };
@@ -7882,7 +7912,7 @@ button.sw[aria-pressed="true"] { background: linear-gradient(180deg, #ffffff, #d
       ctx.fillStyle = isMine(p) ? col.gold : col.chalk; ctx.fillText(tag, p.x, p.y - PRAD - 6);
     }
     if (ball.owner === p.i && p.sq && !down && state === 'play' && !shootoutOn()) { // the man on the ball: his name under him, so you get to know your players
-      const nm = p.sq.split(' ').pop() + (p.ab && p.ab.length ? ' ' + abIcons(p) : ''), ny = p.y + PRAD + (isMine(p) && p.stamina < 0.99 ? 15 : 5);
+      const nm = (p.cap ? 'Ⓒ ' : '') + p.sq.split(' ').pop() + (p.ab && p.ab.length ? ' ' + abIcons(p) : ''), ny = p.y + PRAD + (isMine(p) && p.stamina < 0.99 ? 15 : 5);
       ctx.font = `700 11px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
       ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(nm, p.x + 1, ny + 1); ctx.fillStyle = 'rgba(244,247,242,0.92)'; ctx.fillText(nm, p.x, ny);
     }
