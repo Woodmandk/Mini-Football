@@ -3854,13 +3854,13 @@ table.st tr.fr td { color: var(--gold); }
     return 0.55 + 0.4 * (aiD(p.team).iq || 0) * (0.6 + 0.4 * rat(p, 'phy'));
   }
   function canHead(p) { // can his head get to it at this height right now? (you: only as high as your jump has taken you)
-    return ball.z <= HEAD_Z + 8 + (isHuman(p) ? jumpNow(p) : jumpH(p) * 0.9);
+    return ball.z <= HEAD_Z + 8 + bodyOf(p).hN * 6 + (isHuman(p) ? jumpNow(p) : jumpH(p) * 0.9);
   }
   function headScore(p) {
     const r = REACH + 8, d = dBall(p), pos = Math.max(0, 1 - d / (r + 16));
     const bl = Math.max(1, Math.hypot(ball.x - p.x, ball.y - p.y)), vin = Math.max(0, Math.min(1, (p.vx * (ball.x - p.x) + p.vy * (ball.y - p.y)) / bl / MAXV));
     const skill = Math.max(rat(p, 'sht'), rat(p, 'def'));
-    return pos * 0.32 + headTiming(p) * 0.3 + rat(p, 'phy') * 0.24 + vin * 0.08 + skill * 0.06 + (hasAb(p, 'luft') ? 0.08 : 0) - (p.stamina < 0.3 ? 0.04 : 0);
+    return pos * 0.32 + headTiming(p) * 0.3 + rat(p, 'phy') * 0.2 + bodyOf(p).hN * 0.07 + bodyOf(p).mN * 0.02 + vin * 0.08 + skill * 0.06 + (hasAb(p, 'luft') ? 0.08 : 0) - (p.stamina < 0.3 ? 0.04 : 0);
   }
   // the ball is up for grabs in the air: everyone who went for it is in the duel, the best one gets his head to it
   function aerialDuel(hs) {
@@ -3949,7 +3949,7 @@ table.st tr.fr td { color: var(--gold); }
     let dx = p.fx, dy = p.fy;
     const db = dBall(p);
     if (db < 230) { dx = ball.x + ball.vx * 0.18 - p.x; dy = ball.y + ball.vy * 0.18 - p.y; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l; }
-    p.fx = dx; p.fy = dy; p.tdx = dx; p.tdy = dy;
+    p.fx = dx; p.fy = dy; p.tdx = dx; p.tdy = dy; p.tdk = 'slide';
     p.tackle = TACKLE_T; p.tcd = 0.7; p.charging = false; p.hold = 0;
     sfx.slide();
   }
@@ -3977,9 +3977,9 @@ table.st tr.fr td { color: var(--gold); }
     const shield = dT > dPO + 2 ? Math.min(1, (dT - dPO) / 12) : 0; // the ball is on the far side of his body
     const rear = rearOf(p, o), ang = rear < -0.3 ? 0.07 : rear < 0.3 ? 0.03 : -0.12; // head on you block it, side on is fine, from behind you have to go through him
     const set = Math.hypot(p.vx, p.vy) < MAXV * 0.65 ? 0.06 : 0; // on your toes (jockeying) rather than charging
-    const duel = (rat(p, 'def') - (rat(o, 'drb') * 0.6 + rat(o, 'spd') * 0.2 + rat(o, 'phy') * 0.2)) * 0.3;
+    const duel = (rat(p, 'def') - (rat(o, 'drb') * 0.6 + rat(o, 'spd') * 0.2 + rat(o, 'phy') * 0.2)) * 0.3 + (bodyOf(p).mN - bodyOf(o).mN) * 0.03;
     const turnO = o.skill > 0 ? 0.3 : 0; // in the middle of a feint
-    const q = 0.14 + access * 0.3 + expo * 0.38 - shield * (0.35 + 0.3 * rat(o, 'phy')) + ang + set - lunge * 0.3 + duel - turnO - (hasAb(o, 'bamse') ? 0.06 : 0) - (o.plan && o.plan.shT > 0 ? 0.06 : 0);
+    const q = 0.14 + access * 0.3 + expo * 0.38 - shield * (0.35 + 0.3 * rat(o, 'phy') + 0.1 * bodyOf(o).mN) + ang + set - lunge * 0.3 + duel - turnO - (hasAb(o, 'bamse') ? 0.06 : 0) - (o.plan && o.plan.shT > 0 ? 0.06 : 0);
     return { q, lunge, reach, shield, expo };
   }
   const TQ_WIN = 0.5, TQ_NICK = 0.36; // a clean win / the ball knocked loose between you (a 50-50) / you miss
@@ -3987,7 +3987,7 @@ table.st tr.fr td { color: var(--gold); }
     if (p.tcd > 0 || p.recover > 0 || (setp && setp.team !== p.team)) return;
     p.tcd = 0.55; p.fx = (o.x - p.x) / (Math.hypot(o.x - p.x, o.y - p.y) || 1); p.fy = (o.y - p.y) / (Math.hypot(o.x - p.x, o.y - p.y) || 1);
     const rear = rearOf(p, o);
-    if (rear > 0.5) { p.tdx = p.fx; p.tdy = p.fy; tackleBody(p, o); return; } // through the back of him: that is a foul
+    if (rear > 0.5) { p.tdx = p.fx; p.tdy = p.fy; p.tdk = 'stand'; tackleBody(p, o); return; } // through the back of him: that is a foul
     const T = tackleQ(p, o);
     if (T.q >= TQ_WIN) { tst('stWin'); abPop(p, 'mur'); tackleWins(p); }
     else if (T.q >= TQ_NICK) { // a toe on it: it squirts loose, whoever reacts first has it
@@ -4009,8 +4009,8 @@ table.st tr.fr td { color: var(--gold); }
   // He faces the way he is going, so where he can shoot or pass from depends on his body, not only on the stick
   function moveBody(p, inp, top, has, dt) {
     const g = WX().grip, mag = Math.min(1, Math.hypot(inp.x, inp.y)), pace = rat(p, 'spd');
-    const agi = (0.84 + 0.1 * pace + 0.2 * rat(p, 'drb')) * (hasAb(p, 'tryl') ? 1.1 : 1) * (isKeeper(p) ? 1.2 : 1);
-    const accel = (300 + 230 * pace) * g * (has ? 0.92 : 1) * (1 - 0.2 * tired(p)), brake = (700 + 250 * pace) * g; // Daniel 2026-11-12: as in FIFA it takes him most of a second to get up to full speed (about 0.7 s for a quick man, 1.1 s for a slow one)
+    const B = bodyOf(p), agi = (0.84 + 0.1 * pace + 0.2 * rat(p, 'drb') - 0.06 * B.hN - 0.04 * B.mN) * (hasAb(p, 'tryl') ? 1.1 : 1) * (isKeeper(p) ? 1.2 : 1);
+    const accel = (300 + 230 * pace) * (1 - 0.05 * B.mN - 0.03 * B.hN) * g * (has ? 0.92 : 1) * (1 - 0.2 * tired(p)), brake = (700 + 250 * pace) * g; // Daniel 2026-11-12: as in FIFA it takes him most of a second to get up to full speed (about 0.7 s for a quick man, 1.1 s for a slow one)
     const sp = Math.hypot(p.vx, p.vy);
     if (sp < 45 || p.jockey) { // on the spot, or jockeying (small side steps): footwork any way, no run-up needed
       const tx = inp.x * top, ty = inp.y * top, dx = tx - p.vx, dy = ty - p.vy, dl = Math.hypot(dx, dy);
@@ -4151,6 +4151,22 @@ table.st tr.fr td { color: var(--gold); }
     ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = Object.assign({ team: p.team, pass: false, punt: true }, savedOffs(p)); p.nopick = 0.8;
     tone(170, 0.07, 'triangle', 0.12, -40); shake = Math.max(shake, 3);
   }
+  // Daniel 2026-11-12, as in FIFA: a keeper coming for a cross with a man right on him punches it clear instead of trying to catch it.
+  // Decided by the moment: how close their man is, how high it is, his handling (quality) and how tall he is
+  function kPunch(p) {
+    if (!(size > 1 && isKeeper(p) && ball.last && (ball.last.cross || ball.last.lp || ball.last.punt) && ball.last.team !== p.team && ball.z > 28)) return false;
+    const da = P.filter(o => o.team !== p.team && on(o)).reduce((m, o) => Math.min(m, dBall(o)), 1e9);
+    const handle = 0.4 + keeperQ(p) * 0.55 + bodyOf(p).hN * 0.08 - Math.max(0, (80 - da) / 80) * 0.6 - (ball.z > 62 ? 0.12 : 0);
+    return handle < 0.5;
+  }
+  function punch(p) {
+    saveKind = 'punch';
+    const gx = p.team ? PR : PL, dir = p.team ? -1 : 1; let dx = ball.x - gx, dy = ball.y - CY; const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+    dx = dx * 0.6 + dir * 0.4; const l2 = Math.hypot(dx, dy) || 1, sp = 480 + 220 * keeperQ(p);
+    ball.owner = -1; ball.vx = dx / l2 * sp; ball.vy = dy / l2 * sp; ball.vz = 280; ball.z = Math.max(ball.z, 40);
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = Object.assign({ team: p.team, pass: false, punt: true }, savedOffs(p)); p.nopick = 0.5;
+    tst('punch'); tone(160, 0.07, 'triangle', 0.13, -40); crowd.ooh(true);
+  }
   function spill(p) { // he gets his body behind it but can't hold it: a loose ball in the box
     saveKind = 'spill';
     const dir = p.team ? -1 : 1, a = Math.max(-1, Math.min(1, (ball.y - p.y) / REACH)) * 0.8, sp = 150 + Math.hypot(ball.vx, ball.vy) * 0.1; // it comes off him the way it hit him: off the side of his body it squirms that way
@@ -4168,7 +4184,7 @@ table.st tr.fr td { color: var(--gold); }
   }
   const TEMPO = () => [0.62, 0.74, 0.88][cfg.tempo] ?? 0.74; // Daniel 2026-11-10 (evening): standard = what Hurtigt was (0.74); before that 0.53/0.62/0.74 // tempo for the whole match: Roligt / Normalt / Hurtigt
   let lastCard = '', pendCard = null; // a yellow under advantage is shown at the next stoppage, as in FIFA
-  function foul(a, b, hard) { tst("foul");
+  function foul(a, b, sev = 0.3) { tst("foul"); const hard = sev >= 0.55;
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
     let card = '';
     if (stats) stats.fo[a.team]++;
@@ -4176,7 +4192,8 @@ table.st tr.fr td { color: var(--gold); }
     if (size > 1) {
       a.fouls++;
       if (chanceDenied(a, b)) card = 'Red card';                         // stopped a clear chance: straight red
-      else if (hard || a.fouls >= 2) card = a.yc ? 'Red card' : 'Yellow card'; // a hard one, or one too many; a second yellow is red
+      else if (sev >= 0.95) card = 'Red card'; // reckless, excessive force: straight red
+      else if (hard || a.fouls >= 3) card = a.yc ? 'Red card' : 'Yellow card'; // a reckless one, or fouling again and again; a second yellow is red
       if (card === 'Yellow card') { a.yc = 1; if (stats) stats.yc[a.team]++; }
     }
     // advantage (like a real referee): if the fouled side still has the ball, play on instead of killing their attack
@@ -4189,7 +4206,7 @@ table.st tr.fr td { color: var(--gold); }
     if (card && adv) pendCard = { text: card, who: nameOf(a) || '' };
     else if (card) { flash = { text: card, t: 1.8 }; lastCard = nameOf(a) || ''; }
     if (card && !adv) { pause = Math.max(pause, card === 'Red card' ? 1.9 : 1.3); banner = ''; } // the referee stops the game and shows the card
-    if (size >= 3 && cfg.inj !== false && !(b.inj > 0) && Math.random() < (hard ? 0.16 : 0.04)) { // sometimes he doesn't get up: injured
+    if (size >= 3 && cfg.inj !== false && !(b.inj > 0) && sev - 0.22 * rat(b, 'phy') - 0.05 * bodyOf(b).mN > 0.72) { // a bad one can injure him (a strong, sturdy man takes it better), a soft one never does
       b.inj = 1; b.lay = Math.max(b.lay || 0, 1.6); if (!adv) { pause = Math.max(pause, 1.6); banner = ''; }
       setTimeout(() => { if (b.inj > 0) flash = { text: 'Injured!', t: 1.6 }; }, card && !adv ? 1900 : 0);
       if (!adv && mode !== 'guest') setTimeout(() => { if (state === 'play' && b.inj > 0) autoSubs(true); }, 3600); // off on a stretcher, a sub comes on
@@ -4348,7 +4365,11 @@ table.st tr.fr td { color: var(--gold); }
       const o = owner();
       if (!(o && o.team === b.team && !setp)) b.stun = Math.max(b.stun, 0.5); // his team keeps the ball: he stays on his feet and plays on (advantage)
       sfx.foul(); if (localHuman(a)) buzz(80);
-      foul(a, b, behind && rear > 0.5 && (Math.hypot(b.vx, b.vy) > MAXV * 0.9 || Math.random() < 0.35)); // straight through the back of a man on the run: a hard foul
+      // Daniel 2026-11-12: how bad it was decides the card, as in FIFA (no dice): how fast he came in, from behind, the man before the ball,
+      // nowhere near the ball (late), a slide rather than a poke, and a big man going through a small one
+      const cin = Math.max(0, (a.vx * (b.x - a.x) + a.vy * (b.y - a.y)) / (Math.hypot(b.x - a.x, b.y - a.y) || 1)) / MAXV;
+      const sev = Math.min(1.4, cin * 0.32 + Math.max(0, rear) * 0.3 + (manFirst ? 0.14 : 0) + (late ? 0.32 : 0) + (a.tdk === 'stand' ? -0.1 : 0.06) + Math.max(0, bodyOf(a).mN - bodyOf(b).mN) * 0.06 + (Math.hypot(b.vx, b.vy) > MAXV * 0.9 ? 0.08 : 0));
+      foul(a, b, sev);
       return;
     }
     b.stun = 0.6; b.vx = a.tdx * 120; b.vy = a.tdy * 120; b.nopick = 0.4;
@@ -4630,6 +4651,22 @@ table.st tr.fr td { color: var(--gold); }
     if ((x - x0) * dir > 12) x = x0 + dir * 12; // never drifts forward into an offside spot doing this
     return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 25, Math.min(PB - 25, y))];
   }
+  // as in FIFA: the sweeper keeper. Where the loose ball will be over the next second and a half (it slows down), and who gets there first:
+  // he goes when he beats their nearest man to it by a margin (a better keeper reads it sooner), and only for a ball heading his way
+  function sweepSpot(p, foes, ownX, dir) {
+    if (ball.owner >= 0 || ball.z > 60 || (ball.last && ball.last.team === p.team && ball.last.pass) || ball.vx * dir > -60) return null;
+    const dm = WX().damp, ln = Math.log(dm), kv = MAXV * 1.2, q = keeperQ(p);
+    for (let t = 0.2; t <= 1.6; t += 0.1) {
+      const f = (Math.pow(dm, t) - 1) / ln, x = ball.x + ball.vx * f, y = ball.y + ball.vy * f;
+      if ((x - ownX) * dir > 420 || Math.abs(y - CY) > 300 || (x - ownX) * dir < 20) continue;
+      const tk = Math.hypot(x - p.x, y - p.y) / kv + 0.25;
+      if (tk > t + 0.1) continue;
+      const ta = foes.reduce((m, o) => Math.min(m, Math.hypot(x - o.x, y - o.y) / (MAXV * 1.3) + 0.1), 9);
+      if (tk < ta - 0.35 + 0.2 * q) return [x, y];
+      return null; // he would lose the race: stay in his goal
+    }
+    return null;
+  }
   function aiInput(p, dt) {
     const d = aiD(p.team), T = tac(p.team);
     const dir = p.team ? -1 : 1;
@@ -4784,6 +4821,7 @@ table.st tr.fr td { color: var(--gold); }
       // the keeper only goes for the ball himself in his own box: further out a defender goes, and he keeps his goal
       const chasers = size > 1 && !ballInBox ? mates.filter(q => q.k !== 0) : mates;
       const chaser = (chasers.length ? chasers : mates).reduce((a, b) => (dBall(b) < dBall(a) ? b : a));
+      const swp = keeper && size >= 5 && !o ? sweepSpot(p, foes, ownX, dir) : null; // a ball played in behind our line: the keeper comes out for it if he gets there first
       const L = PR - PL;
       const shape = push => size >= 5 ? shapeSpot(p, push, weHave) : (() => { // keep the team shape, sliding with the ball
         const h = homeOf(p);
@@ -4882,9 +4920,10 @@ table.st tr.fr td { color: var(--gold); }
         go(o.x + gx / gl * r - gy / gl * side * lat, o.y + gy / gl * r + gx / gl * side * lat, true);
       } else if (keeper && shotAt(p)) { // a shot coming at his goal: he does not run at it, he steps across his line to where he reads it (keeperWatch dives)
         const s = shotAt(p); go(p.x, Math.max(CY - MOUTH, Math.min(CY + MOUTH, s.y + (p.err || 0))), true);
-      } else if (p === chaser || (keeper && ballInBox && dBall(p) < 150)) {
+      } else if (p === chaser || (keeper && ((ballInBox && dBall(p) < 150) || swp))) {
         // go for the ball, staying goal-side of whoever has it (low pressing: wait for them further back until they come close)
         let bx = ball.x + ball.vx * 0.15, by = ball.y + ball.vy * 0.15;
+        if (swp) { bx = swp[0]; by = swp[1]; tst('sweep'); }
         const wait = o && !keeper && T.pr === 0 && (o.x - ownX) * dir > L * 0.55;
         const rear = o ? rearOf(p, o) : -1;
         if (o) {
@@ -5385,7 +5424,7 @@ table.st tr.fr td { color: var(--gold); }
           // It goes quicker when the ball is out of the carrier's feet and for the better defender, and not at all while the carrier shields it
           if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2) {
             const dPO = Math.hypot(o.x - p.x, o.y - p.y), shield = db > dPO + 2 ? 1 : 0, ex = Math.max(0, Math.min(1, (Math.hypot(ball.x - o.x, ball.y - o.y) - (REACH - 3)) / 15));
-            const rate = shield ? 0 : (0.45 + ex * 1.2 + (rat(p, 'phy') - rat(o, 'phy')) * 0.6 + (rat(p, 'def') - rat(o, 'drb')) * 0.3) * (isHuman(o) && !isHuman(p) ? 0.5 : 1) * (hasAb(o, 'bamse') ? 0.35 : 1);
+            const rate = shield ? 0 : (0.45 + ex * 1.2 + (rat(p, 'phy') - rat(o, 'phy')) * 0.6 + (bodyOf(p).mN - bodyOf(o).mN) * 0.3 + (rat(p, 'def') - rat(o, 'drb')) * 0.3) * (isHuman(o) && !isHuman(p) ? 0.5 : 1) * (hasAb(o, 'bamse') ? 0.35 : 1);
             p.shc = (p.shc || 0) + Math.max(0, rate) * dt * 1.6; p.shO = o.i; p.shT = 0.25;
             if (p.shc >= 1) { if (hasAb(o, 'bamse')) abPop(o, 'bamse'); p.shc = 0; tst('shoulder'); if (p.ms) p.ms.du = (p.ms.du || 0) + 1; ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
           }
@@ -5458,7 +5497,7 @@ table.st tr.fr td { color: var(--gold); }
             else parry(p); // palmed away to the side
             tst('kNoHold');
           }
-          else if (p.tackle > 0) tackleWins(p); else { if (save) tst('kHold'); grab(p); }
+          else if (p.tackle > 0) tackleWins(p); else if (!save && kPunch(p)) punch(p); else { if (save) tst('kHold'); grab(p); }
           if (save && p.abSave) abPop(p, p.abSave, true);
           if (save) { flash = { text: 'Save!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; if (p.ms) p.ms.sv = (p.ms.sv || 0) + 1; }
           break;
@@ -7980,7 +8019,7 @@ table.st tr.fr td { color: var(--gold); }
     add('o', o); add('ps', DPOSN[dpOf(p)]); add('n', p.n); add('nt', (NATS[p.nat] || 'Denmark') + (p.ev ? ' · ' + p.ev : ''));
     const st = add('st', '');
     for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflexes' : name} ${p[k] ?? '–'}`; st.appendChild(d); }
-    { const t = traits(p.n, p), d = document.createElement('span'); d.textContent = `${t.ft === 'L' ? 'Left' : 'Right'} foot · weak foot ${t.wf}★ · composure ${t.cmp}`; st.appendChild(d); }
+    { const t = traits(p.n, p), d = document.createElement('span'); const bd = bodyOfSq(p); d.textContent = `${bd.cm} cm · ${bd.kg} kg · ${t.ft === 'L' ? 'Left' : 'Right'} foot · weak foot ${t.wf}★ · composure ${t.cmp}`; st.appendChild(d); }
     if (abOf(p).length) { const ab = add('ab', ''); for (const a of abOf(p)) { const d = document.createElement('span'); d.textContent = ABIL[a].i + ' ' + ABIL[a].n; ab.appendChild(d); } }
   }
   // ---------- the pack opening (as in FIFA): the pack shakes, bursts, then nation, position and rating one at a time ----------
@@ -8123,8 +8162,8 @@ table.st tr.fr td { color: var(--gold); }
       r.append(b, bar, val, bt, tb); box.appendChild(r);
     }
     { const t = traits(p.n, p), r = document.createElement('p'); r.className = 'sqnote'; // as in FIFA: his good foot, weak foot stars and composure
-      r.innerHTML = `<b>${t.ft === 'L' ? 'Left' : 'Right'} footed · weak foot ${'★'.repeat(t.wf)}${'☆'.repeat(5 - t.wf)} · composure ${t.cmp}</b> `;
-      r.append('A shot or pass off his weak foot (away to his weak side while running) is less accurate. Composure is how much a defender right on him puts him off.'); box.appendChild(r); }
+      const bd = bodyOfSq(p); r.innerHTML = `<b>${bd.cm} cm · ${bd.kg} kg · ${t.ft === 'L' ? 'Left' : 'Right'} footed · weak foot ${'★'.repeat(t.wf)}${'☆'.repeat(5 - t.wf)} · composure ${t.cmp}</b> `;
+      r.append('A tall man reaches higher in the air, a heavy one wins the shoulder duels and holds the ball up, a small light one turns and gets going quicker. A shot or pass off his weak foot (away to his weak side while running) is less accurate. Composure is how much a defender right on him puts him off.'); box.appendChild(r); }
     { const po = potOf(p), h = document.createElement('p'); h.className = 'sqnote'; h.innerHTML = `<b>You have ${S.tp || 0} TP. Potential ${po}${o >= po ? ' (reached)' : ` (${po - o} to go)`}.</b> `; h.append(o >= po ? 'He is as good as he will get: TP and matches can no longer raise him.' : 'Spend TP to raise a skill, or pick a focus so it grows faster in matches. You get TP from every match.'); box.appendChild(h); }
     { // form and humør: what he brings into the next match
       const FB = $('sqForm'); FB.textContent = '';
@@ -9441,6 +9480,11 @@ table.st tr.fr td { color: var(--gold); }
   // Every player has his own look: size, build, skin, hair colour and hairstyle, boots. It comes from who he is
   // (his name in your squad, otherwise his team and shirt slot), so the same player always looks the same, on every phone.
   function hashStr(t) { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+  // Daniel 2026-11-12: height and weight matter, as in FIFA. Each man's body comes from his look (so the big lad you see IS big): 165-200 cm,
+  // keepers a few cm more, and a build from slim to stocky. hN/mN are -1..1 against an average man (182 cm, 77 kg)
+  function bodyFrom(L, gk) { const cm = Math.round(165 + (L.h - 0.9) / 0.2 * 35 + (gk ? 6 : 0)), bmi = 20.5 + (L.w - 0.88) / 0.26 * 5, kg = Math.round(bmi * (cm / 100) * (cm / 100)); return { cm, kg, hN: Math.max(-1, Math.min(1, (cm - 182) / 15)), mN: Math.max(-1, Math.min(1, (kg - 77) / 14)) }; }
+  const bodyOf = p => p.body && p.body.key === (p.look && p.look.key) + isKeeper(p) ? p.body : (p.body = Object.assign(bodyFrom(lookOf(p), isKeeper(p)), { key: lookOf(p).key + isKeeper(p) }));
+  const bodyOfSq = sp => bodyFrom(lookOf({ sq: sp.n, team: 0, k: 1 }), sp.pos === 'MV');
   function lookOf(p) {
     const online = mode === 'host' || mode === 'guest';
     const team = teamPick && teamPick[p.team] ? teamPick[p.team].n : 'T' + p.team;
