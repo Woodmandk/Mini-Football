@@ -3575,6 +3575,7 @@ table.st tr.fr td { color: var(--gold); }
     }
     if (lvOf(p) && !isPen) power *= 1 + 0.02 * lvOf(p).sht;
     if (hasAb(p, 'kanon') && !isPen) power *= 1.1;
+    if (!isPen && weakFoot(p, fx, fy)) power *= 0.9 + 0.02 * trOf(p).wf; // off the weak foot: less behind it
     if (p.superShot) power *= 1.6;
     const gk = isPen ? 'pen' : ball.fresh && ball.rs === 'free' ? 'fk' : 'shot';
     const x = p.x + fx * (REACH - 2), y = p.y + fy * (REACH - 2);
@@ -3615,9 +3616,10 @@ table.st tr.fr td { color: var(--gold); }
     const bal = sp > 60 ? (1 - cosA) / 2 * Math.min(1, sp / MAXV) : 0; // 0 = square to the ball, 1 = hitting it straight back the way he runs
     const foe = P.filter(q => q.team !== p.team && on(q) && !isKeeper(q)).reduce((m, q) => Math.min(m, Math.hypot(q.x - p.x, q.y - p.y)), 1e9);
     const press = Math.max(0, 1 - foe / 70);
-    const sig = ((0.02 + 0.075 * (1 - sht)) * (0.5 + pw * pw * 1.3)) + bal * 0.1 + press * 0.035 + (p.sprint ? 0.012 : 0) - (hasAb(p, 'kanon') && pw > 0.45 ? 0.006 : 0);
-    const hs = 5 + pw * pw * (16 + 34 * (1 - sht)) + bal * 26 + press * 8;
-    return { sig: Math.max(0, sig), hs, bal };
+    const wk = weakFoot(p, r.fx, r.fy) ? 5 - trOf(p).wf : 0, cm = calm(p);
+    const sig = ((0.02 + 0.075 * (1 - sht)) * (0.5 + pw * pw * 1.3)) + bal * 0.1 + press * 0.035 * cm + (p.sprint ? 0.012 : 0) + wk * 0.018 - (hasAb(p, 'kanon') && pw > 0.45 ? 0.006 : 0);
+    const hs = 5 + pw * pw * (16 + 34 * (1 - sht)) + bal * 26 + press * 8 * cm + wk * 4;
+    return { sig: Math.max(0, sig), hs, bal, wk };
   }
   function shotError(p, r) {
     const { sig, hs, bal } = shotSpread(p, r);
@@ -3754,7 +3756,7 @@ table.st tr.fr td { color: var(--gold); }
     const pas = rat(p, 'pas'), sp = Math.hypot(p.vx, p.vy);
     const cosA = sp > 60 ? (p.vx * p.fx + p.vy * p.fy) / sp : 1, bal = sp > 60 ? (1 - cosA) / 2 * Math.min(1, sp / MAXV) : 0;
     const foe = P.filter(q => q.team !== p.team && on(q) && !isKeeper(q)).reduce((m, q) => Math.min(m, Math.hypot(q.x - p.x, q.y - p.y)), 1e9);
-    const press = Math.max(0, 1 - foe / 65), k = (hasAb(p, 'dirigent') ? 0.5 : 1) * (air ? 1.35 : 1), far = Math.min(2, d / 450);
+    const press = Math.max(0, 1 - foe / 65) * calm(p), k = (hasAb(p, 'dirigent') ? 0.5 : 1) * (air ? 1.35 : 1) * (weakFoot(p, p.fx, p.fy) ? 1 + (5 - trOf(p).wf) * 0.15 : 1), far = Math.min(2, d / 450);
     return { ang: ((0.004 + 0.026 * (1 - pas)) * (0.4 + far) + bal * 0.05 + press * 0.025) * k, wt: ((0.02 + 0.07 * (1 - pas)) * (0.3 + far) + bal * 0.05 + press * 0.04) * k };
   }
   const bell = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2; // roughly a bell curve, standard spread 1
@@ -3872,9 +3874,9 @@ table.st tr.fr td { color: var(--gold); }
     const shield = dT > dPO + 2 ? Math.min(1, (dT - dPO) / 12) : 0; // the ball is on the far side of his body
     const rear = rearOf(p, o), ang = rear < -0.3 ? 0.07 : rear < 0.3 ? 0.03 : -0.12; // head on you block it, side on is fine, from behind you have to go through him
     const set = Math.hypot(p.vx, p.vy) < MAXV * 0.65 ? 0.06 : 0; // on your toes (jockeying) rather than charging
-    const duel = (rat(p, 'def') - (rat(o, 'pas') + rat(o, 'spd')) / 2) * 0.3;
+    const duel = (rat(p, 'def') - (rat(o, 'drb') * 0.6 + rat(o, 'spd') * 0.2 + rat(o, 'phy') * 0.2)) * 0.3;
     const turnO = o.skill > 0 ? 0.3 : 0; // in the middle of a feint
-    const q = 0.14 + access * 0.3 + expo * 0.38 - shield * 0.5 + ang + set - lunge * 0.3 + duel - turnO - (hasAb(o, 'bamse') ? 0.06 : 0) - (o.plan && o.plan.shT > 0 ? 0.06 : 0);
+    const q = 0.14 + access * 0.3 + expo * 0.38 - shield * (0.35 + 0.3 * rat(o, 'phy')) + ang + set - lunge * 0.3 + duel - turnO - (hasAb(o, 'bamse') ? 0.06 : 0) - (o.plan && o.plan.shT > 0 ? 0.06 : 0);
     return { q, lunge, reach, shield, expo };
   }
   const TQ_WIN = 0.5, TQ_NICK = 0.36; // a clean win / the ball knocked loose between you (a 50-50) / you miss
@@ -3894,7 +3896,7 @@ table.st tr.fr td { color: var(--gold); }
       sfx.trap(); if (localHuman(p) || localHuman(o)) buzz(18);
     }
     else { // missed: he is past you, longer the harder you flew in
-      tst('stMiss'); p.recover = 0.22 + T.lunge * 0.45 + (T.q < 0 ? 0.08 : 0); p.vx *= 0.3; p.vy *= 0.3; tone(220, 0.05, 'triangle', 0.06);
+      tst('stMiss'); if (o.ms) o.ms.dr = (o.ms.dr || 0) + 1; p.recover = 0.22 + T.lunge * 0.45 + (T.q < 0 ? 0.08 : 0); p.vx *= 0.3; p.vy *= 0.3; tone(220, 0.05, 'triangle', 0.06);
       if (T.lunge > 0.2) ball.stealCd = Math.max(ball.stealCd || 0, 0.35);
     }
   }
@@ -3904,7 +3906,7 @@ table.st tr.fr td { color: var(--gold); }
   // He faces the way he is going, so where he can shoot or pass from depends on his body, not only on the stick
   function moveBody(p, inp, top, has, dt) {
     const g = WX().grip, mag = Math.min(1, Math.hypot(inp.x, inp.y)), pace = rat(p, 'spd');
-    const agi = (0.86 + 0.14 * pace + 0.14 * rat(p, 'pas')) * (hasAb(p, 'tryl') ? 1.1 : 1) * (isKeeper(p) ? 1.2 : 1);
+    const agi = (0.84 + 0.1 * pace + 0.2 * rat(p, 'drb')) * (hasAb(p, 'tryl') ? 1.1 : 1) * (isKeeper(p) ? 1.2 : 1);
     const accel = (720 + 300 * pace) * g * (has ? 0.92 : 1), brake = (1250 + 300 * pace) * g;
     const sp = Math.hypot(p.vx, p.vy);
     if (sp < 45 || p.jockey) { // on the spot, or jockeying (small side steps): footwork any way, no run-up needed
@@ -4768,7 +4770,7 @@ table.st tr.fr td { color: var(--gold); }
           p.wfcd = Math.max(0, (p.wfcd || 0) - dt);
           const dd = Math.hypot(o.x - p.x, o.y - p.y), turn = p.lkx * hx + p.lky * hy;
           if (turn < 0.3 && v > 80 && dd < 100 && rear < 0.3 && p.wfcd <= 0 && p.tackle <= 0 && p.windup <= 0 && Math.hypot(p.vx, p.vy) > 50) {
-            p.recover = Math.max(p.recover, 0.24 + 0.22 * (1 - iq)); p.wfcd = 1.5; p.lkx = hx; p.lky = hy;
+            p.recover = Math.max(p.recover, Math.max(0.08, 0.16 + 0.22 * (1 - iq) + (rat(o, 'drb') - rat(p, 'def')) * 0.3)); p.wfcd = 1.5; if (o.ms) o.ms.dr = (o.ms.dr || 0) + 1; p.lkx = hx; p.lky = hy; // a stick feint (as in FIFA): a sharp cut close to him; a better dribbler against a poorer defender leaves him longer
             ball.stealCd = Math.max(ball.stealCd || 0, 0.7); dust(p.x, p.y);
             if (localHuman(o)) buzz(12);
           }
@@ -4792,7 +4794,14 @@ table.st tr.fr td { color: var(--gold); }
           const off = Math.min(cd * 0.5, 115), ux = (o.x - ownX) / cd, uy = (o.y - CY) / cd;
           go(ownX + ux * off, CY + uy * off, true);
           if (Math.hypot(o.x - p.x, o.y - p.y) < REACH + 26 && Math.random() < (0.5 + iq) * 3 * dt) out.tackle = true;
-        } else go(ownX + dir * 38, CY + Math.max(-MOUTH + 10, Math.min(MOUTH - 10, (ball.y - CY) * 0.6)));
+        } else { // as a FIFA keeper: on the line from the ball to the middle of the goal (a touch toward the near post), further off his line
+          // the more central and closer the ball is, so he narrows the angle; the better keeper reads it a little better
+          const bx = (ball.x - ownX) * dir, by = ball.y - CY, bd = Math.hypot(bx, by) || 1, q = keeperQ(p);
+          const ay = Math.max(-MOUTH * 0.3, Math.min(MOUTH * 0.3, by * 0.12)), cen = Math.max(0, bx / bd); // 1 = straight in front of goal
+          const depth = bd > 700 ? 30 : Math.max(16, Math.min(58, (10 + 46 * cen) * (0.8 + 0.3 * q)));
+          const ux = bx, uy = by - ay, ul = Math.hypot(ux, uy) || 1;
+          go(ownX + dir * Math.max(10, ux / ul * depth), Math.max(CY - MOUTH, Math.min(CY + MOUTH, CY + ay + uy / ul * depth)));
+        }
       } else if (size >= 5 && dLine[p.team] !== null && formOf(p)[0] < 0.4) { // the back line, as one unit
         const [x, y] = lineSpot(p, marks.get(p));
         go(x, y, Math.abs(x - p.x) > 70 || Math.hypot(x - p.x, y - p.y) > 160);
@@ -4962,7 +4971,7 @@ table.st tr.fr td { color: var(--gold); }
       const ai = p.ctrl === 'ai';
       p.fat = p.fat || 0;
       if (p.sprint && p.ms) p.ms.spr += dt;
-      if (p.sprint && p.turbo <= 0) { const mo = hasAb(p, 'motor') ? 0.6 : 1; p.stamina = Math.max(0, p.stamina - (ai ? 0.05 : 0.055) * mo * dt); p.fat = Math.min(0.25, p.fat + 0.0012 * mo * dt); } // Daniel 2026-11-12: lasts much longer, as in FIFA (about 18 s of sprinting from full)
+      if (p.sprint && p.turbo <= 0) { const mo = hasAb(p, 'motor') ? 0.6 : 1; p.stamina = Math.max(0, p.stamina - (ai ? 0.05 : 0.055) * mo * (1.2 - 0.4 * rat(p, 'phy')) * dt); p.fat = Math.min(0.25, p.fat + 0.0012 * mo * dt); } // Daniel 2026-11-12: lasts much longer, as in FIFA (about 18 s of sprinting from full)
       else p.stamina = Math.min(1 - p.fat, p.stamina + (hasAb(p, 'motor') ? 0.3 : 0.22) * dt);
       const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has && !(p.heavy > 0) ? 0.92 : 1) * (1 + 0.03 * momEdge(p.team)) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
       if (p.sprint && p.ab && hasAb(p, 'raket') && Math.hypot(p.vx, p.vy) > MAXV * 1.25 && performance.now() - (p.abAt || 0) > 14000) abPop(p, 'raket');
@@ -5173,7 +5182,7 @@ table.st tr.fr td { color: var(--gold); }
         // each touch plays it ahead and he runs onto it: long strides when he sprints, small taps when he jogs
         const mvO = Math.hypot(o.vx, o.vy), tpo = mvO / (o.sprint ? 105 : 70);
         o.touch = ((o.touch || 0) + dt * tpo) % 1;
-        const off = REACH - 3 + (mvO > 60 && !(o.frozen > 0) && !(o.hands > 0) ? (o.sprint ? 14 : 4.5) * (1 - o.touch) : 0) + (o.heavy > 0 ? 24 * (o.heavy / HEAVY_T) : 0);
+        const off = REACH - 3 + (mvO > 60 && !(o.frozen > 0) && !(o.hands > 0) ? (o.sprint ? 14 : 4.5) * (1.25 - 0.5 * rat(o, 'drb')) * (1 - o.touch) : 0) + (o.heavy > 0 ? 24 * (o.heavy / HEAVY_T) : 0);
         const tx = o.x + o.fx * off, ty = o.y + o.fy * off;
         const k = Math.min(1, 28 * dt);
         ball.x += (tx - ball.x) * k; ball.y += (ty - ball.y) * k;
@@ -5192,9 +5201,9 @@ table.st tr.fr td { color: var(--gold); }
           // It goes quicker when the ball is out of the carrier's feet and for the better defender, and not at all while the carrier shields it
           if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2) {
             const dPO = Math.hypot(o.x - p.x, o.y - p.y), shield = db > dPO + 2 ? 1 : 0, ex = Math.max(0, Math.min(1, (Math.hypot(ball.x - o.x, ball.y - o.y) - (REACH - 3)) / 15));
-            const rate = shield ? 0 : (0.45 + ex * 1.2 + (rat(p, 'def') - rat(o, 'pas')) * 0.6) * (isHuman(o) && !isHuman(p) ? 0.5 : 1) * (hasAb(o, 'bamse') ? 0.35 : 1);
+            const rate = shield ? 0 : (0.45 + ex * 1.2 + (rat(p, 'phy') - rat(o, 'phy')) * 0.6 + (rat(p, 'def') - rat(o, 'drb')) * 0.3) * (isHuman(o) && !isHuman(p) ? 0.5 : 1) * (hasAb(o, 'bamse') ? 0.35 : 1);
             p.shc = (p.shc || 0) + Math.max(0, rate) * dt * 1.6; p.shO = o.i; p.shT = 0.25;
-            if (p.shc >= 1) { if (hasAb(o, 'bamse')) abPop(o, 'bamse'); p.shc = 0; tst('shoulder'); ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
+            if (p.shc >= 1) { if (hasAb(o, 'bamse')) abPop(o, 'bamse'); p.shc = 0; tst('shoulder'); if (p.ms) p.ms.du = (p.ms.du || 0) + 1; ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
           }
         }
       }
@@ -5657,10 +5666,27 @@ table.st tr.fr td { color: var(--gold); }
   // profile and coins, shared with other parts of the game: localStorage 'mf-profile'
   const PROF0 = () => ({ coins: 0, games: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, streak: 0, bestStreak: 0, bigWin: 0, seasons: 0, shootouts: 0, tro: {}, own: [], lv: { spd: 0, sht: 0, pas: 0, def: 0 }, xp: 0, lvl: 1 });
   // training your team: four skills you buy with coins, 0-10 each; they help your side against the computer (not online, so it stays fair)
-  const SKILLS = [['spd', 'Pace', 'Runs faster'], ['sht', 'Shots', 'Harder and more accurate shots'], ['pas', 'Passes', 'Plays faster and better balls'], ['def', 'Defence', 'Wins more tackles']];
+  const SKILLS = [['spd', 'Pace', 'Runs faster'], ['sht', 'Shots', 'Harder and more accurate shots'], ['pas', 'Passes', 'Plays faster and better balls'], ['def', 'Defence', 'Wins more tackles'], ['drb', 'Dribbling', 'Turns quicker with the ball and keeps it closer'], ['phy', 'Physical', 'Wins shoulder duels, shields the ball and lasts longer']]; // Daniel 2026-11-12: the six FIFA face stats (pace, shooting, passing, defending, dribbling, physical)
   const skillPrice = l => 60 + l * 40;
   function myLv() { const pr = loadProf(); return Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {}); }
   const rat = (p, k) => p.r99 ? Math.max(0, Math.min(1, (p.r99[k] - 45) / 50)) : 0.5; // a rating 0..1 from his 40-99 stat (70 = 0.5; 0.5 for a man without one)
+  // Daniel 2026-11-12, as in FIFA: every player has a stronger foot, a weak foot rating (1-5 stars) and composure (how well he copes
+  // with a defender right on him). They come from who he is (his name) and how good he is, so they never change at random
+  function traits(n, st) {
+    let h = 7; for (const ch of String(n || 'x')) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const ks = ['spd', 'sht', 'pas', 'def', 'drb', 'phy'].filter(k => st && st[k] != null), avg = ks.length ? ks.reduce((a, k) => a + st[k], 0) / ks.length : 62;
+    return { wf: [2, 3, 3, 3, 4, 4, 2, 3, 5, 3, 4, 1][h % 12], ft: (h >> 5) % 5 === 0 ? 'L' : 'R', cmp: Math.max(40, Math.min(96, Math.round(avg - 4 + ((h >> 9) % 19)))) };
+  }
+  const trOf = p => { if (p._trK !== p.r99) { p._trK = p.r99; p._tr = p.r99 && p.sq ? traits(p.sq, p.r99) : { wf: 3, ft: 'R', cmp: 62 }; } return p._tr; };
+  // which foot he hits it with: on the move, a ball played away to his weak side of the way he is running goes off the weak foot
+  // (standing, he sets himself and uses his good foot)
+  function weakFoot(p, dx, dy) {
+    const t = trOf(p), sp = Math.hypot(p.vx, p.vy), l = Math.hypot(dx, dy) || 1;
+    if (sp < 60) return false;
+    const cr = (p.vx * dy - p.vy * dx) / (sp * l); // > 0: to his right
+    return t.ft === 'R' ? cr < -0.34 : cr > 0.34;
+  }
+  const calm = p => 1.5 - Math.max(0, Math.min(1, (trOf(p).cmp - 40) / 55)); // pressure counts this many times: 1.5 for a nervous man, 0.5 for an ice-cold one
   const lvOf = p => p.lv || null; // a player's trained skills in this match (only your squad, only against the computer)
   function loadProf() { try { return Object.assign(PROF0(), JSON.parse(localStorage.getItem('mf-profile') || '{}')); } catch (_) { return PROF0(); } }
   function paintCoins(pr) { const c = (pr || loadProf()).coins; document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = c; }); try { paintTP(); } catch (_) {} } // TP sit next to the coins (Daniel 2026-11-12: you must be able to see them)
@@ -5834,7 +5860,7 @@ table.st tr.fr td { color: var(--gold); }
     ['angle', 'Tight angle'], ['oneone', 'One on one with the keeper'], ['wall', 'Past the defender'], ['volley', 'Pass from the middle'],
   ];
   let drill = null, drillAgain = null;
-  const SKN = { sht: 'Shots', pas: 'Passing', spd: 'Pace', def: 'Defence' };
+  const SKN = { sht: 'Shots', pas: 'Passing', spd: 'Pace', def: 'Defence', drb: 'Dribbling', phy: 'Physical' };
   const drillLoad = () => { try { return JSON.parse(localStorage.getItem('mf-drills') || '{}') || {}; } catch (_) { return {}; } };
   const starStr = n => '★'.repeat(n) + '☆'.repeat(3 - n);
   // skill games: every drill has 5 levels; a star on a level opens the next one, which is harder (keeper, defenders, time)
@@ -6627,7 +6653,7 @@ table.st tr.fr td { color: var(--gold); }
     while (out.length < Math.min(n, pool.length)) { const a = pool[Math.floor(rnd() * pool.length)]; if (!out.includes(a)) out.push(a); }
     return out;
   }
-  const OVRW = { MV: { spd: 0.1, sht: 0.05, pas: 0.25, def: 0.6 }, FO: { spd: 0.2, sht: 0.05, pas: 0.2, def: 0.55 }, MB: { spd: 0.2, sht: 0.2, pas: 0.45, def: 0.15 }, AN: { spd: 0.3, sht: 0.5, pas: 0.15, def: 0.05 } };
+  const OVRW = { MV: { spd: 0.08, sht: 0.04, pas: 0.22, def: 0.56, drb: 0.02, phy: 0.08 }, FO: { spd: 0.16, sht: 0.03, pas: 0.15, def: 0.45, drb: 0.04, phy: 0.17 }, MB: { spd: 0.15, sht: 0.15, pas: 0.35, def: 0.1, drb: 0.17, phy: 0.08 }, AN: { spd: 0.24, sht: 0.4, pas: 0.1, def: 0.02, drb: 0.18, phy: 0.06 } };
   const FIRSTN = ['Mads', 'Oliver', 'Emil', 'Noah', 'Lucas', 'Viktor', 'Magnus', 'Frederik', 'Anton', 'Malthe', 'Elias', 'Oscar', 'Villads', 'Johan', 'Carl', 'Alfred', 'Storm', 'Aksel', 'Theo', 'Valdemar'];
   const LASTN = ['Holm', 'Krogh', 'Bech', 'Lund', 'Dahl', 'Juul', 'Vang', 'Friis', 'Bak', 'Kjær', 'Brink', 'Skov', 'Ravn', 'Hede', 'Toft', 'Mølgaard', 'Lykke', 'Beach', 'Thorup', 'Bonde'];
   const SQ_POS = ['MV', 'FO', 'FO', 'FO', 'FO', 'MB', 'MB', 'MB', 'AN', 'AN', 'AN'];
@@ -6661,7 +6687,7 @@ table.st tr.fr td { color: var(--gold); }
     if (S.gm % YEAR === 0) {
       const old = [];
       for (const p of S.pl) { p.age = (p.age || 24) + 1;
-        if (p.age >= 31) { const d = p.age >= 35 ? 2 : 1; p.spd = Math.max(40, p.spd - d); if (p.age >= 33) { const k = ['sht', 'pas', 'def'][nameH(p.n + p.age) % 3]; p[k] = Math.max(40, p[k] - 1); } old.push(p.n.split(' ').pop()); }
+        if (p.age >= 31) { const d = p.age >= 35 ? 2 : 1; p.spd = Math.max(40, p.spd - d); if (p.age >= 33) { const k = ['sht', 'pas', 'def', 'drb', 'phy'][nameH(p.n + p.age) % 5]; p[k] = Math.max(40, p[k] - 1); } if (p.age >= 32 && p.phy) p.phy = Math.max(40, p.phy - 1); old.push(p.n.split(' ').pop()); }
         if (p.age >= 35 && (p.age >= 39 || nameH(p.n + 'r' + p.age) % 100 < (p.age >= 37 ? 70 : 35))) p.ret = 1; }
       news.push('A year has passed: everyone is a year older' + (old.length ? '. Age is catching up ' + old.slice(0, 3).join(', ') : ''));
     }
@@ -6673,12 +6699,20 @@ table.st tr.fr td { color: var(--gold); }
     if (out.length) { for (const p of S.pl) if (p.ret) delete p.ret; squadSave(S); }
     return out;
   }
+  // a player from before dribbling and physical existed: both are worked out from what he has (his position, pace, passing,
+  // defending) with a little of his own on top, so they fit him, and his potential is lifted if the new overall is above it
+  function statsSix(p) {
+    const h = nameH(p.n || 'x'), pb = POSB[p.pos] || POSB.MB, c = v => Math.max(40, Math.min(99, Math.round(v)));
+    if (p.drb == null) p.drb = c(((p.spd || 50) + (p.pas || 50)) / 2 + pb.drb * 0.6 + (h % 9) - 4);
+    if (p.phy == null) p.phy = c(((p.def || 50) + (p.spd || 50)) / 2 + pb.phy * 0.6 + ((h >> 4) % 9) - 4);
+    if (p.pot != null) p.pot = Math.max(p.pot, ovr(p));
+  }
   function squadLoad() {
     let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
-    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { let np = false; for (const p of S.pl) { if (!p.nat) p.nat = 'DK'; if (!p.age) p.age = 19 + nameH(p.n) % 12; if (p.pot == null) { p.pot = potNew(p); np = true; } } if (np) squadSave(S); if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
+    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { let np = false; for (const p of S.pl) { if (p.drb == null || p.phy == null) { statsSix(p); np = true; } if (!p.nat) p.nat = 'DK'; if (!p.age) p.age = 19 + nameH(p.n) % 12; if (p.pot == null) { p.pot = potNew(p); np = true; } } if (np) squadSave(S); if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
     // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
     const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
-    const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
+    const base = { MV: [48, 40, 52, 58, 40, 52], FO: [52, 42, 50, 58, 45, 58], MB: [53, 50, 58, 48, 56, 50], AN: [57, 58, 50, 42, 57, 52] };
     S = { tp: 0, pl: SQ_POS.map((pos, i) => {
       const b = base[pos], j = () => Math.floor(Math.random() * 7) - 3, p = { n: `${fn[i]} ${ln[i]}`, pos, nat: 'DK' };
       SKILLS.forEach(([k], x) => { p[k] = Math.max(40, Math.min(99, b[x] + j() + Math.round((old[k] || 0) * 4.5))); });
@@ -6740,7 +6774,7 @@ table.st tr.fr td { color: var(--gold); }
     try {
       const S = squadLoad(), xi = xiFor(n, S), fl = formList(n), L = v === CUST ? (myLay(n) || layFor(n)) : (fl && fl[v] ? fl[v][1] : layFor(n));
       return xi.map((i, k) => { const p = S.pl[i], o = fitOvr(p, slotPos(L[k] || [0.5, 0.5], k, n)), pen = ovr(p) - o; // out of position: he plays worse
-        return [String(p.n || '').slice(0, 18), ...SKILLS.map(([q]) => Math.round(p[q] - pen)), o, abOf(p).map(a => ABK().indexOf(a))]; });
+        return [String(p.n || '').slice(0, 18), ...['spd', 'sht', 'pas', 'def'].map(q => Math.round((p[q] || 50) - pen)), o, abOf(p).map(a => ABK().indexOf(a)), -1, Math.round((p.drb || 50) - pen), Math.round((p.phy || 50) - pen)]; });
     } catch (_) { return 0; }
   }
   function cleanSquad(a, n) {
@@ -6749,7 +6783,7 @@ table.st tr.fr td { color: var(--gold); }
     for (const r of a) {
       if (!Array.isArray(r)) return null;
       const nm = String(r[0] || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 18);
-      out.push({ n: nm || 'Player', spd: st(r[1]), sht: st(r[2]), pas: st(r[3]), def: st(r[4]), o: Math.round(st(r[5])), ab: (Array.isArray(r[6]) ? r[6] : []).map(i => ABK()[i | 0]).filter(Boolean).slice(0, 2), i: Number.isInteger(r[7]) && r[7] >= 0 && r[7] < 200 ? r[7] : -1 });
+      out.push({ n: nm || 'Player', spd: st(r[1]), sht: st(r[2]), pas: st(r[3]), def: st(r[4]), drb: r[8] != null ? st(r[8]) : st((st(r[1]) + st(r[3])) / 2), phy: r[9] != null ? st(r[9]) : st((st(r[4]) + st(r[1])) / 2), o: Math.round(st(r[5])), ab: (Array.isArray(r[6]) ? r[6] : []).map(i => ABK()[i | 0]).filter(Boolean).slice(0, 2), i: Number.isInteger(r[7]) && r[7] >= 0 && r[7] < 200 ? r[7] : -1 });
     }
     return out;
   }
@@ -6772,7 +6806,7 @@ table.st tr.fr td { color: var(--gold); }
         for (const [k] of SKILLS) p.lv[k] += mb - (k === 'spd' ? fb : fb * 0.4);
         p.fit0 = (100 - fi) / 100 * 0.4; p.fat = p.fit0; p.stamina = 1 - p.fat; }
     }
-    const avg = { spd: 0, sht: 0, pas: 0, def: 0 };
+    const avg = { spd: 0, sht: 0, pas: 0, def: 0, drb: 0, phy: 0 };
     for (const [k] of SKILLS) avg[k] = xi.reduce((t, i) => t + statLv(S0.pl[i][k]), 0) / xi.length;
     return avg;
   }
@@ -6789,7 +6823,7 @@ table.st tr.fr td { color: var(--gold); }
     for (const p of tm) if (!own.has(p)) hs.forEach((h, j) => { const o = hs.reduce((t, x, jj) => (jj === j ? t : t + rat(x, p)), 0) / (H - 1); pairs.push([rat(h, p) - o, p, j]); });
     pairs.sort((a, b) => b[0] - a[0]);
     for (const [, p, j] of pairs) if (!own.has(p) && cnt[j] < quota[j]) { own.set(p, j); cnt[j]++; }
-    const S0 = squadLoad(), avg = { spd: 0, sht: 0, pas: 0, def: 0 };
+    const S0 = squadLoad(), avg = { spd: 0, sht: 0, pas: 0, def: 0, drb: 0, phy: 0 };
     for (const p of tm) {
       const j = own.get(p) || 0, r = j ? hs[j].r[p.k] : null;
       if (r) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.r99 = Object.fromEntries(SKILLS.map(([k]) => [k, r[k]])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); p.rl = 0; p.cap = false; p.spk = 0; p.fit0 = 0; p.fat = 0; p.stamina = 1; p.coP = hs[j].id; p.coI = r.i; }
@@ -6807,14 +6841,14 @@ table.st tr.fr td { color: var(--gold); }
       for (const [, k, i] of pairs) if (out[k] < 0 && !used.has(i)) { out[k] = i; used.add(i); }
       if (out.some(i => i < 0)) return 0;
       return out.map((i, k) => { const p = S.pl[i], o = fitOvr(p, sps[k]), pen = ovr(p) - o;
-        return [String(p.n || '').slice(0, 18), ...SKILLS.map(([q]) => Math.round(p[q] - pen)), o, abOf(p).map(a => ABK().indexOf(a)), i]; });
+        return [String(p.n || '').slice(0, 18), ...['spd', 'sht', 'pas', 'def'].map(q => Math.round((p[q] || 50) - pen)), o, abOf(p).map(a => ABK().indexOf(a)), i, Math.round((p.drb || 50) - pen), Math.round((p.phy || 50) - pen)]; });
     } catch (_) { return 0; }
   }
   const coName = v => String(v || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 18);
   // the computer teams' players (as in FIFA): every man has his own pace, shot, passing and defending, built from the
   // team's stars and his position, the same every time you meet that team. His p.lv is measured from the team's level,
   // so the team as a whole plays as strong as its stars say, but a quick winger is quick and a centre back wins tackles.
-  const POSB = { MV: { spd: -8, sht: -12, pas: -2, def: 8 }, FO: { spd: -2, sht: -9, pas: -2, def: 9 }, MB: { spd: 0, sht: -1, pas: 7, def: -2 }, AN: { spd: 6, sht: 8, pas: -2, def: -13 } };
+  const POSB = { MV: { spd: -8, sht: -12, pas: -2, def: 8, drb: -12, phy: 2 }, FO: { spd: -2, sht: -9, pas: -2, def: 9, drb: -6, phy: 8 }, MB: { spd: 0, sht: -1, pas: 7, def: -2, drb: 4, phy: -1 }, AN: { spd: 6, sht: 8, pas: -2, def: -13, drb: 6, phy: 0 } };
   function cpuRatings(t) {
     const tm = teamPick && teamPick[t], base = strOvr(tm ? tm.str || 3 : 3);
     let h = 7; for (const ch of (tm ? tm.n : 'cpu') + size) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -6862,7 +6896,7 @@ table.st tr.fr td { color: var(--gold); }
     for (const p of list || P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) { // the men who were subbed off grow from their part too
       if (p.team !== 0 || !(p.sqi >= 0) || !S.pl[p.sqi]) continue;
       const pl = S.pl[p.sqi], m = p.ms || {}, gx = pl.gx = pl.gx || {};
-      const g = { sht: (m.g || 0) * 0.5 + Math.min(m.sh || 0, 8) * 0.1, pas: Math.min(m.pa || 0, 25) * 0.035, def: Math.min(m.tk || 0, 8) * 0.22, spd: Math.min(m.spr || 0, 60) * 0.01 };
+      const g = { sht: (m.g || 0) * 0.5 + Math.min(m.sh || 0, 8) * 0.1, pas: Math.min(m.pa || 0, 25) * 0.035, def: Math.min(m.tk || 0, 8) * 0.22, spd: Math.min(m.spr || 0, 60) * 0.01, drb: (m.dr || 0) * 0.04 + (m.g || 0) * 0.1, phy: Math.min(m.tk || 0, 8) * 0.08 + Math.min(m.spr || 0, 60) * 0.006 + (m.du || 0) * 0.06 };
       g[POSMAIN[pl.pos]] += 0.25;
       if (pl.fo && g[pl.fo] != null) g[pl.fo] = g[pl.fo] * 1.6 + 0.15; // his training focus
       if (friendly) for (const k in g) g[k] *= 1.5; // a friendly is a match played to develop the players
@@ -6992,7 +7026,7 @@ table.st tr.fr td { color: var(--gold); }
     clubSave(C);
   }
   // training sessions: the whole squad works on one thing. It costs legs, and there are three a day.
-  const TRAIN = { spd: ['Running and sprints', '🏃', 'Pace'], sht: ['Finishing', '🎯', 'Shots'], pas: ['Passing game', '🔁', 'Passing'], def: ['Defence and duels', '🛡️', 'Defence'], rest: ['Recovery', '🧊', ''] };
+  const TRAIN = { spd: ['Running and sprints', '🏃', 'Pace'], sht: ['Finishing', '🎯', 'Shots'], pas: ['Passing game', '🔁', 'Passing'], def: ['Defence and duels', '🛡️', 'Defence'], drb: ['Ball work and dribbling', '⚽', 'Dribbling'], phy: ['Gym and strength', '💪', 'Physical'], rest: ['Recovery', '🧊', ''] };
   const TRAIN_N = 3, TRAIN_FIT = 8;
   function trainLeft(C) { return C.td === dayNo() ? Math.max(0, TRAIN_N - (C.tn | 0)) : TRAIN_N; }
   function trainRun(k) {
@@ -7015,7 +7049,7 @@ table.st tr.fr td { color: var(--gold); }
     const C = clubLoad(), T = $('clTrain'), left = trainLeft(C); T.textContent = '';
     const h = document.createElement('p'); h.className = 'sqnote'; h.innerHTML = `<b>${left} of ${TRAIN_N} sessions left today.</b> `; h.append(`Pick what the whole squad trains. Each session costs ${TRAIN_FIT} form. Form only counts in ranked matches; everything else is played with fresh legs.`); T.appendChild(h);
     const g = document.createElement('div'); g.className = 'trsess';
-    const TIC = { spd: 'cone', sht: 'goal', pas: 'swap', def: 'shield', rest: 'check' };
+    const TIC = { spd: 'cone', sht: 'goal', pas: 'swap', def: 'shield', drb: 'ball', phy: 'stairs', rest: 'check' };
     for (const k of Object.keys(TRAIN)) {
       const [nm, ic, st] = TRAIN[k], b = document.createElement('button'); b.className = 'alt trbtn'; b.disabled = left <= 0;
       const i = document.createElement('i'); if (window.mfIco) i.innerHTML = window.mfIco(TIC[k] || 'cone'); else i.textContent = ic; const t = document.createElement('span'); t.textContent = nm; const sm = document.createElement('small'); sm.textContent = k === 'rest' ? '+15 form for everyone' : `${st} up · −${TRAIN_FIT} form`;
@@ -7742,7 +7776,8 @@ table.st tr.fr td { color: var(--gold); }
     const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; el.appendChild(d); return d; };
     add('o', o); add('ps', DPOSN[dpOf(p)]); add('n', p.n); add('nt', (NATS[p.nat] || 'Denmark') + (p.ev ? ' · ' + p.ev : ''));
     const st = add('st', '');
-    for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflexes' : name} ${p[k]}`; st.appendChild(d); }
+    for (const [k, name] of SKILLS) { const d = document.createElement('span'); d.textContent = `${p.pos === 'MV' && k === 'def' ? 'Reflexes' : name} ${p[k] ?? '–'}`; st.appendChild(d); }
+    { const t = traits(p.n, p), d = document.createElement('span'); d.textContent = `${t.ft === 'L' ? 'Left' : 'Right'} foot · weak foot ${t.wf}★ · composure ${t.cmp}`; st.appendChild(d); }
     if (abOf(p).length) { const ab = add('ab', ''); for (const a of abOf(p)) { const d = document.createElement('span'); d.textContent = ABIL[a].i + ' ' + ABIL[a].n; ab.appendChild(d); } }
   }
   // ---------- the pack opening (as in FIFA): the pack shakes, bursts, then nation, position and rating one at a time ----------
@@ -7884,6 +7919,9 @@ table.st tr.fr td { color: var(--gold); }
         S2.tp -= price; q[k]++; squadSave(S2); paintTP(S2); sfx.win(); guideHit('train'); sqRefresh(); };
       r.append(b, bar, val, bt, tb); box.appendChild(r);
     }
+    { const t = traits(p.n, p), r = document.createElement('p'); r.className = 'sqnote'; // as in FIFA: his good foot, weak foot stars and composure
+      r.innerHTML = `<b>${t.ft === 'L' ? 'Left' : 'Right'} footed · weak foot ${'★'.repeat(t.wf)}${'☆'.repeat(5 - t.wf)} · composure ${t.cmp}</b> `;
+      r.append('A shot or pass off his weak foot (away to his weak side while running) is less accurate. Composure is how much a defender right on him puts him off.'); box.appendChild(r); }
     { const po = potOf(p), h = document.createElement('p'); h.className = 'sqnote'; h.innerHTML = `<b>You have ${S.tp || 0} TP. Potential ${po}${o >= po ? ' (reached)' : ` (${po - o} to go)`}.</b> `; h.append(o >= po ? 'He is as good as he will get: TP and matches can no longer raise him.' : 'Spend TP to raise a skill, or pick a focus so it grows faster in matches. You get TP from every match.'); box.appendChild(h); }
     { // form and humør: what he brings into the next match
       const FB = $('sqForm'); FB.textContent = '';
