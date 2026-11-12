@@ -122,6 +122,7 @@ table.st td.l, table.st th.l { text-align: left; }
 .hub { gap: 8px; padding: 10px 14px 8px; }
 .hubtop { display: flex; align-items: center; gap: 8px; }
 .hubtop .logo { font: 800 20px/1 var(--font); font-style: italic; text-transform: uppercase; white-space: nowrap; }
+.mfver { position: fixed; left: 5px; bottom: 2px; z-index: 50; font: 600 9px/1 var(--font); color: rgba(244,247,242,0.55); pointer-events: none; letter-spacing: 0.3px; } /* the build, so you can see you have the newest one (build.sh stamps it) */
 .hubtop .logo .r { color: #e5483b; } .hubtop .logo .b { color: #2f7ff0; }
 .hubtop .namein { flex: 0 1 130px; min-width: 70px; padding: 7px 9px; font-size: 14px; }
 .hubtop .prog { flex: 1 1 auto; min-width: 0; }
@@ -1082,6 +1083,7 @@ table.st tr.fr td { color: var(--gold); }
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
         <div class="logo"><span class="r">Bane</span><span class="b">bold</span></div>
+        <span class="mfver" id="mfVer">v dev</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
