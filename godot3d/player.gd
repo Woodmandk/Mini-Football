@@ -117,6 +117,19 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	torso.position = Vector3(0, 1.05, 0)
 	body.add_child(torso)
 	_part(torso, _capsule(0.215, 0.72), mat(shirt), Vector3(0, 0.33, 0), Vector3(1.0, 1.0, 0.68))
+	# shirt number on the back
+	if num > 0:
+		var nl := Label3D.new()
+		nl.text = str(num)
+		nl.font = load("res://fonts/ChakraPetch-Bold.ttf")
+		nl.font_size = 64
+		nl.pixel_size = 0.0042
+		nl.outline_size = 0
+		nl.double_sided = false
+		nl.modulate = Color(0.08, 0.08, 0.08) if shirt.get_luminance() > 0.6 else Color(1, 1, 1)
+		nl.position = Vector3(0, 0.40, 0.152)
+		nl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		torso.add_child(nl)
 	# head
 	head = Node3D.new()
 	head.position = Vector3(0, 0.72, 0)
