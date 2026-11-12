@@ -234,6 +234,9 @@ button.big small { font: 500 11px/1.2 var(--font); color: var(--muted); letter-s
 .seasonview table.st td, .seasonview table.st th { padding: 3px 5px; }
 .seasonview tr.me td { color: var(--gold); font-weight: 700; }
 .vs { font-size: 18px; font-weight: 700; }
+.cobrief { display: grid; gap: 3px; margin: 6px 0; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,.06); border-left: 3px solid var(--gold); text-align: left; font-size: 13px; line-height: 1.35; }
+.cobrief b { color: var(--gold); font-weight: 700; }
+.cobrief .hl { opacity: .8; font-style: italic; }
 .ow.three { grid-template-columns: 1fr 1fr 1fr; }
 .bracket { display: grid; grid-template-columns: 1fr 1fr 1fr 0.8fr; gap: 8px; align-items: stretch; font-size: 12px; }
 .bracket .rd { display: flex; flex-direction: column; justify-content: space-around; gap: 6px; }
@@ -1463,6 +1466,7 @@ table.st tr.fr td { color: var(--gold); }
       <div class="lbl" id="lobbyLbl">Match code</div>
       <div class="bigcode" id="lobbyCode">0000</div>
       <p id="lobbyMsg"></p>
+      <div class="cobrief" id="lobbyBrief" hidden></div>
       <div class="roster">
         <ul class="tr" id="rosterR"></ul>
         <ul class="tb" id="rosterB"></ul>
@@ -1643,6 +1647,7 @@ table.st tr.fr td { color: var(--gold); }
           <div class="endhead"><h1 id="endTitle">End</h1>
           <div class="final"><span class="h" id="fh">0</span> – <span class="a" id="fa">0</span></div></div>
           <p id="endMsg"></p>
+          <div class="cobrief" id="endBrief" hidden></div>
           <button id="motm" class="alt" hidden></button>
           <div class="tablewrap"><table class="st" id="statsTable"></table></div>
         </div>
@@ -3159,6 +3164,7 @@ table.st tr.fr td { color: var(--gold); }
     if (cupMatch) { cupResult(cupMatch.i, score[0], score[1], win); }
     $('toCup').hidden = !cupMatch; $('again').hidden = $('again').hidden || !!cupMatch;
     afterMatch(win, me, ss);
+    coBriefPaint();
     $('hlRow').hidden = !hlClips.length; hlOutShow(false);
     $('hlBtn').textContent = `Watch the goals (${hlClips.length})`;
     const lines = []; lastRank = null; endRankShow(null);
@@ -5521,7 +5527,7 @@ table.st tr.fr td { color: var(--gold); }
       if (sh.tp > tp) { addTP(sh.tp - tp); tp = sh.tp; }
       const S8 = squadLoad(), mine = (Array.isArray(sh.gw) ? sh.gw : []).filter(e => Array.isArray(e) && Number.isInteger(e[0]) && S8.pl[e[0]] && coName(S8.pl[e[0]].n) === String(e[1])).slice(0, 11);
       const cl = v => clamp(Number(v) | 0, 0, 99), ups = mine.length ? squadGrow(mine.map(e => ({ team: 0, sqi: e[0], ms: { g: cl(e[2]), sh: cl(e[3]), pa: cl(e[4]), tk: cl(e[5]), spr: cl(e[6]) } }))) : squadGrowAway(win === me); // your own men grow from what they did
-      extra = (extra ? extra + ' · ' : '') + 'Shared with the whole team' + (mine.length ? ` · ${mine.length} of your players played` : '') + (ups.length ? ' · Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? '…' : '') : '');
+      extra = (extra ? extra + ' · ' : '') + 'Shared with the whole team' + (mine.length ? ` · Your players gained experience: ${mine.map(e => String(e[1]).split(' ').pop()).join(', ')}` : '') + (ups.length ? ' · Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? '…' : '') : '');
     }
     if (coOut) { coOut.c = Math.max(0, coins); coOut.tp = tp; }
     if (eco) extra = `${eco.att.toLocaleString('en')} fans · prize +${eco.p}, gate +${eco.g}` + (eco.s ? `, sponsors +${eco.s}` : '') + (eco.m ? `, shop +${eco.m}` : '') + (eco.tv ? `, TV +${eco.tv}` : '') + `, wages −${eco.w}` + (eco.u ? `, upkeep −${eco.u}` : '') + (eco.ln ? `, loan −${eco.ln}` : '') + (eco.loanEnd ? '. The loan is paid off' : '') + (eco.short ? '. There was not enough for all the wages: morale drops' : '') + (eco.spEnd ? '. The sponsor deal has ended: pick a new one under The club' : '') + (extra ? ' · ' + extra : '');
@@ -5877,6 +5883,26 @@ table.st tr.fr td { color: var(--gold); }
     return true;
   }
   const coNote = () => (mode === 'host' ? ' You play this together: go back to start the match.' : ' You play this together: the match starts when everyone is ready.');
+  // what you are playing for, on every phone in the room: the next match, the table, the board and the paper
+  function coBrief() {
+    const t = coType(), L = [];
+    if (t === 'career') { const C = carLoad(); if (!C || !C.S) return L;
+      const me = carMe(C), rows = carRows(C), rank = rows.findIndex(x => x.i === me) + 1, G = GOALS[C.goal] || GOALS.up, tr = C.trust == null ? 55 : C.trust, pts = (rows[rank - 1] || {}).p || 0;
+      if (C.S.r >= 7) L.push(['Season over', `No. ${rank} in the ${DIVS[C.div].n}`]);
+      else { const o = carTeam(C.divs[C.div][carOpp(C)]); L.push([`Round ${C.S.r + 1} of 7`, `v ${o.n} ${'★'.repeat(o.str || 0)}`]); }
+      L.push(['Table', `${rank}${['st', 'nd', 'rd'][rank - 1] || 'th'} of 8 in the ${DIVS[C.div].n}, ${pts} pts`]);
+      L.push(['The board', `${G[0]} · confidence ${tr >= 75 ? 'high' : tr >= 50 ? 'good' : tr >= 30 ? 'shaky' : 'low'}`]);
+      if (C.rvn && C.S.r < 7) { const rr = carRivalRound(C); if (rr >= C.S.r) L.push(['Rival', rr === C.S.r ? `Derby now against ${C.rvn}` : `${C.rvn}, derby in round ${rr + 1}`]); }
+      if (C.story && C.story[0]) L.push(['', C.story[0]]);
+    } else if (t === 'cup') { const K = koLoad(); if (!K) return L;
+      L.push(['Cup', K.champ ? 'You won the cup!' : K.out ? 'You are out of the cup' : `${KO_RN[K.r]} v ${TEAMS[koOpp(K)].n}`]);
+    }
+    return L;
+  }
+  function coBriefPaint() {
+    for (const id of ['lobbyBrief', 'endBrief']) { const box = $(id); if (!box) continue; const L = coBrief(); box.textContent = ''; box.hidden = !L.length;
+      for (const [k, v] of L) { const r = document.createElement('div'); if (k) { const b = document.createElement('b'); b.textContent = k + ': '; r.append(b, v); } else { r.className = 'hl'; r.textContent = v; } box.appendChild(r); } }
+  }
   function coLabel() {
     const t = coType();
     if (t === 'career') { const C = carLoad(); return C ? `See the table · ${C.S.r >= 7 ? 'season over' : 'round ' + (C.S.r + 1) + ' of 7'}` : ''; }
@@ -6211,12 +6237,23 @@ table.st tr.fr td { color: var(--gold); }
       sh.className = 'setsheet'; sh.hidden = true;
       sh.innerHTML = `<div class="top"><button class="alt back" aria-label="Back">${ic('back')}</button><h2>Match settings</h2><button class="sheetok">Done</button></div>`;
       box.before(b); sh.appendChild(box); card.appendChild(sh);
-      const close = () => { sh.hidden = true; }; sh.querySelector('.back').onclick = close; sh.querySelector('.sheetok').onclick = close; b.onclick = () => { sh.hidden = false; sh.scrollTop = 0; };
+      const close = () => { sh.hidden = true; }; sh.querySelector('.back').onclick = close; sh.querySelector('.sheetok').onclick = close; b.onclick = () => { segPaints.forEach(f => f()); sh.hidden = false; sh.scrollTop = 0; };
     }
   }
   function buildOpts() {
     for (const box of document.querySelectorAll('[data-mopts]')) {
       box.textContent = '';
+      // in the cup and the career: players per team, match length and level can be changed before any match, not only at the start
+      const cK = box.closest('#ko') ? 'ko' : box.closest('#career') ? 'car' : null;
+      if (cK) {
+        const ld = () => (cK === 'ko' ? koLoad() : carLoad()) || {}, sv = o => { if (cK === 'ko') { koSave(o); if (!$('ko').hidden) koShow(); } else { carSave(o); if (!$('career').hidden) carShow(); } };
+        const rows = [['size', 'Players per team', cK === 'ko' ? [2, 3, 5, 7, 11] : [1, 2, 3, 5, 7, 11], cK === 'ko' ? ['2', '3', '5', '7', '11'] : ['1', '2', '3', '5', '7', '11']], ['mins', 'Match length', [2, 3, 5], ['2 min', '3 min', '5 min']], cK === 'ko' ? ['diff', 'Level', [0, 1, 2, 3], DIFFN] : ['lvl', 'Level', [1, 2, 3], ['Easy', 'Normal', 'Hard']]];
+        for (const [k, name, vals, labels] of rows) {
+          const c = document.createElement('div'), l = document.createElement('div'), sg = document.createElement('div');
+          l.className = 'lbl'; l.textContent = name; sg.className = 'seg'; sg.setAttribute('role', 'group'); sg.setAttribute('aria-label', name); c.append(l, sg); box.appendChild(c);
+          mkSeg(sg, vals, labels, () => ld()[k], v => { const o = ld(); if (o.R || o.divs) { o[k] = v; sv(o); } });
+        }
+      }
       for (const [key, name, labels] of MOPTS) {
         const c = document.createElement('div'), l = document.createElement('div'), sg = document.createElement('div');
         l.className = 'lbl'; l.textContent = name; sg.className = 'seg'; sg.setAttribute('role', 'group'); sg.setAttribute('aria-label', name);
@@ -8416,7 +8453,7 @@ table.st tr.fr td { color: var(--gold); }
     $('lobbyTeams').textContent = tw[0] || tw[1] ? `${tw[0] ? tw[0].n : KITN[kit][0]} v ${tw[1] ? tw[1].n : KITN[kit][1]}` : '';
     $('lobbyTeams').hidden = !(tw[0] || tw[1]);
     $('lobbyMine').textContent = loadMT().made ? 'Edit my team and tactics' : 'Make your own team';
-    { const l = coLabel(); $('lobbyComp').hidden = !l; if (l) $('lobbyComp').textContent = l; }
+    { const l = coLabel(); $('lobbyComp').hidden = !l; if (l) $('lobbyComp').textContent = l; coBriefPaint(); }
     const b = $('startOnline');
     if (isHost) {
       const y = roster.length, x = roster.filter(r => lobbyReady.get(r[0])).length;
@@ -8628,6 +8665,7 @@ table.st tr.fr td { color: var(--gold); }
     if (!s || !Array.isArray(s.p) || !Array.isArray(s.b)) return;
     if (s.cv) carShare(s.cv);
     if (s.ko) koShare(s.ko);
+    if ((s.cv || s.ko) && (state === 'lobby' || state === 'end')) coBriefPaint();
     if (s.st !== 'e') coG = null;
     if (coBack && s.st === 'p') coViewClose(true);
     else if (s.co && typeof s.co === 'object') coG = { p: clamp(Number(s.co.p) | 0, 0, 800), c: clamp(Number(s.co.c) | 0, 0, 1500), tp: clamp(Number(s.co.tp) | 0, 0, 60), tx: String(s.co.tx || '').slice(0, 400), tr: (Array.isArray(s.co.tr) ? s.co.tr : []).filter(x => CO_TRO.includes(x)), nx: !!s.co.nx,
