@@ -1179,9 +1179,9 @@ table.st tr.fr td { color: var(--gold); }
           </div></div>
         <div class="col" id="formBox"><div class="lbl" id="formLbl">Formation <button id="setupMine" class="linkbtn">Tactics and line-up ›</button></div>
           <div class="seg" id="segForm" role="group" aria-label="Formation"></div></div>
-        <div class="col" id="minsBox"><div class="lbl">Match length</div>
-          <div class="seg" id="segMins" role="group" aria-label="Match length">
-            <button data-v="2">2 min</button><button data-v="3">3 min</button><button data-v="5">5 min</button>
+        <div class="col" id="minsBox"><div class="lbl">Half length</div>
+          <div class="seg" id="segMins" role="group" aria-label="Half length">
+            <button data-v="2">2 min</button><button data-v="3">3 min</button><button data-v="4">4 min</button><button data-v="6">6 min</button>
           </div></div>
         <div class="col" id="serBox"><div class="lbl">Series</div>
           <div class="seg" id="segSer" role="group" aria-label="Series">
@@ -1383,7 +1383,7 @@ table.st tr.fr td { color: var(--gold); }
       <div id="seasonSetup" class="setup">
         <div class="col full"><div class="lbl" id="seasonTeamLbl">Pick your team</div><div class="teams" id="seasonTeams" role="group" aria-label="Your team"></div></div>
         <div class="col"><div class="lbl">Players per team</div><div class="seg" id="seasonSize"></div></div>
-        <div class="col"><div class="lbl">Match length</div><div class="seg" id="seasonMins"></div></div>
+        <div class="col"><div class="lbl">Half length</div><div class="seg" id="seasonMins"></div></div>
         <div class="col"><div class="lbl">Level</div><div class="seg" id="seasonDiff"></div></div>
         <div class="col"><p>You meet the 7 other teams once, from the weakest to the strongest. Most points wins the trophy.</p></div>
         <button id="seasonStart" class="go full">Start the season ›</button>
@@ -1407,7 +1407,7 @@ table.st tr.fr td { color: var(--gold); }
       <div id="koSetup" class="setup">
         <div class="col full"><div class="lbl" id="koTeamLbl">Your team</div><div class="teams" id="koTeams" role="group" aria-label="Your team"></div></div>
         <div class="col"><div class="lbl">Players per team</div><div class="seg" id="koSize"></div></div>
-        <div class="col"><div class="lbl">Match length</div><div class="seg" id="koMins"></div></div>
+        <div class="col"><div class="lbl">Half length</div><div class="seg" id="koMins"></div></div>
         <div class="col"><div class="lbl">Level</div><div class="seg" id="koDiff"></div></div>
         <div class="col"><p>8 teams in quarter-finals, semi-finals and final. Draws are settled on penalties. You are on the same team, and the computer is the opponent.</p></div>
         <button id="koStart" class="go full">Start the cup ›</button>
@@ -1436,7 +1436,7 @@ table.st tr.fr td { color: var(--gold); }
         <div class="col full"><div class="lbl">Your team</div>
           <div class="carteam"><span class="badge" id="carBadge">MY</span><b id="carTeamName">My team</b><button id="carEdit" class="alt small">Edit name, kit and tactics</button></div></div>
         <div class="col"><div class="lbl">Players per team</div><div class="seg" id="carSize"></div></div>
-        <div class="col"><div class="lbl">Match length</div><div class="seg" id="carMins"></div></div>
+        <div class="col"><div class="lbl">Half length</div><div class="seg" id="carMins"></div></div>
         <div class="col"><div class="lbl">Level</div><div class="seg" id="carLvl"></div></div>
         <div class="col"><p>You start in the 3rd division. The top 2 go up, the bottom 2 go down. Prize money buys players and builds your club. Can you win the Premier Division?</p></div>
         <button id="carStart" class="go full">Start the career ›</button>
@@ -2436,7 +2436,7 @@ table.st tr.fr td { color: var(--gold); }
     const f = formOf(p), half = (PR - PL) / 2;
     return { x: p.team ? PR - f[0] * half : PL + f[0] * half, y: PT + f[1] * (PB - PT) };
   }
-  const MAXV = 218, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7, PASS_TAP = 0.16;
+  const MAXV = 180, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7, PASS_TAP = 0.16;
   const TACKLE_T = 0.38, TACKLE_V = 550;
   let TACKLE_REACH = REACH + 24;
   function setBallSize(big) { BRAD = big ? BALL_BIG : BALL_R; REACH = PRAD + BRAD; TACKLE_REACH = REACH + 24; }
@@ -3070,7 +3070,8 @@ table.st tr.fr td { color: var(--gold); }
     if (m !== 'two') cupMatch = null;
     if (m !== 'host') { makePlayers(matchSize()); assignLocal(); }
     for (const q of P) { q.fit0 = 0; q.fat = 0; q.stamina = 1; } // fresh legs for a new match (your own squad's form is set in squadToPitch)
-    score = [0, 0]; clock = matchMins() * 60; matchLen = clock; half = 1; addT = null; stopT = 0; subsUsed = [0, 0]; subOut = []; subChk = 0; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false; mom = [0, 0]; momSaid = 0;
+    score = [0, 0]; clock = matchMins() * 2 * 60 * TEMPO(); // Daniel 2026-11-12: as in FIFA the length you pick is one half, in real minutes (the clock runs at the match tempo)
+    matchLen = clock; half = 1; addT = null; stopT = 0; subsUsed = [0, 0]; subOut = []; subChk = 0; pen = null; so = null; soG = null; celeb = -1; golden = false; paused = false; mom = [0, 0]; momSaid = 0;
     for (const p of P) { p.out = 0; p.fouls = 0; p.yc = 0; p.dive = 0; p.lay = 0; p.hands = 0; p.inj = 0; }
     particles = []; matchNo++; stadTier = kind === 'train' || kind === 'test' || drill ? 0 : stadOf(loadProf().lvl || 1);
     stats = newStats(); matchGoals = []; item = null; itemT = 8; bigT = 0; setBallSize(false); replay = null; recBuf = []; hlReset(); lastGk = ''; lastGoalTeam = 0;
@@ -3574,7 +3575,7 @@ table.st tr.fr td { color: var(--gold); }
     let fx = p.fx, fy = p.fy;
     if (ax !== undefined && Math.hypot(ax, ay) > 0.3) { const l = Math.hypot(ax, ay); fx = ax / l; fy = ay / l; }
     const pw = Math.min(1, hold / MAXCHARGE);
-    let power = 820 + pw * 420; // Daniel 2026-11-12: even a quick tap on SKYD is a real strike (as in FIFA), never as soft as a pass; holding adds power and lift
+    let power = 700 + pw * 340; // about 90 km/h for a tap, 125 km/h flat out (FIFA's range) // Daniel 2026-11-12: even a quick tap on SKYD is a real strike (as in FIFA), never as soft as a pass; holding adds power and lift
     const isPen = ball.rs === 'pen' && p.frozen > 0 && (pen || so);
     if (isPen) power = (470 + pw * 280) * Math.max(1, G.spot / 105); // from the real penalty mark: just as quick to the goal as before, so penalties stay as hard
     const dir = p.team ? -1 : 1, gx = p.team ? PL : PR;
@@ -3792,7 +3793,7 @@ table.st tr.fr td { color: var(--gold); }
     { const a = Math.atan2(p.fy, p.fx) + bell() * SPR.ang; p.fx = Math.cos(a); p.fy = Math.sin(a); }
     // a through ball is weighted to reach the spot about when he does (it rolls on a little further)
     // Daniel 2026-11-12: even a quick tap is a firm pass with real pace on it, never a slow roller
-    let speed = (through ? Math.max(520, Math.min(1000, (d + 60) * 0.75 + 240)) : Math.max(580, Math.min(1080, d * 1.3 + 400))) * 0.93 * WX().pass;
+    let speed = (through ? Math.max(440, Math.min(850, (d + 60) * 0.65 + 210)) : Math.max(480, Math.min(900, d * 1.1 + 340))) * 0.93 * WX().pass;
     if (hard) speed = Math.min(1050, speed * (1 + hard * 0.2)); // held AFLEVER: a bit more pace, but still weighted for him to take it
     const toKeeper = size > 1 && q.k === 0;
     if (toKeeper) speed = Math.min(speed, 560); // gentle back-pass
@@ -3816,7 +3817,7 @@ table.st tr.fr td { color: var(--gold); }
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     const pt = q && ax !== undefined ? [p.x + ax, p.y + ay] : null;
     ball.x = p.x + p.fx * (REACH - 2); ball.y = p.y + p.fy * (REACH - 2);
-    const hs = ax !== undefined ? Math.max(260, Math.min(q ? 1000 : 600, Math.hypot(ax, ay) / (lp ? 0.8 : q ? 0.73 : 0.85))) : 540; // a high pass comes down at his chest // crosses land where they're aimed (to a man: at head height)
+    const hs = ax !== undefined ? Math.max(240, Math.min(q ? 880 : 540, Math.hypot(ax, ay) / (lp ? 0.8 : q ? 0.73 : 0.85))) : 540; // a high pass comes down at his chest // crosses land where they're aimed (to a man: at head height)
     release(p, p.fx * hs + (lp ? 0 : p.vx * 0.2), p.fy * hs + (lp ? 0 : p.vy * 0.2), 0.35);
     ball.vz = 470;
     if (lp && ax !== undefined) { // a high pass: timed so it comes down at his chest when it reaches him, whatever the distance
@@ -4005,7 +4006,7 @@ table.st tr.fr td { color: var(--gold); }
   function moveBody(p, inp, top, has, dt) {
     const g = WX().grip, mag = Math.min(1, Math.hypot(inp.x, inp.y)), pace = rat(p, 'spd');
     const agi = (0.84 + 0.1 * pace + 0.2 * rat(p, 'drb')) * (hasAb(p, 'tryl') ? 1.1 : 1) * (isKeeper(p) ? 1.2 : 1);
-    const accel = (720 + 300 * pace) * g * (has ? 0.92 : 1), brake = (1250 + 300 * pace) * g;
+    const accel = (300 + 230 * pace) * g * (has ? 0.92 : 1) * (1 - 0.2 * tired(p)), brake = (700 + 250 * pace) * g; // Daniel 2026-11-12: as in FIFA it takes him most of a second to get up to full speed (about 0.7 s for a quick man, 1.1 s for a slow one)
     const sp = Math.hypot(p.vx, p.vy);
     if (sp < 45 || p.jockey) { // on the spot, or jockeying (small side steps): footwork any way, no run-up needed
       const tx = inp.x * top, ty = inp.y * top, dx = tx - p.vx, dy = ty - p.vy, dl = Math.hypot(dx, dy);
@@ -4258,7 +4259,7 @@ table.st tr.fr td { color: var(--gold); }
     sfx.whistle(2);
     if (half === 1 || half === 3) { // half time (in extra time too): ends swap, a breather, and the coaches make changes
       if (half === 1) autoSubs();
-      half++; for (const q of P) { q.fat = (q.fat || 0) * 0.5; q.stamina = 1 - q.fat; }
+      half++; for (const q of P) { q.fat = (q.fat || 0) * 0.7; q.stamina = 1 - q.fat; }
       banner = 'Pause'; pause = half === 2 ? 4.0 : 2.5; return;
     }
     if (score[0] === score[1] && half === 2 && etOn()) { // a draw: extra time, 2 x 15 minutes, before penalties
@@ -5048,8 +5049,16 @@ table.st tr.fr td { color: var(--gold); }
         if (clock <= endAt) { clock = endAt; startAdded(); }
       } else {
         addT.left -= dt;
-        const dz = Math.min(Math.abs(ball.x - PL), Math.abs(ball.x - PR)) < 300 && !setp; // an attack in full flow is played out (a little)
-        if (addT.left <= 0 && (!dz || addT.left < -3)) { addT = null; stopT = 0; endPeriod(); return; }
+        // Daniel 2026-11-12: as in FIFA the referee does not blow in the middle of an attack. When the time is up he waits while the side
+        // going forward keeps the ball in the other half (a set piece or a penalty they win there is taken too); the moment the other side
+        // wins it, clears it, the keeper has it, or it goes back into their own half, he blows. Never more than about 15 s of play
+        if (addT.left <= 0) {
+          const o = owner();
+          if (addT.att === undefined) { const t = pen ? pen.team ?? (o ? o.team : ball.lastTeam) : setp ? setp.team : o ? o.team : ball.lastTeam, dir = t ? -1 : 1; addT.att = (ball.x - CX) * dir > -40 ? t : -1; }
+          const t = addT.att, dir = t ? -1 : 1;
+          const on2 = t >= 0 && addT.left > -11 && (pen || (setp ? setp.team === t : o ? o.team === t && !(o.hands > 0) : ball.lastTeam === t)) && (pen || (ball.x - CX) * dir > -40);
+          if (!on2) { addT = null; stopT = 0; endPeriod(); return; }
+        }
       }
     }
     if (pen) { pen.t += dt; if (pen.t > 7) { const tk = P[pen.tk]; if (tk && ball.owner === pen.tk) shoot(tk, 0.3); else pen = null; } } // don't wait forever
@@ -5098,9 +5107,16 @@ table.st tr.fr td { color: var(--gold); }
       const ai = p.ctrl === 'ai';
       p.fat = p.fat || 0;
       if (p.sprint && p.ms) p.ms.spr += dt;
-      if (p.sprint && p.turbo <= 0) { const mo = hasAb(p, 'motor') ? 0.6 : 1; p.stamina = Math.max(0, p.stamina - (ai ? 0.05 : 0.055) * mo * (1.2 - 0.4 * rat(p, 'phy')) * dt); p.fat = Math.min(0.25, p.fat + 0.0012 * mo * dt); } // Daniel 2026-11-12: lasts much longer, as in FIFA (about 18 s of sprinting from full)
-      else p.stamina = Math.min(1 - p.fat, p.stamina + (hasAb(p, 'motor') ? 0.3 : 0.22) * dt);
-      const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has && !(p.heavy > 0) ? 0.92 : 1) * (1 + 0.03 * momEdge(p.team)) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
+      { // Daniel 2026-11-12: stamina as in FIFA, two layers. The bar (p.stamina) drains while he sprints and comes back when he eases off
+        // (quicker standing still); the match takes its toll underneath (p.fat): every minute on the pitch a little, running more, sprinting
+        // most, counted in match minutes so a short half tires him as much as a long one. The worn-out part never comes back until half time.
+        // His Physical (stamina) sets how fast both go. A tired man is slower, gets going slower and everything he does gets worse (tired())
+        const mo = hasAb(p, 'motor') ? 0.6 : 1, end = mo * (1.25 - 0.5 * (p.r99 ? Math.max(0, Math.min(1, (p.r99.phy - 45) / 50)) : 0.5)), m90 = matchLen > 0 ? 90 / matchLen : 0.75, v = Math.hypot(p.vx, p.vy) / MAXV;
+        if (!(p.frozen > 0) && state === 'play' && !setp) p.fat = Math.min(0.6, p.fat + m90 * dt * end * (0.0014 + (p.sprint ? 0.007 : v > 0.6 ? 0.0025 : 0)));
+        if (p.sprint && p.turbo <= 0) p.stamina = Math.max(0, p.stamina - (ai ? 0.05 : 0.055) * end * dt);
+        else p.stamina = Math.min(1 - p.fat, p.stamina + 0.16 * (1 - p.fat) * (v < 0.3 ? 1.35 : 1) * (mo < 1 ? 1.3 : 1) * dt);
+      }
+      const top = MAXV * (p.r99 ? 0.9 + 0.2 * rat(p, 'spd') : lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (1 - 0.1 * tired(p)) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has && !(p.heavy > 0) ? 0.92 : 1) * (1 + 0.03 * momEdge(p.team)) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
       if (p.sprint && p.ab && hasAb(p, 'raket') && Math.hypot(p.vx, p.vy) > MAXV * 1.25 && performance.now() - (p.abAt || 0) > 14000) abPop(p, 'raket');
 
       if (p.dive > 0) { // keeper diving
@@ -5816,7 +5832,8 @@ table.st tr.fr td { color: var(--gold); }
   const SKILLS = [['spd', 'Pace', 'Runs faster'], ['sht', 'Shots', 'Harder and more accurate shots'], ['pas', 'Passes', 'Plays faster and better balls'], ['def', 'Defence', 'Wins more tackles'], ['drb', 'Dribbling', 'Turns quicker with the ball and keeps it closer'], ['phy', 'Physical', 'Wins shoulder duels, shields the ball and lasts longer']]; // Daniel 2026-11-12: the six FIFA face stats (pace, shooting, passing, defending, dribbling, physical)
   const skillPrice = l => 60 + l * 40;
   function myLv() { const pr = loadProf(); return Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {}); }
-  const rat = (p, k) => p.r99 ? Math.max(0, Math.min(1, (p.r99[k] - 45) / 50)) : 0.5; // a rating 0..1 from his 40-99 stat (70 = 0.5; 0.5 for a man without one)
+  const tired = p => Math.max(0, Math.min(1, (0.55 - (p.stamina ?? 1)) / 0.55)); // 0 = fine, 1 = out on his feet (as in FIFA, it starts to tell below about half the bar)
+  const rat = (p, k) => (p.r99 ? Math.max(0, Math.min(1, (p.r99[k] - 45) / 50)) : 0.5) * (1 - 0.18 * tired(p)); // a rating 0..1 from his 40-99 stat (70 = 0.5; 0.5 for a man without one), a tired man plays below it
   // Daniel 2026-11-12, as in FIFA: every player has a stronger foot, a weak foot rating (1-5 stars) and composure (how well he copes
   // with a defender right on him). They come from who he is (his name) and how good he is, so they never change at random
   function traits(n, st) {
@@ -5846,7 +5863,7 @@ table.st tr.fr td { color: var(--gold); }
   const seasonLoad = () => { try { return JSON.parse(localStorage.getItem('mf-season') || 'null'); } catch (_) { return null; } };
   const seasonSaveS = v => { try { localStorage.setItem('mf-season', JSON.stringify(v)); } catch (_) {} };
   function matchSize() { if (quick && (mode === 'host' || mode === 'guest')) return quickN; if (comp) return comp.size; if (kind === 'season') { const S = seasonLoad(); if (S) return S.size; } return kind === 'pen' || kind === 'train' ? 5 : kind === 'test' ? (cfg.tsize || 5) : cfg.size; }
-  function matchMins() { if (quick && (mode === 'host' || mode === 'guest')) return quickN === 11 ? 6 : 4; if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
+  function matchMins() { if (quick && (mode === 'host' || mode === 'guest')) return quickN === 11 ? 3 : 2; if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
   function matchDiff() { if (drill) return DRILL_DIFF[(drill.lv || 1) - 1]; if (comp) return comp.diff; if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
   const tn = t => (teamPick ? teamPick[t].n : KITN[kit][t]);
   const aiD = t => tD[t] || DIFF[1];
@@ -6635,7 +6652,7 @@ table.st tr.fr td { color: var(--gold); }
     const kv = { size: Math.max(2, cfg.size), mins: cfg.mins, diff: cfg.diff, team: teamOpen(cfg.team) ? cfg.team : 1 };
     teamPicker($('koTeams'), $('koTeamLbl'), () => 'Your team', () => kv.team, v => { kv.team = v; });
     mkSeg($('koSize'), [2, 3, 5, 7, 11], ['2', '3', '5', '7', '11'], () => kv.size, v => { kv.size = v; });
-    mkSeg($('koMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => kv.mins, v => { kv.mins = v; });
+    mkSeg($('koMins'), [2, 3, 4, 6], ['2 min', '3 min', '4 min', '6 min'], () => kv.mins, v => { kv.mins = v; });
     mkSeg($('koDiff'), [0, 1, 2, 3], DIFFN, () => kv.diff, v => { kv.diff = v; });
     howSeg($('koHow'), () => (koLoad() || { how: 0 }).how, v => { const K = koLoad(); if (K) { K.how = v; koSave(K); } }, $('koP2'));
     $('koStart').onclick = () => { koNew(teamOpen(kv.team) ? kv.team : 1, kv.size, kv.mins, kv.diff, 0); koShow(); compSubs(); };
@@ -6649,7 +6666,7 @@ table.st tr.fr td { color: var(--gold); }
     };
     const cv2 = { size: cfg.size > 1 ? cfg.size : 5, mins: cfg.mins, lvl: 2 };
     mkSeg($('carSize'), [1, 2, 3, 5, 7, 11], ['1', '2', '3', '5 indoor', '7', '11'], () => cv2.size, v => { cv2.size = v; });
-    mkSeg($('carMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => cv2.mins, v => { cv2.mins = v; });
+    mkSeg($('carMins'), [2, 3, 4, 6], ['2 min', '3 min', '4 min', '6 min'], () => cv2.mins, v => { cv2.mins = v; });
     mkSeg($('carLvl'), [1, 2, 3], ['Easy', 'Normal', 'Hard'], () => cv2.lvl, v => { cv2.lvl = v; });
     howSeg($('carHow'), () => (carLoad() || { how: 2 }).how, v => { const C = carLoad(); if (C) { C.how = v; carSave(C); } }, $('carP2'));
     $('carStart').onclick = () => { carNew(cv2.size, cv2.mins, cv2.lvl); carShow(); compSubs(); };
@@ -6705,7 +6722,7 @@ table.st tr.fr td { color: var(--gold); }
       const cK = box.closest('#ko') ? 'ko' : box.closest('#career') ? 'car' : null;
       if (cK) {
         const ld = () => (cK === 'ko' ? koLoad() : carLoad()) || {}, sv = o => { if (cK === 'ko') { koSave(o); if (!$('ko').hidden) koShow(); } else { carSave(o); if (!$('career').hidden) carShow(); } };
-        const rows = [['size', 'Players per team', cK === 'ko' ? [2, 3, 5, 7, 11] : [1, 2, 3, 5, 7, 11], cK === 'ko' ? ['2', '3', '5', '7', '11'] : ['1', '2', '3', '5', '7', '11']], ['mins', 'Match length', [2, 3, 5], ['2 min', '3 min', '5 min']], cK === 'ko' ? ['diff', 'Level', [0, 1, 2, 3], DIFFN] : ['lvl', 'Level', [1, 2, 3], ['Easy', 'Normal', 'Hard']]];
+        const rows = [['size', 'Players per team', cK === 'ko' ? [2, 3, 5, 7, 11] : [1, 2, 3, 5, 7, 11], cK === 'ko' ? ['2', '3', '5', '7', '11'] : ['1', '2', '3', '5', '7', '11']], ['mins', 'Half length', [2, 3, 4, 6], ['2 min', '3 min', '4 min', '6 min']], cK === 'ko' ? ['diff', 'Level', [0, 1, 2, 3], DIFFN] : ['lvl', 'Level', [1, 2, 3], ['Easy', 'Normal', 'Hard']]];
         for (const [k, name, vals, labels] of rows) {
           const c = document.createElement('div'), l = document.createElement('div'), sg = document.createElement('div');
           l.className = 'lbl'; l.textContent = name; sg.className = 'seg'; sg.setAttribute('role', 'group'); sg.setAttribute('aria-label', name); c.append(l, sg); box.appendChild(c);
@@ -8700,7 +8717,7 @@ table.st tr.fr td { color: var(--gold); }
     const sv = { size: cfg.size, mins: cfg.mins, diff: cfg.diff };
     teamPicker($('seasonTeams'), $('seasonTeamLbl'), () => 'Pick your team', () => cfg.team, v => { cfg.team = v; saveCfg(); });
     mkSeg($('seasonSize'), [1, 2, 3, 5, 7, 11], ['1', '2', '3', '5 indoor', '7', '11'], () => sv.size, v => { sv.size = v; });
-    mkSeg($('seasonMins'), [2, 3, 5], ['2 min', '3 min', '5 min'], () => sv.mins, v => { sv.mins = v; });
+    mkSeg($('seasonMins'), [2, 3, 4, 6], ['2 min', '3 min', '4 min', '6 min'], () => sv.mins, v => { sv.mins = v; });
     mkSeg($('seasonDiff'), [0, 1, 2, 3], DIFFN, () => sv.diff, v => { sv.diff = v; });
     $('goSeason').onclick = seasonShow;
     $('seasonClose').onclick = () => { $('season').hidden = true; seasonSub(); };
