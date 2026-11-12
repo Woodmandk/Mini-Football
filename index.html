@@ -1022,6 +1022,24 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
 .mtwho .mwd { flex: 0 0 auto; min-height: 44px; padding: 8px 16px; margin: 0; font-size: 15px; }
 .mtwho .mwx { flex: 0 0 auto; width: 44px; min-height: 44px; padding: 0; margin: 0; font-size: 16px; }
 #shopTr, #clTrain { display: none !important; }
+/* ---- menu polish: touch targets, things that must fit a 360px-high phone, one look for lists ---- */
+.teams:not(.tcard) { gap: 5px; }
+.teams:not(.tcard) button { min-height: 40px; font-size: 12px; padding: 9px 0 11px; }
+.teams button.lock::after { content: ""; top: -5px; right: -3px; width: 13px; height: 13px; border-radius: 50%; background: var(--s3, #24382c) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f1f1ec' stroke-width='2.6' stroke-linecap='round'%3E%3Crect x='6' y='11' width='12' height='8' rx='1.5'/%3E%3Cpath d='M8.500 11V8a3.500 3.500 0 0 1 7 0v3'/%3E%3C/svg%3E") center / 9px 9px no-repeat; }
+.comprow { font-size: 13px; gap: 10px; margin-top: 14px; }
+.comprow button { min-height: 42px; padding: 9px 18px; font-size: 14px; }
+#pgComp .ow.three .col { display: flex; flex-direction: column; }
+#pgComp .ow.three .col .go { margin-top: auto; }
+#pgSetup > .setup #coopBox:not([hidden]), #pgSetup > .setup #coopBox:not([hidden]) + #diffBox { grid-column: auto; }
+#wrap.n560 #pgSetup > .setup #coopBox, #wrap.n560 #pgSetup > .setup #diffBox { grid-column: 1 / -1; }
+#carPlay, #koPlay, #seasonPlay { position: sticky; bottom: 6px; z-index: 2; }
+:is(#carPlay, #koPlay, #seasonPlay):not(:focus-visible) { outline: 6px solid var(--bg); }
+.mkrow button { min-height: 36px; padding: 8px 14px; }
+.subrow button { min-height: 32px; padding: 6px 16px; font-size: 13px; } .sublist { gap: 6px; }
+#pgOnline .ow .col { padding: 10px 12px; gap: 6px; } #pgOnline .ow .col p { margin: 0; } #pgOnline .ow { gap: 10px; } #pgOnline .ow.one { margin-bottom: 10px; }
+.evbox { margin-top: 0; padding: 0; background: none; border: 0; font-size: 15px; }
+.evbox .evhead { margin: 0 0 10px; color: var(--muted); font-size: 14px; } .evbox .evhead b { display: block; font-family: var(--disp); font-size: 18px; color: var(--chalk); margin-bottom: 2px; }
+.evbox .chl li { display: grid; } .evbox .chl .rw { font-family: var(--disp); }
 
 .mtghost { position: absolute; z-index: 40; width: 220px; pointer-events: none; opacity: 0.92; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5); border-color: var(--gold) !important; }
 #mtSubs .mtswr { touch-action: none; cursor: grab; }
@@ -1165,11 +1183,11 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     <div class="card wide" id="pgOnline" hidden>
       <div class="top"><button class="alt back" data-back>‹ Back</button><h2>Online</h2><span class="sp"></span></div>
       <div class="ow one"><div class="col"><div class="lbl">Ranked match against anyone</div>
-          <p id="quickSub">Your own team against a random player. Wins give rank points, and ranked matches give double XP in the season pass. Tap your rank to see how it works.</p>
+          <p id="quickSub">Your own team against a random player. Wins give rank points and double season pass XP.</p>
           <div class="qrow"><div class="qcol"><button id="quick" class="go quick" disabled>Find opponent · 7 v 7</button><button class="alt qrk" data-rl=""></button></div><div class="qcol"><button id="quick11" class="go quick" disabled>Find opponent · 11 v 11</button><button class="alt qrk" data-rl="11"></button></div></div></div></div>
       <div class="ow">
         <div class="col"><div class="lbl">Start a new match</div>
-          <p>You choose team size and length and get a code to send to your friends.</p>
+          <p>Pick the settings and get a code to send to your friends.</p>
           <button id="host" class="go" disabled>Create match</button></div>
         <div class="col"><div class="lbl">Got a code?</div>
           <p>Type the 4 digits your friend sent you.</p>
@@ -1396,7 +1414,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
         <div class="col"><div class="lbl">Players per team</div><div class="seg" id="carSize"></div></div>
         <div class="col"><div class="lbl">Match length</div><div class="seg" id="carMins"></div></div>
         <div class="col"><div class="lbl">Level</div><div class="seg" id="carLvl"></div></div>
-        <div class="col"><p>You start in the 3rd division. The top 2 go up, the bottom 2 go down. Prize money can be spent on training in the shop. Can you win the Premier Division?</p></div>
+        <div class="col"><p>You start in the 3rd division. The top 2 go up, the bottom 2 go down. Prize money buys players and builds your club. Can you win the Premier Division?</p></div>
         <button id="carStart" class="go full">Start the career ›</button>
       </div>
       <div id="carView" class="seasonview" hidden>
@@ -1759,7 +1777,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const L = loadLeague();
     const rows = Object.entries(L.pl).map(([n, r]) => [n, r.k, r.v, r.u, r.t, `${r.mf}-${r.mm}`, r.v * 3 + r.u])
       .sort((a, b) => b[6] - a[6] || (b[2] - a[2]));
-    fillTable($('leagueTable'), ['Player', 'K', 'V', 'U', 'T', 'Goals', 'P'], rows);
+    fillTable($('leagueTable'), ['Player', 'P', 'W', 'D', 'L', 'Goals', 'Pts'], rows);
     const sc = Object.entries(L.sc).sort((a, b) => b[1] - a[1]).slice(0, 5);
     fillTable($('scorerTable'), ['Player', 'Goals'], sc);
     $('leagueReset').textContent = 'Reset the table'; $('leagueReset').dataset.sure = '';
@@ -1834,7 +1852,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     }
     const n = new Date(), mid = new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1), left = Math.max(0, mid - n), h = Math.floor(left / 3600000), m = Math.floor(left / 60000) % 60;
     $('dailyInfo').innerHTML = `Complete them to earn coins. You have <b data-coins>${loadProf().coins || 0}</b> coins. New challenges in ${h} h ${m} min.`;
-    $('dailyBonus').textContent = D.bonus ? `You have completed all three today and got ${DAILY_BONUS} ekstra.` : `Complete all three for ${DAILY_BONUS} extra coins.`;
+    $('dailyBonus').textContent = D.bonus ? `You have completed all three today and got ${DAILY_BONUS} extra coins.` : `Complete all three for ${DAILY_BONUS} extra coins.`;
     evPaint(); $('daily').hidden = false;
     subTabs($('daily'), [['Today', ['dlyBox']], ['Weekly event', ['evTab']]], 'daily', $('dlyBox'));
   }
@@ -1902,10 +1920,10 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
   }
   function showFriends() {
     const M = loadMe(), F = loadFriends();
-    const rows = Object.values(F).map(f => ({ ...f, rp: f.rp === undefined ? rpFromElo(f.r) : f.rp, me: false })); rows.push({ n: (cfg.name || 'You') + ' (dig)', rp: rpOf(M, ''), w: M.w, d: M.d, l: M.l, g: M.g, me: true });
+    const rows = Object.values(F).map(f => ({ ...f, rp: f.rp === undefined ? rpFromElo(f.r) : f.rp, me: false })); rows.push({ n: (cfg.name || 'You') + ' (you)', rp: rpOf(M, ''), w: M.w, d: M.d, l: M.l, g: M.g, me: true });
     rows.sort((a, b) => b.rp - a.rp);
     const tbl = $('friendsTable');
-    fillTable(tbl, ['#', 'Name', 'Rank', 'RP', 'V-U-T', 'Goals', 'You vs them'], rows.map((f, i) => [i + 1, f.n, rankOf(f.rp).n, f.rp, `${f.w}-${f.d}-${f.l}`, f.g, f.me ? '' : `${(f.h || [0])[0]}-${(f.h || [0, 0])[1]}-${(f.h || [0, 0, 0])[2]}`]));
+    fillTable(tbl, ['#', 'Name', 'Rank', 'RP', 'W-D-L', 'Goals', 'You vs them'], rows.map((f, i) => [i + 1, f.n, rankOf(f.rp).n, f.rp, `${f.w}-${f.d}-${f.l}`, f.g, f.me ? '' : `${(f.h || [0])[0]}-${(f.h || [0, 0])[1]}-${(f.h || [0, 0, 0])[2]}`]));
     tbl.rows[0].cells[0].className = ''; tbl.rows[0].cells[1].className = 'l';
     [...tbl.rows].slice(1).forEach((r, i) => { if (rows[i] && rows[i].me) r.className = 'me'; r.cells[1].className = 'l'; r.cells[0].className = ''; });
     $('friendsEmpty').hidden = rows.length > 1;
@@ -2064,7 +2082,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
   function paintProg() {
     const el = $('homeProg'); if (!el) return;
     const M = loadMe(), S = passLoad(), st = loginStreak();
-    const L = rpOf(M, '11') > rpOf(M, '') ? '11' : '', rk = rankOf(rpOf(M, L));
+    const L = rpOf(M, '11') >= rpOf(M, '') ? '11' : '', rk = rankOf(rpOf(M, L));
     $('hpRank').innerHTML = badgeSVG(rk); $('hpRankN').textContent = rk.n; $('hpRankP').textContent = (rk.t === 5 ? `${rk.inDiv} RP` : `${rk.inDiv}/100 RP`) + ` · ${L ? 11 : 7} v ${L ? 11 : 7}`;
     $('hpPass').textContent = `Season pass ${S.t}/${PASS_N}` + (S.free.length ? ` · ${S.free.length} pack${S.free.length > 1 ? 's' : ''} to open` : '');
     $('hpBar').style.width = (S.t >= PASS_N ? 100 : (S.xp - S.t * PASS_XP) / PASS_XP * 100) + '%';
@@ -2121,12 +2139,12 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       $('passSub').textContent = `Level ${S.t} of ${PASS_N} · ${S.t >= PASS_N ? 'complete' : `${(S.t + 1) * PASS_XP - S.xp} XP to next`} · new pass in ${daysLeftInMonth()} days`;
       const k7 = rankOf(rpOf(M, '')), k11 = rankOf(rpOf(M, '11')), kb = k11.step > k7.step ? k11 : k7;
       $('rankIc').innerHTML = badgeSVG(kb);
-      $('rankSub').textContent = `${k7.n} in 7 v 7 · ${k11.n} in 11 v 11. See the rank road and how you climb`;
-      $('onlSub').textContent = `${k7.n} · ranked, or play a friend with a code`;
+      $('rankSub').textContent = `${k11.n} in 11 v 11 · ${k7.n} in 7 v 7. See the rank road and how you climb`;
+      $('onlSub').textContent = `${kb.n} · ranked, or play a friend with a code`;
       const dseen = (() => { try { return localStorage.getItem('mf-dseen') === today(); } catch (_) { return true; } })();
       const dot = (t, on) => { const b = document.querySelector(`#tabbar [data-t="${t}"]`); if (b) b.classList.toggle('dot', !!on); };
       dot('butik', S.free.length); dot('profil', !dseen); $('goShop').classList.toggle('dot', !!S.free.length); $('goFree').classList.toggle('dot', !!S.free.length); $('bDaily').classList.toggle('dot', !dseen);
-      $('evSub').textContent = `${T.n}: ` + (E.got ? 'done!' : T.tasks.map(([, , need], i) => `${Math.min(need, E.p[i])}/${need}`).join(' · '));
+      { const D = loadDaily(), dl = dailyPick(D.d), dn = dl.filter(ch => D.done[ch.id]).length; $('evSub').textContent = (dn >= dl.length ? 'All done today' : `${dn} of ${dl.length} done today`) + ` · weekly event: ${T.n}${E.got ? ' done' : ''}`; }
     } catch (_) {}
   }
   function passShow() {
@@ -2190,7 +2208,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
   $('rankClose').onclick = () => { $('rankOv').hidden = true; paintProg(); };
   $('homeRank').onclick = rankShow; $('goRank').onclick = rankShow;
   document.querySelectorAll('.qrk').forEach(b => b.onclick = () => { rkRoadL = b.dataset.rl; subTab.rank = 'My rank'; rankShow(); });
-  function qrkPaint() { const M = loadMe(); document.querySelectorAll('.qrk').forEach(b => { const k = rankOf(rpOf(M, b.dataset.rl)); b.innerHTML = badgeSVG(k) + `<span>${k.n} · ${k.t === 5 ? k.inDiv + ' RP' : k.inDiv + '/100 RP'}</span>`; }); }
+  function qrkPaint() { const M = loadMe(); document.querySelectorAll('.qrk').forEach(b => { const k = rankOf(rpOf(M, b.dataset.rl)); b.innerHTML = badgeSVG(k) + `<span>${k.n} · ${k.t === 5 ? k.inDiv + ' RP' : k.inDiv + '/100 RP'} ›</span>`; }); }
   // after a ranked match: the panel on the end screen, then the big show when you went up (or a quiet one when you went down)
   function endRankShow(R) {
     const box = $('endRank'); if (!R) { box.hidden = true; return; }
@@ -2364,7 +2382,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       b.onclick = () => el._pick(i); el.appendChild(b);
     });
     // your own line-up: tap to use it, tap again (or the first time) to drag the players around
-    const b = document.createElement('button'); b.textContent = 'Custom ✎'; b.setAttribute('aria-pressed', String(cur === CUST)); b.disabled = !!locked;
+    const b = document.createElement('button'); b.textContent = 'Custom'; b.setAttribute('aria-pressed', String(cur === CUST)); b.disabled = !!locked;
     b.setAttribute('aria-label', 'Custom line-up');
     b.onclick = () => {
       const had = !!myLay(n);
@@ -5261,7 +5279,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
         if (g.ga > g.gb) { A.v++; B.t++; } else if (g.ga < g.gb) { B.v++; A.t++; } else { A.u++; B.u++; }
       }
       const rows = R.map(r => [r.n, r.k, r.v, r.u, r.t, `${r.f}-${r.m}`, r.v * 3 + r.u]).sort((a, b) => b[6] - a[6] || (parseInt(b[5]) - parseInt(b[5].split('-')[1])) - (parseInt(a[5]) - parseInt(a[5].split('-')[1])));
-      fillTable($('cupTable'), ['Player', 'K', 'V', 'U', 'T', 'Goals', 'P'], rows);
+      fillTable($('cupTable'), ['Player', 'P', 'W', 'D', 'L', 'Goals', 'Pts'], rows);
       const next = c.games.find(g => g.ga === null), left = c.games.filter(g => g.ga === null).length;
       $('cupNextLbl').textContent = next ? `Next match (${left} left)` : 'The tournament is over';
       $('cupNext').textContent = next ? `${c.n[next.a]} v ${c.n[next.b]}` : `Winner: ${rows[0][0]}`;
@@ -5746,7 +5764,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     if (!S) { $('seasonTeams')._paint(); segPaints.forEach(f => f()); }
     else {
       const rows = seasonRows(S);
-      fillTable($('seasonTable'), ['#', 'Team', 'K', 'V', 'U', 'T', 'Goals', 'P'], []);
+      fillTable($('seasonTable'), ['#', 'Team', 'P', 'W', 'D', 'L', 'Goals', 'Pts'], []);
       const tbl = $('seasonTable'); while (tbl.rows.length > 1) tbl.deleteRow(1);
       rows.forEach((x, n) => {
         const tr = tbl.insertRow(); if (x.i === S.me) tr.className = 'me';
@@ -5931,7 +5949,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const done = K.out || K.champ;
     if (done) {
       $('koNextLbl').textContent = K.champ ? 'Cup winners!' : 'The cup is over';
-      $('koNext').textContent = K.champ ? `${TEAMS[K.me].n} won 🏆` : `${TEAMS[K.R[3][0]].n} vandt`;
+      $('koNext').textContent = K.champ ? `${TEAMS[K.me].n} won 🏆` : `${TEAMS[K.R[3][0]].n} won`;
       $('koMsg').textContent = K.champ ? 'Well played! Start a new cup, and try a harder level.' : 'Better luck next time. Start a new cup.';
     } else {
       const o = TEAMS[koOpp(K)];
@@ -6062,7 +6080,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     if (!C) { segPaints.forEach(f => f()); paintCoins(); $('career').hidden = false; return; }
     const me = carMe(C), rows = carRows(C), over = C.S.r >= 7;
     $('carTabLbl').textContent = `Season ${C.no} · ${DIVS[C.div].n}` + (C.titles ? ` · ${C.titles} title${C.titles > 1 ? 's' : ''} 🏆` : '');
-    const tbl = $('carTable'); fillTable(tbl, ['#', 'Team', 'K', 'V', 'U', 'T', 'Goals', 'P'], []); while (tbl.rows.length > 1) tbl.deleteRow(1);
+    const tbl = $('carTable'); fillTable(tbl, ['#', 'Team', 'P', 'W', 'D', 'L', 'Goals', 'Pts'], []); while (tbl.rows.length > 1) tbl.deleteRow(1);
     rows.forEach((x, n) => {
       const tr = tbl.insertRow(); tr.className = (x.i === me ? 'me ' : '') + (n < 2 && C.div > 0 ? 'up' : n >= 6 && C.div < 3 ? 'down' : '');
       [n + 1, (x.i === me ? T.n : x.t.n) + (x.t.str && x.i !== me ? ' ' + '★'.repeat(x.t.str) : ''), x.r.k, x.r.v, x.r.u, x.r.t, `${x.r.f}-${x.r.m}`, x.p].forEach((v, j) => { const td = tr.insertCell(); td.textContent = v; if (j === 1) td.className = 'l'; });
@@ -6629,7 +6647,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const g = el('div', 'fingrid'), G = gateOf(C, pr), cc = (() => { try { return carLoad(); } catch (_) { return null; } })();
     // match day: the fans, the ground and the ticket price
     { const b = el('div', 'scbox'), bar = el('div', 'finbar'), fill = el('b'); fill.style.width = Math.round(G.att / G.cap * 100) + '%'; bar.appendChild(fill);
-      b.append(el('b', '', `🎟️ Match day · ${STAD[stadOf(lvl)][0]}`), el('span', '', `${num(G.att)} of ${num(G.cap)} seats filled · ${num(fansOf(C, lvl))} supporters`), bar);
+      b.append(el('b', '', `Match day · ${STAD[stadOf(lvl)][0]}`), el('span', '', `${num(G.att)} of ${num(G.cap)} seats filled · ${num(fansOf(C, lvl))} supporters`), bar);
       const sg = el('div', 'seg'); TICKET.forEach(([t], k) => { const bt = el('button', '', t); bt.setAttribute('aria-pressed', String((C.tk == null ? 1 : C.tk) === k)); bt.onclick = () => { const C2 = clubLoad(); C2.tk = k; clubSave(C2); sfx.kick(0.2); again(); }; sg.appendChild(bt); });
       b.append(el('span', 'sqnote', 'Ticket price'), sg, el('span', 'sqnote', `Gate about +${G.g} a match. Cheap tickets fill the ground and win new supporters; premium tickets earn more per seat but fewer come. Wins bring supporters, defeats lose them.`));
       const seats = clamp(C.seats | 0, 0, SEAT_MAX), cost = Math.round(SEAT_COST[stadOf(lvl)] * (1 + seats * 0.5)), st = el('button', seats >= SEAT_MAX || G.att < G.cap ? 'alt' : '', seats >= SEAT_MAX ? 'No room for more stands' : `Build a stand · ${cost} coins (+${num(CAP0[stadOf(lvl)] * 0.1)} seats)`); st.disabled = seats >= SEAT_MAX;
@@ -6637,7 +6655,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       b.append(st, el('span', 'sqnote', G.att < G.cap ? 'The ground is not full yet, so a new stand can wait.' : 'Sold out! A new stand means more tickets every match.')); g.appendChild(b); }
     // the match account
     { const b = el('div', 'scbox'), e = matchEco(pr, false, 0, { tv: cc ? TV[cc.div] || 0 : 0 }), net = e.g + e.s + e.m + e.tv - e.w - e.u - e.ln;
-      b.append(el('b', '', '📒 Every match with your own team'));
+      b.append(el('b', '', 'Every match with your own team'));
       row(b, 'Gate', `+${e.g}`, 'in'); row(b, 'Sponsors', e.s || !C.sp ? `+${e.s}` : 'depends on the result', 'in');
       row(b, `Fan shop (level ${facLv('fan')})`, `+${e.m}`, 'in'); row(b, cc ? `TV money (${DIVS[cc.div].n})` : 'TV money (career matches)', cc ? `+${e.tv}` : '—', 'in');
       row(b, 'Prize', 'for goals and the win', 'in');
@@ -6646,7 +6664,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       const top = S.pl.slice().sort((a, b2) => wageOf(b2) - wageOf(a)).slice(0, 3).map(q => `${q.n.split(' ').slice(-1)[0]} ${wageOf(q)}`).join(', ');
       b.append(el('span', 'sqnote', `Highest wages: ${top}. Friendlies cost and earn nothing.`)); g.appendChild(b); }
     // sponsors: the shirt, the boards and the kit
-    { const b = el('div', 'scbox'); b.append(el('b', '', '🤝 Sponsors'));
+    { const b = el('div', 'scbox'); b.append(el('b', '', 'Sponsors'));
       const slot = (title, cur, lockTxt) => { const d = el('div', 'spslot' + (lockTxt ? ' lock' : '')); d.append(el('small', '', title)); if (lockTxt) d.append(el('span', 'sqnote', lockTxt)); else if (cur) row(d, cur[0], cur[1], 'in'); b.appendChild(d); return d; };
       const offer = (d, ic, name, text, on) => { const bt = el('button', 'alt trbtn'), t = el('span', '', name); t.appendChild(el('small', '', text)); bt.append(el('i', '', ic), t); bt.onclick = on; d.appendChild(bt); };
       { const A = C.sp && SPON[C.sp.id], d = slot('Shirt sponsor', A ? [`${A.i} ${A.n} · ${C.sp.left} matches left`, A.d(C.sp.a).split(',')[0].replace(' coins', '')] : null);
@@ -6655,7 +6673,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
         if (!cur && lvl >= D.lvl) for (const [n2, ic, sign, a, len] of D.o(lvl)) offer(d, ic, n2, (sign ? `${sign} coins now, ` : '') + `${a} a match for ${len} matches`, () => { const C2 = clubLoad(); C2.sps = C2.sps || {}; if (C2.sps[k]) return; C2.sps[k] = { n: n2, i: ic, a, left: len }; clubSave(C2); if (sign) addCoins(sign, 'sponsor'); sfx.win(); buzz(30); again(); }); }
       g.appendChild(b); }
     // the bank and the book
-    { const b = el('div', 'scbox'); b.append(el('b', '', '🏦 The bank'));
+    { const b = el('div', 'scbox'); b.append(el('b', '', 'The bank'));
       if (C.loan) { row(b, 'Your loan', `${C.loan.left} matches left`, ''); row(b, 'Paid back after every match', `−${C.loan.pay}`, 'out'); b.append(el('span', 'sqnote', 'You can take a new loan when this one is paid off.')); }
       else { b.append(el('span', 'sqnote', 'Short of money for a player or a building? Borrow now and pay back a little after every match with your own team.'));
         for (const [amt, n2, pay, need] of LOANS) { const bt = el('button', 'alt', lvl < need ? `${num(amt)} coins · club level ${need}` : `Borrow ${num(amt)} · pay ${pay} × ${n2} matches`); bt.disabled = lvl < need;
@@ -6663,7 +6681,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       const L = C.led || [];
       if (L.length) { const nets = L.map(x => x.p + x.g + x.s + x.m + x.tv - x.w - x.u - x.l), mx = Math.max(1, ...nets.map(Math.abs)), bars = el('div', 'finbars'), sum = k => L.reduce((t, x) => t + (x[k] || 0), 0), tot = nets.reduce((a, c) => a + c, 0);
         nets.forEach(v => { const sp = el('span'), i = el('i', v >= 0 ? 'pos' : 'neg'); i.style.height = Math.max(3, Math.abs(v) / mx * 48) + '%'; sp.appendChild(i); bars.appendChild(sp); });
-        b.append(el('b', '', `📈 The last ${L.length} match${L.length > 1 ? 'es' : ''}`), bars, el('span', 'finnet ' + (tot >= 0 ? 'pos' : 'neg'), `${tot >= 0 ? '+' : '−'}${num(Math.abs(tot))} coins`));
+        b.append(el('b', '', `The last ${L.length} match${L.length > 1 ? 'es' : ''}`), bars, el('span', 'finnet ' + (tot >= 0 ? 'pos' : 'neg'), `${tot >= 0 ? '+' : '−'}${num(Math.abs(tot))} coins`));
         row(b, 'In: prize, gate, sponsors, shop, TV', `+${num(sum('p') + sum('g') + sum('s') + sum('m') + sum('tv'))}`, 'in'); row(b, 'Out: wages, upkeep, loan', `−${num(sum('w') + sum('u') + sum('l'))}`, 'out'); row(b, 'Average crowd', num(sum('a') / L.length), ''); }
       g.appendChild(b); }
     E.appendChild(g);
@@ -6850,17 +6868,17 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const sc = M.sc, box = document.createElement('div'); box.className = 'scbox';
     if (sc && !sc.res && Date.now() - sc.t >= sc.dur) { sc.res = scoutFind(sc.pos, sc.kind); mktSave(M); }
     if (sc && !sc.res) {
-      const b = document.createElement('b'); b.textContent = `🔭 The scout is looking for: ${SCOUT[sc.kind][0].toLowerCase()}, ${SC_POS.find(q => q[0] === sc.pos)[1].toLowerCase()}`;
+      const b = document.createElement('b'); b.textContent = `The scout is looking for: ${SCOUT[sc.kind][0].toLowerCase()}, ${SC_POS.find(q => q[0] === sc.pos)[1].toLowerCase()}`;
       const t = document.createElement('span'); t.className = 'big'; t.textContent = `Back in ${hm(sc.t + sc.dur - Date.now())}`;
       const n = document.createElement('span'); n.className = 'sqnote'; n.textContent = 'He comes back with three names. You can play meanwhile.'; box.append(b, t, n); X.appendChild(box); return;
     }
     if (sc && sc.res) {
-      const b = document.createElement('b'); b.textContent = sc.res.length ? '🔭 The scout is back with his finds' : '🔭 The scout is ready for a new trip'; X.appendChild(b);
+      const b = document.createElement('b'); b.textContent = sc.res.length ? 'The scout is back with his finds' : 'The scout is ready for a new trip'; X.appendChild(b);
       sc.res.forEach((c, i) => bidRows(X, c, 's', i));
     }
     const h = document.createElement('b'); h.textContent = sc && sc.res && sc.res.length ? 'Send him out again (the old finds disappear)' : 'What should the scout look for?';
     const s1 = document.createElement('div'); s1.className = 'seg'; SC_POS.forEach(([k, n]) => { const b = document.createElement('button'); b.textContent = n; b.setAttribute('aria-pressed', scPos === k); b.onclick = () => { scPos = k; mktShow(); }; s1.appendChild(b); });
-    const s2 = document.createElement('div'); s2.className = 'seg'; Object.keys(SCOUT).forEach(k => { const b = document.createElement('button'); b.textContent = `${SCOUT[k][1]} ${SCOUT[k][0]}`; b.setAttribute('aria-pressed', scKind === k); b.onclick = () => { scKind = k; mktShow(); }; s2.appendChild(b); });
+    const s2 = document.createElement('div'); s2.className = 'seg'; Object.keys(SCOUT).forEach(k => { const b = document.createElement('button'); b.textContent = SCOUT[k][0]; b.setAttribute('aria-pressed', scKind === k); b.onclick = () => { scKind = k; mktShow(); }; s2.appendChild(b); });
     const d = document.createElement('span'); d.className = 'sqnote'; d.textContent = `${SCOUT[scKind][4]}. The trip takes ${stLv('sc') ? hm(SCOUT[scKind][3] * SCOUT_H * (1 - 0.15 * stLv('sc'))) : SCOUT[scKind][3] + (SCOUT[scKind][3] === 1 ? ' hour' : ' hours')}.`;
     const go = document.createElement('button'); go.textContent = `Send the scout · ${SCOUT[scKind][2]} coins`;
     go.onclick = () => { const pr2 = loadProf(), cost = SCOUT[scKind][2]; if (pr2.coins < cost) { go.textContent = `Need ${cost - pr2.coins} coins`; return; }
@@ -7032,10 +7050,10 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
   function tradePaint() {
     const X = $('mkFriend'); if (!X) return; X.textContent = '';
     const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
-    { const sg = el('div', 'seg'); for (const [k, t] of [['gm', '🌍 Shared market'], ['fr', '🤝 Trade with a friend']]) { const b = el('button', '', t); b.setAttribute('aria-pressed', String(trMode === k)); b.onclick = () => { trMode = k; tradePaint(); }; sg.appendChild(b); } X.appendChild(sg); }
+    { const sg = el('div', 'seg'); for (const [k, t] of [['gm', 'Shared market'], ['fr', 'Trade with a friend']]) { const b = el('button', '', t); b.setAttribute('aria-pressed', String(trMode === k)); b.onclick = () => { trMode = k; tradePaint(); }; sg.appendChild(b); } X.appendChild(sg); }
     if (trMode === 'gm') { gmPaint(X); return; }
     if (!tnet) {
-      const box = el('div', 'scbox'); box.append(el('b', '', '🤝 Trade with a friend'), el('span', 'sqnote', room ? 'You both need the game open. One opens a trade room and says the code out loud, the other types it. Then you can sell players to each other.' : 'Trading with a friend works on the game\'s own link.'));
+      const box = el('div', 'scbox'); box.append(el('b', '', 'Trade with a friend'), el('span', 'sqnote', room ? 'You both need the game open. One opens a trade room and says the code out loud, the other types it. Then you can sell players to each other.' : 'Trading with a friend works on the game\'s own link.'));
       if (trMsg) box.append(el('span', 'sqnote', trMsg));
       if (room) {
         const op = el('button', '', tr && tr.busy ? 'Opening…' : 'Open trade room'); op.disabled = !!(tr && tr.busy); op.onclick = () => tradeOpen('h', String(1000 + Math.floor(Math.random() * 9000)));
@@ -7231,10 +7249,10 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const add = { goals: d.gf, win: d.win ? 1 : 0, big: d.win && d.gf - d.ga >= 3 ? 1 : 0, clean: d.ga === 0 ? 1 : 0, tk: d.tk, pa: d.pa, hard: d.win && d.diff >= 2 ? 1 : 0, play: 1 };
     T.tasks.forEach(([id, txt, need], i) => {
       const was = E.p[i]; E.p[i] = Math.min(need, E.p[i] + (add[id] || 0));
-      if (E.p[i] > was) out.push(`Event ${T.n}: ${txt} ${E.p[i]}/${need}`);
+      if (E.p[i] > was) out.push(`Weekly event: ${txt} ${E.p[i]}/${need}`);
     });
     if (T.tasks.every(([, , need], i) => E.p[i] >= need)) {
-      E.got = true; addCoins(200, 'event'); out.push(`Event ${T.n} complete! +200 coins and an event card`);
+      E.got = true; addCoins(200, 'event'); out.push(`Weekly event complete! +200 coins and an event card`);
       evSave(E);
       setTimeout(() => showCard(makeCard(80, 84, { ev: T.ev }), `Event card: ${T.n}`), 600);
       return out;
@@ -7243,8 +7261,9 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
   }
   function evPaint() {
     const E = evLoad(), T = evTheme(E), box = $('evBox'); box.textContent = '';
-    const h = document.createElement('b'); h.textContent = `Weekly event: ${T.n}` + (E.got ? ' · complete' : ' · reward: event card 80+ and 200 coins'); box.appendChild(h);
-    T.tasks.forEach(([, txt, need], i) => { const r = document.createElement('div'); const a = document.createElement('span'); a.textContent = txt; const b = document.createElement('span'); b.textContent = `${Math.min(need, E.p[i])}/${need}`; r.append(a, b); box.appendChild(r); });
+    const h = document.createElement('p'); h.className = 'evhead'; h.innerHTML = `<b></b>${E.got ? 'Complete. A new event starts next week.' : 'Finish all three this week for an event card rated 80+ and 200 coins.'}`; h.firstChild.textContent = T.n; box.appendChild(h);
+    const ul = document.createElement('ul'); ul.className = 'chl'; box.appendChild(ul);
+    T.tasks.forEach(([, txt, need], i) => { const have = Math.min(need, E.p[i]), li = document.createElement('li'); if (have >= need) li.className = 'done'; const a = document.createElement('span'); a.textContent = (have >= need ? '✓ ' : '') + txt; const b = document.createElement('span'); b.className = 'rw'; b.textContent = `${have} of ${need}`; const bar = document.createElement('div'); bar.className = 'bar'; const f = document.createElement('i'); f.style.width = (have / need * 100) + '%'; bar.appendChild(f); li.append(a, b, bar); ul.appendChild(li); });
   }
   let sqSel = 1;
   // a little portrait of the player, the same man you see on the pitch: skin, hair colour and hairstyle, in your shirt
@@ -7415,7 +7434,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const box = $('profStats'); box.textContent = '';
     const M = loadMe();
     [['Rank 7 v 7', rankOf(rpOf(M, '')).n], ['Rank 11 v 11', rankOf(rpOf(M, '11')).n], ['Matches', pr.games], ['Wins', pr.w], ['Draw', pr.d], ['Loss', pr.l], ['Goals scored', pr.gf], ['Goals against', pr.ga],
-     ['Club level', `${pr.lvl || 1} (${pr.xp || 0}/${(pr.lvl || 1) * 100})`], ['Home ground', STAD[stadOf(pr.lvl || 1)][0] + (stadOf(pr.lvl || 1) < 3 ? ` (next at level ${STAD[stadOf(pr.lvl || 1) + 1][1]})` : '')], ['Biggest win', pr.bigWin ? '+' + pr.bigWin : '–'], ['Most wins in a row', pr.bestStreak], ['Seasons won', pr.seasons], ['Shoot­outs won', pr.shootouts]]
+     ['Club level', `${pr.lvl || 1} · ${pr.xp || 0}/${(pr.lvl || 1) * 100} XP`], ['Home ground', STAD[stadOf(pr.lvl || 1)][0]], ['Biggest win', pr.bigWin ? '+' + pr.bigWin : '–'], ['Most wins in a row', pr.bestStreak], ['Seasons won', pr.seasons], ['Shoot­outs won', pr.shootouts]]
       .forEach(([k, v]) => { const d = document.createElement('div'); const b = document.createElement('b'); b.textContent = v; d.append(b, k); box.appendChild(d); });
     const tb = $('profTro'); tb.textContent = '';
     let n = 0;
