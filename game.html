@@ -3500,6 +3500,7 @@ table.st tr.fr td { color: var(--gold); }
     setp = null;
     if (ball.lastTeam !== p.team) wonAt[p.team] = clock; // we just won it (the clock counts down)
     else if (ball.last && ball.last.pass && ball.last.to === p.i) ball.stealCd = Math.max(ball.stealCd || 0, 0.5); // a clean first touch: a moment to settle it before a shoulder-nick can take it
+    const z0 = ball.z;
     ball.owner = p.i; ball.loose = 0; ball.last = null; ball.z = ball.vz = 0; ball.fresh = false;
     ball.lastTeam = p.team; ball.lastIdx = p.i;
     p.tackle = 0; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.chB = false; p.holdB = 0; p.chE = false; p.holdE = 0;
@@ -3514,12 +3515,30 @@ table.st tr.fr td { color: var(--gold); }
         const l = i ? Math.hypot(i.x, i.y) : 0;
         if (l > 0.3) { p.fx = i.x / l; p.fy = i.y / l; ball.x = p.x + p.fx * (REACH - 3); ball.y = p.y + p.fy * (REACH - 3); }
         knock = !!i && l > 0.3 && (i.adv ? !!i.c : (i.sprint || l > 0.97)); // sprint held as it arrives: he knocks it on into his stride
-      } else if (!(p.frozen > 0)) { // the computer: a hard pass is harder to kill, and a good passer has the better touch
-        const pl = lvOf(p), tech = hasAb(p, 'tryl') || hasAb(p, 'dirigent') ? 0.25 : pl ? Math.max(0.4, 1 - pl.pas * 0.12) : 1;
-        knock = rv0 > 430 && Math.random() < ((rv0 - 430) / 600 + (p.sprint ? 0.15 : 0)) * tech;
+      }
+      // Daniel 2026-11-12: the first touch is his, not a dice roll (as in FIFA). How hard it comes at him, from which side (behind him / across him
+      // is much harder than onto his front foot), off the ground, on the sprint, a man on him, against his touch (Dribbling, a bit of Passing).
+      // Clean = it is dead at his feet; a bit heavy = it runs a step ahead; a bad one bounces off him
+      let bad = 0;
+      if (prev < 0 && !(p.frozen > 0) && !(p.hands > 0) && !setp && !pen && !so && !isKeeper(p) && rv0 > 120) {
+        const ux = (ball.vx - p.vx) / rv0, uy = (ball.vy - p.vy) / rv0, front = -(p.fx * ux + p.fy * uy); // 1 = it comes onto his front, -1 = from behind him
+        const foe = P.filter(o => o.team !== p.team && on(o)).reduce((m, o) => Math.min(m, Math.hypot(o.x - p.x, o.y - p.y)), 1e9);
+        const ctl = 0.36 + rat(p, 'drb') * 0.42 + rat(p, 'pas') * 0.12 + (hasAb(p, 'tryl') || hasAb(p, 'dirigent') ? 0.15 : 0);
+        const dif = Math.max(0, rv0 - 520) / 600 + Math.max(0, -front) * 0.32 * Math.min(1, rv0 / 500) + (front < 0.3 && front > -0.3 ? 0.05 : 0) + (z0 > 8 ? 0.12 : 0) + (p.sprint ? 0.06 : 0) + Math.max(0, 1 - foe / 60) * 0.07 * calm(p);
+        const m = ctl - dif;
+        if (m < 0) bad = 2; else if (m < 0.1 && !isHuman(p)) knock = true;
+        tst(m < 0 ? 'ftBad' : m < 0.1 ? 'ftHeavy' : 'ftClean');
+        if (m < 0.1 && isHuman(p) && !knock && m >= 0) { p.heavy = HEAVY_T * 0.6; ball.stealCd = 0; } // a heavy touch: it gets away from him a bit
+        if (bad) { // it bounces off him: loose, and back the way it came if it hit his front, on past him if it came from behind
+          let dx = ux * 0.7 + p.fx * 0.3, dy = uy * 0.7 + p.fy * 0.3; const l = Math.hypot(dx, dy); if (l < 0.2) { dx = -p.fy; dy = p.fx; } else { dx /= l; dy /= l; }
+          const k = Math.min(0.6, 0.28 + -m * 0.7) * rv0;
+          ball.x = p.x + dx * (REACH + 2); ball.y = p.y + dy * (REACH + 2);
+          const air = z0 > 8; release(p, dx * k, dy * k, 0.35); ball.last = { team: p.team, pass: false, offs: [] }; ball.z = 2; ball.vz = air ? 80 : 30;
+          tone(95, 0.07, 'sine', 0.09, -25); return;
+        }
       }
       // a knock-on first touch: the ball runs a couple of metres ahead of him. Quicker away if there is room, easy to nick if there is not
-      if (knock && inPass && !(p.hands > 0) && !setp && !pen && !so) { p.heavy = HEAVY_T; ball.stealCd = 0; tone(95, 0.07, 'sine', 0.09, -25); }
+      if (knock && (inPass || prev < 0) && !(p.hands > 0) && !setp && !pen && !so) { p.heavy = HEAVY_T; ball.stealCd = 0; tone(95, 0.07, 'sine', 0.09, -25); }
     }
   }
   function release(p, vx, vy, nopick) {
@@ -3811,31 +3830,104 @@ table.st tr.fr td { color: var(--gold); }
     ball.last = { team: p.team, pass: false, offs }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
     const gx = p.team ? PL : PR;
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
-    if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; ball.last.kc = Math.random() < 0.3; ball.last.dw = Math.random() < 0.4; q.recv = 1.6; handOver(p, q); } // the keeper comes for about a third of them // the man it is aimed at runs onto it
+    if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; q.recv = 1.6; handOver(p, q); } // the man it is aimed at runs onto it
     tone(200, 0.12, 'triangle', 0.12, 120);
   }
-  function header(p) {
-    if (offsideCall(p)) return;
-    const dir = p.team ? -1 : 1, gx = p.team ? PL : PR, near = (gx - p.x) * dir < 430 && (gx - p.x) * dir > 0;
-    let tx, ty;
-    if (near) { // head it toward the corner the keeper is furthest from
-      const kp = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
-      const side = kp && Math.abs(kp.y - CY) > 6 ? -Math.sign(kp.y - CY) : (Math.random() < 0.5 ? -1 : 1);
-      tx = gx; ty = CY + side * MOUTH * (0.45 + Math.random() * 0.4) * (Math.random() < 0.15 ? -1 : 1);
+  // Daniel 2026-11-12: a header is something YOU do, as in FIFA: press SKYD (at goal / clear it) or AFLEVER (to a mate) while the ball is
+  // in the air and he jumps for it. Who wins it is decided, not rolled: when you pressed (jump timing), how close he is to where it drops,
+  // his Physical (spring, strength), whether he runs onto it, and how good he is with his head. The computer's men head it on their own
+  const JUMP_T = 0.55, HD_ARM = 1.2;
+  const jumpH = p => 20 + 22 * rat(p, 'phy') + (hasAb(p, 'luft') ? 8 : 0); // how high he gets off the ground
+  const jumpNow = p => p.jmp > 0 ? (t => 4 * jumpH(p) * t * (1 - t))(1 - p.jmp / JUMP_T) : 0;
+  const inOf = p => p.ctrl === 'L0' ? localInput(0) : p.ctrl === 'L1' ? localInput(1) : p.ctrl === 'R' ? (remoteIn.get(p.peer) || ZERO) : null;
+  const HEAD_Z = 44; // his head, standing
+  function headTiming(p) { // 0..1: how well he timed it
+    if (isHuman(p)) {
+      const age = HD_ARM - (p.hdArm || 0);
+      return age < 0.1 ? 0.55 + age * 3 : age < 0.55 ? 1 : Math.max(0.25, 1 - (age - 0.55) * 1.15); // late = a rushed jump, early = he is already coming down
     }
+    return 0.55 + 0.4 * (aiD(p.team).iq || 0) * (0.6 + 0.4 * rat(p, 'phy'));
+  }
+  function canHead(p) { // can his head get to it at this height right now? (you: only as high as your jump has taken you)
+    return ball.z <= HEAD_Z + 8 + (isHuman(p) ? jumpNow(p) : jumpH(p) * 0.9);
+  }
+  function headScore(p) {
+    const r = REACH + 8, d = dBall(p), pos = Math.max(0, 1 - d / (r + 16));
+    const bl = Math.max(1, Math.hypot(ball.x - p.x, ball.y - p.y)), vin = Math.max(0, Math.min(1, (p.vx * (ball.x - p.x) + p.vy * (ball.y - p.y)) / bl / MAXV));
+    const skill = Math.max(rat(p, 'sht'), rat(p, 'def'));
+    return pos * 0.32 + headTiming(p) * 0.3 + rat(p, 'phy') * 0.24 + vin * 0.08 + skill * 0.06 + (hasAb(p, 'luft') ? 0.08 : 0) - (p.stamina < 0.3 ? 0.04 : 0);
+  }
+  // the ball is up for grabs in the air: everyone who went for it is in the duel, the best one gets his head to it
+  function aerialDuel(hs) {
+    const sc = hs.map(p => [p, headScore(p)]).sort((a, b) => b[1] - a[1]);
+    const [w, s1] = sc[0], foe = sc.find(x => x[0].team !== w.team);
+    const mg = foe ? s1 - foe[1] : 1;
+    tst('aerial'); if (foe) tst('aerDuel');
+    if (foe && mg < 0.035) { // dead level: they clash and it drops between them
+      const f = foe[0], mx = (w.x + f.x) / 2, my = (w.y + f.y) / 2, sp = Math.hypot(ball.vx, ball.vy) * 0.3;
+      let dx = ball.x - mx, dy = ball.y - my; const l = Math.hypot(dx, dy) || 1;
+      ball.vx = dx / l * sp; ball.vy = dy / l * sp; ball.vz = 70; ball.headCd = 0.35; w.nopick = f.nopick = 0.25;
+      ball.last = { team: w.team, pass: false, offs: offsNow(w), defl: true }; ball.lastTeam = w.team; ball.lastIdx = w.i;
+      tst('aerScr'); sfx.trap(); dust(mx, my); return;
+    }
+    if (foe) tst(w.team === ((ball.last && ball.last.team) ?? w.team) ? 'aerAtt' : 'aerDef');
+    const q = Math.max(0, Math.min(1, headTiming(w) * 0.6 + Math.min(1, mg / 0.25) * 0.4)); // a clean, free header or one he only just got to
+    let kind = 'clear';
+    if (isHuman(w)) kind = w.hdK === 'b' ? 'pass' : 'shot';
     else {
-      const i = p.ctrl === 'L0' ? localInput(0) : p.ctrl === 'L1' ? localInput(1) : p.ctrl === 'R' ? (remoteIn.get(p.peer) || ZERO) : null;
-      if (i && Math.hypot(i.x, i.y) > 0.3) { tx = p.x + i.x * 300; ty = p.y + i.y * 300; }
-      else { tx = p.x + dir * 320; ty = p.y + (CY - p.y) * 0.3; } // clear it upfield
+      const dir = w.team ? -1 : 1, gx = w.team ? PL : PR, toG = (gx - w.x) * dir;
+      kind = toG > 0 && toG < 330 && Math.abs(w.y - CY) < 200 ? 'shot' : (w.x - (w.team ? PR : PL)) * dir < (PR - PL) * 0.35 ? 'clear' : 'pass';
     }
-    const lu = hasAb(p, 'luft'), dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1, sp = (near ? 640 : 500) * (lu ? 1.15 : 1);
-    if (lu) abPop(p, 'luft');
-    p.fx = dx / d; p.fy = dy / d;
-    ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.z = Math.min(ball.z, 40); ball.vz = near ? -30 : 160;
-    ball.last = { team: p.team, pass: false, offs: offsNow(p), head: near, ks: Math.random() < (lu ? 0.42 : 0.7) }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; // a header at goal: the keeper gets to most of them
-    ball.gk = 'head'; ball.fresh = false;
-    if (near && stats) stats.sh[p.team]++;
-    if (near) flash = { text: 'Header!', t: 0.7 };
+    header(w, kind, q);
+    w.hdArm = 0;
+  }
+  function header(p, kind, Q = 0.8) {
+    if (offsideCall(p)) return;
+    const dir = p.team ? -1 : 1, gx = p.team ? PL : PR, toG = (gx - p.x) * dir, i = inOf(p), il = i ? Math.hypot(i.x, i.y) : 0;
+    const lu = hasAb(p, 'luft'); if (lu) abPop(p, 'luft');
+    const offs = offsNow(p);
+    let fx, fy, sp, vz, at = false, to = null;
+    if (kind === 'pass') {
+      to = passTarget(p, il > 0.3 ? i.x : dir, il > 0.3 ? i.y : (CY - p.y) / 300, 0.2, true);
+      if (!to) kind = 'clear';
+    }
+    if (kind === 'shot' && toG > 0 && toG < 520) { // at goal: the stick picks the side, inside the post (FIFA's assisted heading); where it really goes is down to the header
+      at = true;
+      let ty;
+      if (isHuman(p)) {
+        const ax = il > 0.3 ? i.x : dir, ay = il > 0.3 ? i.y : 0, yc = ax * dir > 0.2 ? p.y + ay * (gx - p.x) / ax : p.y + ay * 400;
+        ty = CY + Math.max(-1, Math.min(1, (yc - CY) / (MOUTH * 1.5))) * MOUTH * 0.62;
+      } else {
+        const kp = size > 1 ? P[slotOf(1 - p.team, 0)] : null, iq = aiD(p.team).iq || 0;
+        const side = kp && Math.abs(kp.y - CY) > 6 ? -Math.sign(kp.y - CY) : (Math.sign(CY - p.y) || 1); // away from the keeper, else back across him
+        ty = CY + side * MOUTH * (0.3 + 0.35 * iq);
+      }
+      const dx = gx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy) || 1; fx = dx / d; fy = dy / d;
+      sp = (480 + 170 * rat(p, 'phy') + 90 * Q) * (lu ? 1.12 : 1);
+      // the spread: his heading (finishing), how well he met it, how far out, a man on him
+      const foeD = P.filter(o => o.team !== p.team && on(o) && !isKeeper(o)).reduce((m, o) => Math.min(m, Math.hypot(o.x - p.x, o.y - p.y)), 1e9);
+      const sig = 0.03 + 0.1 * (1 - rat(p, 'sht')) + (1 - Q) * 0.1 + Math.max(0, 1 - foeD / 60) * 0.03 * calm(p) + Math.min(0.06, Math.max(0, toG - 180) / 4000);
+      const e = bell() * sig, c = Math.cos(e), sn = Math.sin(e), f0 = fx; fx = f0 * c - fy * sn; fy = f0 * sn + fy * c;
+      // down into the ground (bounces up, hard for the keeper) when met cleanly; a poor one loops up, and can go over
+      const T = Math.max(0.1, d / sp), h = Math.max(0, 14 + (1 - Q) * 40 + bell() * (8 + 22 * (1 - rat(p, 'sht'))));
+      vz = (h - Math.min(ball.z, 50) + GRAV / 2 * T * T) / T;
+    } else if (kind === 'pass') { // nodded on to a mate, softly
+      const dx = to.x + to.vx * 0.3 - p.x, dy = to.y + to.vy * 0.3 - p.y, d = Math.hypot(dx, dy) || 1;
+      const S = passSpread(p, d, true), e = bell() * (S.ang + (1 - Q) * 0.08);
+      fx = Math.cos(Math.atan2(dy, dx) + e); fy = Math.sin(Math.atan2(dy, dx) + e);
+      sp = Math.max(240, Math.min(520 + 80 * rat(p, 'phy'), d / 0.75)) * (1 + bell() * S.wt * 0.6); vz = 150;
+    } else { // cleared: high and away, the stick picks where (else upfield and out toward the wing)
+      let dx = il > 0.3 ? i.x : dir, dy = il > 0.3 ? i.y : (p.y > CY ? 0.5 : -0.5); const d = Math.hypot(dx, dy) || 1; dx /= d; dy /= d;
+      const e = bell() * (0.06 + (1 - Q) * 0.18); fx = dx * Math.cos(e) - dy * Math.sin(e); fy = dx * Math.sin(e) + dy * Math.cos(e);
+      sp = (440 + 200 * rat(p, 'phy')) * (0.7 + 0.3 * Q) * (lu ? 1.12 : 1); vz = 230 + 90 * Q;
+    }
+    p.fx = fx; p.fy = fy;
+    ball.owner = -1; ball.vx = fx * sp; ball.vy = fy * sp; ball.z = Math.max(20, Math.min(ball.z, 75)); ball.vz = vz; ball.spinT = 0;
+    ball.last = { team: p.team, pass: !!to, to: to ? to.i : -1, offs, head: at }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.headCd = 0.3; ball.kicker = isHuman(p) ? p.i : -1;
+    if (to) to.recv = 1.4;
+    ball.gk = 'head'; ball.fresh = false; p.nopick = 0.25;
+    if (at && stats) stats.sh[p.team]++;
+    if (at) { flash = { text: 'Header!', t: 0.7 }; tst('hdShot'); if (p.ms) p.ms.sh++; }
     tone(180, 0.07, 'triangle', 0.12, -60);
   }
   // nothing of theirs to tackle: a team-mate has the ball, our own pass/cross is on its way with no opponent on it, or I kicked it a moment ago
@@ -3860,11 +3952,9 @@ table.st tr.fr td { color: var(--gold); }
     if (offsideCall(p)) return;
     const gx = p.team ? PL : PR, l = Math.hypot(inp.x, inp.y);
     let ax = l > 0.3 ? inp.x : gx - p.x, ay = l > 0.3 ? inp.y : CY - p.y;
-    const head = ball.z > 30;
     ball.owner = p.i; ball.z = 0; ball.vz = 0; p.nopick = 0;
-    shoot(p, head ? MAXCHARGE * 0.35 : MAXCHARGE * 0.7, ax, ay);
-    if (head) { ball.z = 30; ball.vz = -40; ball.last.head = true; ball.last.ks = Math.random() < (hasAb(p, 'luft') ? 0.3 : 0.55); abPop(p, 'luft'); flash = { text: 'Header!', t: 0.7 }; }
-    else { ball.z = 4; ball.vz = 120; flash = { text: 'Volley!', t: 0.7 }; }
+    shoot(p, MAXCHARGE * 0.7, ax, ay);
+    ball.z = 4; ball.vz = 120; flash = { text: 'Volley!', t: 0.7 };
   }
   // how far the ball is from the carrier's feet right now (0..1): just after a touch at full sprint, or a heavy first touch, it is there to be won
   const exposed = o => o.skill > 0 ? 0 : o.heavy > 0 ? 1 : Math.hypot(o.vx, o.vy) > 60 ? (o.sprint ? 1 : 0.45) * (1 - (o.touch || 0)) : 0.25;
@@ -4058,8 +4148,8 @@ table.st tr.fr td { color: var(--gold); }
   }
   function spill(p) { // he gets his body behind it but can't hold it: a loose ball in the box
     saveKind = 'spill';
-    const dir = p.team ? -1 : 1, a = (Math.random() - 0.5) * 1.6;
-    ball.vx = dir * Math.cos(a) * 230; ball.vy = Math.sin(a) * 230; ball.vz = 150; ball.z = Math.max(ball.z, 6);
+    const dir = p.team ? -1 : 1, a = Math.max(-1, Math.min(1, (ball.y - p.y) / REACH)) * 0.8, sp = 150 + Math.hypot(ball.vx, ball.vy) * 0.1; // it comes off him the way it hit him: off the side of his body it squirms that way
+    ball.vx = dir * Math.cos(a) * sp; ball.vy = Math.sin(a) * sp; ball.vz = 150; ball.z = Math.max(ball.z, 6);
     ball.lastTeam = p.team; ball.lastIdx = p.i; ball.last = Object.assign({ team: p.team, pass: false, punt: true }, savedOffs(p)); p.nopick = 0.55; p.recover = Math.max(p.recover, 0.3);
     tone(130, 0.08, 'triangle', 0.14, -50); shake = Math.max(shake, 4); crowd.ooh(true);
   }
@@ -4586,8 +4676,36 @@ table.st tr.fr td { color: var(--gold); }
       }
       // under pressure, think like a FIFA player: a man closing him down in front means turn away and shield it,
       // then play the safe ball (sideways or back) instead of running into him and losing it
+      // Daniel 2026-11-12: with space, take him on (as in FIFA): one man in front, nobody covering him, room on one side, and he backs
+      // himself against that defender (his Dribbling and Pace against the man's Defending and Pace). He drives at him, then cuts past on the
+      // open side; whether the defender buys it is the same wrong-foot rule as against you (see the defender's code)
+      let toOn = false;
+      if (!keeper && size >= 3 && !dodge && !p.plan.to && !(p.plan.shT > 0) && toGoal > 80 && toGoal < Lp * 0.62 && p.stamina > 0.3 && !(p.toCd > 0)) {
+        const front = foes.filter(f => !isKeeper(f) && Math.hypot(f.x - p.x, f.y - p.y) < 190 && ((f.x - p.x) * dir) / (Math.hypot(f.x - p.x, f.y - p.y) || 1) > 0.3);
+        const f = front.length === 1 ? front[0] : null;
+        if (f && !foes.some(o => o !== f && !isKeeper(o) && (Math.hypot(o.x - f.x, o.y - f.y) < 120 || Math.hypot(o.x - p.x, o.y - p.y) < 90))) {
+          const room = sd => { const ty = p.y + sd * 110; if (ty < PT + 40 || ty > PB - 40) return 0; return foes.filter(o => !isKeeper(o)).reduce((m, o) => Math.min(m, Math.hypot(o.x - (p.x + dir * 70), o.y - ty)), 200); };
+          const rU = room(-1), rD = room(1), sd = rD > rU ? 1 : -1, rm = Math.max(rU, rD);
+          const edge = rat(p, 'drb') * 0.55 + rat(p, 'spd') * 0.3 + rat(p, 'phy') * 0.15 - (rat(f, 'def') * 0.6 + rat(f, 'spd') * 0.4) + (sty === 'angreb' ? 0.05 : sty === 'kort' ? -0.05 : 0) + (hasAb(p, 'tryl') ? 0.08 : 0);
+          if (rm > 75 && edge > -0.1 + 0.12 * iq) { p.plan.to = { f: f.i, s: sd, t: 2.2, ph: 0 }; tst('toTry'); }
+        }
+      }
+      if (p.plan.to) {
+        const T2 = p.plan.to, f = P[T2.f]; T2.t -= dt;
+        if (!f || !on(f) || T2.t <= 0 || p.stamina < 0.15) { p.plan.to = null; p.toCd = 4; }
+        else {
+          toOn = true;
+          const gx2 = f.x - p.x, gy2 = f.y - p.y, fd = Math.hypot(gx2, gy2) || 1, past = (p.x - f.x) * dir > 6;
+          if (past) { if (!T2.won) { T2.won = true; tst('toPast'); } ax = dir; ay = (p.plan.aimY - p.y) / 260; T2.t = Math.min(T2.t, 0.6); } // past him: away toward goal
+          else if (T2.ph === 0) { // drive at him (just off his shoulder on the far side, to sell it), not at full pace
+            const tx2 = f.x - dir * 10 - T2.s * 16, ty2 = f.y; ax = tx2 - p.x; ay = ty2 - p.y + 0.01;
+            if (fd < 58) { T2.ph = 1; T2.t = Math.min(T2.t, 1.1); }
+          } else { ax = dir * 0.25; ay = T2.s; } // the cut: sharp, on the open side, then burst
+          const l2 = Math.hypot(ax, ay) || 1; ax /= l2; ay /= l2;
+        }
+      }
       const fwd = foeD > 1 ? (fx * dir) / foeD : 0;
-      const pressed = !keeper && size > 1 && !dodge && foes.some(f => { const dd = Math.hypot(f.x - p.x, f.y - p.y); return dd < 62 || (dd < 105 && ((f.x - p.x) * dir) / (dd || 1) > 0.25); });
+      const pressed = !toOn && !keeper && size > 1 && !dodge && foes.some(f => { const dd = Math.hypot(f.x - p.x, f.y - p.y); return dd < 62 || (dd < 105 && ((f.x - p.x) * dir) / (dd || 1) > 0.25); });
       if (pressed && !(p.plan.shT > 0)) p.plan.shT = 0.7 + iq * 0.5; // once he has decided to shield, he sticks with it for a moment (no wobbling)
       if (p.plan.shT > 0) p.plan.shT -= dt;
       if (p.plan.shT > 0 && !dodge) {
@@ -4596,7 +4714,7 @@ table.st tr.fr td { color: var(--gold); }
         if (fwd < -0.2) { bx = ax; by = ay; } // he's already behind me: just go
         const bl = Math.hypot(bx, by) || 1; ax = bx / bl; ay = by / bl;
       }
-      go(p.x + ax * 100, p.y + ay * 100, dodge || (foeD > 140 && p.stamina > 0.5 && !(p.plan.shT > 0)));
+      go(p.x + ax * 100, p.y + ay * 100, dodge || (toOn && p.plan.to.ph === 1) || (foeD > 140 && p.stamina > 0.5 && !(p.plan.shT > 0)));
       const wide = Math.abs(p.y - CY) > MOUTH + 70 && toGoal < 260 && toGoal > 20;
       const sinceWon = wonAt[p.team] - clock;
       const ahead = mates.filter(q => q !== p && q.k !== 0 && (q.x - p.x) * dir > 140 && !isOffside(q, p) && !foes.some(f => Math.hypot(f.x - q.x, f.y - q.y) < 55));
@@ -4650,6 +4768,7 @@ table.st tr.fr td { color: var(--gold); }
         if (run) { out.passTo = run; out.through = true; }
       }
     } else {
+      if (p.plan && p.plan.to && !p.plan.to.won) tst(o && o.team !== p.team ? 'toLost' : 'toGave');
       p.think = 0; p.plan = null;
       // our pass still on its way counts as having it: the team keeps its attacking shape instead of falling back mid-pass
       const weHave = (o && o.team === p.team) || (!o && ball.last && ball.last.team === p.team && ball.last.pass && P[ball.last.to] && P[ball.last.to].recv > 0 && P[ball.last.to] !== p);
@@ -4770,7 +4889,7 @@ table.st tr.fr td { color: var(--gold); }
             bx = o.x + hx * 34 - hy * side * 30; by = o.y + hy * 34 + hx * side * 30;
           }
         }
-        if (o && isHuman(o) && !keeper && !wait) {
+        if (o && (isHuman(o) || (o.plan && o.plan.to)) && !keeper && !wait) { // (the computer's man taking him on is read the same way)
           // a person on the ball can beat him (as in FIFA): the defender commits to the way the carrier is going, a touch late.
           // A sharp cut close to him leaves him wrong-footed for a moment, and he stands a little off instead of on your toes.
           const v = Math.hypot(o.vx, o.vy), hx = v > 40 ? o.vx / v : o.fx, hy = v > 40 ? o.vy / v : o.fy;
@@ -4969,7 +5088,7 @@ table.st tr.fr td { color: var(--gold); }
         }
       }
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
-      if (p.shT > 0) { p.shT -= dt; if (p.shT <= 0) p.shc = 0; } p.tcd -= dt; if (p.relT > 0) p.relT -= dt; p.swcd -= dt; if (p.asw > 0) p.asw -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
+      if (p.shT > 0) { p.shT -= dt; if (p.shT <= 0) p.shc = 0; } p.tcd -= dt; if (p.relT > 0) p.relT -= dt; p.swcd -= dt; if (p.asw > 0) p.asw -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt; if (p.jmp > 0) p.jmp -= dt; if (p.toCd > 0) p.toCd -= dt; if (p.hdArm > 0) p.hdArm -= dt;
       const has = ball.owner === p.i;
       const mag = Math.hypot(inp.x, inp.y);
       p.sprint = (inp.adv ? !!inp.c : (inp.sprint || mag > 0.97)) && p.stamina > 0.04 && mag > 0.2 && p.tackle <= 0;
@@ -5104,9 +5223,14 @@ table.st tr.fr td { color: var(--gold); }
         // first-time finish (as in FIFA): SKYD as a loose ball from your own side reaches you = hit it first time, volley or header
         // (press SKYD while it is on its way and he hits it as it arrives)
         const ownBall = ball.owner < 0 && !isKeeper(p) && ball.last && ball.last.team === p.team && !(p.frozen > 0);
+        // a ball in the air near him: SKYD = go up for a header at goal (or clear it), AFLEVER = head it on to a mate. He jumps when you press,
+        // so the timing is yours: too early and he is coming down again, too late and it is a rushed jump
+        const aerial = ball.owner < 0 && ball.z > 22 && !isKeeper(p) && !(p.frozen > 0) && dBall(p) < 230;
+        const jumpFor = k => { if (!(p.jmp > 0)) { p.jmp = JUMP_T; p.hdArm = HD_ARM; p.hdK = k; } };
         if (aDown && ownBall && dBall(p) < 320) p.ftArm = 2.5;
-        if (p.ftArm > 0) { p.ftArm -= dt; if (!ownBall) p.ftArm = 0; else if (ball.z < 90 && dBall(p) < REACH + 28) { p.ftArm = 0; firstTime(p, inp); } }
-        if (aDown && ownBall && dBall(p) < 320) { /* armed for a first-time finish, no tackle */ }
+        if (p.ftArm > 0) { p.ftArm -= dt; if (!ownBall) p.ftArm = 0; else if (ball.z < 30 && dBall(p) < REACH + 28) { p.ftArm = 0; firstTime(p, inp); } }
+        if (aDown && aerial) jumpFor('a');
+        else if (aDown && ownBall && dBall(p) < 320) { /* armed for a first-time finish, no tackle */ }
         else if (aDown && !isKeeper(p) && noTackle(p)) { /* Daniel 2026-11-12: a second press right after your own pass or cross, or while a team-mate (your co-op partner) has it, is never a slide */ }
         else if (aDown && !(p.frozen > 0) && !(p.dive > 0)) {
           const o = owner(), d = o && o.team !== p.team ? Math.hypot(o.x - p.x, o.y - p.y) : 1e9;
@@ -5117,7 +5241,8 @@ table.st tr.fr td { color: var(--gold); }
         }
         const myPass = ball.owner < 0 && p.recv > 0 && ball.last && ball.last.pass && ball.last.to === p.i && ball.last.team === p.team; // a pass on its way to me
         if (p.ptArm > 0) { p.ptArm -= dt; if (!myPass) p.ptArm = 0; }
-        if (bDown && myPass && !isKeeper(p)) p.ptArm = 2; // ...AFLEVER now = play it on first time when it gets here, not SKIFT
+        if (bDown && aerial) jumpFor('b');
+        else if (bDown && myPass && !isKeeper(p)) p.ptArm = 2; // ...AFLEVER now = play it on first time when it gets here, not SKIFT
         else if (bDown && p.swcd <= 0 && !(p.frozen > 0)) {
           const o = owner();
           if (cfg.lock && size > 1) { if (o && o.team === p.team && o.ctrl === 'ai' && !(o.frozen > 0) && !(o.hands > 0) && !setp) { pass(o, p); p.swcd = 0.6; } } // locked: SKIFT calls for the ball
@@ -5239,7 +5364,9 @@ table.st tr.fr td { color: var(--gold); }
       const oppPass = p => ball.last && ball.last.pass && !ball.last.lp && ball.last.team !== p.team && ball.z < 26 && !(size > 1 && p.k === 0 && inBox(p.team, p.x, p.y));
       const shotVs = p => size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420; // a real shot at him: only what he gets his body or a dive to
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + (shotVs(p) && !(p.dive > 0) ? 4 : oppPass(p) ? 3 : 12) + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 && !shotVs(p) ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0) + (ball.last && ball.last.pass && ball.last.team !== p.team && ball.z < 26 && hasAb(p, 'laeser') ? 18 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      // a cross: the keeper claims it when he gets there first. His hands go higher than their heads, so he gets a few steps' start, more the better he is
+      const kClaim = p => { const dk = dBall(p), da = P.filter(o => o.team !== p.team && on(o) && o.stun <= 0).reduce((m, o) => Math.min(m, dBall(o)), 1e9); return dk < da + 8 + 22 * keeperQ(p); };
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !kClaim(p)))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + (shotVs(p) && !(p.dive > 0) ? 4 : oppPass(p) ? 3 : 12) + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 && !shotVs(p) ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0) + (ball.last && ball.last.pass && ball.last.team !== p.team && ball.z < 26 && hasAb(p, 'laeser') ? 18 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -5252,27 +5379,36 @@ table.st tr.fr td { color: var(--gold); }
         const rd = ball.last && ball.last.pass && ball.last.team !== p.team && hasAb(p, 'laeser'); // Spillæser: he cuts out their passes, hard ones too
         if (rd) abPop(p, 'laeser');
         if (!rd && oppPass(p) && p.tackle <= 0) { // a ground pass reaching a defender: clean if it comes right at him or is slow, otherwise often only a touch off him
-          const sp = Math.hypot(ball.vx, ball.vy), side = dBall(p) > REACH - 6, def = lvOf(p) ? lvOf(p).def / 11 : 0.5;
-          if (sp > 480 && Math.random() < Math.min(0.75, (sp - 480) / 600 + (side ? 0.3 : 0) - def * 0.15)) {
-            const a = (Math.random() - 0.5) * 0.7, k = 0.6, vx = ball.vx * k, vy = ball.vy * k;
-            ball.vx = vx * Math.cos(a) - vy * Math.sin(a); ball.vy = vx * Math.sin(a) + vy * Math.cos(a); p.nopick = 0.3;
-            ball.last = Object.assign({}, ball.last, { defl: true }); sfx.trap(); continue;
+          // Daniel 2026-11-12: decided by the moment, not a dice roll: how far across his body it passes (right at him or only at full stretch),
+          // its pace, whether he is set and square to it or still running across it, and his defending and touch
+          const sp = Math.hypot(ball.vx, ball.vy), ux = ball.vx / (sp || 1), uy = ball.vy / (sp || 1);
+          const lat = (p.x - ball.x) * -uy + (p.y - ball.y) * ux, reachF = Math.min(1, Math.abs(lat) / REACH); // 0 = it comes straight at him
+          const face = -(p.fx * ux + p.fy * uy), pv = Math.hypot(p.vx, p.vy), across = pv > 50 ? Math.abs(p.vx * -uy + p.vy * ux) / pv * Math.min(1, pv / MAXV) : 0;
+          const ctl = 0.45 + rat(p, 'def') * 0.3 + rat(p, 'drb') * 0.1 + Math.max(0, face) * 0.1 - Math.max(0, sp - 420) / 1400 - reachF * 0.4 - across * 0.15 - (face < -0.3 ? 0.1 : 0);
+          if (ctl < 0.3) {
+            const a = -Math.sign(lat || 1) * (0.15 + reachF * 0.55), k = 0.45 + reachF * 0.3, vx = ball.vx * k, vy = ball.vy * k; // a glance off the boot: the further out it hit him, the more it runs on
+            ball.vx = vx * Math.cos(a) - vy * Math.sin(a); ball.vy = vx * Math.sin(a) + vy * Math.cos(a); ball.vz = Math.max(ball.vz, reachF < 0.4 ? 60 : 0); p.nopick = 0.3;
+            ball.last = Object.assign({}, ball.last, { defl: true }); tst('defl'); sfx.trap(); continue;
           }
+          tst('cut');
         }
         if (rv < 760 || rd || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
           const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
           const shooter = P[ball.lastIdx], near = shooter && Math.hypot(shooter.x - p.x, shooter.y - p.y) < 300, stretch = p.dive > 0 || dBall(p) > REACH;
-          const ks = keeperSkill(p), rnd = Math.random(); saveKind = '';
+          saveKind = '';
           if (save && shooter && shooter.team !== p.team) { shooter.rueAt = performance.now(); momAdd(shooter.team, 0.05); }
-          // Daniel 2026-11-12: a good keeper holds on to it, a poor one pushes it out more. How likely he holds it: his quality, the pace of the shot, and whether he is at full stretch
-          const kq = save ? keeperQ(p) : 1, holdP = Math.max(0.05, Math.min(0.95, 0.2 + kq * 0.95 - Math.max(0, sp2 - 520) / 1100 - (stretch ? 0.28 : 0) - (near ? 0.06 : 0)));
-          if (save && rnd > holdP) { // he can't hold it
-            const r2 = Math.random();
-            if (stretch && r2 < 0.35 && Math.abs(p.x - (p.team ? PR : PL)) < 130) tipOver(p); // fingertips round the post or over the bar
-            else if (r2 < 0.75 - kq * 0.45) spill(p); // a poor keeper lets it drop in front of him
+          // Daniel 2026-11-12: whether he holds it is decided by the save itself, not a dice roll: his handling (quality), the pace of the shot,
+          // how far he has to stretch for it (at his body or at full stretch), how high it is, a dipping or bouncing ball, and a shot from close in
+          const kq = save ? keeperQ(p) : 1, off = Math.max(0, Math.min(1, (dBall(p) - REACH * 0.45) / (REACH * 0.75))), hi = ball.z > 40 ? Math.min(1, (ball.z - 40) / 25) : 0;
+          const hold = 0.45 + kq * 0.9 - Math.max(0, sp2 - 600) / 1500 - off * 0.25 - (p.dive > 0 ? 0.08 : 0) - hi * 0.12 - (near ? 0.08 : 0) - (ball.last && ball.last.head && ball.vz < 0 ? 0.05 : 0) - (ball.last && ball.last.hard || 0);
+          if (save && hold < 0.45) { // he gets to it but cannot hold it
+            const gx = p.team ? PR : PL;
+            if ((off > 0.55 || hi > 0.5) && Math.abs(p.x - gx) < 130 && (hi > 0.5 || Math.abs(ball.y - CY) > MOUTH * 0.55)) tipOver(p); // at full stretch near the post or under the bar: round the post / over the bar
+            else if (off < 0.5 && hold < 0.5 - 0.12 - kq * 0.18) spill(p); // right at him and too hot to handle: it squirms out in front of him (a poorer keeper more often)
             else parry(p); // palmed away to the side
+            tst('kNoHold');
           }
-          else if (p.tackle > 0) tackleWins(p); else grab(p);
+          else if (p.tackle > 0) tackleWins(p); else { if (save) tst('kHold'); grab(p); }
           if (save && p.abSave) abPop(p, p.abSave, true);
           if (save) { flash = { text: 'Save!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; if (p.ms) p.ms.sv = (p.ms.sv || 0) + 1; }
           break;
@@ -5280,11 +5416,13 @@ table.st tr.fr td { color: var(--gold); }
       }
       if (ball.owner < 0 && ball.last && ball.last.pass && ball.last.lp && ball.vz <= 0 && ball.z < 75) { // a high pass coming down: the man it is meant for takes it on his chest
         const q = P[ball.last.to];
-        if (q && on(q) && q.stun <= 0 && !(q.ftArm > 0) && dBall(q) < REACH + 26) grab(q);
+        if (q && on(q) && q.stun <= 0 && !(q.ftArm > 0) && !(q.hdArm > 0) && dBall(q) < REACH + 26) grab(q);
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
-        const h = P.filter(p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(size > 1 && p.k === 0) && !(ball.last && ball.last.cross && !ball.last.dw && p.team !== ball.last.team) && !(p.i === ball.lastIdx && ball.loose < 0.5) && dBall(p) < REACH + 8).sort((a, b) => dBall(a) - dBall(b))[0];
-        if (h) header(h);
+        // who goes up for it: the computer's men on their own, YOUR man only if you pressed for a header
+        const ok = p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && (!isHuman(p) || p.hdArm > 0) && canHead(p);
+        const first = P.filter(p => ok(p) && dBall(p) < REACH + 8);
+        if (first.length) aerialDuel(P.filter(p => ok(p) && dBall(p) < REACH + 24)); // the first man there, and anyone right on him, contest it
       }
       if (ball.owner < 0 && ball.z < 26) {
         for (const p of P) {
@@ -9449,9 +9587,10 @@ table.st tr.fr td { color: var(--gold); }
     const sliding = p.tackle > 0 || p.dive > 0 || p.lay > 0, down = p.stun > 0;
     const cb = banner === 'GOAL!' && !(replay && replay.t >= 0) ? P[celeb] : null;
     const hop = cb === p ? Math.abs(Math.sin(performance.now() / 110)) * 10 : cb && cb.team === p.team && Math.hypot(cb.x - p.x, cb.y - p.y) < 60 ? Math.abs(Math.sin(performance.now() / 120 + p.i * 1.3)) * 6 : 0;
-    ctx.save(); ctx.translate(p.x, p.y - hop);
+    const jl = p.jmp > 0 ? jumpNow(p) * 0.45 : 0; // up for a header
+    ctx.save(); ctx.translate(p.x, p.y - hop - jl);
     if (p.out > 0) ctx.globalAlpha = 0.45;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4 * FIG, 6 * FIG, PDR, PDR * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4 * FIG, 6 * FIG + jl, PDR * (1 - jl / 60), PDR * 0.8 * (1 - jl / 60), 0, 0, Math.PI * 2); ctx.fill();
     if (swHint.includes(p)) { ctx.strokeStyle = 'rgba(244,247,242,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.ellipse(2 * FIG, 4 * FIG, PDR + 6, (PDR + 6) * 0.8, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     if (p.hold > 0.05) {
       ctx.strokeStyle = col.gold; ctx.lineWidth = 3.5;
@@ -9975,6 +10114,19 @@ table.st tr.fr td { color: var(--gold); }
           if (bk.length > 2 && md.length) { const xs = bk.map(q => q.x); tst('lineN'); tst('lineSpread', Math.max(...xs) - Math.min(...xs)); const dir = t ? -1 : 1, bm = xs.reduce((a, b) => a + b, 0) / xs.length, mm = md.reduce((a, q) => a + q.x, 0) / md.length; tst('gapBM', (mm - bm) * dir); } }
       }
       return { score: score.slice(), st: stats && JSON.parse(JSON.stringify(stats)), t: { ...TST } };
+    }, hd: (i, pressAt, key) => { // a ball dropping onto man i; press key (Space = SKYD, KeyF = AFLEVER) at pressAt seconds (or never: -1)
+      const p = P[i]; for (const q of P) if (q !== p && !isKeeper(q)) { q.stun = 99; q.x = PL + 40; } setp = null; pause = 0;
+      p.x = PR - 230; p.y = CY - 40; p.vx = p.vy = 0; p.frozen = 0; p.jmp = 0; p.hdArm = 0; p.ftArm = 0; p.nopick = 0;
+      const T = 0.8; ball.owner = -1; ball.x = p.x - 300; ball.y = p.y; ball.vx = 300 / T * 0.98; ball.vy = 0; ball.z = 60; ball.vz = (50 - 60 + GRAV / 2 * T * T) / T;
+      ball.last = { team: p.team, pass: false, offs: [] }; ball.lastTeam = p.team; ball.lastIdx = -1; ball.headCd = 0; ball.loose = 9;
+      for (const k in TST) TST[k] = 0;
+      let t = 0, at = -1; const dt = DT * TEMPO();
+      for (let n = 0; n < 200 && state === 'play'; n++) {
+        if (pressAt >= 0 && t >= pressAt && t < pressAt + dt * 3) keys.add(key || 'Space'); else keys.delete(key || 'Space');
+        step(dt); t += dt;
+        if (TST.aerial && at < 0) { at = t; return { at: +at.toFixed(2), t: { ...TST }, vx: Math.round(ball.vx), vy: Math.round(ball.vy), vz: Math.round(ball.vz), z: Math.round(ball.z), last: ball.last }; }
+      }
+      keys.delete(key || 'Space'); return { at, t: { ...TST }, z: Math.round(ball.z), x: Math.round(ball.x - p.x) };
     }, se: (i, h, n) => { const out = []; for (let k = 0; k < n; k++) { const r = shotPlan(P[i], h); shotError(P[i], r); out.push([Math.atan2(r.vy, r.vx), r.vz]); } return out; }, tst: () => ({ ...TST }), pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, swr: i => switchRank(P[i]).map(q => q.i), msw: i => manualSwitch(P[i]), dsw: () => defendSwitch(owner()), cshare: cv => carShare(cv), cnew: (n, how) => { carNew(n, 2, 1); const C = carLoad(); C.how = how; carSave(C); }, cgo: t => compGo(t), co: () => P.filter(p => p.team === 0).map(p => [p.k, p.sq, p.ovr | 0, p.coP ? 'G' : 'H', p.ctrl]), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
