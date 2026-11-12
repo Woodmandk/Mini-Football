@@ -867,7 +867,8 @@ h1 { font-family: var(--disp); text-shadow: none; font-style: normal; } h1 .r, h
 #pgHome .tabp > .hot small, #pgHome .tabp > .hot2 small { font-size: 15px; max-width: 34ch; }
 #pgHome .tabp[data-tab="spil"] > .hot { font-size: 50px; letter-spacing: 0.04em; text-transform: uppercase; }
 #pgHome .tabp > .hot small { text-transform: none; letter-spacing: 0; }
-#pgHome .hubtop .chip { margin-left: auto; }
+#pgHome .hubtop .chip.tpchip { margin-left: auto; } #pgHome .hubtop .chip.tpchip + .chip { margin-left: 6px; }
+.tpchip, .tpv { color: #7fd3ff; font-family: var(--disp); font-weight: 700; white-space: nowrap; } .tpv { margin-left: auto; margin-right: 10px; font-size: 18px; } .tpv + .coins { margin-left: 0; }
 #pgHome .tabp > .hot .ic, #pgHome .tabp > .hot2 .ic { width: 64px; height: 64px; }
 #pgHome .tabp > .hot .ic svg.i, #pgHome .tabp > .hot2 .ic svg.i { width: 38px; height: 38px; }
 #pgHome .tabp > .alt { font-size: 19px; }
@@ -1089,7 +1090,7 @@ table.st tr.fr td { color: var(--gold); }
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
         <button id="homeProg" class="alt prog" hidden aria-label="Season pass"><span class="pp"><span id="hpPass">Season pass 0/30</span><i class="pbar"><b id="hpBar"></b></i></span><span class="st" id="hpStreak"></span></button>
-        <span class="chip"><span class="coins" data-coins>0</span></span>
+        <span class="chip tpchip" title="Training points: spend them on your players under Team"><b data-tp>0</b> TP</span><span class="chip"><span class="coins" data-coins>0</span></span>
         <button id="goSet" class="alt gear" aria-label="Settings">⚙</button>
       </div>
       <div class="guide" id="guide" hidden><span class="gface">🧑‍🏫</span><span class="gtx"><small id="guideN"></small><b id="guideT"></b><span class="gpips" id="guideP"></span></span><button id="guideGo"></button><button id="guideX" class="alt" aria-label="Hide the guide">✕</button></div>
@@ -1520,7 +1521,7 @@ table.st tr.fr td { color: var(--gold); }
         </div>
       </div>
       <div class="setsheet mtps" id="mtPS" hidden>
-        <div class="top"><button class="alt back" id="mtPSx" aria-label="Back">‹ Back</button><h2 id="mtPSn">Player</h2><span class="coins big" data-coins>0</span></div>
+        <div class="top"><button class="alt back" id="mtPSx" aria-label="Back">‹ Back</button><h2 id="mtPSn">Player</h2><span class="tpv"><b data-tp>0</b> TP</span><span class="coins big" data-coins>0</span></div>
         <div id="mtPan"></div>
       </div>
     </div>
@@ -5505,7 +5506,7 @@ table.st tr.fr td { color: var(--gold); }
   function myLv() { const pr = loadProf(); return Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {}); }
   const lvOf = p => p.lv || null; // a player's trained skills in this match (only your squad, only against the computer)
   function loadProf() { try { return Object.assign(PROF0(), JSON.parse(localStorage.getItem('mf-profile') || '{}')); } catch (_) { return PROF0(); } }
-  function paintCoins(pr) { const c = (pr || loadProf()).coins; document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = c; }); }
+  function paintCoins(pr) { const c = (pr || loadProf()).coins; document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = c; }); try { paintTP(); } catch (_) {} } // TP sit next to the coins (Daniel 2026-11-12: you must be able to see them)
   function saveProf(pr) { try { localStorage.setItem('mf-profile', JSON.stringify(pr)); } catch (_) {} paintCoins(pr); }
   function addCoins(n, why) { const pr = loadProf(); pr.coins = Math.max(0, pr.coins + (n | 0)); saveProf(pr); return pr.coins; }
   const teamOpen = (i, pr) => !!TEAMS[i] && (!TEAMS[i].price || (pr || loadProf()).own.includes('team:' + i));
