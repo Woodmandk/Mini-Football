@@ -1979,8 +1979,8 @@ func _ai_keeper(p, dt: float) -> Vector3:
 				if absf(dz) > 1.0 and t < 0.6 and p.dive_t < 0.0:
 					var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 					p.start_dive(signf(Vector3(0, 0, dz).dot(right)))
-					p.vel = Vector3(0, 0, signf(dz) * 4.5)
-				var sp := 4.5 if p.dive_t >= 0.0 else 3.5
+					p.vel = Vector3(0, 0, signf(dz) * 4.2)
+				var sp := 4.2 if p.dive_t >= 0.0 else 3.5
 				return _run_to(p, target, sp)
 	p.react_t = 0.0
 	if ball_owner == null and absf(b.x - gx) < 15.0 and absf(b.z) < 18.0 and ball_vel.length() < 12.0:
