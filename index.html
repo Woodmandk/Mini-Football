@@ -1019,6 +1019,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
 .trfree .lbl { margin-right: 4px; }
 .trfree button { min-height: 44px; padding: 8px 16px; }
 #wrap.n560 .trcards { grid-template-columns: 1fr 1fr; }
+.strow.tp { grid-template-columns: 66px 1fr 26px 70px 92px; }
 .strow.fo { box-shadow: inset 3px 0 0 var(--act-hi); }
 
 .mtside .mtacts { display: none !important; }
@@ -1087,7 +1088,7 @@ table.st tr.fr td { color: var(--gold); }
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
         <div class="logo"><span class="r">Bane</span><span class="b">bold</span></div>
-        <span class="mfver" id="mfVer">v12.11 14:30</span>
+        <span class="mfver" id="mfVer">v12.11 14:45</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
@@ -5063,9 +5064,12 @@ table.st tr.fr td { color: var(--gold); }
       }
       ball.x += ball.vx * dt; ball.y += ball.vy * dt;
       // first touch: control the ball if it isn't screaming past you
+      // Daniel 2026-11-12: passes were cut out too easily. As in FIFA a defender has to get a foot to it: the ball has to come right at him,
+      // and a firm pass that only clips him is often just deflected and runs on (the man it was meant for can still get it)
+      const oppPass = p => ball.last && ball.last.pass && !ball.last.lp && ball.last.team !== p.team && ball.z < 26 && !(size > 1 && p.k === 0 && inBox(p.team, p.x, p.y));
       const shotVs = p => size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420; // a real shot at him: only what he gets his body or a dive to
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + (shotVs(p) && !(p.dive > 0) ? 4 : 12) + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 && !shotVs(p) ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0) + (ball.last && ball.last.pass && ball.last.team !== p.team && ball.z < 26 && hasAb(p, 'laeser') ? 18 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && !(size > 1 && p.k === 0 && ball.last && ball.last.head && !ball.last.ks && p.team !== ball.last.team) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !ball.last.kc))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + (shotVs(p) && !(p.dive > 0) ? 4 : oppPass(p) ? 3 : 12) + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 && !shotVs(p) ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0) + (ball.last && ball.last.pass && ball.last.team !== p.team && ball.z < 26 && hasAb(p, 'laeser') ? 18 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -5077,6 +5081,14 @@ table.st tr.fr td { color: var(--gold); }
         if (ball.last && ball.last.pass && ball.last.team === p.team) { grab(p); break; }
         const rd = ball.last && ball.last.pass && ball.last.team !== p.team && hasAb(p, 'laeser'); // Spillæser: he cuts out their passes, hard ones too
         if (rd) abPop(p, 'laeser');
+        if (!rd && oppPass(p) && p.tackle <= 0) { // a ground pass reaching a defender: clean if it comes right at him or is slow, otherwise often only a touch off him
+          const sp = Math.hypot(ball.vx, ball.vy), side = dBall(p) > REACH - 6, def = lvOf(p) ? lvOf(p).def / 11 : 0.5;
+          if (sp > 480 && Math.random() < Math.min(0.75, (sp - 480) / 600 + (side ? 0.3 : 0) - def * 0.15)) {
+            const a = (Math.random() - 0.5) * 0.7, k = 0.6, vx = ball.vx * k, vy = ball.vy * k;
+            ball.vx = vx * Math.cos(a) - vy * Math.sin(a); ball.vy = vx * Math.sin(a) + vy * Math.cos(a); p.nopick = 0.3;
+            ball.last = Object.assign({}, ball.last, { defl: true }); sfx.trap(); continue;
+          }
+        }
         if (rv < 760 || rd || p.tackle > 0 || (size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 140)) {
           const save = size > 1 && p.k === 0 && ball.last && !ball.last.pass && !ball.last.punt && ball.last.team !== p.team && Math.hypot(ball.vx, ball.vy) > 420;
           const shooter = P[ball.lastIdx], near = shooter && Math.hypot(shooter.x - p.x, shooter.y - p.y) < 300, stretch = p.dive > 0 || dBall(p) > REACH;
@@ -6471,6 +6483,11 @@ table.st tr.fr td { color: var(--gold); }
   const ovrTier = o => (o >= 85 ? 'elite' : o >= 75 ? 'gold' : o >= 65 ? 'silver' : 'bronze');
   const strOvr = str => 50 + str * 6; // the computer teams' rating, from their stars
   // ---------- years and contracts: a year passes every YEAR matches with your own squad, a contract runs for a number of matches ----------
+  // Daniel 2026-11-12: every player has a max potential (OVR), so nobody can be trained up for ever. Young players have more room to grow.
+  function potNew(p) { const h = nameH(p.n), a = p.age || 24, o = ovr(p); return clamp(o + (a <= 21 ? 10 + h % 11 : a <= 24 ? 6 + h % 9 : a <= 28 ? 3 + h % 6 : h % 4), 45, 95); }
+  const potOf = p => Math.max(p.pot == null ? potNew(p) : p.pot, ovr(p));
+  function grows(pl, k) { if (pl[k] >= 99) return false; const po = potOf(pl); pl[k]++; const ok = ovr(pl) <= po; pl[k]--; return ok; } // one more point in k keeps him within his potential
+  const talent = pl => (pl.age || 24) <= 21 && ovr(pl) < potOf(pl); // a young talent below his potential grows faster
   function nameH(n) { let h = 7; for (const ch of String(n)) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return h; }
   const YEAR = 12, CT_NEW = 25, CT_GONE = -3;
   const ctOf = p => (p.ct == null ? 10 + nameH(p.n) % 16 : p.ct);
@@ -6504,8 +6521,7 @@ table.st tr.fr td { color: var(--gold); }
   }
   function squadLoad() {
     let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
-    if (S && Array.isArray(S.pl) && S.pl.length >= 11 && S.tp > 0) { const c = Math.round(S.tp * 2); S.tp = 0; squadSave(S); try { addCoins(c); } catch (_) {} } // TP left from before become coins
-    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) { if (!p.nat) p.nat = 'DK'; if (!p.age) p.age = 19 + nameH(p.n) % 12; } if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
+    if (S && Array.isArray(S.pl) && S.pl.length >= 11) { let np = false; for (const p of S.pl) { if (!p.nat) p.nat = 'DK'; if (!p.age) p.age = 19 + nameH(p.n) % 12; if (p.pot == null) { p.pot = potNew(p); np = true; } } if (np) squadSave(S); if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
     // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
     const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
     const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
@@ -6526,7 +6542,7 @@ table.st tr.fr td { color: var(--gold); }
     }
   }
   function squadSave(S) { try { localStorage.setItem('mf-squad', JSON.stringify(S)); } catch (_) {} }
-  function addTP() { return 0; } // training points are gone: players get better from matches and training games
+  function addTP(n) { const S = squadLoad(); S.tp = Math.max(0, (S.tp || 0) + (n | 0)); squadSave(S); paintTP(S); return S.tp; } // TP are back (Daniel 2026-11-12): earned in matches, spent per player up to his potential
   function paintTP(S) { const t = (S || squadLoad()).tp; document.querySelectorAll('[data-tp]').forEach(e => { e.textContent = t; }); }
   // the line-up for n a side: the keeper plus the best-rated outfield players, back to front
   // positions (as in football games): every man has his own place (VB, CB, HB, VM, CM, HM, VK, ANG, HK), within his line
@@ -6668,8 +6684,8 @@ table.st tr.fr td { color: var(--gold); }
     for (const i of xi) {
       const pl = S.pl[i]; if (!pl) continue;
       const gx = pl.gx = pl.gx || {}, k = POSMAIN[pl.pos]; if (!k) continue;
-      gx[k] = (gx[k] || 0) + (won ? 0.6 : 0.4) / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1);
-      while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${(SKILLS.find(x => x[0] === k) || [0, k])[1]} ${pl[k]}`); }
+      gx[k] = (gx[k] || 0) + (won ? 0.6 : 0.4) / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (talent(pl) ? 2 : 1);
+      while (gx[k] >= 1 && grows(pl, k)) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${(SKILLS.find(x => x[0] === k) || [0, k])[1]} ${pl[k]}`); }
       gx[k] = Math.round(gx[k] * 100) / 100;
     }
     squadSave(S);
@@ -6681,8 +6697,8 @@ table.st tr.fr td { color: var(--gold); }
     const S = squadLoad(), n = Math.max(1, cfg.size || 7), ups = [];
     for (const i of xiFor(n, S)) {
       const pl = S.pl[i]; if (!pl) continue; const gx = pl.gx = pl.gx || {};
-      gx[k] = (gx[k] || 0) + amt * (pl.fo === k ? 1.6 : 1) / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 1.5 : 1);
-      const v0 = pl[k]; while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; } if (pl[k] > v0) ups.push(`${pl.n.split(' ').slice(-1)[0]} ${pl[k]}`);
+      gx[k] = (gx[k] || 0) + amt * (pl.fo === k ? 1.6 : 1) / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (talent(pl) ? 1.5 : 1);
+      const v0 = pl[k]; while (gx[k] >= 1 && grows(pl, k)) { gx[k] -= 1; pl[k]++; } if (pl[k] > v0) ups.push(`${pl.n.split(' ').slice(-1)[0]} ${pl[k]}`);
       gx[k] = Math.round(gx[k] * 100) / 100;
     }
     squadSave(S); return ups;
@@ -6697,8 +6713,8 @@ table.st tr.fr td { color: var(--gold); }
       if (pl.fo && g[pl.fo] != null) g[pl.fo] = g[pl.fo] * 1.6 + 0.15; // his training focus
       if (friendly) for (const k in g) g[k] *= 1.5; // a friendly is a match played to develop the players
       for (const [k, nm] of SKILLS) {
-        gx[k] = (gx[k] || 0) + g[k] / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1); // a better training ground, and a talent who has not reached his potential, grow faster
-        while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${nm} ${pl[k]}`); }
+        gx[k] = (gx[k] || 0) + g[k] / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (talent(pl) ? 2 : 1); // a better training ground, and a talent who has not reached his potential, grow faster
+        while (gx[k] >= 1 && grows(pl, k)) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${nm} ${pl[k]}`); }
         gx[k] = Math.round(gx[k] * 100) / 100;
       }
     }
@@ -6832,8 +6848,8 @@ table.st tr.fr td { color: var(--gold); }
       if (k === 'rest') { pl.fit = Math.min(100, fitOf(pl) + 15); n++; continue; }
       if (fitOf(pl) < 45) { tired++; continue; } // too tired to train
       const gx = pl.gx = pl.gx || {};
-      gx[k] = (gx[k] || 0) + 0.45 / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1);
-      while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ').slice(-1)[0]} ${pl[k]}`); }
+      gx[k] = (gx[k] || 0) + 0.45 / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr')) * (talent(pl) ? 2 : 1);
+      while (gx[k] >= 1 && grows(pl, k)) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ').slice(-1)[0]} ${pl[k]}`); }
       gx[k] = Math.round(gx[k] * 100) / 100;
       pl.fit = Math.max(FIT_MIN, Math.round(fitOf(pl) - TRAIN_FIT)); n++;
     }
@@ -6857,7 +6873,7 @@ table.st tr.fr td { color: var(--gold); }
     }
     T.appendChild(g);
     if (trainMsg) { const m = document.createElement('p'); m.className = 'trmsg'; m.textContent = trainMsg; T.appendChild(m); }
-    const fs = document.createElement('p'); fs.className = 'sqnote'; fs.textContent = 'Each player can also be trained on his own: open The team, tap him and spend TP under Training. A friendly (under Play) gives 50 % more TP.';
+    const fs = document.createElement('p'); fs.className = 'sqnote'; fs.textContent = 'Each player can also be trained on his own: open The team, tap him and spend TP under Training, up to his potential. A friendly (under Play) gives 50 % more TP.';
     T.append(fs);
   }
   function clubEcoPaint() {
@@ -7700,7 +7716,7 @@ table.st tr.fr td { color: var(--gold); }
     $('sqStats').hidden = sqTab !== 0; $('sqAb').hidden = sqTab !== 1; $('sqForm').hidden = sqTab !== 2; $('sqRole').hidden = sqTab !== 3;
     const box = $('sqStats'); box.textContent = '';
     for (const [k, name] of SKILLS) {
-      const v = p[k], r = document.createElement('div'); r.className = 'strow' + (p.fo === k ? ' fo' : '');
+      const v = p[k], r = document.createElement('div'); r.className = 'strow tp' + (p.fo === k ? ' fo' : '');
       const b = document.createElement('span'); b.textContent = p.pos === 'MV' && k === 'def' ? 'Reflexes' : k === 'pas' ? 'Passing' : name;
       const bar = document.createElement('div'); bar.className = 'lvbar'; const f = document.createElement('i'); f.style.width = Math.round((v - 40) / 59 * 100) + '%'; bar.appendChild(f);
       const val = document.createElement('b'); val.textContent = v;
@@ -7708,9 +7724,13 @@ table.st tr.fr td { color: var(--gold); }
       bt.onclick = () => { // his training focus: this skill grows faster in matches and training games
         const S2 = squadLoad(), q = S2.pl[sqSel]; if (q.fo === k) delete q.fo; else q.fo = k; squadSave(S2); sfx.kick(0.3); guideHit('train'); sqRefresh();
       };
-      r.append(b, bar, val, bt); box.appendChild(r);
+      const price = tpPrice(v), can = grows(p, k), tb = document.createElement('button'); // spend TP: +1, as long as he stays within his potential
+      tb.textContent = !can ? 'Max' : `+1 · ${price} TP`; tb.disabled = !can; if (!can || (S.tp || 0) < price) tb.className = 'alt';
+      tb.onclick = () => { const S2 = squadLoad(), q = S2.pl[sqSel]; if (!q || !grows(q, k)) return; if ((S2.tp || 0) < price) { tb.textContent = `Need ${price - (S2.tp || 0)} TP`; return; }
+        S2.tp -= price; q[k]++; squadSave(S2); paintTP(S2); sfx.win(); guideHit('train'); sqRefresh(); };
+      r.append(b, bar, val, bt, tb); box.appendChild(r);
     }
-    { const h = document.createElement('p'); h.className = 'sqnote'; h.textContent = 'Players get better by playing matches and training games. Pick a focus and that skill grows faster.'; box.appendChild(h); }
+    { const po = potOf(p), h = document.createElement('p'); h.className = 'sqnote'; h.innerHTML = `<b>You have ${S.tp || 0} TP. Potential ${po}${o >= po ? ' (reached)' : ` (${po - o} to go)`}.</b> `; h.append(o >= po ? 'He is as good as he will get: TP and matches can no longer raise him.' : 'Spend TP to raise a skill, or pick a focus so it grows faster in matches. You get TP from every match.'); box.appendChild(h); }
     { // form and humør: what he brings into the next match
       const FB = $('sqForm'); FB.textContent = '';
       const f = Math.round(fitOf(p)), m = Math.round(morOf(p));
