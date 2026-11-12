@@ -752,8 +752,8 @@ button.sw[aria-pressed="true"], button.sw[aria-pressed="true"]:hover { backgroun
 
 /* ---- screens: every menu is one full page with the same header ---- */
 .card, .overlay:not(#menu) .card { background: var(--s1); border: 1px solid var(--line); border-radius: var(--r3); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
-.overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help) { background: var(--bg); }
-.overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help) > .card { background: transparent; border: 0; box-shadow: none; max-width: 820px; padding-top: 10px; }
+.overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help):not(#invOv) { background: var(--bg); }
+.overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help):not(#invOv) > .card { background: transparent; border: 0; box-shadow: none; max-width: 820px; padding-top: 10px; }
 #menu:has(> .card:not(#pgHome):not([hidden])) { background: var(--bg); }
 #menu > .card:not(#pgHome) { background: transparent; border: 0; box-shadow: none; max-width: 820px; padding-top: 10px; }
 #menu { background: rgba(8, 16, 12, 0.42); }
@@ -764,7 +764,7 @@ button.sw[aria-pressed="true"], button.sw[aria-pressed="true"]:hover { backgroun
 .top { gap: 12px; justify-content: flex-start; min-height: 44px; }
 .top h2 { flex: 1; min-width: 0; text-align: left; font-size: 22px; font-weight: 700; text-transform: none; letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .top .back, .top .sp { flex: 0 0 auto; }
-.overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help), #menu:has(> .card:not(#pgHome):not([hidden])) { align-items: flex-start; }
+.overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help):not(#invOv), #menu:has(> .card:not(#pgHome):not([hidden])) { align-items: flex-start; }
 .top .back { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: var(--r2); font-size: 0; }
 .top .back svg.i { width: 24px; height: 24px; }
 .top .sp:empty { display: none; }
@@ -838,7 +838,7 @@ table.st td { border-bottom-color: var(--line); }
 .pbar b, .lvbar i { background: var(--gold); }
 
 /* dialogs that stay on top of a screen */
-#giftOv > .card, #packOv > .card, #abOv > .card, #paused > .card, #help > .card { background: var(--s1); }
+#giftOv > .card, #packOv > .card, #abOv > .card, #paused > .card, #help > .card, #invOv > .card { background: var(--s1); }
 
 /* in the match */
 .pausebtn, .hlclose { background: rgba(15, 29, 22, 0.78); border: 1px solid var(--line2); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); color: var(--chalk); }
@@ -880,7 +880,7 @@ button.tile.hot2 small { color: var(--muted); }
 #tabbar button.mid[aria-pressed="true"] { background: var(--act); color: #fff; box-shadow: inset 0 -3px 0 var(--act-lo); }
 #tabbar button.mid:not([aria-pressed="true"]) svg.i { color: var(--act-hi); }
 /* every other screen uses the full width of the phone too */
-#menu > .card:not(#pgHome), .overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help) > .card { max-width: none; }
+#menu > .card:not(#pgHome), .overlay:not(#menu):not(#giftOv):not(#packOv):not(#abOv):not(#paused):not(#help):not(#invOv) > .card { max-width: none; }
 #wrap.n560 #pgHome .tabp { grid-template-columns: 1fr 1fr !important; grid-template-rows: none !important; overflow-y: auto; }
 #wrap.n560 #pgHome .tabp > * { grid-row: auto !important; grid-column: auto !important; min-height: 110px; }
 
@@ -1039,6 +1039,27 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
 
 .mtghost { position: absolute; z-index: 40; width: 220px; pointer-events: none; opacity: 0.92; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5); border-color: var(--gold) !important; }
 #mtSubs .mtswr { touch-action: none; cursor: grab; }
+
+#invOv > .card { max-width: 420px; } #invOv .btns { display: flex; gap: 10px; } #invOv .btns button { flex: 1; }
+/* online friends and leaderboard */
+.frtab { display: flex; flex-direction: column; gap: 10px; }
+.frhead { display: grid; grid-template-columns: 1fr 1.3fr; gap: 10px; }
+.frcode { align-items: center; text-align: center; } .frcode .trcode { font-size: 30px; letter-spacing: 0.16em; }
+.fradd .joinrow input { text-transform: uppercase; letter-spacing: 0.12em; }
+.frlist { display: flex; flex-direction: column; gap: 6px; }
+.frrow { display: grid; grid-template-columns: 40px 1fr auto auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--r2, 12px); background: var(--s1, rgba(255,255,255,0.06)); border: 1px solid var(--line, rgba(255,255,255,0.1)); }
+.frrow.on { border-color: var(--act, #3fbf6f); }
+.frbadge svg { width: 36px; height: 40px; display: block; }
+.frmid { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2px; } .frmid b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frsub { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.frdot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; opacity: 0.6; } .frrow.on .frdot { background: var(--act, #3fbf6f); opacity: 1; box-shadow: 0 0 6px var(--act, #3fbf6f); }
+.frst { display: flex; flex-direction: column; align-items: center; min-width: 64px; } .frst b { font-family: var(--disp); font-size: 14px; } .frst span { font-size: 11px; color: var(--muted); }
+.fract { display: flex; gap: 6px; align-items: center; } .fract button { min-height: 40px; padding: 8px 14px; font-size: 14px; } .fract .frx { min-width: 40px; padding: 8px 10px; }
+.frempty { padding: 14px; text-align: center; }
+.frbar { display: flex; gap: 10px; align-items: center; justify-content: space-between; } .frbar .seg { flex: 1; max-width: 320px; } .frbar > button { min-height: 40px; padding: 8px 14px; }
+table.st tr.fr td { color: var(--gold); }
+.frtoast { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 60; max-width: 90%; background: #1f6f43; color: #fff; font-weight: 700; padding: 9px 18px; border-radius: 20px; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+
 </style>
 
 <div id="wrap">
@@ -1090,7 +1111,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
         <button id="goPass" class="big tile alt"><i class="ic">⭐</i>Season pass<small id="passSub">30 levels every month</small></button>
         <button id="bDaily" class="big tile alt"><i class="ic">✅</i>Challenges<small id="evSub">Daily challenges and the weekly event</small></button>
         <button id="goProf" class="big tile alt"><i class="ic">🏅</i>Stats and trophies<small>Your numbers and every trophy</small></button>
-        <button id="bFriends" class="big tile alt"><i class="ic">🤝</i>Friends<small>People you have played online</small></button>
+        <button id="bFriends" class="big tile alt"><i class="ic">🤝</i>Friends and leaderboard<small id="frSub">Add friends with a code, invite them, see the best players</small></button>
       </div>
       <div hidden>
         <button id="goSquad"></button><button id="goTac"></button><button id="goFree"><small id="freeSub"></small></button><button id="goEvent"></button><button id="bHelp"></button>
@@ -1551,9 +1572,26 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
   <div class="overlay" id="friends" hidden>
     <div class="card wide">
       <div class="top"><button id="friendsClose" class="alt back">‹ Back</button><h2>Friends</h2><span class="sp"></span></div>
-      <p>Everyone you have played online with, and their rank from the last time you played. Play with a friend via code and they join the list.</p>
-      <div class="tablewrap"><table class="st" id="friendsTable"></table></div>
-      <p id="friendsEmpty" hidden>No friends yet. Play an online match with a friend and they join the list.</p>
+      <div class="frtab" id="frMine">
+        <div class="frhead">
+          <div class="scbox frcode"><b>Your friend code</b><div class="trcode" id="frCode">······</div><span class="sqnote" id="frCodeNote">Give it to a friend so they can add you.</span><button class="alt" id="frShare">Share code</button></div>
+          <div class="scbox fradd"><b>Add a friend</b><span class="sqnote">Type the code from your friend's Friends screen.</span><div class="joinrow"><input id="frIn" maxlength="6" placeholder="Code" aria-label="Friend code" autocomplete="off" autocapitalize="characters"><button id="frAdd">Add</button></div><span class="sqnote" id="frMsg"></span></div>
+        </div>
+        <div class="frlist" id="frList"></div>
+      </div>
+      <div class="frtab" id="frBoard">
+        <div class="frbar"><div class="seg" id="lbSeg" role="group" aria-label="Team size"><button data-l="">7 v 7</button><button data-l="11">11 v 11</button></div><button class="alt" id="lbFresh">Refresh</button></div>
+        <div class="tablewrap"><table class="st" id="lbTable"></table></div>
+        <p class="hint" id="lbNote"></p>
+      </div>
+      <div class="frtoast" id="frToast" hidden></div>
+    </div>
+  </div>
+  <div class="overlay" id="invOv" hidden>
+    <div class="card">
+      <h1 class="h1s" id="invT">Match invite</h1>
+      <p id="invP"></p>
+      <div class="btns"><button class="alt" id="invNo">Not now</button><button id="invYes">Join</button></div>
     </div>
   </div>
 
@@ -1911,22 +1949,10 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     saveMe(M);
     const F = loadFriends();
     for (const c of opps) { const f = F[c.id]; if (f) { f.h = f.h || [0, 0, 0]; f.h[res === 1 ? 0 : res === 0 ? 2 : 1]++; } }
-    saveFriends(F);
+    saveFriends(F); frPublish();
     return '';
   }
-  function showFriends() {
-    const M = loadMe(), F = loadFriends();
-    const rows = Object.values(F).map(f => ({ ...f, rp: f.rp === undefined ? rpFromElo(f.r) : f.rp, me: false })); rows.push({ n: (cfg.name || 'You') + ' (you)', rp: rpOf(M, ''), w: M.w, d: M.d, l: M.l, g: M.g, me: true });
-    rows.sort((a, b) => b.rp - a.rp);
-    const tbl = $('friendsTable');
-    fillTable(tbl, ['#', 'Name', 'Rank', 'RP', 'W-D-L', 'Goals', 'You vs them'], rows.map((f, i) => [i + 1, f.n, rankOf(f.rp).n, f.rp, `${f.w}-${f.d}-${f.l}`, f.g, f.me ? '' : `${(f.h || [0])[0]}-${(f.h || [0, 0])[1]}-${(f.h || [0, 0, 0])[2]}`]));
-    tbl.rows[0].cells[0].className = ''; tbl.rows[0].cells[1].className = 'l';
-    [...tbl.rows].slice(1).forEach((r, i) => { if (rows[i] && rows[i].me) r.className = 'me'; r.cells[1].className = 'l'; r.cells[0].className = ''; });
-    $('friendsEmpty').hidden = rows.length > 1;
-    $('friends').hidden = false;
-  }
-  $('bFriends').onclick = showFriends;
-  $('friendsClose').onclick = () => { $('friends').hidden = true; };
+  $('friendsClose').onclick = () => { $('friends').hidden = true; frOpen = false; hubPaint(); };
   let quick = false, quickJudge = null, quickN = 7; // a ranked "Find modstander" match (see quickFind)
   // ---------- Online rank (divisions on top of the Elo rating) and the monthly season ----------
   // Every calendar month is a season: your best division that month pays out when the next one starts, and the rating
@@ -2132,6 +2158,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
         const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = scHome ? 'The scout is back with his finds' : Mk.l.length ? `${Mk.l.length} players today` + (dl ? ` · offer: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Sold out today. New players tomorrow'; }
       $('freeSub').textContent = S.free.length ? `${S.free.length} pack${S.free.length > 1 ? 's' : ''} ready to open!` : 'From the season pass and daily rewards';
       $('goFree').classList.toggle('hot', !!S.free.length);
+      try { const on = Object.values(frLive).filter(c => frWhen(c).on).length; $('frSub').textContent = on ? `${on} friend${on > 1 ? 's' : ''} online now. Invite them to a match` : 'Add friends with a code, invite them, see the best players'; $('bFriends').classList.toggle('dot', !!on); } catch (_) {}
       $('passSub').textContent = `Level ${S.t} of ${PASS_N} · ${S.t >= PASS_N ? 'complete' : `${(S.t + 1) * PASS_XP - S.xp} XP to next`} · new pass in ${daysLeftInMonth()} days`;
       const k7 = rankOf(rpOf(M, '')), k11 = rankOf(rpOf(M, '11')), kb = k11.step > k7.step ? k11 : k7;
       $('rankIc').innerHTML = badgeSVG(kb);
@@ -3292,7 +3319,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const press = (...ids) => { for (const id of ids) { const b = $(id); if (b && !b.hidden && b.offsetParent) { b.click(); return true; } } return false; };
     if (typing()) { document.activeElement.blur(); return true; }
     // the overlays from the top down (later in the page lies on top)
-    const OV = [['giftOv', 'giftOk'], ['abOv', 'abClose'], ['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['passOv', 'passClose'], ['rankOv', 'rankClose'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
+    const OV = [['giftOv', 'giftOk'], ['abOv', 'abClose'], ['end', 'toCup', 'toSeason', 'toComp', 'toMenu'], ['passOv', 'passClose'], ['rankOv', 'rankClose'], ['squad', 'sqClose'], ['ko', 'koClose'], ['career', 'carClose'], ['paused', 'quit'], ['cup', 'cupClose', 'cupClose1'], ['friends', 'friendsClose'], ['invOv', 'invNo'], ['daily', 'dailyClose'], ['league', 'leagueClose'],
       ['help', 'helpOk'], ['myteam', 'mtClose'], ['lobby', 'cancel'], ['season', 'seasonClose'], ['shop', 'shopClose'], ['prof', 'profClose']];
     if (!$('rkFx').hidden) { $('rkFx').hidden = true; return true; }
     if (state === 'hl') return press('hlClose') || true;
@@ -6990,6 +7017,188 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     const r = await fetch(`${FB}/${path}.json${q || ''}`, { method, headers: { ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}), ...(hdr || {}) }, body: body !== undefined ? JSON.stringify(body) : undefined });
     return r;
   }
+  // ---------- online friends and the leaderboard (same small database as the shared market) ----------
+  // /pl/<id>   your public card: name, club, rank points, record, when you were last seen
+  // /code/<C>  friend code -> id (written once)
+  // /fr/<id>/<from>  "someone added you": the other phone adds them back
+  // /inv/<id>  the latest match invite: who, and the 4-digit room code
+  const FR_ON = 3 * 60e3, INV_AGE = 4 * 60e3, FC_ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let frOff = false, frOpen = false, frLive = {}, frBusy = false, lbL = '', lbRows = null, lbAt = 0, lbErr = '', invSeen = '', invGot = null;
+  const frNm = v => String(v || '').replace(/[^\p{L}\p{N} .'_-]/gu, '').trim().slice(0, 14);
+  const frClub = v => String(v || '').replace(/[^\p{L}\p{N} .'&_-]/gu, '').trim().slice(0, 24);
+  const frNum = v => Math.max(0, Math.min(99999, Number(v) | 0));
+  function frToast(t) { const e = $('frToast'); if (!e) return; e.textContent = t; e.hidden = false; clearTimeout(frToast.t); frToast.t = setTimeout(() => { e.hidden = true; }, 2600); }
+  async function frCall(method, path, body, q) { // a database call; a "permission denied" means the rules for friends are not switched on yet
+    const r = await fb(method, path, body, null, q);
+    if (r.status === 401 || r.status === 403) { frOff = true; throw new Error('off'); }
+    if (!r.ok) throw new Error('http'); frOff = false;
+    return r.json();
+  }
+  function frCard() { // what everyone can see about you
+    const M = loadMe(), T = loadMT();
+    return { n: frNm(cfg.name) || 'Coach', c: frClub(T.made ? T.n : ''), rp: frNum(rpOf(M, '')), rp11: frNum(rpOf(M, '11')), w: frNum(M.w), d: frNum(M.d), l: frNum(M.l), g: frNum(M.g), n11: frNum(M.n11), w11: frNum(M.w11), ov: Math.min(99, frNum(myOvr(cfg.size || 11))), code: M.fc || '', t: Date.now(), on: Date.now(), s: state === 'play' || state === 'lobby' ? 1 : 0 };
+  }
+  const frClean = (id, o) => o && typeof o === 'object' ? { id, n: frNm(o.n) || 'Coach', c: frClub(o.c), rp: frNum(o.rp), rp11: frNum(o.rp11), w: frNum(o.w), d: frNum(o.d), l: frNum(o.l), g: frNum(o.g), n11: frNum(o.n11), w11: frNum(o.w11), ov: Math.min(99, frNum(o.ov)), on: Number(o.on) || 0, s: o.s ? 1 : 0 } : null;
+  async function frPublish() { try { await frCall('PUT', 'pl/' + loadMe().id, frCard()); } catch (_) {} }
+  async function frEnsureCode() { // claim a 6-letter code that nobody else has
+    const M = loadMe(); if (M.fc) return M.fc;
+    for (let k = 0; k < 6; k++) {
+      let c = ''; for (let i = 0; i < 6; i++) c += FC_ABC[Math.floor(Math.random() * FC_ABC.length)];
+      try {
+        const have = await frCall('GET', 'code/' + c); if (have) continue;
+        await frCall('PUT', 'code/' + c, M.id);
+        const M2 = loadMe(); M2.fc = c; saveMe(M2); frPublish(); return c;
+      } catch (e) { if (frOff) return ''; }
+    }
+    return '';
+  }
+  async function frAddCode(raw) {
+    const c = String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const msg = t => { $('frMsg').textContent = t; };
+    if (c.length !== 6) { msg('A friend code has 6 letters and numbers.'); return; }
+    if (c === loadMe().fc) { msg('That is your own code.'); return; }
+    msg('Looking…');
+    try {
+      const id = await frCall('GET', 'code/' + c);
+      if (typeof id !== 'string' || !/^[a-z0-9]{6,20}$/.test(id)) { msg('No one has that code. Check it and try again.'); return; }
+      const card = frClean(id, await frCall('GET', 'pl/' + id));
+      const F = loadFriends(), f = F[id] || { h: [0, 0, 0] };
+      if (f.o) { msg(`${f.n} is already your friend.`); return; }
+      Object.assign(f, { o: 1, n: card ? card.n : 'Friend', rp: card ? card.rp : 0, at: Date.now() }); F[id] = f; saveFriends(F);
+      if (card) frLive[id] = card;
+      await frCall('PUT', `fr/${id}/${loadMe().id}`, { n: frNm(cfg.name) || 'Coach', t: Date.now() });
+      $('frIn').value = ''; msg(''); frToast(`${f.n} is now your friend`); sfx.win(); frPaint();
+    } catch (_) { msg(frOff ? 'Online friends are not switched on yet.' : 'Could not reach the server. Check the connection.'); }
+  }
+  async function frRefresh() { // fresh cards for every friend
+    if (frBusy) return; frBusy = true;
+    const F = loadFriends(), ids = Object.keys(F).filter(id => /^[a-z0-9]{6,20}$/.test(id)).slice(0, 40);
+    await Promise.all(ids.map(async id => { try { const c = frClean(id, await frCall('GET', 'pl/' + id)); if (c) frLive[id] = c; } catch (_) {} }));
+    frBusy = false; if (frOpen) frPaint();
+  }
+  async function frPoll() { // friend requests and match invites for you
+    if (frOff) return;
+    const me = loadMe().id;
+    try {
+      const req = await frCall('GET', 'fr/' + me);
+      if (req && typeof req === 'object') {
+        const F = loadFriends(); let news = [];
+        for (const id of Object.keys(req).slice(0, 20)) {
+          if (!/^[a-z0-9]{6,20}$/.test(id) || id === me) continue;
+          const f = F[id] || { h: [0, 0, 0] }, nm = frNm(req[id] && req[id].n) || 'A friend';
+          if (!f.o) news.push(nm); Object.assign(f, { o: 1, n: f.n || nm, at: Date.now() }); if (!f.n || f.n === 'Friend') f.n = nm; F[id] = f;
+          fb('DELETE', `fr/${me}/${id}`).catch(() => {});
+        }
+        saveFriends(F);
+        if (news.length) { frToast(`${news.join(', ')} added you as a friend`); frRefresh(); hubPaint(); }
+      }
+      const inv = await frCall('GET', 'inv/' + me);
+      if (inv && typeof inv === 'object' && /^\d{4}$/.test(String(inv.c)) && Date.now() - (Number(inv.t) || 0) < INV_AGE) {
+        const key = inv.c + ':' + inv.t;
+        if (key !== invSeen && state === 'menu') { invSeen = key; invShow({ n: frNm(inv.n) || 'A friend', c: String(inv.c), sz: frNum(inv.sz) }); }
+      }
+    } catch (_) {}
+  }
+  function invShow(v) {
+    invGot = v; sfx.win(); buzz(40);
+    $('invP').textContent = `${v.n} wants to play${v.sz ? ` ${v.sz} v ${v.sz}` : ''} with you right now. Join the match?`;
+    $('invOv').hidden = false;
+  }
+  $('invNo').onclick = () => { $('invOv').hidden = true; if (invGot) fb('DELETE', 'inv/' + loadMe().id).catch(() => {}); invGot = null; };
+  $('invYes').onclick = () => {
+    const v = invGot; $('invOv').hidden = true; invGot = null; if (!v) return;
+    fb('DELETE', 'inv/' + loadMe().id).catch(() => {});
+    for (const id of ['friends', 'rankOv', 'mktOv', 'clubOv', 'shop', 'prof', 'daily', 'passOv', 'career', 'ko', 'cup', 'league']) { const o = $(id); if (o) o.hidden = true; }
+    frOpen = false; page('pgOnline'); $('code').value = v.c;
+    if ($('join').disabled) { netmsg.textContent = `${v.n} invited you. Tap Join.`; return; }
+    $('join').click();
+  };
+  async function frInvite(id) { // open a room with your usual match settings and tell your friend the code
+    const f = loadFriends()[id] || {}, nm = (frLive[id] || f).n || 'your friend';
+    if (!room) { frToast('Inviting works on the game\'s own link'); return; }
+    if ($('host').disabled) { frToast('Still connecting. Try again in a moment'); return; }
+    $('friends').hidden = true; frOpen = false;
+    kind = null; drill = null; drillAgain = null; comp = null; coopTwo = false; series = cfg.ser > 1 ? { n: cfg.ser, w: [0, 0], g: 0 } : null;
+    page('pgOnline'); hostRoom();
+    const t0 = Date.now();
+    while (Date.now() - t0 < 20000) { // wait for the room (the first time the help screen shows before it)
+      await new Promise(r => setTimeout(r, 300));
+      const code = $('lobbyCode').textContent;
+      if (mode === 'host' && state === 'lobby' && /^\d{4}$/.test(code)) {
+        try { await frCall('PUT', 'inv/' + id, { f: loadMe().id, n: frNm(cfg.name) || 'Coach', c: code, t: Date.now(), sz: size }); $('lobbyMsg').textContent = `Invite sent to ${nm}. The match appears on their phone when they open Banebold. You can also send the code ${code}.`; }
+        catch (_) { $('lobbyMsg').textContent = `Could not send the invite. Send ${nm} the code ${code} instead.`; }
+        return;
+      }
+      if (state !== 'menu' && state !== 'lobby') return;
+    }
+  }
+  const frWhen = c => { if (!c || !c.on) return { on: false, t: 'Not seen online yet' }; const a = Date.now() - c.on;
+    if (a < FR_ON) return { on: true, t: c.s ? 'In a match' : 'Online now' };
+    const m = a / 60e3; return { on: false, t: 'Seen ' + (m < 60 ? Math.round(m) + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago') }; };
+  function frPaint() {
+    const M = loadMe(), F = loadFriends(), L = $('frList'); L.textContent = '';
+    $('frCode').textContent = M.fc || '······';
+    $('frCodeNote').textContent = frOff ? 'Online friends are not switched on yet. Ask the game\'s owner.' : M.fc ? 'Give it to a friend so they can add you.' : 'Getting your code…';
+    $('frShare').hidden = !M.fc;
+    const el = (t, c, x) => { const e = document.createElement(t); if (c) e.className = c; if (x !== undefined) e.textContent = x; return e; };
+    const rows = Object.entries(F).map(([id, f]) => { const c = frLive[id]; return { id, f, c, w: frWhen(c), rp: c ? c.rp : f.rp === undefined ? rpFromElo(f.r) : f.rp }; });
+    rows.sort((a, b) => (b.w.on - a.w.on) || ((b.f.o | 0) - (a.f.o | 0)) || ((b.c ? b.c.on : 0) - (a.c ? a.c.on : 0)) || b.rp - a.rp);
+    if (!rows.length) { L.append(el('p', 'sqnote frempty', 'No friends yet. Swap friend codes, or play an online match with someone: they join this list.')); return; }
+    for (const r of rows) {
+      const k = rankOf(r.rp), row = el('div', 'frrow' + (r.w.on ? ' on' : ''));
+      const bd = el('span', 'frbadge'); bd.innerHTML = badgeSVG(k); row.appendChild(bd);
+      const mid = el('div', 'frmid'); mid.append(el('b', '', (r.c && r.c.n) || r.f.n || 'Friend'));
+      const sub = el('span', 'frsub'); const dot = el('i', 'frdot'); sub.append(dot, document.createTextNode(r.w.t + (r.c && r.c.c ? ' · ' + r.c.c : ''))); mid.appendChild(sub); row.appendChild(mid);
+      const st = el('div', 'frst'); st.append(el('b', '', k.n), el('span', '', `${r.rp} RP`)); row.appendChild(st);
+      const h = r.f.h || [0, 0, 0], hh = el('div', 'frst'); hh.append(el('b', '', `${h[0] | 0}-${h[1] | 0}-${h[2] | 0}`), el('span', '', 'You vs them')); row.appendChild(hh);
+      const act = el('div', 'fract');
+      if (r.w.on && !r.c.s) { const b = el('button', 'go', 'Invite'); b.onclick = () => frInvite(r.id); act.appendChild(b); }
+      const x = el('button', 'alt frx', '×'); x.setAttribute('aria-label', 'Remove friend'); x.onclick = () => { if (x.dataset.sure) { const F2 = loadFriends(); delete F2[r.id]; saveFriends(F2); delete frLive[r.id]; frPaint(); } else { x.dataset.sure = 1; x.textContent = 'Remove?'; setTimeout(() => { if (x.isConnected) { delete x.dataset.sure; x.textContent = '×'; } }, 2500); } };
+      act.appendChild(x); row.appendChild(act); L.appendChild(row);
+    }
+  }
+  async function lbLoad() {
+    lbErr = ''; lbRows = null; lbPaint();
+    const k = 'rp' + lbL;
+    try {
+      const map = await frCall('GET', 'pl', undefined, `?orderBy=%22${k}%22&limitToLast=100`) || {};
+      lbRows = Object.keys(map).map(id => frClean(id, map[id])).filter(c => c && (lbL ? c.n11 > 0 : c.w + c.d + c.l > 0)).sort((a, b) => b[k] - a[k]); lbAt = Date.now();
+    } catch (_) { lbErr = frOff ? 'The leaderboard is not switched on yet. The game\'s owner has to update the database rules.' : 'Could not load the leaderboard. Check the connection and tap Refresh.'; lbRows = []; }
+    lbPaint();
+  }
+  function lbPaint() {
+    [...$('lbSeg').children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.l === lbL)));
+    const tbl = $('lbTable'), me = loadMe().id, F = loadFriends(), k = 'rp' + lbL;
+    if (!lbRows) { tbl.textContent = ''; $('lbNote').textContent = 'Loading…'; return; }
+    const rows = lbRows.slice(0, 100);
+    if (!rows.length) { tbl.textContent = ''; $('lbNote').textContent = lbErr || 'No one has played a ranked match yet this season. Be the first!'; return; }
+    fillTable(tbl, ['#', 'Name', 'Club', 'Rank', 'RP', lbL ? 'Wins' : 'W-D-L'], rows.map((c, i) => [i + 1, c.n, c.c || '–', rankOf(c[k]).n, c[k], lbL ? `${c.w11}/${c.n11}` : `${c.w}-${c.d}-${c.l}`]));
+    [...tbl.rows].forEach((r, i) => { r.cells[1].className = 'l'; r.cells[2].className = 'l lbclub'; if (i && rows[i - 1]) { if (rows[i - 1].id === me) r.className = 'me'; else if (F[rows[i - 1].id] && F[rows[i - 1].id].o) r.className = 'fr'; } });
+    const mine = rows.findIndex(c => c.id === me);
+    $('lbNote').textContent = lbErr || (!rows.length ? 'No one has played a ranked match yet this season. Be the first!' : mine >= 0 ? `You are number ${mine + 1}. Your friends are marked in gold. Updated after every online match.` : `You are not on the list yet: play an online match${lbL ? ' 11 v 11' : ''} to get on it. Your friends are marked in gold.`);
+  }
+  [...$('lbSeg').children].forEach(b => { b.onclick = () => { lbL = b.dataset.l; lbLoad(); }; });
+  $('lbFresh').onclick = lbLoad;
+  $('frAdd').onclick = () => frAddCode($('frIn').value);
+  $('frIn').addEventListener('keydown', e => { if (e.key === 'Enter') frAddCode($('frIn').value); });
+  $('frShare').onclick = async () => {
+    const c = loadMe().fc; if (!c) return; const url = location.href.split('#')[0];
+    try { if (navigator.share) { await navigator.share({ title: 'Banebold', text: `Add me as a friend in Banebold. My friend code is ${c}`, url }); return; } } catch (_) { return; }
+    try { await navigator.clipboard.writeText(c); frToast('Code copied'); } catch (_) { frToast('Your code is ' + c); }
+  };
+  async function showFriends() {
+    frOpen = true; $('friends').hidden = false; $('frMsg').textContent = '';
+    subTabs($('friends'), [['Friends', ['frMine']], ['Leaderboard', ['frBoard']]], 'friends', $('frMine'));
+    { const bb = $('friends').querySelectorAll('.tabbar.sub button')[1]; if (bb && !bb.dataset.hk) { bb.dataset.hk = 1; bb.addEventListener('click', () => { if (!lbRows || Date.now() - lbAt > 60e3) lbLoad(); }); } }
+    frPaint(); if (subTab.friends === 'Leaderboard') lbLoad();
+    await frPublish(); await frEnsureCode(); frPaint(); frPoll(); await frRefresh();
+  }
+  $('bFriends').onclick = showFriends;
+  // keep your card fresh and look for invites while the game is open
+  setTimeout(() => { frPublish(); frPoll(); frRefresh().then(() => { if (state === 'menu') hubPaint(); }); }, 2500);
+  let frTick = 0;
+  setInterval(() => { if (document.hidden || frOff) return; frPublish(); frPoll(); if (frOpen || ++frTick % 3 === 0) frRefresh().then(() => { if (state === 'menu') hubPaint(); }); }, 20000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !frOff) { frPublish(); frPoll(); } });
   const gmClean = (id, o) => { if (!o || typeof o !== 'object') return null; const p = cleanPl(o.p); if (!p) return null;
     return { id, p, pr: Math.max(0, Math.min(99995, Math.round(Number(o.pr) / 5) * 5 || 0)), s: String(o.s || '').slice(0, 20), n: String(o.n || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 14) || 'A coach', t: Number(o.t) || 0, st: o.st ? 1 : 0, bn: String(o.bn || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 14) || 'another coach', b: String(o.b || '').slice(0, 20) }; };
   const gmBack = p => { const S = squadLoad(); if (S.pl.some(q => q.n === p.n)) return true; if (S.pl.length >= SQ_MAX) return false; S.pl.push({ ...p }); squadSave(S); return true; }; // he comes home to your squad
