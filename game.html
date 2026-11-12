@@ -4809,7 +4809,7 @@ table.st tr.fr td { color: var(--gold); }
           if (bx) go(bx[0], bx[1], Math.hypot(bx[0] - p.x, bx[1] - p.y) > 50); else go(Math.max(PL + 90, Math.min(PR - 90, o.x + dir * 150)), CY + lane * [100, 130, 160][T.w], Math.abs(p.x - o.x) < 60);
         }
         else {
-          let [x, y] = shape(0.06);
+          let [x, y] = shape(0.06); p.supU = false;
           const near = mates.filter(q => q !== o && q.k !== 0).sort((a, b) => Math.hypot(a.x - o.x, a.y - o.y) - Math.hypot(b.x - o.x, b.y - o.y));
           const rank = near.indexOf(p);
           if (rank >= 0 && rank < (size >= 7 ? 3 : 2) && !setp && !(p.run > 0)) { // the two nearest offer (three in 7 and 11 a side, the third one further out): find open grass 120-170 from the ball, a bit forward
@@ -4825,7 +4825,7 @@ table.st tr.fr td { color: var(--gold); }
               const sc = Math.min(fd, 140) + Math.min(lane, 60) * 1.2 + (sx - o.x) * dir * (prs && rank === 0 ? -0.15 : 0.35) - Math.hypot(sx - p.x, sy - p.y) * 0.25 - (off ? 300 : 0) - (rank >= 1 && near.slice(0, rank).some(m => Math.hypot(m.x - sx, m.y - sy) < 90) ? 200 : 0);
               if (sc > bsc) { bsc = sc; best = [sx, sy]; }
             }
-            if (best) [x, y] = best;
+            if (best) { [x, y] = best; p.supU = prs && rank < 2; }
           } else {
             p.run = p.run || 0;
             const u0 = formOf(p)[0], ol = offsideLine(p.team), fwd = (o.x - ownX) * dir; // how far up the pitch the ball is
@@ -4857,7 +4857,7 @@ table.st tr.fr td { color: var(--gold); }
           else {
           [x, y] = spaceOut(p, x, y, mates, o);
           if (!(p.run > 0) && o !== p) [x, y] = getOpen(p, x, y, o, foes, dir, mates);
-          go(x, y, p.run > 0 || Math.hypot(x - p.x, y - p.y) > 90);
+          go(x, y, p.run > 0 || Math.hypot(x - p.x, y - p.y) > (p.supU ? 30 : 90));
           }
         }
       } else if (setp && setp.team !== p.team && o && (keeper || p === chaser || (p === second && !bp))) {
@@ -4957,6 +4957,18 @@ table.st tr.fr td { color: var(--gold); }
         const L = PR - PL, lo = dLine[p.team] + L * 0.08, hi = dLine[p.team] + L * 0.21, u = (tx - ownX) * dir;
         if (u < lo || u > hi) tx = ownX + dir * Math.max(lo, Math.min(hi, u));
       }
+      // Daniel 2026-11-12: they help defend (as in FIFA): just after we lose it, a man caught ahead of the ball sprints back to get goal-side
+      // instead of jogging, and whoever is nearest to an opponent running at our goal tracks him
+      if (o && o.team !== p.team && !keeper && !setp && size >= 5) {
+        const lost = clock > 0 && wonAt[o.team] - clock < 4, ahead = (p.x - o.x) * dir > 20, behindT = (tx - p.x) * -dir > 60;
+        if (lost && ahead && behindT && p.stamina > 0.25) out.sprint = true;
+        if (p !== chaser && p !== second) { // a runner of theirs at our goal: the nearest of ours who is not pressing goes with him
+          const run = foes.find(f => f !== o && Math.hypot(f.vx, f.vy) > MAXV * 0.9 && f.vx * -dir > MAXV * 0.5 && (f.x - ownX) * dir < (PR - PL) * 0.45 && !mates.some(m => m !== p && Math.hypot(m.x - f.x, m.y - f.y) < 45));
+          if (run && mates.filter(m => m !== chaser && m !== second && !isKeeper(m)).reduce((a, b) => (Math.hypot(b.x - run.x, b.y - run.y) < Math.hypot(a.x - run.x, a.y - run.y) ? b : a)) === p) {
+            const gx = ownX - run.x, gy = CY - run.y, gl = Math.hypot(gx, gy) || 1; tx = run.x + gx / gl * 30 + run.vx * 0.25; ty = run.y + gy / gl * 30 + run.vy * 0.25; out.sprint = p.stamina > 0.2; tst('track');
+          }
+        }
+      }
       // as in FIFA: one man presses and one covers, everybody else holds his place instead of crowding the man on the ball
       if (o && o.team !== p.team && !keeper && p !== chaser && !setp) {
         const cov = p === second, near = cov ? (T.pr === 2 ? 75 : 150) : 145;
@@ -5031,6 +5043,7 @@ table.st tr.fr td { color: var(--gold); }
   }
   function step(dt) {
     tickFx(dt);
+    hasHum = [P.some(q => q.team === 0 && isHuman(q)), P.some(q => q.team === 1 && isHuman(q))];
     if (paused) return;
     if (pause > 0) {
       const was = pause; pause -= dt;
@@ -5888,7 +5901,11 @@ table.st tr.fr td { color: var(--gold); }
   function matchMins() { if (quick && (mode === 'host' || mode === 'guest')) return quickN === 11 ? 3 : 2; if (comp) return comp.mins; if (kind === 'season') { const S = seasonLoad(); if (S) return S.mins; } return cfg.mins; }
   function matchDiff() { if (drill) return DRILL_DIFF[(drill.lv || 1) - 1]; if (comp) return comp.diff; if (kind === 'season') { const S = seasonLoad(); if (S) return S.diff; } return cfg.diff; }
   const tn = t => (teamPick ? teamPick[t].n : KITN[kit][t]);
-  const aiD = t => tD[t] || DIFF[1];
+  // Daniel 2026-11-12: your team-mates are as clever as in FIFA whatever the level. The level only sets how good the OPPONENT is;
+  // before, on Easy your own men ran slower than you and thought like Easy, and with your own squad they even lost their brain (no iq)
+  let hasHum = [false, false];
+  const mateD = d => ({ ...d, spd: Math.max(d.spd || 0, DIFF[2].spd), pass: Math.max(d.pass || 0, DIFF[2].pass), shoot: Math.max(d.shoot || 0, DIFF[1].shoot), tackle: Math.max(d.tackle || 0, DIFF[2].tackle), iq: Math.max(d.iq || 0, 0.8), react: Math.min(d.react ?? 1, DIFF[2].react), aimErr: Math.min(d.aimErr ?? 1, DIFF[2].aimErr) });
+  const aiD = t => { const d = tD[t] || DIFF[1]; return hasHum[t] ? (d.mate || (d.mate = mateD(d))) : d; };
   function rgbDist(a, b) { const x = parseInt(a.slice(1), 16), y = parseInt(b.slice(1), 16); return Math.hypot((x >> 16) - (y >> 16), ((x >> 8) & 255) - ((y >> 8) & 255), (x & 255) - (y & 255)); }
   function kitColors(A, B) { // the away side wears its second kit if the colours clash
     let a = B.c1; if (A === B || rgbDist(A.c1, a) < 120) a = B.c2; if (rgbDist(A.c1, a) < 120) a = '#ffd447';
@@ -5920,7 +5937,7 @@ table.st tr.fr td { color: var(--gold); }
     tD = [0, 1].map(t => {
       if (!teamPick) return base;
       const f = teamPick[t].str - 3;
-      return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
+      return { iq: base.iq, spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
     for (const p of P) { p.lv = null; p.r99 = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.rl = 0; p.cap = false; p.spk = 0; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; p.coP = null; p.coI = -1; }
     if (m === 'cpu' || (comp && m === 'host')) cpuRatings(1); // the computer's players each have their own rating too
@@ -5931,7 +5948,7 @@ table.st tr.fr td { color: var(--gold); }
     }
     if ((m === 'cpu' && usesSquad()) || (comp && m === 'host')) { // your trained squad (when you play as your own club): every player plays at his own rating
       const L = (() => { const a = squadToPitch(), x = comp && m === 'host' ? coMix() : null; return x || a; })(); const d = tD[0], ck = (chemOf(size).v - 50) / 50; // kemi: a team that knows each other plays a little better
-      tD[0] = { spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
+      tD[0] = { iq: d.iq, spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
       tD[0].pass *= 1 + 0.06 * ck; tD[0].tackle *= 1 + 0.04 * ck; tD[0].react *= 1 - 0.06 * ck;
     }
   }
