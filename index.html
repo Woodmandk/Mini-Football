@@ -1089,7 +1089,7 @@ table.st tr.fr td { color: var(--gold); }
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
         <div class="logo"><span class="r">Bane</span><span class="b">bold</span></div>
-        <span class="mfver" id="mfVer">v12.11 20:24</span>
+        <span class="mfver" id="mfVer">v12.11 21:39</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
@@ -3195,6 +3195,7 @@ table.st tr.fr td { color: var(--gold); }
     if (kind !== 'train' && kind !== 'test') for (const l of seriesAfter(win, me)) lines.push(l);
     endLines(lines);
     $('end').hidden = false;
+    flash = null; // no text left hanging from the last moment of play (the guest would keep hearing its whistle)
     sfx.whistle(3);
   }
   function endLines(lines) {
@@ -9253,6 +9254,7 @@ table.st tr.fr td { color: var(--gold); }
     K.how = 1; koSave(K);
   }
   const CO_TRO = ['coop', 'kocup', 'champ', 'promo'];
+  let gFl = '';
   function applyState(s) {
     if (!s || !Array.isArray(s.p) || !Array.isArray(s.b)) return;
     if (s.cv) carShare(s.cv);
@@ -9306,7 +9308,8 @@ table.st tr.fr td { color: var(--gold); }
     if (nb !== banner && /^[123]$/.test(nb)) sfx.beep();
     banner = nb;
     const fl = typeof s.fl === 'string' ? s.fl.slice(0, 14) : '';
-    if (fl && !flash) { flash = { text: fl, t: 0.9 }; sfx.foul(); }
+    if (fl !== gFl) { gFl = fl; if (fl && s.st === 'p') sfx.foul(); } // the referee whistles once, when the host's text first shows (not again each time ours runs out, and never after the match)
+    if (fl && s.st === 'p') flash = { text: fl, t: 0.25 }; else if (s.st !== 'p') flash = null; // shown as long as the host shows it
     spR = Math.max(0, Math.min(200, Number(s.sp) || 0)); spG = Number(s.sw) | 0; refCarryG = !!s.rc;
     const no = Number(s.b[2]), had = P[ball.owner]; ball.owner = Number.isInteger(no) && no >= 0 && no < P.length ? no : -1;
     if (had && had.ctrl === 'ME' && ball.owner < 0 && state === 'play') buzz(22); // the ball left your feet: a kick
