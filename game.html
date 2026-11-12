@@ -3559,15 +3559,18 @@ table.st tr.fr td { color: var(--gold); }
     const isPen = ball.rs === 'pen' && p.frozen > 0 && (pen || so);
     if (isPen) power = (470 + pw * 280) * Math.max(1, G.spot / 105); // from the real penalty mark: just as quick to the goal as before, so penalties stay as hard
     const dir = p.team ? -1 : 1, gx = p.team ? PL : PR;
-    { // aim help, kept light (Daniel 2026-11-12: a real football game, not arcade): where you point is where it goes.
-      // Only an aim just wide of the post is nudged part of the way back in; there is no automatic placement away from the keeper
+    { // aim help, as in FIFA. Simple buttons (FIFA's assisted shooting): the stick picks WHERE in the goal (near post, middle, far post)
+      // and the shot is aimed inside the posts there; whether it really gets there is down to the strike (shotError: power, finishing,
+      // balance, pressure). Advanced buttons (FIFA's manual): where you point is where it goes; only an aim just wide of the post is
+      // nudged part of the way back. Neither picks the corner away from the keeper for you (Daniel 2026-11-12: depth, not arcade)
       const dist = (gx - p.x) * dir;
       if (isHuman(p) && !isPen && dist > 30 && dist < 560 && fx * dir > 0.35) {
-        const yc = p.y + fy * (gx - p.x) / fx, lim = MOUTH * 0.9, wide = Math.abs(yc - CY) - lim;
-        if (wide > 0 && wide < MOUTH * 0.6) {
-          const ty = yc - Math.sign(yc - CY) * wide * 0.55, ax = gx - p.x, ay = ty - p.y, l = Math.hypot(ax, ay);
-          fx = ax / l; fy = ay / l;
-        }
+        const yc = p.y + fy * (gx - p.x) / fx;
+        const ri = p.ctrl === 'R' ? remoteIn.get(p.peer) : null, manual = ri ? !!ri.adv : advOn();
+        let ty = null;
+        if (!manual && Math.abs(yc - CY) < MOUTH * 2.6) ty = CY + Math.max(-1, Math.min(1, (yc - CY) / (MOUTH * 1.5))) * MOUTH * 0.72; // the side you point to, inside the post
+        else if (manual) { const lim = MOUTH * 0.9, wide = Math.abs(yc - CY) - lim; if (wide > 0 && wide < MOUTH * 0.6) ty = yc - Math.sign(yc - CY) * wide * 0.55; }
+        if (ty !== null) { const ax = gx - p.x, ay = ty - p.y, l = Math.hypot(ax, ay); fx = ax / l; fy = ay / l; }
       }
     }
     if (lvOf(p) && !isPen) power *= 1 + 0.02 * lvOf(p).sht;
