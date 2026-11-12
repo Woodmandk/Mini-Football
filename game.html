@@ -3130,7 +3130,7 @@ table.st tr.fr td { color: var(--gold); }
     else if (mode === 'cpu' && size === 1) t.textContent = win === 0 ? 'You won' : 'The computer won';
     else t.textContent = win === me ? 'You won' : (mode === 'cpu' ? 'The computer won' : 'You lost');
     $('fh').textContent = score[0]; $('fa').textContent = score[1];
-    $('endMsg').textContent = (ss ? `Penalty shootout: ${ss[0]}-${ss[1]}. ` : '') + (mode === 'guest' ? (gCoop ? 'The host starts the next match.' : 'The host can start a new match.') : '');
+    $('endMsg').textContent = (ss ? `Penalty shootout: ${ss[0]}-${ss[1]}. ` : '') + (mode === 'guest' ? (gCoop ? 'Either of you can start the next match.' : 'The host can start a new match.') : '');
     $('again').hidden = mode === 'guest';
     $('again').textContent = 'Play again';
     if (mode === 'host') updateAgain();
@@ -3272,6 +3272,7 @@ table.st tr.fr td { color: var(--gold); }
     else if (mode === 'guest') { gRx = [gRx[0] + 1, id]; sendG(); }
   });
   $('again').onclick = () => {
+    if (mode === 'guest') { if (gCoop) { gNx = seenMatch; sendG(); $('again').disabled = true; $('again').textContent = 'Starting…'; } return; } // co-op: you start the next match for both of you
     if (kind === 'train' && drillAgain) { startDrill(...drillAgain); return; }
     if (comp) { compNext(); return; }
     if (!series && $('again').onclickSer && kind === null) series = { n: cfg.ser, w: [0, 0], g: 0 };
@@ -5418,7 +5419,7 @@ table.st tr.fr td { color: var(--gold); }
       const f = teamPick[t].str - 3;
       return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
-    for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.rl = 0; p.cap = false; p.spk = 0; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; }
+    for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.rl = 0; p.cap = false; p.spk = 0; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; p.coP = null; p.coI = -1; }
     if (m === 'cpu' || (comp && m === 'host')) cpuRatings(1); // the computer's players each have their own rating too
     if (m === 'host' && !comp && kind !== 'train' && kind !== 'test') { // online: both captains' own players, with their ratings and evner
       const hT = hostTeam();
@@ -5426,7 +5427,7 @@ table.st tr.fr td { color: var(--gold); }
       if (roster.some(r => P[r[1]] && P[r[1]].team === 1 - hT)) applySquad(1 - hT, netSq);
     }
     if ((m === 'cpu' && usesSquad()) || (comp && m === 'host')) { // your trained squad (when you play as your own club): every player plays at his own rating
-      const L = squadToPitch(); const d = tD[0], ck = (chemOf(size).v - 50) / 50; // kemi: a team that knows each other plays a little better
+      const L = (() => { const a = squadToPitch(), x = comp && m === 'host' ? coMix() : null; return x || a; })(); const d = tD[0], ck = (chemOf(size).v - 50) / 50; // kemi: a team that knows each other plays a little better
       tD[0] = { spd: d.spd * (1 + 0.012 * L.spd), shoot: d.shoot * (1 + 0.05 * L.sht), pass: d.pass * (1 + 0.05 * L.pas), tackle: d.tackle * (1 + 0.06 * L.def), aimErr: d.aimErr * (1 - 0.04 * L.sht), react: d.react * (1 - 0.03 * L.pas) };
       tD[0].pass *= 1 + 0.06 * ck; tD[0].tackle *= 1 + 0.04 * ck; tD[0].react *= 1 - 0.06 * ck;
     }
@@ -5485,11 +5486,15 @@ table.st tr.fr td { color: var(--gold); }
     coOut = null;
     if (comp) {
       const cg = [], r = compAfter(win, id => { cg.push(id); give(id); }); coins += r.coins || 0; if (r.champ) { give('kocup'); cg.push('kocup'); } if (r.text) extra = r.text;
-      if (mode === 'host') coOut = { p: r.coins || 0, tx: r.text || '', tr: cg, c: 0, tp: 0 }; // everyone on the team gets the same out of it
+      if (mode === 'host') { // what every guest's own players did on the pitch, so they grow on his phone
+        const gw = new Map(); for (const p of P) if (p.team === 0 && p.coP && p.coI >= 0) { if (!gw.has(p.coP)) gw.set(p.coP, []); const m = p.ms || {}; gw.get(p.coP).push([p.coI, p.sq, m.g | 0, m.sh | 0, m.pa | 0, m.tk | 0, Math.round(m.spr || 0)]); }
+        coOut = { p: r.coins || 0, tx: r.text || '', tr: cg, c: 0, tp: 0, nx: (kind === 'cup' ? koComp() : carComp()) ? 1 : 0, gw: [...gw] };
+      } // everyone on the team gets the same out of it
     }
     const sh = mode === 'guest' && gCoop && me === 0 ? coG : null; // co-op on another phone: the host's competition result is yours too
     if (mode === 'guest' && gCoop && me === 0 && win === 0) give('coop');
     if (sh) { for (const id of sh.tr) give(id); coins += sh.p; if (sh.tx) extra = sh.tx; }
+    if (mode === 'guest' && gCoop) { const nx = !!(sh && sh.nx); $('again').hidden = !nx; $('again').disabled = false; $('again').textContent = 'Next match ›'; if (nx) $('ready').hidden = true; }
     if (mode === 'guest' && gCoop && coHas()) { $('toComp').hidden = false; $('toComp').textContent = gCoKind === 2 ? 'See the table' : 'See the cup'; }
     coins += got.length * 50;
     if (me === 0 || me === 1) { // experience: the team levels up and the club pays a bonus
@@ -5514,8 +5519,9 @@ table.st tr.fr td { color: var(--gold); }
     if (own) { const ups = squadGrow(); { const tired = squadAfter(win === me ? 1 : win < 0 || win == null ? 0 : -1, friendly); if (tired.length) extra = (extra ? extra + ' · ' : '') + 'Tired legs: ' + tired.slice(0, 3).join(', ') + '. Give them a rest'; for (const nw of tired.news || []) extra = (extra ? extra + ' · ' : '') + nw; } if (ups.length) extra = (extra ? extra + ' · ' : '') + 'Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? ` +${ups.length - 4}` : ''); }
     if (sh && kind !== 'pen') { // your own squad was part of it: the same training points, and your starters develop too
       if (sh.tp > tp) { addTP(sh.tp - tp); tp = sh.tp; }
-      const ups = squadGrowAway(win === me);
-      extra = (extra ? extra + ' · ' : '') + 'Shared with the whole team' + (ups.length ? ' · Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? '…' : '') : '');
+      const S8 = squadLoad(), mine = (Array.isArray(sh.gw) ? sh.gw : []).filter(e => Array.isArray(e) && Number.isInteger(e[0]) && S8.pl[e[0]] && coName(S8.pl[e[0]].n) === String(e[1])).slice(0, 11);
+      const cl = v => clamp(Number(v) | 0, 0, 99), ups = mine.length ? squadGrow(mine.map(e => ({ team: 0, sqi: e[0], ms: { g: cl(e[2]), sh: cl(e[3]), pa: cl(e[4]), tk: cl(e[5]), spr: cl(e[6]) } }))) : squadGrowAway(win === me); // your own men grow from what they did
+      extra = (extra ? extra + ' · ' : '') + 'Shared with the whole team' + (mine.length ? ` · ${mine.length} of your players played` : '') + (ups.length ? ' · Development: ' + ups.slice(0, 4).join(', ') + (ups.length > 4 ? '…' : '') : '');
     }
     if (coOut) { coOut.c = Math.max(0, coins); coOut.tp = tp; }
     if (eco) extra = `${eco.att.toLocaleString('en')} fans · prize +${eco.p}, gate +${eco.g}` + (eco.s ? `, sponsors +${eco.s}` : '') + (eco.m ? `, shop +${eco.m}` : '') + (eco.tv ? `, TV +${eco.tv}` : '') + `, wages −${eco.w}` + (eco.u ? `, upkeep −${eco.u}` : '') + (eco.ln ? `, loan −${eco.ln}` : '') + (eco.loanEnd ? '. The loan is paid off' : '') + (eco.short ? '. There was not enough for all the wages: morale drops' : '') + (eco.spEnd ? '. The sponsor deal has ended: pick a new one under The club' : '') + (extra ? ' · ' + extra : '');
@@ -5851,6 +5857,7 @@ table.st tr.fr td { color: var(--gold); }
   function compNext() { // "Næste kamp" on the end screen: straight into the next match, online in the same room
     const c = kind === 'cup' ? koComp() : kind === 'career' ? carComp() : null;
     if (!c) { compView(); return; }
+    coViewClose(true);
     comp = Object.assign(c, { how: comp ? comp.how : c.how });
     startMatch(mode);
   }
@@ -6416,7 +6423,7 @@ table.st tr.fr td { color: var(--gold); }
     for (const r of a) {
       if (!Array.isArray(r)) return null;
       const nm = String(r[0] || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 18);
-      out.push({ n: nm || 'Player', spd: st(r[1]), sht: st(r[2]), pas: st(r[3]), def: st(r[4]), o: Math.round(st(r[5])), ab: (Array.isArray(r[6]) ? r[6] : []).map(i => ABK()[i | 0]).filter(Boolean).slice(0, 2) });
+      out.push({ n: nm || 'Player', spd: st(r[1]), sht: st(r[2]), pas: st(r[3]), def: st(r[4]), o: Math.round(st(r[5])), ab: (Array.isArray(r[6]) ? r[6] : []).map(i => ABK()[i | 0]).filter(Boolean).slice(0, 2), i: Number.isInteger(r[7]) && r[7] >= 0 && r[7] < 200 ? r[7] : -1 });
     }
     return out;
   }
@@ -6443,6 +6450,41 @@ table.st tr.fr td { color: var(--gold); }
     for (const [k] of SKILLS) avg[k] = xi.reduce((t, i) => t + statLv(S0.pl[i][k]), 0) / xi.length;
     return avg;
   }
+  // co-op online (career or cup): both of you bring your own players. Every human gets a fair share of the places,
+  // the man you start the match on is your own, and the other places go to whoever has the better man for them.
+  function coMix() {
+    const tm = P.filter(p => p.team === 0), n = tm.length, hs = [{ id: 'host', r: null }];
+    for (const [peer, slot] of roster) { const q = coSq.get(peer); if (q && q.length === n && P[slot] && P[slot].team === 0 && !hs.some(h => h.id === peer)) hs.push({ id: peer, r: q, slot }); }
+    if (hs.length < 2 || n < 2) return null;
+    const rat = (h, p) => (h.r ? h.r[p.k].o : p.ovr || 50), own = new Map(), cnt = hs.map(() => 0), H = hs.length;
+    const quota = hs.map((_, j) => Math.floor(n / H) + (j < n % H ? 1 : 0)), me = P.find(q => q.ctrl === 'L0');
+    hs.forEach((h, j) => { const p = h.r ? P[h.slot] : me; if (p && p.team === 0 && !own.has(p) && cnt[j] < quota[j]) { own.set(p, j); cnt[j]++; } });
+    const pairs = [];
+    for (const p of tm) if (!own.has(p)) hs.forEach((h, j) => { const o = hs.reduce((t, x, jj) => (jj === j ? t : t + rat(x, p)), 0) / (H - 1); pairs.push([rat(h, p) - o, p, j]); });
+    pairs.sort((a, b) => b[0] - a[0]);
+    for (const [, p, j] of pairs) if (!own.has(p) && cnt[j] < quota[j]) { own.set(p, j); cnt[j]++; }
+    const S0 = squadLoad(), avg = { spd: 0, sht: 0, pas: 0, def: 0 };
+    for (const p of tm) {
+      const j = own.get(p) || 0, r = j ? hs[j].r[p.k] : null;
+      if (r) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); p.rl = 0; p.cap = false; p.spk = 0; p.fit0 = 0; p.fat = 0; p.stamina = 1; p.coP = hs[j].id; p.coI = r.i; }
+      const src = r || S0.pl[p.sqi] || {};
+      for (const [k] of SKILLS) avg[k] += statLv(src[k] || 50) / n;
+    }
+    return avg;
+  }
+  // a co-op guest lines his own starters up in the host's places (sps: the position of every place)
+  function coWire(sps) {
+    try {
+      const n = sps.length, S = squadLoad(), xi = [...new Set(xiFor(n, S))].filter(i => S.pl[i]), pairs = [], out = new Array(n).fill(-1), used = new Set();
+      sps.forEach((sp, k) => xi.forEach(i => pairs.push([fitOvr(S.pl[i], sp) + (dpOf(S.pl[i]) === sp ? 0.5 : 0), k, i])));
+      pairs.sort((a, b) => b[0] - a[0]);
+      for (const [, k, i] of pairs) if (out[k] < 0 && !used.has(i)) { out[k] = i; used.add(i); }
+      if (out.some(i => i < 0)) return 0;
+      return out.map((i, k) => { const p = S.pl[i], o = fitOvr(p, sps[k]), pen = ovr(p) - o;
+        return [String(p.n || '').slice(0, 18), ...SKILLS.map(([q]) => Math.round(p[q] - pen)), o, abOf(p).map(a => ABK().indexOf(a)), i]; });
+    } catch (_) { return 0; }
+  }
+  const coName = v => String(v || '').replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 18);
   // the computer teams' players (as in FIFA): every man has his own pace, shot, passing and defending, built from the
   // team's stars and his position, the same every time you meet that team. His p.lv is measured from the team's level,
   // so the team as a whole plays as strong as its stars say, but a quick winger is quick and a centre back wins tackles.
@@ -6489,9 +6531,9 @@ table.st tr.fr td { color: var(--gold); }
     }
     squadSave(S); return ups;
   }
-  function squadGrow() {
+  function squadGrow(list) { // list: the men to grow (a co-op guest's own players, as the host saw them play)
     const S = squadLoad(), ups = [];
-    for (const p of P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) { // the men who were subbed off grow from their part too
+    for (const p of list || P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) { // the men who were subbed off grow from their part too
       if (p.team !== 0 || !(p.sqi >= 0) || !S.pl[p.sqi]) continue;
       const pl = S.pl[p.sqi], m = p.ms || {}, gx = pl.gx = pl.gx || {};
       const g = { sht: (m.g || 0) * 0.5 + Math.min(m.sh || 0, 8) * 0.1, pas: Math.min(m.pa || 0, 25) * 0.035, def: Math.min(m.tk || 0, 8) * 0.22, spd: Math.min(m.spr || 0, 60) * 0.01 };
@@ -8226,7 +8268,7 @@ table.st tr.fr td { color: var(--gold); }
   let roster = []; // [[peer, slot]] (guests also get [peer, slot, name])
   let hostReady = false, hostInfo = [0, 'Host'], lobbyLr = [0, 0, 0];
   let gSent = 0, gIn = [0, 0, 0, 0], gRx = [0, 0], gRd = -1, gLr = 0, gFm = 0, gWs = -1, gSeenGoal = null, gZ = 0;
-  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard(), ly: gFm === CUST ? packLay(myLay(lobbySize)) : 0, sq: squadWire(lobbySize, gFm), tc: tacWire(loadMT().tac), tm: teamWire(myCardTeam()) }).catch(() => {}); };
+  const sendG = () => { if (net && mode === 'guest') net.presence({ r: 'g', i: gIn, n: cfg.name, rx: gRx, rd: gRd, lr: gLr, fm: gFm, ws: gWs, pf: myCard(), ly: gFm === CUST ? packLay(myLay(lobbySize)) : 0, sq: gCoop && gCps ? coWire(gCps) : squadWire(lobbySize, gFm), cw: gCoop && gCps ? 1 : 0, nx: gNx, tc: tacWire(loadMT().tac), tm: teamWire(myCardTeam()) }).catch(() => {}); };
   const netmsg = $('netmsg');
   (async () => {
     const framed = window.top !== window;
@@ -8241,10 +8283,10 @@ table.st tr.fr td { color: var(--gold); }
   function leaveNet() {
     if (net) { try { net.leave(); } catch (_) {} }
     net = null; tgt = null; roster = []; remoteIn.clear(); lostAt = 0; myPeer = null;
-    names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1;
+    names.clear(); netCards.clear(); readyMap.clear(); lobbyReady.clear(); rxSeen.clear(); hostReady = false; gLr = 0; gRd = -1; coSq.clear(); gCps = null; gNx = -1;
   }
   function toMenu(text) {
-    coBack = null; hlReset(); leaveNet(); quickReset(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; friendly = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
+    coBack = null; $('again').disabled = false; hlReset(); leaveNet(); quickReset(); setWeather(0); state = 'menu'; mode = null; paused = false; cupMatch = null; pen = null; so = null; kind = null; comp = null; coopTwo = false; friendly = false; drill = null; drillAgain = null; // a skills game you walked out of must not follow you into the next match
     demoReset();
     for (const id of ['lobby', 'end', 'paused']) $(id).hidden = true; vsT = 0; $('vs').hidden = true;
     $('pauseBtn').hidden = true; $('menu').hidden = false; $('rxbar').hidden = true; replay = null; menuForm(); homeGifts();
@@ -8291,6 +8333,8 @@ table.st tr.fr td { color: var(--gold); }
       seeCard(g.peer, pr.pf);
       if (pr.rd !== undefined) readyMap.set(g.peer, Number(pr.rd));
       lobbyReady.set(g.peer, !!pr.lr);
+      if (comp) { const cq = pr.cw ? cleanSquad(pr.sq, size) : null; if (cq && cq.every(r => r.i >= 0)) coSq.set(g.peer, cq); else coSq.delete(g.peer); }
+      if (comp && state === 'end' && Number(pr.nx) === matchNo && coNx !== matchNo && roster.some(r => r[0] === g.peer)) { coNx = matchNo; setTimeout(() => { if (state === 'end' && mode === 'host' && comp && (kind === 'cup' ? koComp() : carComp())) compNext(); }, 0); } // a friend tapped Next match: off you go
       if (state === 'lobby' && Number.isInteger(pr.ws) && P[pr.ws] && P[pr.ws].ctrl === 'ai' && !(comp && P[pr.ws].team !== 0) && !roster.some(r => r[1] === pr.ws)) {
         const e = roster.find(r => r[0] === g.peer); if (e && e[1] !== pr.ws) e[1] = pr.ws; // move to the spot they asked for
       }
@@ -8332,7 +8376,7 @@ table.st tr.fr td { color: var(--gold); }
     }
   }
   // online helpers for your own team: what the host and the other captain bring
-  let netSq = null, netTeam = null, netTac = null, netLay = null, lobbyTeams = [null, null], gCoop = false;
+  let netSq = null, netTeam = null, netTac = null, netLay = null, lobbyTeams = [null, null], gCoop = false, coSq = new Map(), coNx = -1, gCps = null, gNx = -1;
   const hostTeam = () => (P.find(q => q.ctrl === 'L0') || { team: 0 }).team;
   const capTeam = () => (mode === 'host' ? 1 - hostTeam() : P[hostInfo[0]] ? 1 - P[hostInfo[0]].team : 1);
   const hex = v => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v) : null);
@@ -8400,7 +8444,7 @@ table.st tr.fr td { color: var(--gold); }
     makePlayers(matchSize()); assignLocal(); kickoff(); $('rosterR').dataset.key = '';
     $('menu').hidden = true; $('lobby').hidden = false;
     $('lobbyCode').textContent = code || 'Ranked'; $('lobbyLbl').textContent = quick ? `Ranked online · ${quickN} v ${quickN} · ${quickN === 11 ? 6 : 4} min` : 'Match code';
-    $('lobbyMsg').textContent = quick ? 'Looking for an opponent…' : comp ? `${comp.type === 'cup' ? 'Co-op cup' : 'Career'}: send the code to the people playing with you (up to ${size - 1}). You are all on ${comp.a.n} v ${comp.b.n}. Everyone gets the same prize money, XP and trophies.` : `Send the code to your friends (up to ${size * 2 - 1}). Empty spots are played by the computer.`;
+    $('lobbyMsg').textContent = quick ? 'Looking for an opponent…' : comp ? `${comp.type === 'cup' ? 'Co-op cup' : 'Career'}: send the code to the people playing with you (up to ${size - 1}). You are all on ${comp.a.n} v ${comp.b.n}, with players from each of your own squads. Everyone gets the same prize money, XP and trophies.` : `Send the code to your friends (up to ${size * 2 - 1}). Empty spots are played by the computer.`;
     $('startOnline').hidden = quick; $('share').hidden = quick || window.top !== window; $('share').textContent = 'Share invite link';
     net.onPeers(ch => {
       const me = ch.peers.find(p => p.sameTab); if (me) myPeer = me.peer;
@@ -8555,7 +8599,7 @@ table.st tr.fr td { color: var(--gold); }
     if (st === 'e' && comp && coOut) o.co = coOut;
     if (st !== 'p' && comp && kind === 'cup' && koN++ % 10 === 0) { const K = koLoad(); if (K) { if (!K.cid) { K.cid = Math.random().toString(36).slice(2, 10); koSave(K); } o.ko = K; } } // the cup is on every phone from the moment you are in the room
     if (st !== 'p' && comp && kind === 'career' && ++cvN % 10 === 1) { const C = carLoad(); if (C) { if (!C.cid) { C.cid = Math.random().toString(36).slice(2, 10); carSave(C); } o.cv = Object.assign({}, C, { gst: 0, own: { n: TEAMS[OWN].n, s: TEAMS[OWN].s } }); } } // the career is shared from the moment you are in the room: the other phone saves it too
-    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx, tf: teamForm, tm: [0, 1].map(t => teamWire(comp ? comp[t ? 'b' : 'a'] : t === hostTeam() ? myCardTeam() : netTeam)), cp: comp ? (comp.type === 'career' ? 2 : 1) : 0, nm: P.map(p => nameOf(p, true)), sq: P.map(p => (p.sq ? [p.sq, p.ovr | 0, (p.ab || []).map(a => ABK().indexOf(a))] : 0)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Host'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
+    if (st !== 'p' || ++packN % 15 === 0) Object.assign(o, { k: kit, wx, tf: teamForm, tm: [0, 1].map(t => teamWire(comp ? comp[t ? 'b' : 'a'] : t === hostTeam() ? myCardTeam() : netTeam)), cp: comp ? (comp.type === 'career' ? 2 : 1) : 0, cl: comp ? layFor(size).map((q, i) => slotPos(q, i, size)) : 0, nm: P.map(p => nameOf(p, true)), sq: P.map(p => (p.sq ? [p.sq, p.ovr | 0, (p.ab || []).map(a => ABK().indexOf(a))] : 0)), hs: [Math.max(0, P.findIndex(q => q.ctrl === 'L0')), cfg.name || 'Host'], pf: [['host', ...myCard()], ...[...netCards].map(([k, c]) => [k, ...c.card])] });
     return o;
   }
   function myTeam() { const e = roster.find(r => r[0] === myPeer); return e && P[e[1]] ? P[e[1]].team : null; }
@@ -8586,7 +8630,8 @@ table.st tr.fr td { color: var(--gold); }
     if (s.ko) koShare(s.ko);
     if (s.st !== 'e') coG = null;
     if (coBack && s.st === 'p') coViewClose(true);
-    else if (s.co && typeof s.co === 'object') coG = { p: clamp(Number(s.co.p) | 0, 0, 800), c: clamp(Number(s.co.c) | 0, 0, 1500), tp: clamp(Number(s.co.tp) | 0, 0, 60), tx: String(s.co.tx || '').slice(0, 400), tr: (Array.isArray(s.co.tr) ? s.co.tr : []).filter(x => CO_TRO.includes(x)) };
+    else if (s.co && typeof s.co === 'object') coG = { p: clamp(Number(s.co.p) | 0, 0, 800), c: clamp(Number(s.co.c) | 0, 0, 1500), tp: clamp(Number(s.co.tp) | 0, 0, 60), tx: String(s.co.tx || '').slice(0, 400), tr: (Array.isArray(s.co.tr) ? s.co.tr : []).filter(x => CO_TRO.includes(x)), nx: !!s.co.nx,
+      gw: ((Array.isArray(s.co.gw) ? s.co.gw : []).find(e => Array.isArray(e) && e[0] === myPeer) || [0, []])[1] };
     const z = [1, 2, 3, 5, 7, 11].includes(Number(s.z)) ? Number(s.z) : 1;
     if (P.length !== z * 2) makePlayers(z);
     lobbySize = z;
@@ -8598,6 +8643,7 @@ table.st tr.fr td { color: var(--gold); }
     if (KITS[s.k]) setKit(Number(s.k));
     if (s.wx !== undefined) { const w = Number(s.wx) | 0; setWeather(w & 3); }
     if (s.cp !== undefined) { gCoop = !!s.cp; gCoKind = Number(s.cp) | 0; }
+    if ('cl' in s && mode === 'guest') { const v = Array.isArray(s.cl) && s.cl.length === z && s.cl.every(x => DPOSN[x]) ? s.cl.slice() : null; if (String(v) !== String(gCps)) { gCps = v; sendG(); } } // the host's places: line your own men up in them
     if (Array.isArray(s.tm)) { lobbyTeams = [cleanTeam(s.tm[0]), cleanTeam(s.tm[1])]; netPick(lobbyTeams); }
     if (Array.isArray(s.tf)) teamForm = [Number(s.tf[0]) | 0, Number(s.tf[1]) | 0];
     if (Array.isArray(s.hs)) hostInfo = [Number(s.hs[0]) | 0, cleanName(s.hs[1]) || 'Host'];
@@ -8613,7 +8659,7 @@ table.st tr.fr td { color: var(--gold); }
         renderRoster(false); lobbyUI();
         const mine = roster.some(r => r[0] === myPeer);
         if (quick) $('lobbyMsg').textContent = mine ? `Opponent found: ${hostInfo[1] || 'Host'}. The match starts shortly…` : 'Found someone waiting. Connecting…';
-        else $('lobbyMsg').textContent = (gCoop ? 'Co-op: you are all on the same team against the computer, and everyone gets the same prize money, XP and trophies. ' : '') + (mine ? (gLr ? `You are ready. The match starts when everyone is ready (${lobbyLr[0] + lobbyLr[2]}/${lobbyLr[1] + 1}).` : 'You are in. Pick a formation and tap Ready.') : 'The match is full, but you can watch.');
+        else $('lobbyMsg').textContent = (gCoop ? 'Co-op: you are all on the same team against the computer, your own players play alongside the host\'s, and everyone gets the same prize money, XP and trophies. ' : '') + (mine ? (gLr ? `You are ready. The match starts when everyone is ready (${lobbyLr[0] + lobbyLr[2]}/${lobbyLr[1] + 1}).` : 'You are in. Pick a formation and tap Ready.') : 'The match is full, but you can watch.');
       }
       return;
     }
@@ -8636,7 +8682,7 @@ table.st tr.fr td { color: var(--gold); }
     tgt = s;
     if (s.st === 'p' && (state !== 'play' || s.m !== seenMatch)) {
       seenMatch = s.m; state = 'play'; particles = []; resetCommentary();
-      stats = newStats(); matchGoals = []; replay = null; recBuf = []; rxList = []; gLr = 0; gRd = -1; sendG(); hlReset(); matchLen = Math.max(1, clock);
+      stats = newStats(); matchGoals = []; replay = null; recBuf = []; rxList = []; gLr = 0; gRd = -1; gNx = -1; sendG(); hlReset(); matchLen = Math.max(1, clock);
       gSeenGoal = Array.isArray(s.gs) ? s.gs[0] : null;
       $('ready').hidden = true; $('rxbar').hidden = false;
       for (const id of ['lobby', 'end', 'menu']) $(id).hidden = true;
@@ -9528,7 +9574,7 @@ table.st tr.fr td { color: var(--gold); }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); setTimeout(optsBehindButton, 0); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, swr: i => switchRank(P[i]).map(q => q.i), msw: i => manualSwitch(P[i]), dsw: () => defendSwitch(owner()), cshare: cv => carShare(cv), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, swr: i => switchRank(P[i]).map(q => q.i), msw: i => manualSwitch(P[i]), dsw: () => defendSwitch(owner()), cshare: cv => carShare(cv), cnew: (n, how) => { carNew(n, 2, 1); const C = carLoad(); C.how = how; carSave(C); }, cgo: t => compGo(t), co: () => P.filter(p => p.team === 0).map(p => [p.k, p.sq, p.ovr | 0, p.coP ? 'G' : 'H', p.ctrl]), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
