@@ -47,8 +47,8 @@ void fragment() {
 	vec3 g2 = vec3(0.145, 0.355, 0.12);
 	vec3 grass = mix(g1, g2, stripe);
 	grass *= 0.96 + 0.04 * stripe2;
-	float n = hash(floor(p * 9.0)) * 0.5 + hash(floor(p * 2.3)) * 0.5;
-	grass *= 0.93 + 0.14 * n;
+	float n = hash(floor(p * 24.0)) * 0.6 + hash(floor(p * 7.0)) * 0.4;
+	grass *= 0.95 + 0.10 * n;
 	if (inside < 0.5) {
 		float edge = max(q.x - 52.5, q.y - 34.0);
 		grass = mix(grass * 0.9, vec3(0.08, 0.2, 0.08), clamp(edge / 5.0, 0.0, 1.0));
@@ -82,7 +82,7 @@ void vertex() {
 	float calm = sin(TIME * sp * 0.6 + ph) * 0.03;
 	float wild = abs(sin(TIME * (5.0 + fract(id * 0.77) * 3.0) + ph)) * 0.5;
 	VERTEX.y += mix(calm, wild, excite) * step(0.0, VERTEX.y + 0.2) ;
-	VERTEX.y *= 1.0 + excite * 0.25 * step(0.0, VERTEX.y);
+	VERTEX.y *= 1.0 + excite * 0.12 * step(0.0, VERTEX.y);
 	col = COLOR.rgb;
 }
 void fragment() {

@@ -413,6 +413,39 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				s3.size = Vector2(w, 30)
 				s3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(s3)
+		"how":
+			var hw := minf(w - 80.0, 860.0)
+			var hp := Panel.new()
+			hp.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.95), 20, Color(1, 1, 1, 0.16)))
+			hp.position = Vector2((w - hw) * 0.5, 22)
+			hp.size = Vector2(hw, h - 44)
+			menu.add_child(hp)
+			var ht := _label("HOW TO PLAY", 32, GOLD)
+			ht.position = Vector2(0, 12)
+			ht.size = Vector2(hw, 40)
+			ht.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			hp.add_child(ht)
+			var rows := [
+				["MOVE", "Slide your left thumb anywhere on the left side."],
+				["SHOOT", "Hold to load power, let go to shoot. Push the stick up or down to pick a corner."],
+				["PASS", "Tap for a pass along the ground. Hold for a high ball."],
+				["TACKLE", "Without the ball: win it back. Never from behind, that is a foul."],
+				["SWITCH", "Without the ball: change to the player nearest the ball."],
+				["SPRINT", "Hold to run faster."],
+			]
+			var ry := 62.0
+			var rh := minf(46.0, (h - 44.0 - 62.0 - 84.0) / rows.size())
+			for r in rows:
+				var k1 := _label(r[0], 20, GREEN.lightened(0.25))
+				k1.position = Vector2(34, ry)
+				hp.add_child(k1)
+				var k2 := _label(r[1], 18, Color(1, 1, 1, 0.9), font2)
+				k2.position = Vector2(150, ry + 1)
+				hp.add_child(k2)
+				ry += rh
+			var ok := _btn("LET'S PLAY", "how_ok", null, "primary", Vector2((hw - 300) * 0.5, h - 44 - 76), Vector2(300, 60), 26)
+			hp.add_child(ok)
+			items.append([hp, Vector2(0, 60), 0.0])
 		"pause":
 			var pw := 340.0
 			var panel := Panel.new()
@@ -602,6 +635,11 @@ func _process(dt: float) -> void:
 	queue_redraw()
 
 func _draw() -> void:
+	if size.y > size.x:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.05, 0.04, 0.96))
+		_text("TURN YOUR PHONE", size * 0.5 - Vector2(0, 10), 30, Color.WHITE)
+		_text("The game is played sideways", size * 0.5 + Vector2(0, 28), 18, Color(1, 1, 1, 0.75))
+		return
 	if not in_match:
 		return
 	if replay_on:
@@ -623,9 +661,9 @@ func _draw() -> void:
 	draw_style_box(_box(Color(DARK.r, DARK.g, DARK.b, 0.7), 10), pr)
 	draw_rect(Rect2(pr.position + Vector2(14, 11), Vector2(5, 18)), Color(1, 1, 1, 0.9))
 	draw_rect(Rect2(pr.position + Vector2(25, 11), Vector2(5, 18)), Color(1, 1, 1, 0.9))
-	_minimap()
 	if not show_controls:
 		return
+	_minimap()
 	var b := _btn_pos()
 	_button(b["shoot"][0], b["shoot"][1], lab_a, shoot_down, Color(0.25, 0.85, 0.4))
 	_button(b["pass"][0], b["pass"][1], lab_b, pass_down, Color(0.95, 0.95, 0.95))

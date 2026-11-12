@@ -17,9 +17,9 @@ const LENGTHS := [180.0, 300.0, 480.0] # real seconds for 90 minutes
 const LEN_NAMES := ["3 MIN", "5 MIN", "8 MIN"]
 const DIFF_NAMES := ["EASY", "NORMAL", "HARD"]
 const DIFF := [
-	{"need": 0.62, "spd": 0.91, "err": 1.8, "think": 0.55},
-	{"need": 0.44, "spd": 0.96, "err": 1.0, "think": 0.35},
-	{"need": 0.30, "spd": 1.0, "err": 0.6, "think": 0.22},
+	{"need": 0.80, "spd": 0.91, "err": 1.8, "think": 0.55},
+	{"need": 0.60, "spd": 0.96, "err": 1.0, "think": 0.32},
+	{"need": 0.45, "spd": 1.0, "err": 0.6, "think": 0.22},
 ]
 const FORM := [ # 4-3-3: [role, along 0..1, across -1..1]
 	["GK", 0.0, 0.0],
@@ -64,6 +64,9 @@ var ignore_t := 0.0
 var protect_t := 0.0
 var shot_live := false
 var set_piece := ""
+var pen_wait := false
+var off_spot := Vector3.ZERO
+var off_line := [0.0, 0.0]
 var trail: CPUParticles3D
 var land_ring: MeshInstance3D
 var ball_net := Vector3.ZERO
@@ -116,6 +119,11 @@ var snap_new := false
 
 var autotest := false
 var dbg := false
+var seen_how := false
+var how_next := ""
+var bot_mode := ""
+var bot_t := {}
+var bstats := {"have": 0, "shots": 0, "passes": 0, "tackles": 0, "switches": 0}
 var quality := 2
 var slow_t := 0.0
 var q_applied := -1
@@ -125,7 +133,7 @@ var shot_at := 0.0
 var force_goal := -1.0
 var real_t := 0.0
 var version := "dev"
-var stats := {"shots": 0, "passes": 0, "tackles": 0, "outs": 0, "saves": 0, "goals": 0}
+var stats := {"shots": 0, "passes": 0, "tackles": 0, "outs": 0, "saves": 0, "goals": 0, "fouls": 0, "offsides": 0, "pens": 0, "cards": 0}
 
 func side(t: int) -> float:
 	return 1.0 if t == 0 else -1.0
@@ -147,6 +155,8 @@ func _ready() -> void:
 			cam_mode = int(a.substr(6))
 		elif a.begins_with("--menu="):
 			menu_arg = a.substr(7)
+		elif a.begins_with("--bot="):
+			bot_mode = a.substr(6)
 		elif a.begins_with("--diff="):
 			opt_diff = int(a.substr(7))
 	if FileAccess.file_exists("res://version.txt"):
@@ -156,6 +166,7 @@ func _ready() -> void:
 		dbg = str(JavaScriptBridge.eval("location.search", true)).contains("dbg")
 		if str(JavaScriptBridge.eval("location.search", true)).contains("low"):
 			quality = 0
+		seen_how = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-how')||''}catch(e){return ''}})()", true)) == "1"
 	world = World.new()
 	add_child(world)
 	world.build()
@@ -178,6 +189,12 @@ func _ready() -> void:
 		screen = "match"
 		_begin_match(false)
 		if autotest:
+			if bot_mode != "":
+				humans = [Human.new()]
+				if bot_mode != "solo":
+					var h2 := Human.new()
+					h2.team = 0 if bot_mode == "coop" else 1
+					humans.append(h2)
 			_kickoff(0)
 	else:
 		_to_menu()
@@ -477,6 +494,10 @@ func _to_menu() -> void:
 	score = [0, 0]
 	clock = 0.0
 	half = 1
+	for p in players:
+		p.off = false
+		p.yellow = 0
+		p.visible = true
 	_kickoff(0)
 	if not crowd_au.playing:
 		crowd_au.play()
@@ -486,7 +507,16 @@ func _action(act: String, arg = null) -> void:
 	au["blip2" if act in ["play", "start", "again"] else "blip"].play()
 	if act == "key":
 		return
+	if act in ["play", "friend"] and not seen_how:
+		how_next = act
+		hud.show_menu("how", _menu_info())
+		return
 	match act:
+		"how_ok":
+			seen_how = true
+			if net.web:
+				JavaScriptBridge.eval("try{localStorage.setItem('bb3d-how','1')}catch(e){}", true)
+			_action(how_next if how_next != "" else "play")
 		"play":
 			humans = [Human.new()]
 			me = 0
@@ -651,6 +681,10 @@ func _begin_match(with_intro: bool) -> void:
 	hud.set_clock(0)
 	hud.hide_banner()
 	hud.replay_on = false
+	for p in players:
+		p.off = false
+		p.yellow = 0
+		p.visible = true
 	_formation(0, true)
 	ball_owner = null
 	ball.position = Vector3(0, BALL_R, 0)
@@ -686,20 +720,44 @@ func _formation(kicking: int, instant: bool) -> void:
 			p.yaw = atan2(-s, 0.0)
 		p.stun = 0.0
 		p.recv = false
+		p.offside = false
+		p.commit_t = -1.0
 		p.mood = 0
 		p.mood_t = 0.0
 		p.dive_t = -1.0
 		p.tackle_t = -1.0
 		p.press_t = 0.0
+		if p.off:
+			_send_off(p)
+
+func _send_off(p) -> void:
+	p.off = true
+	p.stun = 1e6
+	p.vel = Vector3.ZERO
+	p.position = Vector3(0, 0, -HW - 30.0)
+	p.visible = false
+	for h in humans:
+		if h.ctrl == p:
+			h.ctrl = null
+			_switch(h)
+
+func _first_on(team: int, order: Array):
+	for i in order:
+		if not teams[team][i].off:
+			return teams[team][i]
+	return teams[team][1]
 
 func _kickoff(team: int) -> void:
 	_formation(team, true)
+	pen_wait = false
 	Engine.time_scale = 1.0
 	anim_rate = 1.0
 	hud.replay_on = false
 	ball.position = Vector3(0, BALL_R, 0)
 	ball_vel = Vector3.ZERO
-	var st = teams[team][9]
+	var st = _first_on(team, [9, 10, 8, 7, 6, 5])
+	if st.idx != 9:
+		st.position = Vector3(-0.6 * side(team), 0, 0)
 	ball_owner = st
 	ball_last = st
 	set_piece = "kick"
@@ -718,7 +776,7 @@ func _kickoff(team: int) -> void:
 			h.ctrl = st
 			taken = true
 		else:
-			h.ctrl = teams[h.team][6] if _hum_of(teams[h.team][6]) == null else teams[h.team][5]
+			h.ctrl = _first_on(h.team, [6, 5, 7, 8, 10, 4, 3]) if _hum_of(teams[h.team][6]) == null else _first_on(h.team, [5, 7, 8, 10, 4, 3])
 	hud.show_controls = screen == "match" and humans.size() > 0
 	fx("excite", 0.0)
 	snd("whistle")
@@ -761,10 +819,10 @@ func _goal(team: int) -> void:
 	fx("vib", 180)
 	fx("say", "Goal! %s scores for %s!" % [scorer.pname, TEAM_NAMES[team].capitalize()])
 
-func _out(kind: String, pos: Vector3, team: int) -> void:
+func _out(kind: String, pos: Vector3, team: int, wait := 0.9) -> void:
 	state = "dead"
 	state_t = 0.0
-	dead_info = {"kind": kind, "pos": pos, "team": team}
+	dead_info = {"kind": kind, "pos": pos, "team": team, "wait": wait}
 	stats["outs"] += 1
 	shot_live = false
 	for h in humans:
@@ -778,13 +836,26 @@ func _restart() -> void:
 	var team: int = dead_info["team"]
 	var pos: Vector3 = dead_info["pos"]
 	var kind: String = dead_info["kind"]
+	var s := side(team)
+	for p in players:
+		if p.off and p.visible:
+			_send_off(p)
+		p.offside = false
+		p.commit_t = -1.0
 	var taker = null
 	if kind == "gk":
 		taker = teams[team][0]
+	elif kind == "pen":
+		pos = Vector3(s * (HL - 11.0), 0, 0)
+		taker = _first_on(team, [9, 10, 8, 7, 6, 5])
+		for h in humans:
+			if h.team == team and h.ctrl != null and h.ctrl.role != "GK":
+				taker = h.ctrl
+				break
 	else:
 		var bd := 1e9
 		for p in teams[team]:
-			if p.role == "GK":
+			if p.role == "GK" or p.off:
 				continue
 			var d: float = p.position.distance_to(pos)
 			if d < bd:
@@ -795,15 +866,48 @@ func _restart() -> void:
 	var inward := Vector3(-pos.x, 0, -pos.z).normalized()
 	if kind == "gk":
 		inward = Vector3(-signf(pos.x), 0, 0)
+	elif kind == "fk" or kind == "pen":
+		inward = (Vector3(HL * s, 0, 0) - pos).normalized()
 	taker.position = Vector3(pos.x, 0, pos.z) - inward * 0.6
 	taker.vel = Vector3.ZERO
 	taker.yaw = atan2(-inward.x, -inward.z)
 	taker.stun = 0.0
 	taker.hold_t = 0.0
+	if kind == "fk":
+		# the other team must give ten yards
+		for o in teams[1 - team]:
+			if o.off or o.role == "GK":
+				continue
+			var away: Vector3 = o.position - pos
+			away.y = 0.0
+			if away.length() < 9.15:
+				var dirn := away.normalized() if away.length() > 0.2 else Vector3(-s, 0, 0)
+				dirn = (dirn + Vector3(s, 0, 0) * 0.8).normalized()
+				o.position = pos + dirn * 9.3
+				o.position.x = clampf(o.position.x, -HL + 1.0, HL - 1.0)
+				o.position.z = clampf(o.position.z, -HW + 1.0, HW - 1.0)
+				o.vel = Vector3.ZERO
+	elif kind == "pen":
+		pen_wait = true
+		var n := 0
+		for p in players:
+			if p.off or p == taker:
+				continue
+			p.vel = Vector3.ZERO
+			p.stun = 0.0
+			if p.role == "GK":
+				if p.team != team:
+					p.position = Vector3(s * (HL - 0.4), 0, 0)
+					p.yaw = atan2(s, 0.0)
+				continue
+			# everyone else waits outside the box
+			p.position = Vector3(s * (HL - 19.5 - (n % 2) * 2.2), 0, (float(n) - 9.5) * 2.0)
+			p.yaw = atan2(-s, 0.0)
+			n += 1
 	ball_owner = taker
 	ball_last = taker
 	set_piece = kind
-	taker.ai_cool = 1.0
+	taker.ai_cool = 1.3 if kind in ["fk", "pen"] else 1.0
 	protect_t = 2.5
 	state = "play"
 	state_t = 0.0
@@ -812,6 +916,65 @@ func _restart() -> void:
 		if h != null:
 			h.ctrl = taker
 	_assign_defenders(1 - team, true)
+
+func _foul(by, on) -> void:
+	stats["fouls"] += 1
+	var pos: Vector3 = on.position
+	on.stun = 1.2
+	on.start_tackle()
+	by.stun = 0.8
+	var gx := -HL * side(by.team)
+	var in_box := absf(pos.x - gx) < 16.5 and absf(pos.z) < 20.16
+	var closing: float = (by.vel - on.vel).length()
+	var card := ""
+	if closing > 5.0 or in_box:
+		by.yellow += 1
+		stats["cards"] += 1
+		card = "YELLOW CARD"
+		if by.yellow >= 2:
+			card = "RED CARD"
+			by.off = true
+	if in_box:
+		stats["pens"] += 1
+	snd("whistle")
+	if not _quiet():
+		var who := "%d  %s" % [by.num, by.pname.to_upper()]
+		if in_box:
+			_banner("PENALTY!", Color(1.0, 0.86, 0.2), 1.6, (card + "   " + who) if card != "" else "", 96)
+			fx("say", "Penalty!")
+			snd("ooh")
+		elif card == "RED CARD":
+			_banner("RED CARD", Color(0.95, 0.2, 0.2), 1.6, who, 84)
+			fx("say", "He is sent off!")
+			snd("ooh")
+		elif card != "":
+			_banner("YELLOW CARD", Color(1.0, 0.9, 0.2), 1.4, who, 72)
+		else:
+			_banner("FOUL", Color(1, 1, 1), 1.0, "", 60)
+		fx("shake", 0.35)
+		fx("vib", 80)
+	ball_owner = null
+	ball_vel = Vector3.ZERO
+	_out("pen" if in_box else "fk", pos, on.team, 2.0 if (in_box or card != "") else 1.4)
+
+func _offside(p) -> void:
+	stats["offsides"] += 1
+	snd("whistle")
+	_banner("OFFSIDE", Color(1, 1, 1), 1.1, "%d  %s" % [p.num, p.pname.to_upper()], 64)
+	ball_owner = null
+	ball_vel = Vector3.ZERO
+	_out("fk", off_spot, 1 - p.team, 1.4)
+
+func _is_offside(p, m) -> bool:
+	var s := side(p.team)
+	var mu: float = m.position.x * s
+	if mu <= 0.0 or mu <= ball.position.x * s + 0.3:
+		return false
+	var n := 0
+	for o in teams[1 - p.team]:
+		if not o.off and o.position.x * s >= mu - 0.25:
+			n += 1
+	return n < 2
 
 # ---------------------------------------------------------------- humans
 
@@ -849,7 +1012,7 @@ func _assign_defenders(t: int, force: bool) -> void:
 	var own_goal := Vector3(-HL * side(t), 0, 0)
 	var cands := []
 	for p in teams[t]:
-		if p.role == "GK":
+		if p.role == "GK" or p.off:
 			continue
 		var d: float = p.position.distance_to(ball.position)
 		if p.position.distance_to(own_goal) > ball.position.distance_to(own_goal) + 2.0:
@@ -873,7 +1036,7 @@ func _switch(h) -> void:
 	var best = null
 	var bd := 1e9
 	for p in teams[h.team]:
-		if p.role == "GK" or p == h.ctrl or _hum_of(p) != null:
+		if p.role == "GK" or p == h.ctrl or _hum_of(p) != null or p.off:
 			continue
 		var d: float = p.position.distance_to(ball.position)
 		if d < bd:
@@ -892,9 +1055,10 @@ func _physics_process(dt: float) -> void:
 		_dbg()
 	if autotest:
 		for i in 30:
+			_bot_inputs(1.0 / 60.0)
 			_tick(1.0 / 60.0)
 			if state == "full":
-				print("AUTOTEST score=", score, " stats=", stats)
+				print("AUTOTEST score=", score, " stats=", stats, " bot=", bstats)
 				get_tree().quit()
 				return
 		return
@@ -965,7 +1129,7 @@ func _tick(dt: float) -> void:
 		"dead":
 			_idle_players(dt)
 			_ball_free(dt)
-			if state_t > 0.9:
+			if state_t > float(dead_info.get("wait", 0.9)):
 				_restart()
 		"half":
 			_idle_players(dt)
@@ -1039,7 +1203,9 @@ func _play(dt: float) -> void:
 				h.charging = false
 				h.charge = 0.0
 			elif e == "pass_down":
-				if mine:
+				if mine and set_piece == "pen":
+					pass
+				elif mine:
 					h.pass_hold = 0.0
 				else:
 					_switch(h)
@@ -1066,6 +1232,12 @@ func _play(dt: float) -> void:
 	var second := [null, null]
 	var aim := _ball_meet_point()
 	for t in 2:
+		var us := []
+		for o in teams[1 - t]:
+			if not o.off:
+				us.append(o.position.x * side(t))
+		us.sort()
+		off_line[t] = maxf(maxf(us[us.size() - 2] if us.size() > 1 else 0.0, ball.position.x * side(t)), 0.0)
 		var b1 := 1e9
 		var b2 := 1e9
 		for p in teams[t]:
@@ -1093,6 +1265,8 @@ func _play(dt: float) -> void:
 		var h = _hum_of(p)
 		if p.stun > 0.0:
 			p.stun -= dt
+		elif pen_wait:
+			want = Vector3.ZERO
 		elif h != null:
 			if p.recv and ball_owner == null and h.stick.length() < 0.5:
 				want = _run_to(p, aim, p.top_speed)
@@ -1282,9 +1456,11 @@ func _release(p, v: Vector3) -> void:
 	ball_ignore = p
 	ignore_t = 0.3
 	set_piece = ""
+	pen_wait = false
 	p.hold_t = 0.0
 	for q in players:
 		q.recv = false
+		q.offside = false
 
 func _pass_target(p, dir3: Vector3, ai: bool):
 	var best = null
@@ -1310,6 +1486,10 @@ func _pass_target(p, dir3: Vector3, ai: bool):
 			sc += n.x * s * 1.6 - absf(d - 15.0) * 0.04
 		if m.role == "GK":
 			sc -= 3.0
+		if set_piece in ["", "fk", "kick"] and _is_offside(p, m):
+			if ai:
+				continue
+			sc -= 2.0
 		var lane := 99.0
 		var mark := 99.0
 		for o in teams[1 - p.team]:
@@ -1347,8 +1527,12 @@ func _pass(p, m, lofted: bool) -> void:
 		t = dir2.length() / vh
 		v = dir2.normalized() * vh * 1.03 + Vector3(0, 4.9 * t, 0)
 	var h = _hum_of(p)
+	var offs: bool = set_piece in ["", "fk", "kick"] and _is_offside(p, m)
 	_release(p, v)
 	m.recv = true
+	if offs:
+		m.offside = true
+		off_spot = m.position
 	stats["passes"] += 1
 	snd("kick" if lofted or d > 22.0 else "touch")
 	if h != null and m.role != "GK" and _hum_of(m) == null:
@@ -1365,7 +1549,7 @@ func _shoot(p, power: float, aim_z: float, err_k: float) -> void:
 	var s := side(p.team)
 	var from := ball.position
 	var d := Vector2(HL * s - from.x, aim_z - from.z).length()
-	var err := (randf() - 0.5) * (0.5 + d * 0.05 + power * 1.3) * err_k
+	var err := (randf() - 0.5) * (0.4 + d * 0.035 + power * 0.8) * err_k
 	var goal := Vector3(HL * s, 0, aim_z + err)
 	var dir := goal - from
 	dir.y = 0.0
@@ -1386,6 +1570,9 @@ func _shoot(p, power: float, aim_z: float, err_k: float) -> void:
 # ---------------------------------------------------------------- winning the ball
 
 func _give(p) -> void:
+	if p.offside and state == "play":
+		_offside(p)
+		return
 	var prev = ball_last
 	ball_owner = p
 	ball_last = p
@@ -1394,6 +1581,7 @@ func _give(p) -> void:
 	p.ai_cool = _cpu(p.team)["think"] * (0.8 + randf() * 0.6)
 	for q in players:
 		q.recv = false
+		q.offside = false
 	for h in humans:
 		h.charging = false
 		h.charge = 0.0
@@ -1429,6 +1617,9 @@ func _human_tackle(h) -> void:
 			_give(me_p)
 			protect_t = 0.7
 			return
+		if d < 1.7:
+			_foul(me_p, c)
+			return
 	me_p.stun = 0.55
 
 func _tackles(dt: float) -> void:
@@ -1439,16 +1630,15 @@ func _tackles(dt: float) -> void:
 		if o.stun > 0.0 or _hum_of(o) != null or o.role == "GK":
 			continue
 		var d: float = o.position.distance_to(c.position)
-		if d < 1.3:
-			o.press_t += dt
-			var need: float = _cpu(o.team)["need"]
-			if _team_human(o.team):
-				need = 0.8
-			if o.press_t > need:
-				o.press_t = 0.0
-				o.start_tackle()
-				var front: float = c.fwd().dot((o.position - c.position).normalized())
-				if front > -0.35:
+		var front: float = c.fwd().dot((o.position - c.position).normalized())
+		if o.commit_t >= 0.0:
+			# the tackle is already on its way: it lands a moment later, wherever the carrier has turned by then
+			o.commit_t -= dt
+			if o.commit_t <= 0.0:
+				o.commit_t = -1.0
+				if d > 1.6:
+					o.stun = 0.5
+				elif front > -0.35:
 					c.stun = 0.55
 					stats["tackles"] += 1
 					snd("touch")
@@ -1456,7 +1646,18 @@ func _tackles(dt: float) -> void:
 					protect_t = 0.7
 					return
 				else:
-					o.stun = 0.75
+					_foul(o, c)
+					return
+			continue
+		if d < 1.3 and front > -0.35:
+			o.press_t += dt
+			var need: float = _cpu(o.team)["need"]
+			if _team_human(o.team):
+				need = 0.8
+			if o.press_t > need - 0.15:
+				o.press_t = 0.0
+				o.commit_t = 0.15
+				o.start_tackle()
 		else:
 			o.press_t = maxf(o.press_t - dt, 0.0)
 
@@ -1471,7 +1672,7 @@ func _pickups() -> void:
 		var gx := -HL * side(t)
 		if absf(b.x - gx) > 16.5 or absf(b.z) > 20.16:
 			continue
-		var reach := 1.0 + (0.9 if g.dive_t >= 0.0 else 0.0)
+		var reach := 0.85 + (0.75 if g.dive_t >= 0.0 else 0.0)
 		var dh := Vector2(b.x - g.position.x, b.z - g.position.z).length()
 		if dh < reach and b.y < 2.6:
 			if hs > 19.0 and dh > 0.7:
@@ -1502,7 +1703,12 @@ func _pickups() -> void:
 			continue
 		if p == ball_ignore and ignore_t > 0.0:
 			continue
+		if shot_live and ball_last != null and p.team == ball_last.team:
+			continue
 		var d := Vector2(b.x - p.position.x, b.z - p.position.z).length()
+		# a fast ball that is not meant for you only hits you if it really hits your body
+		if hs > 12.0 and not p.recv and d > 0.55:
+			continue
 		if d < bd:
 			bd = d
 			best = p
@@ -1576,6 +1782,10 @@ func _ai_carrier(p, dt: float) -> Vector3:
 		if d < nd:
 			nd = d
 			near = o
+	if set_piece == "pen" or (set_piece == "fk" and dist < 27.0 and absf(p.position.z) < 16.0):
+		if p.ai_cool <= 0.0:
+			_shoot(p, 0.55 + randf() * 0.3, (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * (0.5 + randf() * 0.35), cpu["err"])
+		return Vector3.ZERO
 	if set_piece != "":
 		if p.ai_cool <= 0.0:
 			var m2 = _pass_target(p, Vector3.ZERO, set_piece != "corner")
@@ -1583,21 +1793,23 @@ func _ai_carrier(p, dt: float) -> Vector3:
 				m2 = teams[p.team][6]
 			_pass(p, m2, set_piece == "corner" or set_piece == "gk")
 		return Vector3.ZERO
+	if nd < 2.6 and p.ai_cool > 0.12:
+		p.ai_cool = 0.12 # a man is on me: decide now
 	if p.ai_cool <= 0.0:
 		p.ai_cool = cpu["think"] * (0.8 + randf() * 0.6)
 		var angle_ok := absf(p.position.z) < 8.0 + (HL - absf(p.position.x)) * 0.8
 		if dist < 24.0 and angle_ok and (nd > 1.7 or dist < 14.0):
-			if dist < 18.0 or randf() < 0.25:
+			if dist < 20.0 or randf() < 0.4:
 				var gk = teams[1 - p.team][0]
-				var az := (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * (0.55 + randf() * 0.33)
+				var az := (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * (0.5 + randf() * 0.28)
 				_shoot(p, 0.5 + randf() * 0.4, az, cpu["err"])
 				return Vector3.ZERO
-		var pressured := nd < 3.4
+		var pressured := nd < 4.2
 		if pressured or randf() < 0.25:
 			var m3 = _pass_target(p, Vector3.ZERO, true)
 			if m3 != null:
 				var gain: float = (m3.position.x - p.position.x) * s
-				if pressured and gain > -14.0 or gain > 6.0:
+				if pressured and gain > -20.0 or gain > 6.0:
 					_pass(p, m3, false)
 					return Vector3.ZERO
 	var dir := to_goal.normalized()
@@ -1611,7 +1823,7 @@ func _ai_carrier(p, dt: float) -> Vector3:
 		dir = (dir + side_step * (1.0 - nd / 5.0) * 1.3).normalized()
 	if absf(p.position.z) > HW - 3.0 and signf(dir.z) == signf(p.position.z):
 		dir.z *= -0.5
-	return dir.normalized() * p.top_speed * 0.9 * cpu["spd"]
+	return dir.normalized() * p.top_speed * 0.94 * cpu["spd"]
 
 func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 	var t: int = p.team
@@ -1623,7 +1835,7 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		return _run_to(p, aim, p.top_speed)
 	if loose and p == chaser[t]:
 		return _run_to(p, aim, p.top_speed * cpu["spd"])
-	if not loose and not ours:
+	if not loose and not ours and set_piece == "":
 		var c = ball_owner
 		var own_goal := Vector3(-HL * s, 0, 0)
 		var goal_side: Vector3 = (own_goal - c.position).normalized()
@@ -1642,6 +1854,8 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		u = clampf(u, -46.0, 14.0)
 	else:
 		u = clampf(u, -40.0, 47.0)
+	if ours:
+		u = minf(u, maxf(off_line[t] - 0.8, 0.0))
 	var z: float = p.home.y * s * (29.0 if ours else 21.0) + ball.position.z * (0.25 if ours else 0.42)
 	z = clampf(z, -HW + 1.5, HW - 1.5)
 	return _run_to(p, Vector3(u * s, 0, z), p.top_speed * 0.88)
@@ -1661,10 +1875,10 @@ func _ai_keeper(p, dt: float) -> Vector3:
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
 				var dz: float = target.z - p.position.z
-				if absf(dz) > 1.2 and t < 0.5 and p.dive_t < 0.0:
+				if absf(dz) > 1.0 and t < 0.6 and p.dive_t < 0.0:
 					var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 					p.start_dive(signf(Vector3(0, 0, dz).dot(right)))
-				var sp := 8.5 if p.dive_t >= 0.0 else 5.2
+				var sp := 4.8 if p.dive_t >= 0.0 else 3.5
 				return _run_to(p, target, sp)
 	p.react_t = 0.0
 	if ball_owner == null and absf(b.x - gx) < 15.0 and absf(b.z) < 18.0 and ball_vel.length() < 12.0:
@@ -1758,7 +1972,7 @@ func _pack() -> Array:
 		a[k + 6] = p.tackle_n
 		a[k + 7] = p.dive_n
 		a[k + 8] = p.dive_side
-		a[k + 9] = p.mood
+		a[k + 9] = 9 if p.off else p.mood
 		k += N_F
 	a[k] = snappedf(ball.position.x, 0.01)
 	a[k + 1] = snappedf(ball.position.y, 0.01)
@@ -1794,8 +2008,10 @@ func _anim_sync(p, a: Array, k: int) -> void:
 		p.dive_n = int(a[k + 7])
 		p.dive_t = 0.0
 		p.dive_side = a[k + 8]
-	if int(a[k + 9]) != p.mood:
-		p.mood = int(a[k + 9])
+	var md := int(a[k + 9])
+	p.visible = md != 9
+	if md != 9 and md != p.mood:
+		p.mood = md
 		p.mood_t = 0.0
 
 # ---------------------------------------------------------------- online: snapshots
@@ -1931,6 +2147,8 @@ func _minimap() -> void:
 	var pts := PackedVector3Array()
 	var my = humans[me].ctrl if humans.size() > me else null
 	for p in players:
+		if not p.visible:
+			continue
 		pts.append(Vector3(p.position.x * view_flip, p.position.z * view_flip, 2.0 if p == my else float(p.team)))
 	hud.mm_pts = pts
 	hud.mm_ball = Vector2(ball.position.x, ball.position.z) * view_flip
@@ -2031,3 +2249,53 @@ func _auto_quality(dt: float) -> void:
 		get_viewport().scaling_3d_scale = 1.0 if quality >= 1 else 0.7
 		for p in players:
 			p.blob.visible = quality < 2
+
+# Test only: a scripted "thumb" that plays through the same inputs as a person, to exercise the human code paths.
+func _bot_inputs(dt: float) -> void:
+	for h in humans:
+		var p = h.ctrl
+		if p == null:
+			continue
+		var s := side(h.team)
+		var id: int = h.get_instance_id()
+		var t: float = bot_t.get(id, 0.0) - dt
+		h.sprint = true
+		if ball_owner == p:
+			bstats["have"] += 1
+			var goal := Vector3(HL * s, 0, 0)
+			var dist: float = p.position.distance_to(goal)
+			h.stick = Vector2(s, clampf(-p.position.z * 0.05, -0.5, 0.5)).normalized()
+			if h.charging:
+				if h.charge > 0.55:
+					h.evs.append("shoot_up")
+					bstats["shots"] += 1
+			elif dist < 21.0 and t <= 0.0:
+				h.evs.append("shoot_down")
+				t = 1.0
+			elif t <= 0.0:
+				var nd := 99.0
+				for o in teams[1 - h.team]:
+					nd = minf(nd, o.position.distance_to(p.position))
+				if nd < 3.5:
+					h.evs.append("pass_down")
+					h.evs.append("pass_up")
+					bstats["passes"] += 1
+					t = 0.5
+		elif ball_owner != null and ball_owner.team == h.team:
+			h.stick = Vector2(s * 0.6, 0)
+		else:
+			var to: Vector3 = ball.position - p.position
+			to.y = 0.0
+			h.stick = Vector2(to.x, to.z).normalized() if to.length() > 0.3 else Vector2.ZERO
+			if t <= 0.0:
+				if ball_owner != null and to.length() < 1.9:
+					h.evs.append("shoot_down")
+					h.evs.append("shoot_up")
+					bstats["tackles"] += 1
+					t = 0.9
+				elif to.length() > 14.0:
+					h.evs.append("pass_down")
+					h.evs.append("pass_up")
+					bstats["switches"] += 1
+					t = 1.2
+		bot_t[id] = t
