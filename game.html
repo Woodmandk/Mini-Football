@@ -1469,7 +1469,7 @@ button.setmore > span:last-child { min-width: 0; }
         <div><b class="k">CARDS</b><span>Tackle from behind or hit the man far from the ball and it is a free kick, in the box a penalty. A hard tackle from behind or another foul gives a yellow card. A second yellow, or stopping a free man on his way to goal, gives a red card and time off.</span></div>
         <div><b class="k">GOALKEEPER</b><span>The keeper dives for shots himself. When he catches the ball, you control him: hold KICK for a long kick (the line shows where it lands), or tap THROW to a teammate. If you are the keeper in the box yourself, you dive with DIVE.</span></div>
         <div><b class="k">PENALTIES</b><span>Aim with the joystick and tap SHOOT. As keeper the joystick decides which way you dive.</span></div>
-        <div><b class="k">SWITCH</b><span>Without the ball. Switch to the teammate closest to the ball.</span></div>
+        <div><b class="k">SWITCH</b><span>Without the ball. Take the defender best placed between the ball and your goal (a faint ring shows who). Tap again quickly for the next one.</span></div>
         <div><b class="k">ADDED TIME</b><span>Each half gets time added for free kicks, goals and injuries. If it is level after full time, extra time is played before penalties (can be turned off).</span></div>
         <div><b class="k">SUBSTITUTIONS</b><span>Tired and injured players are subbed off at half-time and late in the match. Against the computer you can sub yourself in the pause menu.</span></div>
         <div><b class="k">CAMERA</b><span>Pick Normal, Close or Wide in Settings. On goals, cards, free kicks and corners the camera moves in close with film bars (Film clips can be turned off).</span></div>
@@ -1587,9 +1587,10 @@ button.setmore > span:last-child { min-width: 0; }
   const ctx = cv.getContext('2d');
 
   // ---------- Settings ----------
-  const cfg = { size: 7, mins: 3, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, tempo: 1, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
+  const cfg = { size: 11, mins: 3, diff: 1, kit: 0, name: '', replay: true, pu: false, crowd: true, music: true, ser: 1, team: 1, opp: 0, team2: 0, ball: 0, pitch: 0, wx: 0, vib: true, calm: true, tempo: 1, aim: true, adv: false, cam: 0, cine: true, lock: false, name2: '', coop: 0 };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem('mf-cfg') || '{}')); } catch (_) {}
   if (!cfg.v7) { cfg.v7 = 1; if (cfg.size < 7) cfg.size = 7; }
+  if (!cfg.v11) { cfg.v11 = 1; if (cfg.size === 7) cfg.size = 11; } // Daniel: 11 v 11 is the standard match
   if (!cfg.tv2) { cfg.tv2 = 1; if (cfg.tempo === 2) cfg.tempo = 1; } // the tempo steps moved up one: whoever had Hurtigt keeps that speed, now called Normalt // Daniel: a match should be 7 or 11 a side by default (5 a side is now indoor)
   delete cfg.tod; // evening matches were removed: too dark to see on a phone
   if (![1, 2, 3, 5, 7, 11].includes(cfg.size)) cfg.size = cfg.size === 10 ? 11 : 1;
@@ -1657,7 +1658,7 @@ button.setmore > span:last-child { min-width: 0; }
   }
   function setupSum() { // the short line under Match settings: what is chosen now
     const on = id => { const b = $(id) && $(id).querySelector('[aria-pressed="true"]'); return b ? b.textContent.trim() : ''; };
-    const sz = cfg.size || 7, l = [sz === 5 ? '5 v 5 indoor' : `${sz} v ${sz}`, $('formBox').hidden ? '' : on('segForm'), on('segMins'), on('segSer')];
+    const sz = cfg.size || 11, l = [sz === 5 ? '5 v 5 indoor' : `${sz} v ${sz}`, $('formBox').hidden ? '' : on('segForm'), on('segMins'), on('segSer')];
     if (setupMode === 'host') l.push(''); $('setupSum').textContent = l.filter(Boolean).join(' · ');
   }
   $('setupMore').onclick = () => { $('setupSheet').hidden = false; $('setupSheet').scrollTop = 0; };
@@ -2073,7 +2074,7 @@ button.setmore > span:last-child { min-width: 0; }
   function hubPaint() { // live subtitles on the front page tiles
     guidePaint();
     try {
-      const n = cfg.size || 7, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
+      const n = cfg.size || 11, S = passLoad(), M = loadMe(), E = evLoad(), T = evTheme(E);
       $('hcSub').textContent = `Team ${teamOvr(n)}`; $('hcName').textContent = loadMT().made ? loadMT().n : (cfg.name || 'My team');
       $('holdSub').textContent = `Team ${teamOvr(n)} · chemistry ${chemOf(n).v} · ${n} v ${n}. Tap a player to see and train him`;
       { const Sq = squadLoad(), tr = squadXI(n, Sq).filter(x => fitOf(x.p) < 60).length; if (tr) $('holdSub').textContent = `${tr} starters are tired for ranked. Rest them or give them a massage`;
@@ -3277,8 +3278,9 @@ button.setmore > span:last-child { min-width: 0; }
     if (!h || !q || h === q || q.ctrl !== 'ai' || !isHuman(h)) return;
     if (cfg.lock && size > 1 && !force) return; // locked player (as in FIFA): you keep your own man the whole match
     q.ctrl = h.ctrl; q.peer = h.peer; h.ctrl = 'ai'; h.peer = null;
+    q.swFrom = h.i; q.swAt = performance.now(); q.swSeen = null;
     q.wasA = h.wasA; q.wasB = h.wasB; h.wasA = h.wasB = false;
-    h.charging = false; h.hold = 0; q.charging = false; q.hold = 0; q.swcd = 0.4; q.windup = 0;
+    h.charging = false; h.hold = 0; q.charging = false; q.hold = 0; q.swcd = 0.18; q.windup = 0;
     if (q.ctrl === 'R') { const e = roster.find(r => r[0] === q.peer); if (e) e[1] = q.i; }
   }
   const freeMates = h => P.filter(q => q.team === h.team && q.ctrl === 'ai' && on(q));
@@ -3286,26 +3288,68 @@ button.setmore > span:last-child { min-width: 0; }
     const f = freeMates(h); if (!f.length) return null;
     return f.reduce((a, b) => (dBall(b) < dBall(a) ? b : a));
   }
-  // Auto-switch: hand each human on this team the teammate best placed for (x, y), if he is clearly closer
+  // Defending (as in FIFA): how long a man needs to get between the ball carrier and our goal. A spot just goal-side of
+  // where the carrier is heading counts, and a man who is behind the play (beaten, or up the pitch) pays for every step
+  function defCost(q, o) {
+    const dir = q.team ? -1 : 1, gx = q.team ? PR : PL;
+    const cx = o.x + o.vx * 0.45, cy = o.y + o.vy * 0.45;
+    const gdx = gx - cx, gdy = CY - cy, gl = Math.hypot(gdx, gdy) || 1, k = Math.min(70, gl * 0.35);
+    let c = Math.hypot(q.x - (cx + gdx / gl * k), q.y - (cy + gdy / gl * k));
+    const behind = (q.x - cx) * dir; // > 0: further from our goal than the ball
+    if (behind > 0) c += 70 + behind * 1.3;
+    if (q.stun > 0 || q.tackle > 0 || q.recover > 0) c += 240;
+    return c;
+  }
+  // the same for a spot the ball is going to (a pass, a loose ball): near it, and ideally goal-side of it
+  function spotCost(q, x, y) {
+    const behind = (q.x - x) * (q.team ? -1 : 1);
+    return Math.hypot(q.x - x, q.y - y) + (behind > 0 ? Math.min(160, behind * 0.6) : 0) + (q.stun > 0 ? 220 : 0);
+  }
+  const switchable = h => freeMates(h).filter(q => !(size > 1 && q.k === 0) && !(q.stun > 0) && !(q.frozen > 0));
+  const autoOk = h => !(h.asw > 0) && !h.charging && !h.chB && !(h.tackle > 0) && !(h.hands > 0) && !(size > 1 && h.k === 0);
+  // Auto-switch to a spot: only the human best placed for it takes the man best placed, if that man is clearly better.
+  // In co-op the other person keeps his own man
   function autoSwitchTo(team, x, y, margin) {
-    for (const h of P.filter(q => q.team === team && isHuman(q))) {
-      if (h.swcd > 0 || h.charging || (size > 1 && h.k === 0 && h.hands > 0)) continue;
-      const f = freeMates(h).filter(q => !(size > 1 && q.k === 0) && !(q.stun > 0)); if (!f.length) continue;
-      const dq = q => Math.hypot(q.x - x, q.y - y), q = f.reduce((a, b) => (dq(b) < dq(a) ? b : a));
-      if (dq(q) + margin < dq(h)) { swapControl(h, q); q.swcd = 0.8; }
-    }
+    const hs = P.filter(q => q.team === team && isHuman(q)); if (!hs.length) return;
+    const h = hs.reduce((a, b) => (spotCost(b, x, y) < spotCost(a, x, y) ? b : a));
+    if (!autoOk(h)) return;
+    const f = switchable(h); if (!f.length) return;
+    const q = f.reduce((a, b) => (spotCost(b, x, y) < spotCost(a, x, y) ? b : a));
+    const back = q.i === h.swFrom && performance.now() - (h.swAt || 0) < 3500;
+    if (spotCost(q, x, y) + margin * (back ? 2 : 1) < spotCost(h, x, y) * (back ? 0.7 : 0.85)) { swapControl(h, q); q.asw = 0.9; }
   }
-  function defendSwitch(o) { // they have it: take the man who can get goal-side of the ball carrier quickest
-    const t = 1 - o.team, ownX = t ? PR : PL;
-    const cost = q => Math.hypot(q.x - o.x, q.y - o.y) + ((q.x - o.x) * (t ? -1 : 1) > 0 ? 130 : 0) + (q.stun > 0 ? 200 : 0); // behind the play costs
-    for (const h of P.filter(q => q.team === t && isHuman(q))) {
-      if (h.swcd > 0 || h.charging || (size > 1 && h.k === 0)) continue;
-      const f = freeMates(h).filter(q => !(size > 1 && q.k === 0)); if (!f.length) continue;
-      const q = f.reduce((a, b) => (cost(b) < cost(a) ? b : a));
-      if (cost(q) + 150 < cost(h) && Math.abs(o.x - ownX) < Math.abs(h.x - ownX) + 400) { swapControl(h, q); q.swcd = 1.3; }
-    }
+  // They have it: hand the man who can get goal-side of the carrier quickest. Clearly better only, so it doesn't ping-pong,
+  // but quickly once you have been beaten and someone is waiting behind you
+  function defendSwitch(o, fresh) {
+    if (!o) return;
+    const t = 1 - o.team, hs = P.filter(q => q.team === t && isHuman(q)); if (!hs.length) return;
+    const h = hs.reduce((a, b) => (defCost(b, o) < defCost(a, o) ? b : a));
+    if (fresh) h.asw = 0;
+    if (!autoOk(h)) return;
+    const dh = Math.hypot(h.x - o.x, h.y - o.y), beaten = (h.x - o.x) * (t ? -1 : 1) > 25;
+    if (dh < REACH + 40 && !beaten) return; // right on him and goal-side: your duel, you keep him
+    const f = switchable(h); if (!f.length) return;
+    const q = f.reduce((a, b) => (defCost(b, o) < defCost(a, o) ? b : a)), cq = defCost(q, o), ch = defCost(h, o);
+    const back = q.i === h.swFrom && performance.now() - (h.swAt || 0) < 3500; // straight back to the man you just left: only if you have really been beaten
+    if (beaten ? cq + (back ? 120 : 40) < ch : !back && cq < ch * 0.72 - 50) { swapControl(h, q); q.asw = beaten ? 0.8 : 1.5; }
   }
-  function manualSwitch(h) { const q = nearestFree(h); if (q) swapControl(h, q); }
+  // SKIFT (as in FIFA): the best placed man. Tap again quickly and you get the next one in line, so you can always reach the one you want
+  function switchRank(h) {
+    const o = owner(), f = switchable(h);
+    if (!f.length) return f;
+    let cost;
+    if (o && o.team !== h.team) cost = q => defCost(q, o);
+    else { const bx = ball.x + ball.vx * 0.35, by = ball.y + ball.vy * 0.35; cost = q => (o ? dBall(q) : spotCost(q, bx, by)); }
+    return f.map(q => [cost(q), q]).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+  }
+  function manualSwitch(h) {
+    const now = performance.now(), r = switchRank(h); if (!r.length) return;
+    const recent = now - (h.swAt || 0) < 1300 && h.swSeen ? h.swSeen : [];
+    const q = r.find(x => !recent.includes(x.i)) || r[0];
+    swapControl(h, q);
+    q.swAt = now; q.swSeen = r.find(x => !recent.includes(x.i)) ? [...recent, h.i] : [h.i];
+    q.asw = 1.6; // you chose him: the game leaves him to you for a moment
+  }
   function onPossession(o) {
     // Your team got the ball: you take the player who has it.
     if (o.ctrl === 'ai') {
@@ -3315,10 +3359,7 @@ button.setmore > span:last-child { min-width: 0; }
       if (hs.length) swapControl(hs.reduce((a, b) => (dBall(b) < dBall(a) ? b : a)), o);
     }
     // You lost it: jump to the teammate best placed to win it back.
-    for (const h of P.filter(q => q.team !== o.team && isHuman(q))) {
-      const q = nearestFree(h);
-      if (q && dBall(q) + 60 < dBall(h)) swapControl(h, q);
-    }
+    if (size > 1 && !setp) defendSwitch(o, true);
   }
 
   // ---------- Actions ----------
@@ -3556,7 +3597,7 @@ button.setmore > span:last-child { min-width: 0; }
     ball.gk = 'pass'; ball.fresh = false;
     if (hard) sfx.kick(hard * 0.6); else sfx.pass();
     handOver(p, q);
-    autoSwitchTo(1 - p.team, tx, ty, 50); // the other side: take the man nearest where the pass is going
+    autoSwitchTo(1 - p.team, tx, ty, 80); // the other side: take the man nearest where the pass is going
   }
   // chip over the keeper: two quick taps on SKYD
   function lob(p, ax, ay, q, lp) {
@@ -4538,7 +4579,7 @@ button.setmore > span:last-child { min-width: 0; }
         }
       }
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
-      p.tcd -= dt; p.swcd -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
+      p.tcd -= dt; p.swcd -= dt; if (p.asw > 0) p.asw -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
       const has = ball.owner === p.i;
       const mag = Math.hypot(inp.x, inp.y);
       p.sprint = (inp.adv ? !!inp.c : (inp.sprint || mag > 0.97)) && p.stamina > 0.04 && mag > 0.2 && p.tackle <= 0;
@@ -6395,7 +6436,7 @@ button.setmore > span:last-child { min-width: 0; }
     const C = clubLoad(), l = clamp(C.f.ak | 0, 0, FAC_MAX); if (!l) return C;
     const d = dayNo(); if (C.yd == null) { C.yd = d - AK_DAYS[l]; }
     if (!C.y && d - C.yd >= AK_DAYS[l]) {
-      const t = teamOvr(cfg.size || 7), c = makeCard(clamp(t - 9 + l, 45, 85), clamp(t - 3 + l, 47, 88), { nat: Math.random() < 0.7 ? 'DK' : undefined });
+      const t = teamOvr(cfg.size || 11), c = makeCard(clamp(t - 9 + l, 45, 85), clamp(t - 3 + l, 47, 88), { nat: Math.random() < 0.7 ? 'DK' : undefined });
       c.age = 16 + Math.floor(Math.random() * 3); c.pot = clamp(ovr(c) + 8 + l * 2 + Math.floor(Math.random() * 8), 60, 96); c.ab = abOf(c).slice(0, 1);
       C.y = c; C.yd = d; clubSave(C);
     }
@@ -6611,7 +6652,7 @@ button.setmore > span:last-child { min-width: 0; }
     const C = youthTick(), pr = loadProf(), mt = loadMT(), lvl = pr.lvl || 1; facMemo = C.f;
     crestInto($('clCrest'), TEAMS[OWN]);
     $('clName').textContent = mt.made ? mt.n : (cfg.name || 'My team');
-    $('clSub').textContent = `Club level ${lvl} · ${STAD[stadOf(lvl)][0]}` + (stadOf(lvl) < 3 ? ` · next ground at level ${STAD[stadOf(lvl) + 1][1]}` : '') + ` · Team ${teamOvr(cfg.size || 7)}`;
+    $('clSub').textContent = `Club level ${lvl} · ${STAD[stadOf(lvl)][0]}` + (stadOf(lvl) < 3 ? ` · next ground at level ${STAD[stadOf(lvl) + 1][1]}` : '') + ` · Team ${teamOvr(cfg.size || 11)}`;
     groundPaint(C, pr, lvl);
     const Y = $('clYouth'); Y.textContent = '';
     if (C.y) { // the talent from the academy: sign him or let him go
@@ -6635,7 +6676,7 @@ button.setmore > span:last-child { min-width: 0; }
   const valOf = p => Math.max(20, Math.round(120 * Math.pow(1.105, ovr(p) - 55) * (1 + 0.15 * abOf(p).length) / 5) * 5);
   const sellOf = p => Math.round(valOf(p) * 0.45 / 5) * 5;
   function mktGen(M) { // today's players: most around your own level, one clearly better (the star), one bargain
-    const t = teamOvr(cfg.size || 7), L = [];
+    const t = teamOvr(cfg.size || 11), L = [];
     const spans = [[-7, -3], [-4, 0], [-2, 2], [0, 3], [2, 5], [5, 9]], gk = Math.floor(Math.random() * 6);
     spans.forEach(([a, b], i) => {
       const c = makeCard(clamp(t + a, 45, 92), clamp(t + b, 47, 95), i === gk && Math.random() < 0.5 ? { pos: 'MV' } : {});
@@ -6700,7 +6741,7 @@ button.setmore > span:last-child { min-width: 0; }
   const SCOUT_H = 3600e3;
   let scPos = 'AN', scKind = 'tal';
   function scoutFind(pos, kind) {
-    const t = teamOvr(cfg.size || 7), out = [];
+    const t = teamOvr(cfg.size || 11), out = [];
     for (let k = 0; k < 3; k++) {
       const c = kind === 'tal' ? makeCard(clamp(t - 9, 45, 84), clamp(t - 2, 47, 88), { pos }) : kind === 'klar' ? makeCard(clamp(t + 2, 50, 90), clamp(t + 8, 52, 95), { pos }) : makeCard(clamp(t - 7, 45, 84), clamp(t - 1, 46, 88), { pos });
       if (kind === 'tal') { c.age = 17 + Math.floor(Math.random() * 4); c.pot = clamp(ovr(c) + 9 + Math.floor(Math.random() * 10), 62, 97); }
@@ -8605,6 +8646,7 @@ button.setmore > span:last-child { min-width: 0; }
     }
     ctx.restore();
   }
+  let swHint = [];
   function drawPlayer(p) {
     if (p.out > 1e5) return; // training: the missing opponents are not shown
     if (shootoutOn() && state === 'play' && Math.abs(p.x - soGoal()) > 240) return; // shootout: only the taker and the keeper
@@ -8614,6 +8656,7 @@ button.setmore > span:last-child { min-width: 0; }
     ctx.save(); ctx.translate(p.x, p.y - hop);
     if (p.out > 0) ctx.globalAlpha = 0.45;
     ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.beginPath(); ctx.ellipse(4 * FIG, 6 * FIG, PRAD, PRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    if (swHint.includes(p)) { ctx.strokeStyle = 'rgba(244,247,242,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([4, 5]); ctx.beginPath(); ctx.ellipse(2 * FIG, 4 * FIG, PRAD + 6, (PRAD + 6) * 0.8, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     if (p.hold > 0.05) {
       ctx.strokeStyle = col.gold; ctx.lineWidth = 3.5;
       ctx.beginPath(); ctx.arc(0, 0, PRAD + 7, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.hold / MAXCHARGE)); ctx.stroke();
@@ -9009,6 +9052,11 @@ button.setmore > span:last-child { min-width: 0; }
     drawPitch();
     if (!saved) { drawItem(); drawSetPiece(); drawCones(); if (!shootoutOn()) drawPassHint(); drawAimLine(); }
     if (state === 'play' || state === 'end') updRef(dt);
+    swHint = [];
+    if (state === 'play' && size > 1 && !cfg.lock && mode !== 'guest' && !setp && !pen && !so && !(replay && replay.t >= 0)) { // the man SKIFT would give you: a faint ring at his feet
+      const o = owner();
+      if (o && P.some(h => isMine(h) && h.team !== o.team)) for (const h of P) if (isMine(h) && h.team !== o.team) { const r = switchRank(h); if (r[0]) swHint.push(r[0]); }
+    }
     for (const p of P) if (p.stun > 0) drawPlayer(p);
     drawCoaches(dt); drawRef();
     for (const p of P) if (p.stun <= 0) drawPlayer(p);
@@ -9111,7 +9159,7 @@ button.setmore > span:last-child { min-width: 0; }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); setTimeout(optsBehindButton, 0); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, cshare: cv => carShare(cv), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, swr: i => switchRank(P[i]).map(q => q.i), msw: i => manualSwitch(P[i]), dsw: () => defendSwitch(owner()), cshare: cv => carShare(cv), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
