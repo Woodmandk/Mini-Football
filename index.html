@@ -1022,6 +1022,9 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
 .mtwho .mwd { flex: 0 0 auto; min-height: 44px; padding: 8px 16px; margin: 0; font-size: 15px; }
 .mtwho .mwx { flex: 0 0 auto; width: 44px; min-height: 44px; padding: 0; margin: 0; font-size: 16px; }
 #shopTr, #clTrain { display: none !important; }
+
+.mtghost { position: absolute; z-index: 40; width: 220px; pointer-events: none; opacity: 0.92; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5); border-color: var(--gold) !important; }
+#mtSubs .mtswr { touch-action: none; cursor: grab; }
 </style>
 
 <div id="wrap">
@@ -7682,7 +7685,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       L.forEach((q, i) => { const d = Math.hypot(q[1] * w - p.x, (1 - q[0]) * h - p.y); if (d < bd) { bd = d; best = i; } });
       for (const c of mtCards) if (p.x > c.x - c.w / 2 && p.x < c.x + c.w / 2 && p.y > c.y - c.h / 2 && p.y < c.y + c.h / 2 + 12) { best = c.i; break; } // a tap on the card itself
       if (best < 0) { mtSel = -1; mtSelB = -1; mtPaintSide(); mtDraw(); return; }
-      mtDown = { i: best, x: p.x, y: p.y, moved: false };
+      mtDown = { i: best, x: p.x, y: p.y, moved: false, orig: (L[best] || [0.5, 0.5]).slice() };
       cv2.setPointerCapture(e.pointerId); e.preventDefault();
     });
     cv2.addEventListener('pointermove', e => {
@@ -7697,10 +7700,14 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       if (mtDrag === 0) { q[0] = clamp(u, 0.03, 0.3); q[1] = clamp(v, 0.35, 0.65); } else { q[0] = clamp(u, 0.12, 0.95); q[1] = clamp(v, 0.05, 0.95); }
       mtDraw();
     });
-    const up = () => {
+    const up = e => {
       const d = mtDown; mtDown = null; if (!d) return;
-      if (mtDrag >= 0) { mtDrag = -1; saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); return; }
-      mtTap(d.i);
+      if (mtDrag >= 0) { // dropped on a teammate: they swap places; dropped on the grass: he moves there
+        const k = mtDrag; mtDrag = -1; const j = e && e.clientX != null ? mtSlotAt(e.clientX, e.clientY, k) : -1;
+        if (j >= 0) { const mt = loadMT(); if (mt.lay[mtN]) mt.lay[mtN][k] = d.orig; saveMT(); mtSwap(k, j); mtPaintSide(); mtDraw(); return; }
+        saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); return;
+      }
+      mtOpen(d.i, -1);
     };
     $('mtAuto').onclick = () => { const S = squadLoad(); if (S.xi) delete S.xi[mtN]; squadSave(S); mtSel = mtSelB = -1; mtArm = false; mtPaintSide(); mtDraw(); };
     for (const b of $('mtTabs').children) b.onclick = () => { mtTab = b.dataset.t; mtTabs(); };
@@ -7720,6 +7727,37 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     S.xi = S.xi || {}; S.xi[mtN] = xi; squadSave(S); sfx.kick(0.3);
   }
   let mtArm = false; // Byt is pressed: the next man you tap changes place with the chosen one
+  function mtSlotAt(cx, cy, skip) { // the place on the pitch under a finger (screen position), or -1
+    const cv = $('mtCv'), r = cv.getBoundingClientRect(); if (cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) return -1;
+    const k = r.width / cv.clientWidth, x = (cx - r.left) / k, y = (cy - r.top) / k, w = cv.clientWidth, h = cv.clientHeight, L = mtLayNow();
+    let best = -1, bd = Math.max(34, w * 0.11);
+    L.forEach((q, i) => { if (i === skip) return; const d = Math.hypot(q[1] * w - x, (1 - q[0]) * h - y); if (d < bd) { bd = d; best = i; } });
+    return best;
+  }
+  function mtOpen(slot, bench) { // a tap on a player opens his page
+    mtSel = slot; mtSelB = bench; mtArm = false; mtPaintSide(); mtDraw(); $('mtPS').hidden = false; $('mtPS').scrollTop = 0;
+  }
+  let mtHover = -1;
+  function mtBenchDrag(e, i, row) { // drag a bench player onto the pitch to bring him on; a tap opens his page
+    const ov = $('myteam'), sx = e.clientX, sy = e.clientY; let ghost = null, moved = false;
+    const mv = ev => {
+      if (!moved && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return;
+      if (!moved) { moved = true; ghost = row.cloneNode(true); ghost.className = 'alt mtswr mtghost'; ov.appendChild(ghost); }
+      const o = ov.getBoundingClientRect(), k = o.width / ov.clientWidth;
+      ghost.style.left = (ev.clientX - o.left) / k - 60 + 'px'; ghost.style.top = (ev.clientY - o.top) / k - 24 + 'px';
+      const j = mtSlotAt(ev.clientX, ev.clientY, -1); if (j !== mtHover) { mtHover = j; mtDraw(); }
+      ev.preventDefault();
+    };
+    const end = ev => {
+      removeEventListener('pointermove', mv); removeEventListener('pointerup', end); removeEventListener('pointercancel', end);
+      if (ghost) ghost.remove(); const j = moved && ev.type === 'pointerup' ? mtSlotAt(ev.clientX, ev.clientY, -1) : -1; mtHover = -1;
+      if (!moved) { mtOpen(-1, i); return; }
+      if (j >= 0) { mtSwap(j, -1 - i); mtSel = mtSelB = -1; }
+      mtPaintSide(); mtDraw();
+    };
+    addEventListener('pointermove', mv, { passive: false }); addEventListener('pointerup', end); addEventListener('pointercancel', end);
+    e.preventDefault();
+  }
   function mtTap(i) { // tap a man to pick him, tap another (on the pitch or the bench) and they swap
     if (mtSelB >= 0) { mtSwap(i, -1 - mtSelB); mtSel = mtSelB = -1; }
     else if (mtSel >= 0 && mtSel !== i) { mtSwap(mtSel, i); mtSel = -1; }
@@ -7740,9 +7778,9 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
     $('mtOpenB').hidden = !who; $('mtNone').hidden = !!who;
     { const SB = $('mtSubs'); SB.textContent = ''; if (!who) { const h = document.createElement('div'); h.className = 'lbl'; h.textContent = 'Bench'; SB.appendChild(h);
       S.pl.map((q, i) => ({ q, i })).filter(x => !on.has(x.i)).sort((a, b) => ovr(b.q) - ovr(a.q)).forEach(({ q, i }) => { const b = document.createElement('button'); b.className = 'alt mtswr';
-        b.innerHTML = `<b class="o">${ovr(q)}</b><span class="ps">${DPOSS_(dpOf(q))}</span><span class="n"></span><small>Tap to bring him on</small>`; b.querySelector('.n').textContent = q.n; b.onclick = () => mtBenchTap(i); SB.appendChild(b); }); } }
+        b.innerHTML = `<b class="o">${ovr(q)}</b><span class="ps">${DPOSS_(dpOf(q))}</span><span class="n"></span><small>Drag onto the pitch</small>`; b.querySelector('.n').textContent = q.n; b.onpointerdown = ev => mtBenchDrag(ev, i, b); SB.appendChild(b); }); } }
     $('mtOpenB').onclick = () => { $('mtPS').hidden = false; $('mtPS').scrollTop = 0; };
-    $('mtPSx').onclick = () => { $('mtPS').hidden = true; mtPaintSide(); mtDraw(); };
+    $('mtPSx').onclick = () => { $('mtPS').hidden = true; mtSel = mtSelB = -1; mtArm = false; mtPaintSide(); mtDraw(); };
     sqHome('mt'); $('mtPan').hidden = !who; if (!who) $('mtPS').hidden = true;
     if (who) {
       sqSel = S.pl.indexOf(who); sqPanelPaint(); guideHit('hold'); $('mtPSn').textContent = who.n;
@@ -7792,7 +7830,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       b.onclick = () => { loadMT().lay[mtN] = f.map(q => q.slice()); saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
       el.appendChild(b);
     });
-    $('mtLayTip').textContent = 'Tap a player on the pitch to change him. Drag him to move his spot.';
+    $('mtLayTip').textContent = 'Tap a player to see him. Drag a bench player onto the pitch to bring him on. Drag a player onto a teammate to swap them, or onto the grass to move his spot.';
   }
   function mtDraw() {
     const c = $('mtCv'), mt = loadMT();
@@ -7838,6 +7876,7 @@ button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
       if (fim) { const fs = cw * 0.66; g.drawImage(fim, cx - fs / 2 + cw * 0.14, cy - chh / 2 + 1, fs, fs); g.textAlign = 'left'; g.font = `800 ${Math.round(cw * 0.33)}px ${FT}`; g.fillText(o, cx - cw / 2 + 3, cy - chh / 2 + cw * 0.22); g.textAlign = 'center'; }
       else { g.font = `800 ${Math.round(cw * 0.42)}px ${FT}`; g.fillText(o, cx, cy - chh * 0.14); }
       g.font = `800 ${Math.round(cw * 0.22)}px ${FT}`; g.fillStyle = bad ? '#b3261e' : side ? '#7a4a00' : '#14181c'; g.fillText(DPOSS_(role), cx, cy + chh * 0.3);
+      if (i === mtHover) { g.strokeStyle = '#ffc83d'; g.lineWidth = 3; g.beginPath(); g.roundRect(cx - cw / 2 - 4, cy - chh / 2 - 4, cw + 8, chh + 8, 9); g.stroke(); }
       if (mtArm && (mtSel >= 0 && !sel || mtSelB >= 0)) { const who = mtSelB >= 0 ? S.pl[mtSelB] : S.pl[xi[mtSel]]; if (who && dpOf(who) === spos) { g.strokeStyle = '#59e38b'; g.lineWidth = 2.5; g.beginPath(); g.roundRect(cx - cw / 2 - 3, cy - chh / 2 - 3, cw + 6, chh + 6, 8); g.stroke(); } } // where the chosen man would fit
       if (abOf(sp).length) { g.font = `${Math.round(cw * 0.24)}px ${FT}`; g.fillStyle = '#fff'; g.fillText(abIcons(sp), cx + cw / 2 - 2, cy - chh / 2 + 1); } // his evner on the corner of the card
       if (fitOf(sp) < 90) { const fv = fitOf(sp); g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(cx - cw / 2 + 3, cy + chh / 2 - 6, cw - 6, 4); g.fillStyle = fitCol(fv); g.fillRect(cx - cw / 2 + 3, cy + chh / 2 - 6, (cw - 6) * fv / 100, 4); } // tired legs: a form bar across the top
