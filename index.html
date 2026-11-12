@@ -1089,7 +1089,7 @@ table.st tr.fr td { color: var(--gold); }
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
         <div class="logo"><span class="r">Bane</span><span class="b">bold</span></div>
-        <span class="mfver" id="mfVer">v12.11 21:39</span>
+        <span class="mfver" id="mfVer">v12.11 21:46</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
@@ -3830,11 +3830,13 @@ table.st tr.fr td { color: var(--gold); }
     release(p, p.fx * hs + (lp ? 0 : p.vx * 0.2), p.fy * hs + (lp ? 0 : p.vy * 0.2), 0.35);
     ball.vz = 470;
     if (lp && ax !== undefined) { // a high pass: timed so it comes down at his chest when it reaches him, whatever the distance
-      const dd = Math.hypot(ax, ay), T = Math.max(0.5, Math.min(0.9, dd / 520)), sp = Math.max(160, dd / T);
+      // Daniel 2026-11-12: long ones fell short. The ball slows in the air (0.85 a second), so it is hit hard enough to really get there, and a long
+      // ball hangs longer (a higher arc over the men in between, as a real lofted pass does) so the man has time to get under it
+      const dd = Math.hypot(ax, ay), T = lpT(dd), sp = Math.max(160, dd * -Math.log(0.85) / (1 - Math.pow(0.85, T)));
       ball.vx = p.fx * sp; ball.vy = p.fy * sp; ball.vz = (30 + GRAV / 2 * T * T) / T;
     }
     if (ax !== undefined && !(p.frozen > 0 && ball.rs === 'pen')) { // a high ball or a cross is harder to drop on a man: the same passer's spread, a bit bigger
-      const S = passSpread(p, Math.hypot(ax, ay), true), a = bell() * S.ang, c = Math.cos(a), sn = Math.sin(a), k = Math.max(0.8, Math.min(1.25, 1 + bell() * S.wt)), vx = ball.vx;
+      const S = passSpread(p, Math.hypot(ax, ay), true), a = bell() * S.ang, c = Math.cos(a), sn = Math.sin(a), k = Math.max(0.85, Math.min(1.18, 1 + bell() * S.wt * (lp ? 0.55 : 1))), vx = ball.vx; // a lofted pass to a man is struck with care: its length is truer than a whipped cross
       ball.vx = (vx * c - ball.vy * sn) * k; ball.vy = (vx * sn + ball.vy * c) * k;
     }
     ball.last = { team: p.team, pass: false, offs }; ball.gk = ball.fresh && ball.rs === 'corner' ? 'corner' : 'lob'; ball.fresh = false;
@@ -3842,6 +3844,10 @@ table.st tr.fr td { color: var(--gold); }
     if (stats && Math.abs(gx - p.x) < 520 && (gx - p.x) * p.fx > 0 && Math.abs(p.y - CY) < 200) stats.sh[p.team]++;
     if (pt) { ball.last.pass = true; ball.last.to = q.i; ball.last.pt = pt; ball.last.cross = true; q.recv = 1.6; handOver(p, q); } // the man it is aimed at runs onto it
     tone(200, 0.12, 'triangle', 0.12, 120);
+  }
+  const lpT = d => Math.max(0.55, Math.min(1.6, 0.35 + d / 620)); // how long a high pass hangs in the air
+  function highPass(p, q) { // LOB to a man: a high ball dropped to him
+    const ld = lpT(Math.hypot(q.x - p.x, q.y - p.y)) * 0.8; lob(p, q.x + q.vx * ld - p.x, q.y + q.vy * ld - p.y, q, true); ball.last.lp = true; q.recv = lpT(Math.hypot(q.x - p.x, q.y - p.y)) + 1.2; if (stats) stats.pa[p.team]++;
   }
   // Daniel 2026-11-12: a header is something YOU do, as in FIFA: press SKYD (at goal / clear it) or AFLEVER (to a mate) while the ball is
   // in the air and he jumps for it. Who wins it is decided, not rolled: when you pressed (jump timing), how close he is to where it drops,
@@ -3943,10 +3949,12 @@ table.st tr.fr td { color: var(--gold); }
   // nothing of theirs to tackle: a team-mate has the ball, our own pass/cross is on its way with no opponent on it, or I kicked it a moment ago
   function noTackle(p) {
     if (p.relT > 0) return true;
+    // Daniel 2026-11-12 (again): after my own cross a second press still brought a defender down, often one off the screen. A loose ball
+    // (our cross in the air, a clearance, a bounce) has nobody on it to tackle: you go for it by running to it, as in FIFA.
+    // TACKLE is only a tackle when one of THEIRS has the ball, and he is near you (on your screen)
     const o = owner();
-    if (o) return o.team === p.team;
-    if (!(ball.last && ball.last.team === p.team)) return false;
-    return !P.some(q => on(q) && q.team !== p.team && dBall(q) < 70);
+    if (!o || o.team === p.team) return true;
+    return Math.hypot(o.x - p.x, o.y - p.y) > 400;
   }
   function startTackle(p) {
     if (p.tcd > 0 || p.tackle > 0 || p.recover > 0) return;
@@ -5252,7 +5260,7 @@ table.st tr.fr td { color: var(--gold); }
           if (p.windup <= 0) {
             p.windup = 0;
             const o = owner(), back = o && o.team !== p.team && rearOf(p, o) > 0.3; // he has got behind the man: nearly always holds back
-            if (!has && dBall(p) < 110 && !(back && Math.random() < 0.93)) startTackle(p); else p.tcd = 0.4;
+            if (!has && o && o.team !== p.team && dBall(p) < 110 && !(back && Math.random() < 0.93)) startTackle(p); else p.tcd = 0.4; // only at a man of theirs on the ball, never into a loose-ball scramble
           }
         }
         continue;
@@ -5319,7 +5327,7 @@ table.st tr.fr td { color: var(--gold); }
               if (crossSpot(p) && crossTarget(p, inp.x, inp.y)) { cross(p, inp.x, inp.y); ball.last.ic = true; flash = { text: 'Cross!', t: 0.6 }; if (stats) stats.pa[p.team]++; }
               else {
                 const q = passTarget(p, inp.x, inp.y, pw, true);
-                if (q) { const ld = Math.max(0.5, Math.min(0.9, Math.hypot(q.x - p.x, q.y - p.y) / 520)) * 0.9; lob(p, q.x + q.vx * ld - p.x, q.y + q.vy * ld - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
+                if (q) highPass(p, q);
               }
             }
           }
@@ -5523,7 +5531,7 @@ table.st tr.fr td { color: var(--gold); }
       }
       if (ball.owner < 0 && ball.last && ball.last.pass && ball.last.lp && ball.vz <= 0 && ball.z < 75) { // a high pass coming down: the man it is meant for takes it on his chest
         const q = P[ball.last.to];
-        if (q && on(q) && q.stun <= 0 && !(q.ftArm > 0) && !(q.hdArm > 0) && dBall(q) < REACH + 30) grab(q);
+        if (q && on(q) && q.stun <= 0 && !(q.ftArm > 0) && !(q.hdArm > 0) && dBall(q) < REACH + 36) grab(q);
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
         // who goes up for it: the computer's men on their own, YOUR man only if you pressed for a header
@@ -10228,7 +10236,7 @@ table.st tr.fr td { color: var(--gold); }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); setTimeout(optsBehindButton, 0); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { sim: (sec, all) => { // run the match on its own for sec seconds of game time (all: every man on the computer)
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { hp: (a, b) => highPass(P[a], P[b]), bst: () => ({ owner: ball.owner, x: ball.x, y: ball.y, z: ball.z, vz: ball.vz, last: ball.last && { ...ball.last }, loose: ball.loose }), step1: () => step(DT * TEMPO()), sim: (sec, all) => { // run the match on its own for sec seconds of game time (all: every man on the computer)
       vsT = 0; $('vs').hidden = true; if (all !== false) for (const p of P) p.ctrl = 'ai';
       for (const k in TST) TST[k] = 0;
       const n = Math.round(sec / (DT * TEMPO()));
