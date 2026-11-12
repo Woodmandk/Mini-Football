@@ -3948,9 +3948,13 @@ table.st tr.fr td { color: var(--gold); }
     // Daniel 2026-11-12 (again): after my own cross a second press still brought a defender down, often one off the screen. A loose ball
     // (our cross in the air, a clearance, a bounce) has nobody on it to tackle: you go for it by running to it, as in FIFA.
     // TACKLE is only a tackle when one of THEIRS has the ball, and he is near you (on your screen)
+    // Daniel 2026-11-12 (later): but sliding in to get to a loose ball first IS a feature. So a loose ball can be slid for, as long as it is not
+    // our own pass or cross on its way (that one is ours: nothing to tackle) and it is near enough to slide at
     const o = owner();
-    if (!o || o.team === p.team) return true;
-    return Math.hypot(o.x - p.x, o.y - p.y) > 400;
+    if (o) return o.team === p.team || Math.hypot(o.x - p.x, o.y - p.y) > 400;
+    const L = ball.last;
+    if (L && L.team === p.team && L.pass && !L.defl) return true;
+    return dBall(p) > 230;
   }
   function startTackle(p) {
     if (p.tcd > 0 || p.tackle > 0 || p.recover > 0) return;
@@ -5256,7 +5260,7 @@ table.st tr.fr td { color: var(--gold); }
           if (p.windup <= 0) {
             p.windup = 0;
             const o = owner(), back = o && o.team !== p.team && rearOf(p, o) > 0.3; // he has got behind the man: nearly always holds back
-            if (!has && o && o.team !== p.team && dBall(p) < 110 && !(back && Math.random() < 0.93)) startTackle(p); else p.tcd = 0.4; // only at a man of theirs on the ball, never into a loose-ball scramble
+            if (!has && !noTackle(p) && dBall(p) < 110 && !(back && Math.random() < 0.93)) startTackle(p); else p.tcd = 0.4; // the same rule as yours: at a man of theirs on the ball, or for a loose ball, never at our own pass
           }
         }
         continue;
@@ -5333,7 +5337,7 @@ table.st tr.fr td { color: var(--gold); }
         p.charging = false; p.hold = 0; p.chB = false; p.holdB = 0; p.chE = false; p.holdE = 0;
         // first-time finish (as in FIFA): SKYD as a loose ball from your own side reaches you = hit it first time, volley or header
         // (press SKYD while it is on its way and he hits it as it arrives)
-        const ownBall = ball.owner < 0 && !isKeeper(p) && ball.last && ball.last.team === p.team && !(p.frozen > 0);
+        const ownBall = ball.owner < 0 && !isKeeper(p) && ball.last && ball.last.team === p.team && ball.last.pass && !ball.last.defl && !(p.frozen > 0); // Daniel 2026-11-12: only a pass or cross from a mate; a ball nicked loose in a tackle is not one, so SKYD there is a slide, never a shot
         // a ball in the air near him: SKYD = go up for a header at goal (or clear it), AFLEVER = head it on to a mate. He jumps when you press,
         // so the timing is yours: too early and he is coming down again, too late and it is a rushed jump
         const aerial = ball.owner < 0 && ball.z > 22 && !isKeeper(p) && !(p.frozen > 0) && dBall(p) < 230;
