@@ -2453,6 +2453,7 @@ table.st tr.fr td { color: var(--gold); }
   const stadOf = lvl => (lvl >= 10 ? 3 : lvl >= 6 ? 2 : lvl >= 3 ? 1 : 0);
   const stadName = () => { const mt = loadMT(), t = stadOf(loadProf().lvl || 1); return t === 0 ? 'Training ground' : `${mt.made ? mt.n : 'Home'} ${t === 3 ? 'Arena' : t === 2 ? 'Stadium' : 'Stadium (local)'}`.replace(' Stadium (local)', ' Park'); };
   const ball = { x: CX, y: CY, z: 0, vz: 0, vx: 0, vy: 0, owner: -1, loose: 0, stealCd: 0, trail: [], lastTeam: -1, lastIdx: -1 };
+  const TST = {}; const tst = (k, v = 1) => { TST[k] = (TST[k] || 0) + v; }; // counters for the test runs only
   let stats = null, matchGoals = [], item = null, itemT = 8, bigT = 0, replay = null, recBuf = [], recT = 0, guard = 0;
   let setp = null; // a set piece being taken: { team, r (how far the other team must stand), t }
   const newStats = () => ({ sh: [0, 0], pos: [0, 0], pa: [0, 0], tk: [0, 0], sv: [0, 0], fo: [0, 0], yc: [0, 0], rc: [0, 0] });
@@ -3486,7 +3487,7 @@ table.st tr.fr td { color: var(--gold); }
     const L = ball.last;
     if (!L || (L.offT === undefined ? L.team : L.offT) !== p.team || !L.offs || L.offs.indexOf(p.i) < 0) return false; // offT: the shot was saved or came back off the keeper, it is still offside
     const x = p.x, y = p.y; p.recv = 0; p.ftArm = 0;
-    restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return true;
+    tst('offside'); restart('free', 1 - p.team, Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y)), 'Offside'); return true;
   }
   const HEAVY_T = 0.55; // how long a knock-on first touch stays away from his feet
   function grab(p) {
@@ -3549,30 +3550,22 @@ table.st tr.fr td { color: var(--gold); }
     sfx.kick(0.1);
   }
   // where a shot goes (the same sums shoot() uses), with no side effects, so the aim line can show it before you kick
-  function shotPlan(p, hold, mean) {
+  function shotPlan(p, hold, mean, ax, ay) { // ax, ay: the way the stick points (else the way he faces)
     let fx = p.fx, fy = p.fy;
+    if (ax !== undefined && Math.hypot(ax, ay) > 0.3) { const l = Math.hypot(ax, ay); fx = ax / l; fy = ay / l; }
     const pw = Math.min(1, hold / MAXCHARGE);
     let power = 600 + pw * 580;
     const isPen = ball.rs === 'pen' && p.frozen > 0 && (pen || so);
     if (isPen) power = (470 + pw * 280) * Math.max(1, G.spot / 105); // from the real penalty mark: just as quick to the goal as before, so penalties stay as hard
     const dir = p.team ? -1 : 1, gx = p.team ? PL : PR;
-    { // aim help: a shot roughly at goal is pulled toward the goal mouth
+    { // aim help, kept light (Daniel 2026-11-12: a real football game, not arcade): where you point is where it goes.
+      // Only an aim just wide of the post is nudged part of the way back in; there is no automatic placement away from the keeper
       const dist = (gx - p.x) * dir;
-      if (isHuman(p) && dist > 30 && dist < 560 && fx * dir > 0.35) {
-        const yc = p.y + fy * (gx - p.x) / fx, lim = MOUTH * 0.84;
-        if (Math.abs(yc - CY) < MOUTH * 2.4) {
-          let ty = Math.max(CY - lim, Math.min(CY + lim, yc));
-          // placement (as in FIFA): a shot that would go straight at the keeper is steered to the side with more room, inside the post
-          const kp = size > 1 && !isPen ? P[slotOf(1 - p.team, 0)] : null;
-          if (kp && on(kp) && Math.abs(kp.x - gx) < 200) {
-            const gap = ty - kp.y;
-            if (Math.abs(gap) < MOUTH * 0.7) {
-              const side = CY + MOUTH - kp.y > kp.y - (CY - MOUTH) ? 1 : -1; // the far side from him: inside the post
-              ty = CY + side * lim;
-            }
-          }
-          const ax = gx - p.x, ay = ty - p.y, l = Math.hypot(ax, ay);
-          let nx = fx * 0.12 + ax / l * 0.88, ny = fy * 0.12 + ay / l * 0.88; const nl = Math.hypot(nx, ny); fx = nx / nl; fy = ny / nl;
+      if (isHuman(p) && !isPen && dist > 30 && dist < 560 && fx * dir > 0.35) {
+        const yc = p.y + fy * (gx - p.x) / fx, lim = MOUTH * 0.9, wide = Math.abs(yc - CY) - lim;
+        if (wide > 0 && wide < MOUTH * 0.6) {
+          const ty = yc - Math.sign(yc - CY) * wide * 0.55, ax = gx - p.x, ay = ty - p.y, l = Math.hypot(ax, ay);
+          fx = ax / l; fy = ay / l;
         }
       }
     }
@@ -3581,7 +3574,8 @@ table.st tr.fr td { color: var(--gold); }
     if (p.superShot) power *= 1.6;
     const gk = isPen ? 'pen' : ball.fresh && ball.rs === 'free' ? 'fk' : 'shot';
     const x = p.x + fx * (REACH - 2), y = p.y + fy * (REACH - 2);
-    const r = { fx, fy, pw, isPen, gk, x, y, vx: fx * power + p.vx * 0.25, vy: fy * power + p.vy * 0.25, vz: pw > 0.75 && !isPen ? 140 : 0, spin: 0, spinT: 0, fk: false };
+    const r = { fx, fy, pw, isPen, gk, x, y, vx: fx * power + p.vx * 0.25, vy: fy * power + p.vy * 0.25, vz: 0, spin: 0, spinT: 0, fk: false, h: 0 };
+    if (!isPen && gk === 'shot') r.h = 3 + pw * pw * 26; // how high it is as it reaches the goal (the bar is at 62): the harder you hit it, the more it rises
     const dist = Math.hypot(gx - x, CY - y);
     // finesse (as in FIFA): a placed shot, not at full power and not on the sprint, curls in from outside the post.
     // A direct free kick curls too: aimed just outside the post, it bends back in round the wall
@@ -3605,12 +3599,40 @@ table.st tr.fr td { color: var(--gold); }
       r.vz = Math.max(250, Math.min(560, (h + GRAV / 2 * t * t) / Math.max(0.15, t)));
       r.fk = true;
     }
+    if (r.h > 0) { const t = Math.max(0.08, dist / Math.max(1, Math.hypot(r.vx, r.vy))); r.vz = (r.h + GRAV / 2 * t * t) / t; }
     return r;
+  }
+  // Daniel 2026-11-12: as in FIFA, whether a shot goes where you aim depends on how you hit it. The spread grows with power,
+  // with a poorer finisher, when he is off balance (hitting it across his body or away from the way he is running, at speed),
+  // with a defender right on him and on the sprint. The aim line shows where you aim; this is how true it flies
+  function shotSpread(p, r) { // how far off it can go: sideways (radians) and in height (px), both as one standard spread
+    const sht = rat(p, 'sht'), sp = Math.hypot(p.vx, p.vy), pw = r.pw;
+    const cosA = sp > 60 ? (p.vx * r.fx + p.vy * r.fy) / sp : 1;
+    const bal = sp > 60 ? (1 - cosA) / 2 * Math.min(1, sp / MAXV) : 0; // 0 = square to the ball, 1 = hitting it straight back the way he runs
+    const foe = P.filter(q => q.team !== p.team && on(q) && !isKeeper(q)).reduce((m, q) => Math.min(m, Math.hypot(q.x - p.x, q.y - p.y)), 1e9);
+    const press = Math.max(0, 1 - foe / 70);
+    const sig = ((0.02 + 0.075 * (1 - sht)) * (0.5 + pw * pw * 1.3)) + bal * 0.1 + press * 0.035 + (p.sprint ? 0.012 : 0) - (hasAb(p, 'kanon') && pw > 0.45 ? 0.006 : 0);
+    const hs = 5 + pw * pw * (16 + 34 * (1 - sht)) + bal * 26 + press * 8;
+    return { sig: Math.max(0, sig), hs, bal };
+  }
+  function shotError(p, r) {
+    const { sig, hs, bal } = shotSpread(p, r);
+    const g = () => (Math.random() + Math.random() + Math.random() - 1.5) * 2; // roughly a bell curve, standard spread 1
+    const e = g() * sig, c = Math.cos(e), sn = Math.sin(e), vx = r.vx;
+    r.vx = vx * c - r.vy * sn; r.vy = vx * sn + r.vy * c;
+    // height: hit it hard and badly and it flies over; a good finisher keeps it down
+    if (r.h > 0) {
+      const h = Math.max(0, r.h + g() * hs);
+      const t = Math.max(0.08, Math.hypot((p.team ? PL : PR) - r.x, CY - r.y) / Math.max(1, Math.hypot(r.vx, r.vy)));
+      r.vz = h > 1 ? (h + GRAV / 2 * t * t) / t : 0;
+    }
+    tst('shots'); if (bal > 0.3) tst('offBal');
   }
   function shoot(p, hold, ax, ay) {
     if (ax !== undefined) { const l = Math.hypot(ax, ay) || 1; p.fx = ax / l; p.fy = ay / l; }
     const r = shotPlan(p, hold);
     const pw = r.pw, isPen = r.isPen;
+    if (!isPen && r.gk === 'shot') shotError(p, r);
     p.fx = r.fx; p.fy = r.fy;
     if (p.superShot) { p.superShot = false; flash = { text: 'Super shot!', t: 0.8 }; shake = Math.max(shake, 8); }
     if (stats) stats.sh[p.team]++;
@@ -3816,14 +3838,76 @@ table.st tr.fr td { color: var(--gold); }
   }
   // how far the ball is from the carrier's feet right now (0..1): just after a touch at full sprint, or a heavy first touch, it is there to be won
   const exposed = o => o.skill > 0 ? 0 : o.heavy > 0 ? 1 : Math.hypot(o.vx, o.vy) > 60 ? (o.sprint ? 1 : 0.45) * (1 - (o.touch || 0)) : 0.25;
+  // Daniel 2026-11-12: a tackle is won or lost by what you did, as in FIFA, never by a dice roll. tackleQ says how good the moment is:
+  // how close your foot is to the ball, whether the ball is away from his feet right now (between touches, a sprint touch, a heavy touch),
+  // whether his body is between you and the ball (he shields it), the angle you come in at, whether you are set or flying in,
+  // and your defending against his dribbling (pace and technique)
+  function tackleQ(p, o) {
+    const dT = dBall(p), dC = Math.hypot(ball.x - o.x, ball.y - o.y), dPO = Math.hypot(o.x - p.x, o.y - p.y) || 1;
+    const reach = REACH + 22 + rat(p, 'def') * 8 + (hasAb(p, 'mur') ? 8 : 0);
+    const vin = (p.vx * (o.x - p.x) + p.vy * (o.y - p.y)) / dPO, lunge = Math.max(0, vin - MAXV * 0.75) / MAXV; // going into him at full tilt: easy to knock it past you
+    if (dT > reach) return { q: -1, lunge, reach };
+    const access = 1 - dT / reach;
+    const expo = Math.max(0, Math.min(1, (dC - (REACH - 3)) / 15)); // how far the ball is out of his feet
+    const shield = dT > dPO + 2 ? Math.min(1, (dT - dPO) / 12) : 0; // the ball is on the far side of his body
+    const rear = rearOf(p, o), ang = rear < -0.3 ? 0.07 : rear < 0.3 ? 0.03 : -0.12; // head on you block it, side on is fine, from behind you have to go through him
+    const set = Math.hypot(p.vx, p.vy) < MAXV * 0.65 ? 0.06 : 0; // on your toes (jockeying) rather than charging
+    const duel = (rat(p, 'def') - (rat(o, 'pas') + rat(o, 'spd')) / 2) * 0.3;
+    const turnO = o.skill > 0 ? 0.3 : 0; // in the middle of a feint
+    const q = 0.14 + access * 0.3 + expo * 0.38 - shield * 0.5 + ang + set - lunge * 0.3 + duel - turnO - (hasAb(o, 'bamse') ? 0.06 : 0) - (o.plan && o.plan.shT > 0 ? 0.06 : 0);
+    return { q, lunge, reach, shield, expo };
+  }
+  const TQ_WIN = 0.5, TQ_NICK = 0.36; // a clean win / the ball knocked loose between you (a 50-50) / you miss
   function standTackle(p, o) { // as in FIFA: a poke at the ball instead of a slide
     if (p.tcd > 0 || p.recover > 0 || (setp && setp.team !== p.team)) return;
     p.tcd = 0.55; p.fx = (o.x - p.x) / (Math.hypot(o.x - p.x, o.y - p.y) || 1); p.fy = (o.y - p.y) / (Math.hypot(o.x - p.x, o.y - p.y) || 1);
     const rear = rearOf(p, o);
     if (rear > 0.5) { p.tdx = p.fx; p.tdy = p.fy; tackleBody(p, o); return; } // through the back of him: that is a foul
-    const chance = 0.14 + exposed(o) * 0.55 + (rear < -0.3 ? 0.08 : 0) - (o.plan && o.plan.shT > 0 ? 0.12 : 0) + ((lvOf(p) && lvOf(p).def) || 0) * 0.02 - (o.ctrl === 'ai' ? (aiD(o.team).iq || 0) * 0.15 : 0) + (hasAb(p, 'mur') ? 0.16 : 0) - (hasAb(o, 'bamse') ? 0.12 : 0);
-    if (Math.random() < chance) { abPop(p, 'mur'); tackleWins(p); flash = { text: 'Ball won', t: 0.6 }; }
-    else { p.recover = 0.35; p.vx *= 0.3; p.vy *= 0.3; tone(220, 0.05, 'triangle', 0.06); } // missed: he is past you for a moment
+    const T = tackleQ(p, o);
+    if (T.q >= TQ_WIN) { tst('stWin'); abPop(p, 'mur'); tackleWins(p); }
+    else if (T.q >= TQ_NICK) { // a toe on it: it squirts loose, whoever reacts first has it
+      tst('stNick');
+      const dx = ball.x - p.x, dy = ball.y - p.y, d = Math.hypot(dx, dy) || 1;
+      ball.owner = -1; ball.vx = dx / d * 150 + o.vx * 0.35; ball.vy = dy / d * 150 + o.vy * 0.35; ball.z = 0; ball.vz = 0;
+      ball.last = { team: p.team, pass: false }; ball.lastTeam = p.team; ball.lastIdx = p.i; ball.stealCd = 0;
+      o.nopick = 0.25; p.nopick = 0.12; o.vx *= 0.6; o.vy *= 0.6; p.vx *= 0.5; p.vy *= 0.5;
+      sfx.trap(); if (localHuman(p) || localHuman(o)) buzz(18);
+    }
+    else { // missed: he is past you, longer the harder you flew in
+      tst('stMiss'); p.recover = 0.22 + T.lunge * 0.45 + (T.q < 0 ? 0.08 : 0); p.vx *= 0.3; p.vy *= 0.3; tone(220, 0.05, 'triangle', 0.06);
+      if (T.lunge > 0.2) ball.stealCd = Math.max(ball.stealCd || 0, 0.35);
+    }
+  }
+  // Daniel 2026-11-12: weight, as in FIFA. Every man (yours and the computer's alike) carries his momentum: speed builds up,
+  // he has to brake before a sharp turn (and plants his foot and turns once he is slow), and the faster he goes the wider he turns.
+  // Pace sets his acceleration, pace and technique his agility; with the ball he turns a little wider at a sprint.
+  // He faces the way he is going, so where he can shoot or pass from depends on his body, not only on the stick
+  function moveBody(p, inp, top, has, dt) {
+    const g = WX().grip, mag = Math.min(1, Math.hypot(inp.x, inp.y)), pace = rat(p, 'spd');
+    const agi = (0.86 + 0.14 * pace + 0.14 * rat(p, 'pas')) * (hasAb(p, 'tryl') ? 1.1 : 1) * (isKeeper(p) ? 1.2 : 1);
+    const accel = (720 + 300 * pace) * g * (has ? 0.92 : 1), brake = (1250 + 300 * pace) * g;
+    const sp = Math.hypot(p.vx, p.vy);
+    if (sp < 45 || p.jockey) { // on the spot, or jockeying (small side steps): footwork any way, no run-up needed
+      const tx = inp.x * top, ty = inp.y * top, dx = tx - p.vx, dy = ty - p.vy, dl = Math.hypot(dx, dy);
+      if (dl > 0) { const m = Math.min(dl, (p.jockey ? brake * 0.8 : accel * 1.15) * dt); p.vx += dx / dl * m; p.vy += dy / dl * m; }
+      if (mag > 0.2 && !p.jockey) { // turns on the spot quickly
+        const ca = Math.atan2(p.fy, p.fx); let da = Math.atan2(inp.y, inp.x) - ca; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+        const na = ca + Math.max(-14 * agi * dt, Math.min(14 * agi * dt, da)); p.fx = Math.cos(na); p.fy = Math.sin(na);
+      }
+      return;
+    }
+    const h = Math.atan2(p.vy, p.vx);
+    if (mag < 0.05) { const ns = Math.max(0, sp - brake * 0.75 * dt); p.vx = Math.cos(h) * ns; p.vy = Math.sin(h) * ns; p.fx = Math.cos(h); p.fy = Math.sin(h); return; } // stick let go: he slows to a stop
+    let da = Math.atan2(inp.y, inp.x) - h; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+    const rel = sp / (MAXV * 1.4), base = has ? (p.sprint ? 3.8 : 8.5) : (p.sprint ? 4.6 : 9);
+    const om = base * agi / (0.45 + rel); // how fast he can bend his run, radians a second
+    const nh = h + Math.max(-om * dt, Math.min(om * dt, da));
+    const want = top * mag * (Math.abs(da) > 0.7 ? Math.max(0.05, (Math.cos(da) + 0.5) / 1.5) : 1); // a sharp change of direction: he brakes first (right round: he stops, plants and turns)
+    let ns = sp;
+    if (ns < want) ns = Math.min(want, ns + accel * (1 - 0.5 * Math.min(1, ns / Math.max(1, top))) * dt);
+    else ns = Math.max(want, ns - (ns > top ? brake * 0.45 : brake) * dt); // over his top speed (a sprint let go): he eases down
+    p.vx = Math.cos(nh) * ns; p.vy = Math.sin(nh) * ns;
+    p.fx = Math.cos(nh); p.fy = Math.sin(nh);
   }
   // how far a is behind b: 1 = right at his back, 0 = beside him, -1 = in front (uses where b is going, else where he faces)
   function rearOf(a, b) {
@@ -3959,7 +4043,7 @@ table.st tr.fr td { color: var(--gold); }
   }
   const TEMPO = () => [0.62, 0.74, 0.88][cfg.tempo] ?? 0.74; // Daniel 2026-11-10 (evening): standard = what Hurtigt was (0.74); before that 0.53/0.62/0.74 // tempo for the whole match: Roligt / Normalt / Hurtigt
   let lastCard = '', pendCard = null; // a yellow under advantage is shown at the next stoppage, as in FIFA
-  function foul(a, b, hard) {
+  function foul(a, b, hard) { tst("foul");
     const x = Math.max(PL + 30, Math.min(PR - 30, b.x)), y = Math.max(PT + 30, Math.min(PB - 30, b.y));
     let card = '';
     if (stats) stats.fo[a.team]++;
@@ -4082,7 +4166,7 @@ table.st tr.fr td { color: var(--gold); }
     const outN = p.sq || '';
     subOut.push({ team: t, sqi: p.sqi, ms: p.ms });
     const b = benchFor(p);
-    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); p.ab = abOf(b.s); p.fit0 = (100 - fitOf(b.s)) / 100 * 0.4; sqMeta(p, b.s, squadLoad()); if (size > 1 && p.k === 0) p.rl = 0; }
+    if (b) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(b.s[k])])); p.r99 = Object.fromEntries(SKILLS.map(([k]) => [k, b.s[k]])); p.sq = b.s.n; p.sqi = b.i; p.ovr = ovr(b.s); p.ab = abOf(b.s); p.fit0 = (100 - fitOf(b.s)) / 100 * 0.4; sqMeta(p, b.s, squadLoad()); if (size > 1 && p.k === 0) p.rl = 0; }
     else { p.ab = null; p.rl = 0; p.cap = false; p.spk = 0; // a reserve from the bench: fresh, a touch less good
       if (p.lv) p.lv = Object.fromEntries(Object.entries(p.lv).map(([k, v]) => [k, v - 0.6]));
       if (p.ovr) p.ovr = Math.max(40, p.ovr - 3);
@@ -4128,8 +4212,9 @@ table.st tr.fr td { color: var(--gold); }
     const dot = a.tdx * b.fx + a.tdy * b.fy; // > 0: sliding the same way the victim faces
     const rear = rearOf(a, b);
     // through the back of the man on the ball is a foul (like a real referee); from the back-side it is often one too
-    const behind = ball.owner === b.i && (rear > 0.5 || (dot > 0.8 && rear > 0.1) || (rear > 0.2 && Math.random() < 0.5));
-    if (ball.owner === b.i && !behind && !(b.skill > 0) && dBall(a) < TACKLE_REACH) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
+    const manFirst = dBall(a) > Math.hypot(b.x - a.x, b.y - a.y) + 2; // the slide reached his legs before the ball
+    const behind = ball.owner === b.i && (rear > 0.5 || (dot > 0.8 && rear > 0.1) || (rear > 0.2 && manFirst));
+    if (ball.owner === b.i && !behind && !(b.skill > 0) && dBall(a) < TACKLE_REACH && !manFirst) { b.stun = 0.5; b.nopick = 0.4; tackleWins(a); return; }
     // took the man and nowhere near the ball
     const late = ball.owner !== b.i && Math.hypot(ball.x - b.x, ball.y - b.y) > 90 && dBall(a) > 90;
     a.tackle = 0;
@@ -4251,6 +4336,60 @@ table.st tr.fr td { color: var(--gold); }
     }
     // with the ball the team stretches the pitch (wide men hug the touchline), without it the block narrows to the ball side
     const y = CY + (f[1] - 0.5) * (PB - PT) * (weHave ? 1.3 : 0.88) * [0.8, 1, 1.18][T.w] + (ball.y - CY) * (weHave ? 0.16 : 0.26);
+    return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
+  }
+  // Daniel 2026-11-12: the back line defends as ONE unit, as in FIFA. Each team keeps one line height for its defenders:
+  // it follows the ball at a set distance (closer for a pressing team, capped by how high the team plays), drops when the man on
+  // the ball has time and his head up to play it in behind (and further when a runner goes), steps up together when the ball goes
+  // back or he is closed down (that is how forwards get caught offside), and never stays in front of a carrier who got past it.
+  // It moves at a set pace, so the line moves together instead of man by man. The midfield stays a set distance in front of it
+  const dLine = [null, null];
+  const lineMen = t => P.filter(q => q.team === t && on(q) && q.k !== 0 && formOf(q)[0] < 0.4 && !(q.out > 0));
+  function lineDefending(t) {
+    const o = owner();
+    if (o) return o.team !== t;
+    return !!(ball.last && ball.last.team !== t && !(ball.last.pass && P[ball.last.to] && P[ball.last.to].team === t));
+  }
+  function lineTick(dt) {
+    if (size < 5) return;
+    const L = PR - PL;
+    for (const t of [0, 1]) {
+      const dir = t ? -1 : 1, ownX = t ? PR : PL, men = lineMen(t);
+      if (!men.length) continue;
+      const nowU = men.reduce((a, q) => a + (q.x - ownX) * dir, 0) / men.length;
+      if (setp || !lineDefending(t)) { dLine[t] = null; continue; } // with the ball (or at a restart) the shape takes over; the line starts again from where they stand
+      const T = tac(t), o = owner(), ub = (ball.x - ownX) * dir;
+      const gap = L * [0.24, 0.2, 0.165][T.pr] - (T.m - 1) * L * 0.015;
+      let u = ub - gap;
+      const maxU = L * ([0.36, 0.43, 0.5][T.pr] + (T.m - 1) * 0.03) - (teamSty[t] === 'mur' ? L * 0.06 : 0);
+      if (o && o.team !== t) {
+        const pressed = P.some(q => q.team === t && on(q) && Math.hypot(q.x - o.x, q.y - o.y) < 75);
+        const fwd = -(o.fx * dir); // he faces our goal
+        if (!pressed && fwd > 0.3 && ub - u < L * 0.5) { // time on the ball, head up: drop off to cover the ball in behind
+          u -= L * 0.05 * fwd;
+          for (const f of P) { // a runner going for the space behind us: the line goes with him
+            if (f.team === t || f === o || !on(f) || f.k === 0) continue;
+            const fu = (f.x - ownX) * dir, vin = -f.vx * dir;
+            if (fu > u - 20 && fu < u + L * 0.07 && vin > MAXV * 0.8) u = Math.min(u, fu - L * 0.02);
+          }
+        }
+        if (pressed && fwd < 0) u += L * 0.03; // closed down and facing his own goal: step up
+      }
+      u = Math.min(u, ub - 26); // never in front of the ball
+      u = Math.max(Math.max(70, L * 0.045), Math.min(maxU, u));
+      if (dLine[t] === null) dLine[t] = nowU;
+      const dv = u - dLine[t], vUp = 150, vDn = 230; // the line steps up a little slower than it drops
+      dLine[t] += Math.max(-vDn * dt, Math.min(vUp * dt, dv));
+      if (dLine[t] > ub - 10) dLine[t] = Math.max(70, ub - 10);
+    }
+  }
+  // where a line man stands: on the line, across the pitch narrowed to the ball side; the far-side man tucks in a little deeper (cover)
+  function lineSpot(p, m) {
+    const t = p.team, dir = t ? -1 : 1, ownX = t ? PR : PL, f = formOf(p), T = tac(t), W = PB - PT;
+    let y = CY + (f[1] - 0.5) * W * 0.72 * [0.85, 1, 1.12][T.w] + (ball.y - CY) * 0.38;
+    if (m) y = y * 0.55 + m.y * 0.45; // leaning toward the man in his zone
+    const far = Math.abs(y - ball.y) > W * 0.38 ? (PR - PL) * 0.012 : 0;
+    const x = ownX + dir * (dLine[t] - far);
     return [Math.max(PL + 30, Math.min(PR - 30, x)), Math.max(PT + 30, Math.min(PB - 30, y))];
   }
   // the best mate to pass to: free of markers, a clear lane, and further up the pitch
@@ -4457,13 +4596,13 @@ table.st tr.fr td { color: var(--gold); }
       }
       else if (runner && p.think > d.react && Math.random() < d.pass * (0.6 + iq) * 1.5 * dt) { out.passTo = runner; out.through = true; } // a mate is running in behind: slip him in
       else if (gd < range && p.think > d.react + 0.2 && Math.random() < d.shoot * (sty === 'angreb' ? 1.4 : 1) * dt * (gd < 220 ? 1.5 : 0.6)) {
-        const err = (Math.random() - 0.5) * 2 * d.aimErr;
+        const err = (Math.random() - 0.5) * d.aimErr; // (half: the strike itself adds the rest, the same for him as for you, see shotError)
         const gk0 = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
         // a clever shooter goes for the corner the keeper can't reach; the rest just hit it somewhere at goal
         const far = gk0 && Math.random() < iq ? -Math.sign((gk0.y - CY) || (p.y - CY) || 1) : 0;
         const gy = far ? CY + far * MOUTH * (0.55 + Math.random() * 0.3) : CY + (Math.random() - 0.5) * (MOUTH * 1.3);
         const gx = goalX - p.x, gyy = gy - p.y, a = Math.atan2(gyy, gx) + err;
-        out.shoot = gd > 260 ? MAXCHARGE : 0.3 + Math.random() * 0.3; out.aim = [Math.cos(a), Math.sin(a)];
+        out.shoot = gd > 260 ? MAXCHARGE * (1 - 0.22 * iq) : 0.3 + Math.random() * 0.3; out.aim = [Math.cos(a), Math.sin(a)]; // a clever finisher places it rather than leathers it
         const gk = size > 1 ? P[slotOf(1 - p.team, 0)] : null;
         if (gk && gd > 180 && Math.abs(gk.x - goalX) > 70 && Math.random() < 0.6) out.lob = true; // keeper off his line: chip him
       } else if (size > 1 && foeD < (T.pt ? 75 : 105) && p.think > d.react && Math.random() < d.pass * [1.5, 1, 0.8][T.pt] * dt) {
@@ -4621,7 +4760,11 @@ table.st tr.fr td { color: var(--gold); }
           if (rear < 0.15 || Math.random() < 0.06 * (1 - iq)) out.tackle = true; // only slide from the front or side; a clumsy one sometimes goes through the back (a foul)
         }
         // right up against him: a clever defender stays on his feet and pokes at it when the ball is away from the carrier's feet
-        if (o && o.team !== p.team && !wait && !out.tackle && p.tcd <= 0 && !(o.hands > 0) && !(o.frozen > 0) && Math.hypot(o.x - p.x, o.y - p.y) < REACH + 24 && rearOf(p, o) < 0.4 && Math.random() < d.tackle * (0.3 + iq) * exposed(o) * 1.6 * dt) out.poke = true;
+        if (o && o.team !== p.team && !wait && !out.tackle && p.tcd <= 0 && !(o.hands > 0) && !(o.frozen > 0) && Math.hypot(o.x - p.x, o.y - p.y) < REACH + 34 && rearOf(p, o) < 0.4) {
+          // he reads the moment (as a FIFA defender): a clever one waits until the ball is out of the carrier's feet, a poor one goes early
+          const tq = tackleQ(p, o).q, want = TQ_WIN + 0.02 - (1 - iq) * 0.2;
+          if (tq >= want && Math.random() < (2 + d.tackle * 2) * dt) out.poke = true;
+        }
       } else if (keeper) {
         const cd = o && o.team !== p.team ? Math.hypot(o.x - ownX, o.y - CY) : 1e9;
         const free = o && o.team !== p.team && !mates.some(m => m !== p && laneGap(o.x, o.y, ownX, CY, [m]) < 30); // nobody of ours between him and the goal
@@ -4630,6 +4773,9 @@ table.st tr.fr td { color: var(--gold); }
           go(ownX + ux * off, CY + uy * off, true);
           if (Math.hypot(o.x - p.x, o.y - p.y) < REACH + 26 && Math.random() < (0.5 + iq) * 3 * dt) out.tackle = true;
         } else go(ownX + dir * 38, CY + Math.max(-MOUTH + 10, Math.min(MOUTH - 10, (ball.y - CY) * 0.6)));
+      } else if (size >= 5 && dLine[p.team] !== null && formOf(p)[0] < 0.4) { // the back line, as one unit
+        const [x, y] = lineSpot(p, marks.get(p));
+        go(x, y, Math.abs(x - p.x) > 70 || Math.hypot(x - p.x, y - p.y) > 160);
       } else if (size >= 5) {
         const m = marks.get(p);
         if (m) { // goal side of the man; the clever ones lean into the passing lane to pick it off
@@ -4642,6 +4788,11 @@ table.st tr.fr td { color: var(--gold); }
         const mark = foes.filter(f => f !== o).sort((a, b) => Math.abs(a.x - ownX) - Math.abs(b.x - ownX))[(p.k + 1) % Math.max(1, foes.length - 1)] || foes[0];
         const gx = ownX - mark.x, gy = CY - mark.y, gl = Math.hypot(gx, gy) || 1, k = o ? 0.35 * iq : 0;
         go(mark.x + gx / gl * 55 * (1 - k) + (o ? (o.x - mark.x) * k * 0.45 : 0), mark.y + gy / gl * 55 * (1 - k) + (o ? (o.y - mark.y) * k * 0.45 : 0), iq > 0.7 && Math.hypot(mark.x - p.x, mark.y - p.y) > 150);
+      }
+      // the midfield line stays a set distance in front of the back line, so there is no gap between the lines to play into
+      if (size >= 7 && !weHave && dLine[p.team] !== null && !keeper && p !== chaser && p !== second && p !== third && !setp && formOf(p)[0] >= 0.4 && formOf(p)[0] < 0.7) {
+        const L = PR - PL, lo = dLine[p.team] + L * 0.08, hi = dLine[p.team] + L * 0.21, u = (tx - ownX) * dir;
+        if (u < lo || u > hi) tx = ownX + dir * Math.max(lo, Math.min(hi, u));
       }
       // as in FIFA: one man presses and one covers, everybody else holds his place instead of crowding the man on the ball
       if (o && o.team !== p.team && !keeper && p !== chaser && !setp) {
@@ -4753,7 +4904,7 @@ table.st tr.fr td { color: var(--gold); }
     if (bigT > 0) { bigT -= dt; if (bigT <= 0) setBallSize(false); }
     if (cfg.pu || (mode === 'guest')) stepItems(dt);
 
-    offCache = {}; assignMarks();
+    offCache = {}; assignMarks(); lineTick(dt);
     for (const p of P) {
       if (p.out > 0) { // sent off: waits by the touchline
         p.out -= dt; p.vx = p.vy = 0; p.x = CX + (p.team ? 1 : -1) * (80 + p.k * 30); p.y = PT - 26;
@@ -4781,7 +4932,7 @@ table.st tr.fr td { color: var(--gold); }
         }
       }
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
-      p.tcd -= dt; p.swcd -= dt; if (p.asw > 0) p.asw -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
+      if (p.shT > 0) { p.shT -= dt; if (p.shT <= 0) p.shc = 0; } p.tcd -= dt; p.swcd -= dt; if (p.asw > 0) p.asw -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
       const has = ball.owner === p.i;
       const mag = Math.hypot(inp.x, inp.y);
       p.sprint = (inp.adv ? !!inp.c : (inp.sprint || mag > 0.97)) && p.stamina > 0.04 && mag > 0.2 && p.tackle <= 0;
@@ -4796,21 +4947,6 @@ table.st tr.fr td { color: var(--gold); }
       const top = MAXV * (lvOf(p) ? 1 + 0.012 * lvOf(p).spd : 1) * (p.sprint ? (hasAb(p, 'raket') ? 1.44 : 1.35) : 1) * (has && !(p.heavy > 0) ? 0.92 : 1) * (1 + 0.03 * momEdge(p.team)) * (p.charging ? 0.7 : 1) * (p.turbo > 0 ? 1.15 : 1) * (p.windup > 0 ? 0.5 : 1) * (p.inj > 0 ? 0.85 : 1);
       if (p.sprint && p.ab && hasAb(p, 'raket') && Math.hypot(p.vx, p.vy) > MAXV * 1.25 && performance.now() - (p.abAt || 0) > 14000) abPop(p, 'raket');
 
-      if (mag > 0.2 && p.tackle <= 0 && !(p.dive > 0)) {
-        const ta = Math.atan2(inp.y, inp.x);
-        if (has) { // turn with the ball smoothly so it rolls around your feet
-          const ca = Math.atan2(p.fy, p.fx);
-          let da = ta - ca; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
-          const tr = p.sprint ? 7 : 11; // at full sprint the ball needs a wider turn
-          const na = ca + Math.max(-tr * dt, Math.min(tr * dt, da));
-          p.fx = Math.cos(na); p.fy = Math.sin(na);
-        } else if (p.ctrl === 'ai') { // computer players turn gradually instead of snapping round
-          const ca = Math.atan2(p.fy, p.fx);
-          let da = ta - ca; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
-          const na = ca + Math.max(-7 * dt, Math.min(7 * dt, da));
-          p.fx = Math.cos(na); p.fy = Math.sin(na);
-        } else { p.fx = Math.cos(ta); p.fy = Math.sin(ta); }
-      }
       if (p.dive > 0) { // keeper diving
         p.dive -= dt; p.vx = p.dvx; p.vy = p.dvy; p.frozen = 0;
         if (p.dive <= 0) { p.dive = 0; p.lay = 0.5; p.recover = Math.max(p.recover, 0.45); p.vx *= 0.2; p.vy *= 0.2; } // on the ground for a moment
@@ -4821,16 +4957,9 @@ table.st tr.fr td { color: var(--gold); }
         p.tackle -= dt; if (Math.random() < 0.6) dust(p.x, p.y);
         if (p.tackle <= 0) { p.tackle = 0; p.recover = 0.3; }
       } else if (p.stun > 0) { p.vx *= 0.85; p.vy *= 0.85; }
-      else if (p.frozen > 0) { p.frozen -= dt; p.vx = p.vy = 0; if (p.frozen <= 0 && has && p.ctrl === 'ai') p.frozen = 0.01; }
+      else if (p.frozen > 0) { p.frozen -= dt; p.vx = p.vy = 0; if (mag > 0.2) { const l = Math.hypot(inp.x, inp.y); p.fx = inp.x / l; p.fy = inp.y / l; } if (p.frozen <= 0 && has && p.ctrl === 'ai') p.frozen = 0.01; } // standing at a set piece: he turns to aim
       else {
-        let acc = p.ctrl === 'ai' ? ACC_AI : ACC;
-        if (p.ctrl !== 'ai') { // as in FIFA: a sprint takes a moment to build up, a sharp turn at full speed costs speed
-          const sp0 = Math.hypot(p.vx, p.vy), dot = sp0 > 1 ? (p.vx * inp.x + p.vy * inp.y) / (sp0 * (Math.hypot(inp.x, inp.y) || 1)) : 1;
-          if (p.sprint && dot > 0.7 && sp0 < top) acc *= 0.55;
-          else if (sp0 > MAXV * 1.1 && dot < 0.3) acc *= 0.6;
-        }
-        const t = Math.min(1, acc * WX().grip * dt); // the computer has more momentum: no instant turns; a wet or snowy pitch is slippery
-        p.vx += (inp.x * top - p.vx) * t; p.vy += (inp.y * top - p.vy) * t;
+        moveBody(p, inp, top, has, dt);
       }
       p.x += p.vx * dt; p.y += p.vy * dt;
       const wall = INDOOR() ? 30 + PRAD : 0; // indoors the boards stop you
@@ -4889,9 +5018,9 @@ table.st tr.fr td { color: var(--gold); }
         if (p.charging) {
           if (inp.a) p.hold = Math.min(MAXCHARGE, p.hold + dt);
           else if (p.hold < 0.14) { p.charging = false; p.pending = 0.2; p.pendHold = p.hold; } // wait a moment: a second tap makes it a lob
-          else shoot(p, p.hold);
+          else { const l = Math.hypot(inp.x, inp.y); if (l > 0.3) shoot(p, p.hold, inp.x, inp.y); else shoot(p, p.hold); } // where the stick points; the body decides how true it is
         }
-        if (p.pending > 0) { p.pending -= dt; if (p.pending <= 0 && ball.owner === p.i) shoot(p, p.pendHold || 0); }
+        if (p.pending > 0) { p.pending -= dt; if (p.pending <= 0 && ball.owner === p.i) { const l = Math.hypot(inp.x, inp.y); if (l > 0.3) shoot(p, p.pendHold || 0, inp.x, inp.y); else shoot(p, p.pendHold || 0); } }
         // AFLEVER (as in FIFA): tap = to the nearest man that way (into his path if he is ahead). Hold = a through ball:
         // the longer you hold, the further ahead of him it goes, in behind the defenders (Daniel 2026-11-12)
         if (bDown) { p.chB = true; p.holdB = 0; }
@@ -5036,10 +5165,17 @@ table.st tr.fr td { color: var(--gold); }
           if (p.team === o.team || p.stun > 0 || o.frozen > 0 || o.hands > 0 || !on(p)) continue;
           const db = dBall(p);
           const rear = rearOf(p, o);
-          if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + (lvOf(p) ? lvOf(p).def * 0.8 : 0) + (hasAb(p, 'mur') ? 9 : 0)) { abPop(p, 'mur'); tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody)
+          if (p.tackle > 0 && rear < 0.35 && db < TACKLE_REACH + rat(p, 'def') * 9 + (hasAb(p, 'mur') ? 9 : 0) && db < Math.hypot(o.x - p.x, o.y - p.y) + 4) { tst('slideWin'); abPop(p, 'mur'); tackleWins(p); break; } // from behind he has to go through the man (foul, see tackleBody) // the slide gets there and the ball is on his side of the man, not behind his body
           if (p.dive > 0 && isKeeper(p) && db < REACH + 10) { tackleWins(p); flash = { text: 'Save!', t: 1.0 }; crowd.save(); if (p.team === localTeam()) buzz(40); if (stats) stats.sv[p.team]++; if (p.ms) p.ms.sv = (p.ms.sv || 0) + 1; break; }
           const facing = ((ball.x - p.x) * p.fx + (ball.y - p.y) * p.fy) / (db || 1) > 0.3;
-          if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2 && Math.random() < (isHuman(o) && !isHuman(p) ? 0.42 : 1.0) * (hasAb(o, 'bamse') ? (abPop(o, 'bamse'), 0.35) : 1) * dt) { ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
+          // shoulder to shoulder (as in FIFA): not a dice roll each frame but a contest that builds while he has a foot on the ball side.
+          // It goes quicker when the ball is out of the carrier's feet and for the better defender, and not at all while the carrier shields it
+          if (p.tackle <= 0 && ball.stealCd <= 0 && !(o.skill > 0) && facing && rear < 0.1 && db < REACH + 2) {
+            const dPO = Math.hypot(o.x - p.x, o.y - p.y), shield = db > dPO + 2 ? 1 : 0, ex = Math.max(0, Math.min(1, (Math.hypot(ball.x - o.x, ball.y - o.y) - (REACH - 3)) / 15));
+            const rate = shield ? 0 : (0.45 + ex * 1.2 + (rat(p, 'def') - rat(o, 'pas')) * 0.6) * (isHuman(o) && !isHuman(p) ? 0.5 : 1) * (hasAb(o, 'bamse') ? 0.35 : 1);
+            p.shc = (p.shc || 0) + Math.max(0, rate) * dt * 1.6; p.shO = o.i; p.shT = 0.25;
+            if (p.shc >= 1) { if (hasAb(o, 'bamse')) abPop(o, 'bamse'); p.shc = 0; tst('shoulder'); ball.stealCd = 1.5; o.nopick = 0.6; o.tcd = Math.max(o.tcd, 1.2); o.recover = Math.max(o.recover, 0.4); p.tcd = Math.max(p.tcd, 0.6); if (stats) stats.tk[p.team]++; if (p.ms) p.ms.tk++; grab(p); break; }
+          }
         }
       }
     }
@@ -5157,6 +5293,7 @@ table.st tr.fr td { color: var(--gold); }
       const over = side === 0 ? ball.x < PL - BRAD : ball.x > PR + BRAD;
       if (!over) continue;
       const inMouth = Math.abs(ball.y - CY) < MOUTH - POSTR;
+      if (ball.last && !ball.last.pass) tst(inMouth ? (ball.z < BAR ? 'sGoal' : 'sOver') : 'sWide');
       if (inMouth && ball.z < BAR) { scoreOn(side); return; }
       if (inMouth || (Math.abs(ball.y - CY) < MOUTH * 2.4 && ball.last && !ball.last.pass && Math.hypot(ball.vx, ball.vy) > 380)) { crowd.ooh(); const sh = P[ball.lastIdx]; if (sh && sh.team !== side) sh.rueAt = performance.now(); } // over the bar or just wide
       const gx = side ? PR : PL, top = ball.y < CY;
@@ -5503,6 +5640,7 @@ table.st tr.fr td { color: var(--gold); }
   const SKILLS = [['spd', 'Pace', 'Runs faster'], ['sht', 'Shots', 'Harder and more accurate shots'], ['pas', 'Passes', 'Plays faster and better balls'], ['def', 'Defence', 'Wins more tackles']];
   const skillPrice = l => 60 + l * 40;
   function myLv() { const pr = loadProf(); return Object.assign({ spd: 0, sht: 0, pas: 0, def: 0 }, pr.lv || {}); }
+  const rat = (p, k) => p.r99 ? Math.max(0, Math.min(1, (p.r99[k] - 45) / 50)) : 0.5; // a rating 0..1 from his 40-99 stat (70 = 0.5; 0.5 for a man without one)
   const lvOf = p => p.lv || null; // a player's trained skills in this match (only your squad, only against the computer)
   function loadProf() { try { return Object.assign(PROF0(), JSON.parse(localStorage.getItem('mf-profile') || '{}')); } catch (_) { return PROF0(); } }
   function paintCoins(pr) { const c = (pr || loadProf()).coins; document.querySelectorAll('[data-coins]').forEach(e => { e.textContent = c; }); }
@@ -5552,7 +5690,7 @@ table.st tr.fr td { color: var(--gold); }
       const f = teamPick[t].str - 3;
       return { spd: base.spd * (1 + 0.03 * f), shoot: base.shoot * (1 + 0.08 * f), pass: base.pass * (1 + 0.06 * f), tackle: base.tackle * (1 + 0.08 * f), aimErr: base.aimErr * (1 - 0.12 * f), react: base.react * (1 - 0.1 * f) };
     });
-    for (const p of P) { p.lv = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.rl = 0; p.cap = false; p.spk = 0; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; p.coP = null; p.coI = -1; }
+    for (const p of P) { p.lv = null; p.r99 = null; p.sqi = -1; p.ovr = 0; p.sq = ''; p.rl = 0; p.cap = false; p.spk = 0; p.ab = null; p.abT = 0; p.abAt = 0; p.ms = { g: 0, sh: 0, pa: 0, tk: 0, spr: 0 }; p.coP = null; p.coI = -1; }
     if (m === 'cpu' || (comp && m === 'host')) cpuRatings(1); // the computer's players each have their own rating too
     if (m === 'host' && !comp && kind !== 'train' && kind !== 'test') { // online: both captains' own players, with their ratings and evner
       const hT = hostTeam();
@@ -6598,18 +6736,18 @@ table.st tr.fr td { color: var(--gold); }
   function applySquad(team, sq) { // the host plays both elevens at their own ratings and evner
     if (!sq) return false;
     for (const p of P) { if (p.team !== team) continue; const r = sq[p.k]; if (!r) continue;
-      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); }
+      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.r99 = Object.fromEntries(SKILLS.map(([k]) => [k, r[k]])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); }
     return true;
   }
   // what you told him in Holdet: his role, the armband, and the set pieces that are his
   const sqMeta = (p, s, S) => { p.rl = s.pos === 'MV' ? 0 : Math.max(-1, Math.min(1, s.rl | 0)); p.cap = !!S.cap && S.cap === s.n; const sp = S.sp || {}; p.spk = (sp.fk === s.n ? 1 : 0) | (sp.ck === s.n ? 2 : 0) | (sp.pn === s.n ? 4 : 0); };
   function squadToPitch() { // every man plays the place he has in your line-up (picked by you, or the best for each place)
-    for (const p of P) if (p.team === 0) { p.lv = null; p.sqi = -1; p.ovr = 0; p.ab = null; p.fit0 = 0; p.rl = 0; p.cap = false; p.spk = 0; }
+    for (const p of P) if (p.team === 0) { p.lv = null; p.r99 = null; p.sqi = -1; p.ovr = 0; p.ab = null; p.fit0 = 0; p.rl = 0; p.cap = false; p.spk = 0; }
     const S0 = squadLoad(), xi = xiFor(size, S0), L = layFor(size), mine = P.filter(p => p.team === 0);
     for (const p of mine) {
       const i = xi[p.k], s = S0.pl[i]; if (!s) continue;
       const pen = (ovr(s) - fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size))) / 4.5; // out of position: he plays a bit worse
-      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size)); p.ab = abOf(s); sqMeta(p, s, S0); if (size > 1 && p.k === 0) p.rl = 0;
+      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(s[k]) - pen])); p.r99 = Object.fromEntries(SKILLS.map(([k]) => [k, s[k] - pen * 4.5])); p.sq = s.n; p.sqi = i; p.ovr = fitOvr(s, slotPos(L[p.k] || [0.5, 0.5], p.k, size)); p.ab = abOf(s); sqMeta(p, s, S0); if (size > 1 && p.k === 0) p.rl = 0;
       { const fi = 100, mo = morOf(s), mb = mo >= 85 ? 0.4 : mo < 35 ? -0.5 : 0, fb = Math.max(0, 70 - fi) / 20; // tired legs are slower and tire sooner, a happy player plays a little above himself
         for (const [k] of SKILLS) p.lv[k] += mb - (k === 'spd' ? fb : fb * 0.4);
         p.fit0 = (100 - fi) / 100 * 0.4; p.fat = p.fit0; p.stamina = 1 - p.fat; }
@@ -6634,7 +6772,7 @@ table.st tr.fr td { color: var(--gold); }
     const S0 = squadLoad(), avg = { spd: 0, sht: 0, pas: 0, def: 0 };
     for (const p of tm) {
       const j = own.get(p) || 0, r = j ? hs[j].r[p.k] : null;
-      if (r) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); p.rl = 0; p.cap = false; p.spk = 0; p.fit0 = 0; p.fat = 0; p.stamina = 1; p.coP = hs[j].id; p.coI = r.i; }
+      if (r) { p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, statLv(r[k])])); p.r99 = Object.fromEntries(SKILLS.map(([k]) => [k, r[k]])); p.sq = r.n; p.sqi = -1; p.ovr = r.o; p.ab = r.ab.slice(); p.rl = 0; p.cap = false; p.spk = 0; p.fit0 = 0; p.fat = 0; p.stamina = 1; p.coP = hs[j].id; p.coI = r.i; }
       const src = r || S0.pl[p.sqi] || {};
       for (const [k] of SKILLS) avg[k] += statLv(src[k] || 50) / n;
     }
@@ -6665,7 +6803,7 @@ table.st tr.fr td { color: var(--gold); }
       const u = formOf(p)[0], pos = size > 1 && p.k === 0 ? 'MV' : u < 0.35 ? 'FO' : u < 0.7 ? 'MB' : 'AN';
       const r = { pos };
       for (const [k] of SKILLS) r[k] = Math.max(40, Math.min(99, Math.round(base + POSB[pos][k] + (rnd() * 16 - 8))));
-      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, (r[k] - base - POSB[pos][k] * 0.4) / 3.5]));
+      p.lv = Object.fromEntries(SKILLS.map(([k]) => [k, (r[k] - base - POSB[pos][k] * 0.4) / 3.5])); p.r99 = Object.fromEntries(SKILLS.map(([k]) => [k, r[k]]));
       p.ovr = ovr(r); p.sq = FIRSTN[Math.floor(rnd() * FIRSTN.length)] + ' ' + LASTN[Math.floor(rnd() * LASTN.length)];
       const str = tm ? tm.str || 3 : 3; // the stars of a team: a top side has an evne on most of its players
       { const pool = abFor(pos); p.ab = rnd() < 0.08 + 0.13 * str ? [pool[Math.floor(rnd() * pool.length)]] : null; }
@@ -8863,7 +9001,7 @@ table.st tr.fr td { color: var(--gold); }
       $('ready').hidden = true; $('rxbar').hidden = false;
       for (const id of ['lobby', 'end', 'menu']) $(id).hidden = true;
       ball.x = s.b[0]; ball.y = s.b[1];
-      s.p.forEach((q, i) => { if (P[i]) { P[i].x = q[0]; P[i].y = q[1]; P[i].ovr = 0; P[i].sq = ''; P[i].ab = null; P[i].lv = null; P[i].abI = ''; } });
+      s.p.forEach((q, i) => { if (P[i]) { P[i].x = q[0]; P[i].y = q[1]; P[i].ovr = 0; P[i].sq = ''; P[i].ab = null; P[i].lv = null; P[i].r99 = null; P[i].abI = ''; } });
       vsShow();
       clearInput(); sfx.beep(); updateCamera(0, true);
     } else if (s.st === 'p' && (score[0] !== prev[0] || score[1] !== prev[1])) {
@@ -9368,13 +9506,15 @@ table.st tr.fr td { color: var(--gold); }
       const gx = me.team ? PL : PR, dir = me.team ? -1 : 1, toGoal = (gx - me.x) * dir;
       const atPiece = setp && (ball.rs === 'free' || ball.rs === 'pen') || (ball.rs === 'pen' && (pen || so));
       if (!(me.charging || me.pending > 0 || (atPiece && toGoal < 560))) continue; // in open play: while SKYD is held
-      if (me.fx * dir < 0.1 && !atPiece) continue; // not shooting at goal: nothing to show
+      const sk = !atPiece && Math.hypot(inp.x, inp.y) > 0.3, ax = sk ? inp.x : me.fx, ay = sk ? inp.y : me.fy;
+      if (ax * dir < 0.1 * Math.hypot(ax, ay) && !atPiece) continue; // not shooting at goal: nothing to show
       const hold = me.charging ? me.hold : me.pending > 0 ? (me.pendHold || 0) : MAXCHARGE * 0.45;
-      const r = traceShot(shotPlan(me, hold, true));
+      const plan = shotPlan(me, hold, true, ax, ay), r = traceShot(plan);
+      const spr = !atPiece && plan.gk === 'shot' ? Math.max(8, Math.min(70, shotSpread(me, plan).sig * Math.hypot(r.x - me.x, r.y - me.y))) : 8; // off balance, at full power, under pressure: the ring opens up
       ctx.save();
       ctx.strokeStyle = r.goal ? 'rgba(255,212,71,0.9)' : 'rgba(255,255,255,0.55)'; ctx.lineWidth = 3; ctx.setLineDash([4, 7]);
       ctx.beginPath(); ctx.moveTo(r.pts[0][0], r.pts[0][1]); for (const q of r.pts) ctx.lineTo(q[0], q[1]); ctx.stroke(); ctx.setLineDash([]);
-      ctx.beginPath(); ctx.arc(r.x, r.y, 8, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(r.x, r.y, spr, 0, Math.PI * 2); ctx.stroke();
       if (r.goal) { ctx.beginPath(); ctx.moveTo(r.x - 5, r.y); ctx.lineTo(r.x + 5, r.y); ctx.moveTo(r.x, r.y - 5); ctx.lineTo(r.x, r.y + 5); ctx.stroke(); }
       ctx.restore();
     }
@@ -9757,7 +9897,17 @@ table.st tr.fr td { color: var(--gold); }
   }
   makePlayers(cfg.size); kickoff(); menuForm(); cupInit(); extrasInit(); compInit(); squadInit(); buildOpts(); setTimeout(optsBehindButton, 0); demoReset(); setTimeout(homeGifts, 700); hubShow(hubTab);
   window.__mf = () => ({ state, mode, score, pen: !!pen, so: soSums(), banner, flash: flash && flash.text, out: P.filter(p => p.out > 0).length, half, replay: !!replay, size, tf: teamForm, z: Math.round(ball.z), item: item && item.type, stats, owner: ball.owner, ball: [Math.round(ball.x), Math.round(ball.y)], ctrl: P.map(p => p.ctrl), stun: P.filter(p => p.stun > 0).length });
-  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, swr: i => switchRank(P[i]).map(q => q.i), msw: i => manualSwitch(P[i]), dsw: () => defendSwitch(owner()), cshare: cv => carShare(cv), cnew: (n, how) => { carNew(n, 2, 1); const C = carLoad(); C.how = how; carSave(C); }, cgo: t => compGo(t), co: () => P.filter(p => p.team === 0).map(p => [p.k, p.sq, p.ovr | 0, p.coP ? 'G' : 'H', p.ctrl]), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
+  if (/[?&]mftest\b/.test(location.search)) window.__mfTest = { sim: (sec, all) => { // run the match on its own for sec seconds of game time (all: every man on the computer)
+      vsT = 0; $('vs').hidden = true; if (all !== false) for (const p of P) p.ctrl = 'ai';
+      for (const k in TST) TST[k] = 0;
+      const n = Math.round(sec / (DT * TEMPO()));
+      for (let i = 0; i < n && state === 'play'; i++) { step(DT * TEMPO());
+        const o = owner();
+        if (i % 60 === 0 && o && size >= 7 && !setp && pause <= 0) { const t = 1 - o.team, bk = P.filter(q => q.team === t && on(q) && q.k !== 0 && formOf(q)[0] < 0.4), md = P.filter(q => q.team === t && on(q) && q.k !== 0 && formOf(q)[0] >= 0.4 && formOf(q)[0] < 0.7);
+          if (bk.length > 2 && md.length) { const xs = bk.map(q => q.x); tst('lineN'); tst('lineSpread', Math.max(...xs) - Math.min(...xs)); const dir = t ? -1 : 1, bm = xs.reduce((a, b) => a + b, 0) / xs.length, mm = md.reduce((a, q) => a + q.x, 0) / md.length; tst('gapBM', (mm - bm) * dir); } }
+      }
+      return { score: score.slice(), st: stats && JSON.parse(JSON.stringify(stats)), t: { ...TST } };
+    }, se: (i, h, n) => { const out = []; for (let k = 0; k < n; k++) { const r = shotPlan(P[i], h); shotError(P[i], r); out.push([Math.atan2(r.vy, r.vx), r.vz]); } return out; }, tst: () => ({ ...TST }), pen: startPenalty, so: () => { clock = 0.01; score = [0, 0]; }, foul: (i, j) => foul(P[i], P[j]), half: () => { clock = matchLen / 2 + 0.05; }, start: m => startMatch(m), restart: (t, team, x, y) => restart(t, team, x, y), info: () => ({ setp: setp && { ...setp }, P: P.map(p => ({ x: p.x, y: p.y, team: p.team, ctrl: p.ctrl, i: p.i })), ball: [ball.x, ball.y], owner: ball.owner, PL, PR, PT, PB }), goal: t => { ball.gk = 'head'; ball.lastIdx = P.findIndex(p => p.team === t); goal(t); }, end: (a, b) => { if (a !== undefined) score = [a, b]; half = 2; clock = 0.01; } , go: (m, n) => { cfg.size = n || cfg.size; startMatch(m); }, P: () => P, rules: () => ({ addT, stopT, half, clock, matchLen, subsUsed, banner, pause, so: !!so }), setClock: c => { clock = c; }, sub: i => doSub(P[i]), setScore: (a, b) => { score = [a, b]; }, foulX: (i, j) => foul(P[i], P[j], true), paused: v => setPaused(v), pack: i => buyPack(i), coins: n => addCoins(n), shop: () => shopShow(), squad: () => squadShow(), ev: d => evMatch(d), chem: n => chemOf(n), sq: () => squadLoad(), mk: () => mktLoad(), mkSet: M => mktSave(M), mkShow: () => mktShow(), aim: (i, h) => { const r = traceShot(shotPlan(P[i], h, true)); return { x: r.x, y: r.y, z: r.z, goal: r.goal }; }, shoot: (i, h) => shoot(P[i], h), ball: () => ball, cfg, grab: i => grab(P[i]), tb: (i, j) => tackleBody(P[i], P[j]), st: () => stats, geo: () => ({ PL, PR, PT, PB, CX, CY, MOUTH }), setPause: v => { pause = v; banner = ''; }, end: () => finish(), mt: () => ({ teamForm, teamLay, teamTac, pick: teamPick && teamPick.map(t => t.n), col: [col.home, col.away] }), home: i => homeOf(P[i]), spot: (i, w) => shapeSpot(P[i], 0, w), aiLv: (a, b) => { tD = [DIFF[a], DIFF[b]]; }, sty: () => teamSty, wx: w => { if (w !== undefined) setWeather(w); return { wx, damp: WX().damp }; }, pass: (i, j, t, h) => pass(P[i], P[j], t, h), lob: (i, j, lp) => { lob(P[i], P[j].x - P[i].x, P[j].y - P[i].y, P[j], lp); if (lp) ball.last.lp = true; }, sp: () => setp && { ...setp, rs: ball.rs }, flash: () => flash && flash.text, pause: () => pause, sc: (a, b) => { score = [a, b]; }, drill: () => drill, comp: () => comp && { type: comp.type, a: comp.a.n, b: comp.b.n, how: comp.how, diff: comp.diff, size: comp.size, coop: coopTwo, two: twoSides(), kind }, pt: (i, x, y, r) => { const q = passTarget(P[i], x, y, r); return q ? q.i : -1; }, stk: (i, j) => standTackle(P[i], P[j]), nosp: () => { setp = null; }, swr: i => switchRank(P[i]).map(q => q.i), msw: i => manualSwitch(P[i]), dsw: () => defendSwitch(owner()), cshare: cv => carShare(cv), cnew: (n, how) => { carNew(n, 2, 1); const C = carLoad(); C.how = how; carSave(C); }, cgo: t => compGo(t), co: () => P.filter(p => p.team === 0).map(p => [p.k, p.sq, p.ovr | 0, p.coP ? 'G' : 'H', p.ctrl]), pk: st => pack(st), rk: (L, o, res, gd, w) => { const M = loadMe(); const R = rankMatch(M, L, o, res, gd, w === undefined ? 1 : w); saveMe(M); return R; }, rshow: R => { $('end').hidden = false; endRankShow(R); }, setRp: (L, v, sh) => { const M = loadMe(); M['rp' + L] = v; if (sh !== undefined) M['sh' + L] = sh; saveMe(M); paintProg(); } }; // only for automated tests
   requestAnimationFrame(frame);
 })();
 </script>
