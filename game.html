@@ -1551,7 +1551,6 @@ table.st tr.fr td { color: var(--gold); }
         <div><b class="k">SUBSTITUTIONS</b><span>Tired and injured players are subbed off at half-time and late in the match. Against the computer you can sub yourself in the pause menu.</span></div>
         <div><b class="k">CAMERA</b><span>Pick Normal, Close or Wide in Settings. On goals, cards, free kicks and corners the camera moves in close with film bars (Film clips can be turned off).</span></div>
         <div><b class="k">AIM LINE</b><span>While you hold SHOOT, and at free kicks and corners, a dotted line shows where the ball goes. Gold means it is on target. Can be turned off in Settings.</span></div>
-        <div><b class="k">ADVANCED</b><span>Pick Buttons: Advanced in Settings. Then you only sprint with the SPRINT button, with the ball FEINT gives a quick sidestep past the defender, and without the ball you hold PRESS to close down the man on the ball.</span></div>
       </div>
       <div class="btns"><button id="helpOk">Got it</button></div>
     </div>
@@ -2592,7 +2591,7 @@ table.st tr.fr td { color: var(--gold); }
   const btnTouches = new Map(); // touch id -> {side, type: 'a'|'b'}
   const btn = [{ a: false, b: false, c: false, d: false, e: false }, { a: false, b: false, c: false, d: false, e: false }];
   const downAt = { a: 0, b: 0, c: 0, d: 0, e: 0 };
-  const advOn = () => cfg.adv && !twoSides(); // Avanceret styring (settings: Knapper): own SPURT button, FINTE with the ball, PRES without
+  const advOn = () => false; // Daniel 2026-11-12: the Advanced buttons (SPURT/FINTE, manual aim) are gone; everyone plays one set of buttons, aim assisted as in FIFA
   const twoSides = () => mode === 'two' || (mode === 'cpu' && coopTwo);
 
   function aBtn(side) {
@@ -3555,7 +3554,7 @@ table.st tr.fr td { color: var(--gold); }
     let fx = p.fx, fy = p.fy;
     if (ax !== undefined && Math.hypot(ax, ay) > 0.3) { const l = Math.hypot(ax, ay); fx = ax / l; fy = ay / l; }
     const pw = Math.min(1, hold / MAXCHARGE);
-    let power = 600 + pw * 580;
+    let power = 820 + pw * 420; // Daniel 2026-11-12: even a quick tap on SKYD is a real strike (as in FIFA), never as soft as a pass; holding adds power and lift
     const isPen = ball.rs === 'pen' && p.frozen > 0 && (pen || so);
     if (isPen) power = (470 + pw * 280) * Math.max(1, G.spot / 105); // from the real penalty mark: just as quick to the goal as before, so penalties stay as hard
     const dir = p.team ? -1 : 1, gx = p.team ? PL : PR;
@@ -6495,7 +6494,7 @@ table.st tr.fr td { color: var(--gold); }
 
   // ----- little helpers for pickers -----
   // match options, shown where you start a match (setup, cup, career, online lobby) instead of hidden in the settings
-  const MOPTS = [['lock', 'Controls', ['Switch', 'Locked']], ['tempo', 'Tempo', ['Calm', 'Normal', 'Fast']], ['aim', 'Aim line', ['Off', 'On']], ['adv', 'Buttons', ['Simple', 'Advanced']], ['et', 'Extra time', ['Off', 'On']], ['inj', 'Injuries', ['Off', 'On']], ['cam', 'Camera', ['Normal', 'Close', 'Wide']], ['cine', 'Film clips', ['Off', 'On']], ['pu', 'Power-ups', ['Off', 'On']]];
+  const MOPTS = [['lock', 'Controls', ['Switch', 'Locked']], ['tempo', 'Tempo', ['Calm', 'Normal', 'Fast']], ['aim', 'Aim line', ['Off', 'On']], ['et', 'Extra time', ['Off', 'On']], ['inj', 'Injuries', ['Off', 'On']], ['cam', 'Camera', ['Normal', 'Close', 'Wide']], ['cine', 'Film clips', ['Off', 'On']], ['pu', 'Power-ups', ['Off', 'On']]];
   function optsBehindButton() { // in the cup and the career the match options sit behind one button, so the screen stays calm
     if (!window.mfIco) { setTimeout(optsBehindButton, 60); return; } // the icon set loads in the last script
     const ic = n => window.mfIco(n);
@@ -8658,7 +8657,7 @@ table.st tr.fr td { color: var(--gold); }
       }
       const i = Array.isArray(g.presence.i) ? g.presence.i : [0, 0, 0, 0];
       const cl = v => Math.max(-1, Math.min(1, (Number(v) || 0) / 100));
-      remoteIn.set(g.peer, { x: cl(i[0]), y: cl(i[1]), a: !!i[2], b: !!i[3], c: !!i[4], d: !!i[5], adv: !!i[6], e: !!i[7] });
+      remoteIn.set(g.peer, { x: cl(i[0]), y: cl(i[1]), a: !!i[2], b: !!i[3], c: !!i[4], d: !!i[5], adv: false, e: !!i[7] });
       if (roster.some(r => r[0] === g.peer)) continue;
       if (quick && (roster.length || state !== 'lobby')) continue; // a ranked match is one against one
       const taken = new Set(roster.map(r => r[1]));
