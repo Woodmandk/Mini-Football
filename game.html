@@ -3696,7 +3696,7 @@ table.st tr.fr td { color: var(--gold); }
       const want = 120 + reach * 620;
       const s = cos * 2.6 - Math.abs(d - want) / (380 + reach * 120) - (isOffside(q, p) ? 0.6 : 0) - (cos < 0.2 ? 1 : 0) + (calling(q) && cos > 0.5 ? 0.45 : 0) // a man making a run is easier to find
         + (thru && (q.x - p.x) * (p.team ? -1 : 1) > 40 && !isOffside(q, p) ? 0.5 + (calling(q) ? 0.3 : 0) : 0)
-        - (!air && !thru && cos > 0.2 && laneShut(p, q) ? 0.3 : 0); // a defender standing right on the line of the pass: the open man next to him is the better pick
+        - (!air && !thru && cos > 0.2 && laneShut(p, q) ? 0.3 : 0) - (cos > 0.2 && mateShadow(p, q, mates) ? 0.7 : 0); // hidden behind one of ours: the near man is the pass // a defender standing right on the line of the pass: the open man next to him is the better pick
       if (s > bs) { bs = s; best = q; }
     }
     return best;
@@ -3722,6 +3722,10 @@ table.st tr.fr td { color: var(--gold); }
     return Math.max(CX * dir, xs[1]) * dir;
   }
   // Two people on one team (as in FIFA co-op): the pass goes to the man the OTHER person controls, the passer keeps his own and runs on
+  function mateShadow(p, q, mates) { // one of our own stands on the line to q, close to the passer (so a lob over him is still on further out)
+    const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1;
+    return mates.some(m => { if (m === q || isKeeper(m)) return false; const t = ((m.x - p.x) * dx + (m.y - p.y) * dy) / (d * d); if (t < 0.1 || t > 0.9) return false; return Math.abs((m.x - p.x) * dy - (m.y - p.y) * dx) / d < 24; });
+  }
   function laneShut(p, q, w = 20) { // an opponent right on the line of a pass along the ground, at any distance
     const dx = q.x - p.x, dy = q.y - p.y, d = Math.hypot(dx, dy) || 1;
     return P.some(f => { if (f.team === p.team || !on(f)) return false;
@@ -4600,18 +4604,20 @@ table.st tr.fr td { color: var(--gold); }
   }
   // Daniel 2026-11-12: teammates make themselves available, as in FIFA. A man whose spot is hidden behind a defender (the pass would be cut out)
   // slides sideways until the line from the ball to him is clear, and a man standing right on top of a defender steps off him
-  function getOpen(p, x, y, o, foes, dir) {
+  function getOpen(p, x, y, o, foes, dir, mates = []) {
     if (size < 3) return [x, y];
     const x0 = x;
     for (let it = 0; it < 2; it++) {
       const dx = x - o.x, dy = y - o.y, d = Math.hypot(dx, dy) || 1;
       if (d < 70) break;
       let worst = null, wv = 0;
-      for (const f of foes) {
+      // Daniel 2026-11-12: a team-mate in the line counts too. Two of ours one behind the other means the pass (or the lob) to the far one
+      // hits the near one, so the man further away steps out of his shadow, as in FIFA
+      for (const f of foes.concat(mates.filter(q => q !== p && q !== o && !isKeeper(q) && Math.hypot(q.x - o.x, q.y - o.y) < d - 20))) {
         if (isKeeper(f)) continue;
         const t = ((f.x - o.x) * dx + (f.y - o.y) * dy) / (d * d);
         if (t < 0.12 || t > 1.08) continue;
-        const perp = ((f.x - o.x) * dy - (f.y - o.y) * dx) / d, w = 44 - Math.abs(perp);
+        const perp = ((f.x - o.x) * dy - (f.y - o.y) * dx) / d, w = (f.team === p.team ? 40 : 44) - Math.abs(perp);
         if (w > wv) { wv = w; worst = { perp, t: Math.min(1, t) }; }
       }
       if (!worst) break;
@@ -4850,7 +4856,7 @@ table.st tr.fr td { color: var(--gold); }
           if (bx) { go(bx[0], bx[1], Math.hypot(bx[0] - p.x, bx[1] - p.y) > 50); }
           else {
           [x, y] = spaceOut(p, x, y, mates, o);
-          if (!(p.run > 0) && o !== p) [x, y] = getOpen(p, x, y, o, foes, dir);
+          if (!(p.run > 0) && o !== p) [x, y] = getOpen(p, x, y, o, foes, dir, mates);
           go(x, y, p.run > 0 || Math.hypot(x - p.x, y - p.y) > 90);
           }
         }
@@ -4962,6 +4968,21 @@ table.st tr.fr td { color: var(--gold); }
           tx = Math.max(PL + 20, Math.min(PR - 20, tx)); ty = Math.max(PT + 20, Math.min(PB - 20, ty));
         }
         if (!beaten && Math.hypot(p.x - o.x, p.y - o.y) < near - 30) out.sprint = true; // he runs at us: drop off quickly to keep the gap
+      }
+    }
+    if (o && o.team === p.team && o !== p && !keeper && !setp && size >= 3 && !(p.run > 0)) { // never hide behind one of ours: step out of his shadow so the ball can reach me (see getOpen)
+      for (let it = 0; it < 2; it++) {
+        const dx = tx - o.x, dy = ty - o.y, d = Math.hypot(dx, dy) || 1; if (d < 70) break;
+        let w = 0, side = 0;
+        for (const m of mates) { if (m === p || m === o || isKeeper(m)) continue;
+          for (const [mx, my] of m.tgt ? [[m.x, m.y], m.tgt] : [[m.x, m.y]]) {
+            const t = ((mx - o.x) * dx + (my - o.y) * dy) / (d * d); if (t < 0.1 || t > 0.92) continue;
+            const perp = ((mx - o.x) * dy - (my - o.y) * dx) / d, ww = 38 - Math.abs(perp);
+            if (ww > w) { w = ww; side = perp > 3 ? -1 : perp < -3 ? 1 : (p.i % 2 ? 1 : -1); }
+          } }
+        if (w <= 0) break;
+        tx += dy / d * (w + 16) * side; ty += -dx / d * (w + 16) * side;
+        tx = Math.max(PL + 20, Math.min(PR - 20, tx)); ty = Math.max(PT + 20, Math.min(PB - 20, ty));
       }
     }
     p.tgt = o === p ? null : [tx, ty];
@@ -5436,13 +5457,14 @@ table.st tr.fr td { color: var(--gold); }
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
         // who goes up for it: the computer's men on their own, YOUR man only if you pressed for a header
-        const ok = p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && (!isHuman(p) || p.hdArm > 0) && canHead(p);
+        const ok = p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(ball.last && ball.last.pass && ball.last.team === p.team && ball.last.to >= 0 && ball.last.to !== p.i && P[ball.last.to] && P[ball.last.to].recv > 0) /* a cross or lob meant for a team-mate: he leaves it for him */ && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && (!isHuman(p) || p.hdArm > 0) && canHead(p);
         const first = P.filter(p => ok(p) && dBall(p) < REACH + 8);
         if (first.length) aerialDuel(P.filter(p => ok(p) && dBall(p) < REACH + 24)); // the first man there, and anyone right on him, contest it
       }
       if (ball.owner < 0 && ball.z < 26) {
         for (const p of P) {
           if (!on(p)) continue;
+          if (ball.last && ball.last.pass && ball.last.team === p.team && ball.last.to !== p.i && P[ball.last.to] && P[ball.last.to].recv > 0) continue; // our pass meant for someone else: he lets it run (steps over it), as in FIFA
           const dx = ball.x - p.x, dy = ball.y - p.y, d = Math.hypot(dx, dy);
           if (d < REACH && d > 0) {
             const nx = dx / d, ny = dy / d; ball.x = p.x + nx * REACH; ball.y = p.y + ny * REACH;
