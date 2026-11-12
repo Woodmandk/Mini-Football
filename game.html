@@ -980,6 +980,44 @@ button.setmore > span:last-child { min-width: 0; }
 
 #ko .setsheet .mopts, #career .setsheet .mopts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; }
 #ko > .card, #career > .card, #season > .card { position: relative; }
+
+/* The team, simpler: the pitch and one panel. Tap a player, pick who takes his place */
+.mtgrid.tab-lay .mtbcol { display: none; }
+.mtside .mtsel { gap: 10px; }
+.mtswl { display: flex; flex-direction: column; gap: 6px; }
+button.mtswr { display: grid; grid-template-columns: 44px 38px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 48px; padding: 6px 10px; text-align: left; background: var(--s2); border: 1px solid var(--line); box-shadow: none; border-radius: var(--r2); }
+button.mtswr .o { font-family: var(--disp); font-size: 20px; color: var(--chalk); }
+button.mtswr .ps { font-size: 12px; font-weight: 700; color: var(--muted); }
+button.mtswr .n { font-size: 15px; font-weight: 700; color: var(--chalk); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.mtswr small { font-size: 12px; color: var(--muted); white-space: nowrap; }
+button.mtswr.fit { border-color: var(--act-hi); }
+button.mtswr.fit .ps { color: var(--act-hi); }
+.mtside .mtacts { grid-template-columns: 1fr 1fr; }
+.mtside .mtacts button { min-height: 44px; font-size: 15px; }
+.mtnone #mtAuto { order: 3; }
+/* training: one card per training game */
+.trhow { font-size: 14px; color: var(--muted); text-align: left; }
+.trleft { color: var(--gold); font-family: var(--disp); font-size: 15px; white-space: nowrap; }
+.trcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+button.trcard { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 190px; padding: 14px; text-align: left; border-radius: var(--r3); background: var(--s1); border: 1px solid var(--line); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); }
+button.trcard i { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r2); background: var(--s3); color: var(--act-hi); margin-bottom: 6px; }
+button.trcard i svg.i { width: 26px; height: 26px; }
+button.trcard b { font-family: var(--disp); font-size: 20px; color: var(--chalk); }
+button.trcard .trk { color: var(--act-hi); font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+button.trcard .trtx { color: var(--muted); font-size: 12px; line-height: 1.35; flex: 1; }
+button.trcard small { color: var(--muted); font-size: 13px; }
+button.trcard .st { color: var(--gold); font-size: 18px; letter-spacing: 2px; }
+.trfree { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.trfree .lbl { margin-right: 4px; }
+.trfree button { min-height: 44px; padding: 8px 16px; }
+#wrap.n560 .trcards { grid-template-columns: 1fr 1fr; }
+.strow.fo { box-shadow: inset 3px 0 0 var(--act-hi); }
+
+.mtside .mtacts { display: none !important; }
+.mtwho .mwt { flex: 1; min-width: 0; } .mtwho .mwt b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtwho .mwd { flex: 0 0 auto; min-height: 44px; padding: 8px 16px; margin: 0; font-size: 15px; }
+.mtwho .mwx { flex: 0 0 auto; width: 44px; min-height: 44px; padding: 0; margin: 0; font-size: 16px; }
+#shopTr, #clTrain { display: none !important; }
 </style>
 
 <div id="wrap">
@@ -1012,11 +1050,11 @@ button.setmore > span:last-child { min-width: 0; }
         <button id="goOnline" class="big tile alt"><i class="ic">🌐</i>Online<small id="onlSub">Ranked, or play a friend with a code</small></button>
         <button id="goSeason" class="big tile alt"><i class="ic">🏆</i>Career and cups<small id="compSub">Career, co-op cup and season</small></button>
         <button id="bTwo" class="big tile alt"><i class="ic">👥</i>2 on one phone<small>Against each other or together</small></button>
-        <button id="goFriendly" class="big tile alt"><i class="ic">🤝</i>Friendly<small>More TP, no wages, no prize</small></button>
+        <button id="goFriendly" class="big tile alt"><i class="ic">🤝</i>Friendly<small>Players develop faster, no wages, no prize</small></button>
       </div>
       <div class="tabp" data-tab="hold" hidden>
         <button id="goMine" class="big tile hot"><i class="ic">📋</i>The team<small id="holdSub">Line-up, players, tactics and kit. Tap a player</small></button>
-        <button id="goPractice" class="big tile hot2"><i class="ic">🎯</i>Training<small id="trainSub">Squad sessions, skill games, penalties and training points</small></button>
+        <button id="goPractice" class="big tile hot2"><i class="ic">🎯</i>Training<small id="trainSub">Training games that make your players better</small></button>
       </div>
       <div class="tabp" data-tab="klub" hidden>
         <button id="goClub" class="big tile hot"><i class="ic">🏟️</i>The club<small id="clubSub">Grounds, staff and finances</small></button>
@@ -1060,22 +1098,10 @@ button.setmore > span:last-child { min-width: 0; }
 
     <!-- straffe og træning -->
     <div class="card wide" id="pgPractice" hidden>
-      <div class="top"><button class="alt back" data-back>‹ Back</button><h2>Training</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
-      <div class="ow three" id="prSkill">
-        <div class="col"><div class="lbl">Penalties</div>
-          <p>5 penalties each against the computer. Aim with the joystick and tap SHOOT. In goal the joystick decides where you dive.</p>
-          <button id="bPens" class="go">Start penalties</button></div>
-        <div class="col"><div class="lbl">Skill games</div>
-          <p>5 levels in each. Stars give training points (TP) and unlock the next level.</p>
-          <div class="shoplist" id="drillList"></div></div>
-        <div class="col"><div class="lbl">Training pitch</div>
-          <p>Your team against a keeper. No clock and no opponents. Practise shots, lobs, through balls and dribbling.</p>
-          <button id="bTrain" class="go">Start training</button></div>
-        <div class="col"><div class="lbl">Test match</div>
-          <p>Against the computer with no clock. Try sprinting, tackles and passing under pressure. Does not count.</p>
-          <div class="seg" id="segTest" role="group" aria-label="Players per team in the test match"></div>
-          <button id="bTest" class="go" style="margin-top:6px">Start test match</button></div>
-      </div>
+      <div class="top"><button class="alt back" data-back>‹ Back</button><h2>Training</h2><span class="sp trleft" id="trLeft"></span></div>
+      <p class="trhow">Play a training game and your starting players get better at that skill. More stars, more effect. Players also get better from playing matches.</p>
+      <div class="trcards" id="drillList"></div>
+      <div class="trfree"><span class="lbl">Just for fun</span><button id="bPens" class="alt">Penalty shoot-out</button><button id="bTrain" class="alt">Training pitch</button><button id="bTest" class="alt">Test match</button><div class="seg" id="segTest" role="group" aria-label="Players per team in the test match" hidden></div></div>
     </div>
 
     <!-- kampopsætning: kun de valg der passer til kampen -->
@@ -1195,7 +1221,7 @@ button.setmore > span:last-child { min-width: 0; }
 
   <div class="overlay" id="squad" hidden>
     <div class="card wide">
-      <div class="top"><button class="alt back" id="sqClose">‹ Back</button><h2>The squad</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+      <div class="top"><button class="alt back" id="sqClose">‹ Back</button><h2>The squad</h2><span class="sp"></span></div>
       <div class="sqbar"><span class="chip2" id="sqTeam"></span><span class="chip2" id="sqChem"></span><div class="sqfil" id="sqFil"></div><button id="sqDrills" class="alt">Skill games ›</button></div>
       <div class="sqgrid">
         <div class="sqcards" id="sqList"></div>
@@ -1237,7 +1263,7 @@ button.setmore > span:last-child { min-width: 0; }
 
   <div class="overlay" id="abOv" hidden>
     <div class="card wide">
-      <div class="top"><button class="alt back" id="abClose">‹ Back</button><h2 id="abTitle">Pick a skill</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+      <div class="top"><button class="alt back" id="abClose">‹ Back</button><h2 id="abTitle">Pick a skill</h2><span class="coins big" data-coins>0</span></div>
       <p class="sqnote" id="abNote" style="margin-bottom:8px"></p>
       <div class="ablist" id="abList"></div>
     </div>
@@ -1441,11 +1467,11 @@ button.setmore > span:last-child { min-width: 0; }
         <div class="col mtright" id="mtLay">
           <div class="mtlay"><canvas id="mtCv" aria-label="Line-up. Tap two players to swap them, drag to move"></canvas>
             <div class="mtbcol"><div class="lbl">Bench</div><div class="mtbench" id="mtBench"></div></div>
-            <div class="mtside"><div class="mtsel" id="mtSel"></div><div class="mtacts"><button id="mtOpenB" class="go">Player details ›</button><button id="mtSwapB" class="alt" hidden>Cancel</button></div><div class="mtnone" id="mtNone"><button id="mtAuto" class="alt">Pick the best team</button><div class="lbl mtfl">Formation</div><div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start from a formation"></div><p class="mttip" id="mtLayTip"></p></div></div></div>
+            <div class="mtside"><div class="mtsel" id="mtSel"></div><div class="mtacts"><button id="mtOpenB" class="go">Player details ›</button><button id="mtSwapB" class="alt" hidden>Cancel</button></div><div class="mtnone" id="mtNone"><button id="mtAuto" class="alt">Pick the best team</button><div class="lbl mtfl">Formation</div><div class="seg mtfrom" id="mtFrom" role="group" aria-label="Start from a formation"></div><p class="mttip" id="mtLayTip"></p><div class="mtswl" id="mtSubs"></div></div></div></div>
         </div>
       </div>
       <div class="setsheet mtps" id="mtPS" hidden>
-        <div class="top"><button class="alt back" id="mtPSx" aria-label="Back">‹ Back</button><h2 id="mtPSn">Player</h2><span class="tp big"><span data-tp>0</span> TP</span></div>
+        <div class="top"><button class="alt back" id="mtPSx" aria-label="Back">‹ Back</button><h2 id="mtPSn">Player</h2><span class="coins big" data-coins>0</span></div>
         <div id="mtPan"></div>
       </div>
     </div>
@@ -1679,11 +1705,8 @@ button.setmore > span:last-child { min-width: 0; }
   $('setHelp').onclick = () => { $('help').hidden = false; };
   $('goPractice').onclick = () => practiceShow();
   $('goFriendly').onclick = () => showSetup('cpu', true);
-  function practiceShow() { // ONE place for all training: squad sessions, skill games and buying training points
-    const pg = $('pgPractice');
-    if ($('clTrain').parentNode !== pg) { pg.appendChild($('clTrain')); pg.appendChild($('shopTr')); }
-    clubTrainPaint(); tpShopPaint(); paintTP(); page('pgPractice');
-    subTabs(pg, [['Squad sessions', ['clTrain']], ['Skill games', ['prSkill']], ['Training points', ['shopTr']]], 'train', $('clTrain'));
+  function practiceShow() { // ONE place for all training: training games that make the starters better
+    drillList(); page('pgPractice');
   }
   const cleanName = v => String(v || '').replace(/[^\p{L}\p{N} ._-]/gu, '').trim().slice(0, 12);
   $('name').value = cfg.name || '';
@@ -2045,7 +2068,7 @@ button.setmore > span:last-child { min-width: 0; }
   const guideSteps = () => [
     ['kamp', 'Play your first match against the computer', 50, 'spil', 'bCpu', () => loadProf().games >= 1],
     ['hold', 'Open The team and tap one of your players', 30, 'hold', 'goMine', null],
-    ['train', 'Train a player: spend your TP under Training', 30, 'hold', 'goMine', null],
+    ['train', 'Pick a training focus for one of your players', 30, 'hold', 'goMine', null],
     ['cap', 'Pick a captain under the Role tab', 30, 'hold', 'goMine', () => !!squadLoad().cap],
     ['byg', 'Build your first building on the club grounds', 150, 'klub', 'goClub', () => Object.values(clubLoad().f).some(v => v > 0)],
     ['scout', 'Send the scout out for a new player', 50, 'klub', 'goMarket', () => !!mktLoad().sc],
@@ -2084,7 +2107,7 @@ button.setmore > span:last-child { min-width: 0; }
         if (!tr && ctw) $('holdSub').textContent = `${ctw} contract${ctw > 1 ? 's' : ''} expires soon. Tap the player and extend under Form`;
         $('goMine').classList.toggle('dot', !!(tr || ctw)); $('goClub').classList.toggle('dot', !!Cl.y); $('goMarket').classList.toggle('dot', scHome);
         { const b = document.querySelector('#tabbar [data-t="hold"]'); if (b) b.classList.toggle('dot', !!(tr || ctw)); const b2 = document.querySelector('#tabbar [data-t="klub"]'); if (b2) b2.classList.toggle('dot', !!(Cl.y || scHome)); }
-        { const tl = trainLeft(clubLoad()); $('trainSub').textContent = tl ? `${tl} squad sessions left today · ${Sq.tp | 0} TP to spend` : `${Sq.tp | 0} TP to spend on your players · skill games and penalties`; }
+        { const tl = trainLeft(clubLoad()); const tn = TRAIN_DAY - trainToday(); $('trainSub').textContent = tn > 0 ? `${tn} of ${TRAIN_DAY} training games count today. They make your players better` : 'Training done for today. Players also get better in matches'; }
         const Mk = mktLoad(), dl = Mk.l.find(c => c.deal); $('mktSub').textContent = scHome ? 'The scout is back with his finds' : Mk.l.length ? `${Mk.l.length} players today` + (dl ? ` · offer: ${dl.n.split(' ').slice(-1)[0]} (${ovr(dl)}) for ${dl.pr}` : '') : 'Sold out today. New players tomorrow'; }
       $('freeSub').textContent = S.free.length ? `${S.free.length} pack${S.free.length > 1 ? 's' : ''} ready to open!` : 'From the season pass and daily rewards';
       $('goFree').classList.toggle('hot', !!S.free.length);
@@ -3031,8 +3054,8 @@ button.setmore > span:last-child { min-width: 0; }
     bt.textContent = '';
     const r = document.createElement('span'); r.className = 'mr'; r.textContent = top.v.toFixed(1);
     const t = document.createElement('span'); t.className = 'mt'; t.textContent = top.p.sq + (top.p.ab && top.p.ab.length ? ' ' + abIcons(top.p) : '');
-    const mine = top.p.team === 0 && top.p.sqi >= 0 && (mode === 'cpu' || comp); if (mine) addTP(5); // your own man was the best on the pitch: a little extra to train for
-    const sm = document.createElement('small'); sm.textContent = `⭐ Player of the match${did ? ' · ' + did : ''}${mine ? ' · +5 TP' : ''}`; t.appendChild(sm);
+    const mine = top.p.team === 0 && top.p.sqi >= 0 && (mode === 'cpu' || comp); 
+    const sm = document.createElement('small'); sm.textContent = `⭐ Player of the match${did ? ' · ' + did : ''}`; t.appendChild(sm);
     const g = document.createElement('span'); g.className = 'mg'; g.textContent = 'Ratings ›';
     bt.append(r, t, g); bt.hidden = false;
     let marks = false;
@@ -5411,16 +5434,16 @@ button.setmore > span:last-child { min-width: 0; }
     if (coOut) { coOut.c = Math.max(0, coins); coOut.tp = tp; }
     if (eco) extra = `${eco.att.toLocaleString('en')} fans · prize +${eco.p}, gate +${eco.g}` + (eco.s ? `, sponsors +${eco.s}` : '') + (eco.m ? `, shop +${eco.m}` : '') + (eco.tv ? `, TV +${eco.tv}` : '') + `, wages −${eco.w}` + (eco.u ? `, upkeep −${eco.u}` : '') + (eco.ln ? `, loan −${eco.ln}` : '') + (eco.loanEnd ? '. The loan is paid off' : '') + (eco.short ? '. There was not enough for all the wages: morale drops' : '') + (eco.spEnd ? '. The sponsor deal has ended: pick a new one under The club' : '') + (extra ? ' · ' + extra : '');
     if (own && friendly) extra = 'Friendly: no prize and no wages' + (extra ? ' · ' + extra : '');
-    rw.textContent = `${coins >= 0 ? '+' : '−'}${Math.abs(coins)} coins` + (tp ? ` · +${tp} TP` : '') + (got.length ? ` · New trophy: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
+    rw.textContent = `${coins >= 0 ? '+' : '−'}${Math.abs(coins)} coins` + (got.length ? ` · New trophy: ${got.map(troName).join(', ')}` : '') + (extra ? ` · ${extra}` : '');
     rw.hidden = false;
   }
 
   // ----- training challenges: every try is a new situation, stars for how well you do ('mf-drills') -----
   const DRILLS = {
-    shots: { n: 'Finishing', tries: 10, stars: [3, 5, 7], txt: '10 different finishes: free shots, crosses, a defender on your back, one on one with the keeper' },
-    corner: { n: 'Corner', tries: 8, stars: [2, 4, 6], txt: '8 corners: put it on a teammate\'s head. More defenders each time' },
-    pens: { n: 'Penalty', tries: 10, stars: [5, 7, 9], txt: '10 penalties. The keeper gets better with every kick' },
-    cones: { n: 'Dribbling', tries: 1, stars: [32, 24, 18], time: true, txt: 'Dribble through the gates in order and score. As fast as you can' },
+    shots: { k: 'sht', n: 'Finishing', tries: 10, stars: [3, 5, 7], txt: '10 different finishes: free shots, crosses, a defender on your back, one on one with the keeper' },
+    corner: { k: 'pas', n: 'Crossing', tries: 8, stars: [2, 4, 6], txt: '8 corners: put it on a teammate\'s head. More defenders each time' },
+    pens: { k: 'sht', n: 'Penalties', tries: 10, stars: [5, 7, 9], txt: '10 penalties. The keeper gets better with every kick' },
+    cones: { k: 'spd', n: 'Dribbling', tries: 1, stars: [32, 24, 18], time: true, txt: 'Dribble through the gates in order and score. As fast as you can' },
   };
   // the shooting situations, mixed differently every time you play
   const SHOT_SC = [
@@ -5428,6 +5451,7 @@ button.setmore > span:last-child { min-width: 0; }
     ['angle', 'Tight angle'], ['oneone', 'One on one with the keeper'], ['wall', 'Past the defender'], ['volley', 'Pass from the middle'],
   ];
   let drill = null, drillAgain = null;
+  const SKN = { sht: 'Shots', pas: 'Passing', spd: 'Pace', def: 'Defence' };
   const drillLoad = () => { try { return JSON.parse(localStorage.getItem('mf-drills') || '{}') || {}; } catch (_) { return {}; } };
   const starStr = n => '★'.repeat(n) + '☆'.repeat(3 - n);
   // skill games: every drill has 5 levels; a star on a level opens the next one, which is harder (keeper, defenders, time)
@@ -5438,12 +5462,17 @@ button.setmore > span:last-child { min-width: 0; }
   function drillList() {
     const box = $('drillList'); if (!box) return; box.textContent = '';
     const D = drillLoad();
+    { const left = TRAIN_DAY - (D._d === dayNo() ? D._n | 0 : 0), el = $('trLeft'); if (el) el.textContent = left > 0 ? `${left} of ${TRAIN_DAY} training games count today` : 'Training done for today'; }
     for (const [id, d] of Object.entries(DRILLS)) {
-      const lv = drillLv(D, id);
-      const b = document.createElement('button'); b.className = 'alt drill';
-      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = `${d.n} · level ${lv}/${DRILL_MAX}`;
+      if (id.startsWith('_')) continue; const lv = drillLv(D, id);
+      const b = document.createElement('button'); b.className = 'alt trcard';
+      const ic = document.createElement('i'); if (window.mfIco) ic.innerHTML = window.mfIco({ shots: 'goal', corner: 'swap', pens: 'target', cones: 'cone' }[id] || 'ball');
+      const tr = document.createElement('small'); tr.className = 'trk'; tr.textContent = 'Trains ' + SKN[d.k].toLowerCase();
+      const nm = document.createElement('b'); nm.textContent = d.n;
+      const lvl = document.createElement('small'); lvl.textContent = `Level ${lv} of ${DRILL_MAX}`;
       const st = document.createElement('span'); st.className = 'st'; st.textContent = starStr(drillStars(D, id, lv));
-      b.title = d.txt; b.append(nm, st);
+      const tx = document.createElement('small'); tx.className = 'trtx'; tx.textContent = d.txt;
+      b.append(ic, tr, nm, tx, lvl, st);
       b.onclick = () => startDrill(id, lv);
       box.appendChild(b);
     }
@@ -5596,13 +5625,18 @@ button.setmore > span:last-child { min-width: 0; }
     const all = drillLoad(), old = all[d.id] || { s: 0, b: timed ? 999 : 0 };
     const was = drillStars(all, d.id, lv);
     const newStars = Math.max(0, st - was), coins = newStars * 20 + (st === 3 && was < 3 ? 30 : 0);
-    const tp = newStars * 6 * lv + st * 2; // training points: a lot for new stars, a little for every star
     const best = timed ? Math.min(old.b || 999, score) : Math.max(old.b || 0, score);
     const opened = st >= 1 && lv === drillLv(all, d.id) && lv < DRILL_MAX;
     all[d.id] = { s: Math.max(old.s || 0, lv === 1 ? st : 0), b: best, lv: Math.max(drillLv(all, d.id), opened ? lv + 1 : 1), st: Object.assign({}, old.st, { [lv]: Math.max(was, st) }) };
+    let trMsg = ''; // the training effect: the first games each day make the starting players better at this skill
+    if (st > 0) {
+      const used = all._d === dayNo() ? all._n | 0 : 0;
+      if (used < TRAIN_DAY) { all._d = dayNo(); all._n = used + 1; const ups = squadTrain(D.k, [0, 0.4, 0.7, 1.1][st] * (1 + 0.12 * (lv - 1)));
+        trMsg = `${SKN[D.k]} trained` + (ups.length ? `: ${ups.slice(0, 4).join(', ')}${ups.length > 4 ? ` +${ups.length - 4}` : ''}` : ' (it shows after a few sessions)'); }
+      else trMsg = 'No more training effect today. Come back tomorrow';
+    }
     try { localStorage.setItem('mf-drills', JSON.stringify(all)); } catch (_) {}
     if (coins) addCoins(coins);
-    if (tp) addTP(tp);
     drill = null;
     finish();
     $('endTitle').textContent = `${D.n} level ${lv}: ${starStr(st)}`;
@@ -5614,7 +5648,7 @@ button.setmore > span:last-child { min-width: 0; }
       $('fh').textContent = d.goals; $('fa').textContent = D.tries;
       $('endMsg').textContent = `You scored ${d.goals} of ${D.tries}. ${st < 3 ? `Next star at ${Dn.stars[st]} goals.` : 'All three stars!'} Best: ${best}.`;
     }
-    const rw = $('endReward'); rw.textContent = (tp ? `+${tp} TP` : '') + (coins ? ` · +${coins} coins for new stars` : '') + (opened ? ` · Level ${lv + 1} is unlocked!` : '') || 'No stars this time'; rw.hidden = false;
+    const rw = $('endReward'); rw.textContent = [trMsg, coins ? `+${coins} coins for new stars` : '', opened ? `Level ${lv + 1} is unlocked!` : ''].filter(Boolean).join(' · ') || 'No stars this time, so no training effect'; rw.hidden = false;
     $('again').hidden = false; $('again').textContent = opened ? `Level ${lv + 1} ›` : 'Try again';
     drillAgain = [d.id, opened ? lv + 1 : lv];
     drillList();
@@ -6160,7 +6194,7 @@ button.setmore > span:last-child { min-width: 0; }
     kat: { n: 'The cat', i: '🐱', d: 'Lightning reflexes: dives for more shots.', pos: ['MV'] },
     straf: { n: 'Penalty killer', i: '🧤', d: 'Saves more penalties and close-range shots.', pos: ['MV'] },
   };
-  const AB_SLOT2 = 70, AB_COST = [25, 60], AB_SWAP = 15; // rating that opens the second place, TP to learn, TP to swap
+  const AB_SLOT2 = 70, AB_COST = [150, 400], AB_SWAP = 100; // rating that opens the second place, coins to learn, coins to swap
   const abOf = p => (p && Array.isArray(p.ab) ? p.ab.filter(a => ABIL[a]).slice(0, 2) : []);
   const hasAb = (p, a) => !!(p && p.ab && p.ab.indexOf(a) >= 0);
   const abFor = pos => Object.keys(ABIL).filter(a => ABIL[a].pos.includes(pos));
@@ -6221,11 +6255,12 @@ button.setmore > span:last-child { min-width: 0; }
   }
   function squadLoad() {
     let S = null; try { S = JSON.parse(localStorage.getItem('mf-squad') || 'null'); } catch (_) {}
+    if (S && Array.isArray(S.pl) && S.pl.length >= 11 && S.tp > 0) { const c = Math.round(S.tp * 2); S.tp = 0; squadSave(S); try { addCoins(c); } catch (_) {} } // TP left from before become coins
     if (S && Array.isArray(S.pl) && S.pl.length >= 11) { for (const p of S.pl) { if (!p.nat) p.nat = 'DK'; if (!p.age) p.age = 19 + nameH(p.n) % 12; } if (!S.abv) { abStart(S); squadSave(S); } squadTick(S); return S; }
     // a new squad; training bought the old way (the whole team, 0-10) is carried over to every player
     const old = myLv(), fn = shuffle(FIRSTN.slice()), ln = shuffle(LASTN.slice());
     const base = { MV: [48, 40, 52, 58], FO: [52, 42, 50, 58], MB: [53, 50, 58, 48], AN: [57, 58, 50, 42] };
-    S = { tp: 20, pl: SQ_POS.map((pos, i) => {
+    S = { tp: 0, pl: SQ_POS.map((pos, i) => {
       const b = base[pos], j = () => Math.floor(Math.random() * 7) - 3, p = { n: `${fn[i]} ${ln[i]}`, pos, nat: 'DK' };
       SKILLS.forEach(([k], x) => { p[k] = Math.max(40, Math.min(99, b[x] + j() + Math.round((old[k] || 0) * 4.5))); });
       return p;
@@ -6242,7 +6277,7 @@ button.setmore > span:last-child { min-width: 0; }
     }
   }
   function squadSave(S) { try { localStorage.setItem('mf-squad', JSON.stringify(S)); } catch (_) {} }
-  function addTP(n) { const S = squadLoad(); S.tp = Math.max(0, (S.tp || 0) + (n | 0)); squadSave(S); paintTP(S); return S.tp; }
+  function addTP() { return 0; } // training points are gone: players get better from matches and training games
   function paintTP(S) { const t = (S || squadLoad()).tp; document.querySelectorAll('[data-tp]').forEach(e => { e.textContent = t; }); }
   // the line-up for n a side: the keeper plus the best-rated outfield players, back to front
   // positions (as in football games): every man has his own place (VB, CB, HB, VM, CM, HM, VK, ANG, HK), within his line
@@ -6356,6 +6391,18 @@ button.setmore > span:last-child { min-width: 0; }
     squadSave(S);
     return ups;
   }
+  const TRAIN_DAY = 3; // training games that count each day
+  function trainToday() { const D = drillLoad(); return D._d === dayNo() ? D._n | 0 : 0; }
+  function squadTrain(k, amt) { // a training game: the starting players get better at one skill (more for the ones with it as focus)
+    const S = squadLoad(), n = Math.max(1, cfg.size || 7), ups = [];
+    for (const i of xiFor(n, S)) {
+      const pl = S.pl[i]; if (!pl) continue; const gx = pl.gx = pl.gx || {};
+      gx[k] = (gx[k] || 0) + amt * (pl.fo === k ? 1.6 : 1) / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 1.5 : 1);
+      const v0 = pl[k]; while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; } if (pl[k] > v0) ups.push(`${pl.n.split(' ').slice(-1)[0]} ${pl[k]}`);
+      gx[k] = Math.round(gx[k] * 100) / 100;
+    }
+    squadSave(S); return ups;
+  }
   function squadGrow() {
     const S = squadLoad(), ups = [];
     for (const p of P.concat(subOut.map(o => ({ team: o.team, sqi: o.sqi, ms: o.ms })))) { // the men who were subbed off grow from their part too
@@ -6363,6 +6410,8 @@ button.setmore > span:last-child { min-width: 0; }
       const pl = S.pl[p.sqi], m = p.ms || {}, gx = pl.gx = pl.gx || {};
       const g = { sht: (m.g || 0) * 0.5 + Math.min(m.sh || 0, 8) * 0.1, pas: Math.min(m.pa || 0, 25) * 0.035, def: Math.min(m.tk || 0, 8) * 0.22, spd: Math.min(m.spr || 0, 60) * 0.01 };
       g[POSMAIN[pl.pos]] += 0.25;
+      if (pl.fo && g[pl.fo] != null) g[pl.fo] = g[pl.fo] * 1.6 + 0.15; // his training focus
+      if (friendly) for (const k in g) g[k] *= 1.5; // a friendly is a match played to develop the players
       for (const [k, nm] of SKILLS) {
         gx[k] = (gx[k] || 0) + g[k] / (1 + Math.max(0, pl[k] - 60) / 15) * (1 + 0.1 * facLv('tr') + 0.08 * stLv('tr')) * (pl.pot && ovr(pl) < pl.pot ? 2 : 1); // a better training ground, and a talent who has not reached his potential, grow faster
         while (gx[k] >= 1 && pl[k] < 99) { gx[k] -= 1; pl[k]++; ups.push(`${pl.n.split(' ')[1] || pl.n} ${nm} ${pl[k]}`); }
@@ -6401,7 +6450,7 @@ button.setmore > span:last-child { min-width: 0; }
   }
   // ---------- the club's facilities (as in Top Eleven): build them up with coins, each one helps a little every day ----------
   const FAC = {
-    tr: { n: 'Training facility', i: '🏋️', d: l => `+${l * 10} % TP from matches, and the players develop ${l * 10} % faster` },
+    tr: { n: 'Training facility', i: '🏋️', d: l => `The players develop ${l * 10} % faster in matches and training` },
     kl: { n: 'Clinic', i: '🩺', d: l => `Form comes back ${l * 25} % faster, massage gives +${30 + l * 5}` },
     ak: { n: 'Youth academy', i: '🌱', d: l => (l ? `A new talent every ${AK_DAYS[l]}. day` + (l > 1 ? `, with higher potential` : '') : 'No talents yet') },
     fan: { n: 'Fan shop', i: '🧣', d: l => `+${l * 8} % coins from every match` },
@@ -7184,19 +7233,17 @@ button.setmore > span:last-child { min-width: 0; }
     $('sqStats').hidden = sqTab !== 0; $('sqAb').hidden = sqTab !== 1; $('sqForm').hidden = sqTab !== 2; $('sqRole').hidden = sqTab !== 3;
     const box = $('sqStats'); box.textContent = '';
     for (const [k, name] of SKILLS) {
-      const v = p[k], price = tpPrice(v), r = document.createElement('div'); r.className = 'strow';
+      const v = p[k], r = document.createElement('div'); r.className = 'strow' + (p.fo === k ? ' fo' : '');
       const b = document.createElement('span'); b.textContent = p.pos === 'MV' && k === 'def' ? 'Reflexes' : k === 'pas' ? 'Passing' : name;
       const bar = document.createElement('div'); bar.className = 'lvbar'; const f = document.createElement('i'); f.style.width = Math.round((v - 40) / 59 * 100) + '%'; bar.appendChild(f);
       const val = document.createElement('b'); val.textContent = v;
-      const bt = document.createElement('button'); bt.textContent = v >= 99 ? 'Max' : `+1 · ${price} TP`; bt.disabled = v >= 99; if (S.tp < price) bt.className = 'alt';
-      bt.onclick = () => {
-        const S2 = squadLoad(), q = S2.pl[sqSel];
-        if (S2.tp < price) { bt.textContent = `Need ${price - S2.tp}`; return; }
-        S2.tp -= price; q[k] = Math.min(99, q[k] + 1); squadSave(S2); sfx.win(); guideHit('train'); sqRefresh();
+      const fo = p.fo === k, bt = document.createElement('button'); bt.textContent = fo ? '✓ Focus' : 'Focus'; bt.className = fo ? '' : 'alt'; bt.setAttribute('aria-pressed', String(fo));
+      bt.onclick = () => { // his training focus: this skill grows faster in matches and training games
+        const S2 = squadLoad(), q = S2.pl[sqSel]; if (q.fo === k) delete q.fo; else q.fo = k; squadSave(S2); sfx.kick(0.3); guideHit('train'); sqRefresh();
       };
       r.append(b, bar, val, bt); box.appendChild(r);
     }
-    { const h = document.createElement('p'); h.className = 'sqnote'; h.textContent = 'You get TP in matches and skill games. Players also develop by playing.'; box.appendChild(h); }
+    { const h = document.createElement('p'); h.className = 'sqnote'; h.textContent = 'Players get better by playing matches and training games. Pick a focus and that skill grows faster.'; box.appendChild(h); }
     { // form and humør: what he brings into the next match
       const FB = $('sqForm'); FB.textContent = '';
       const f = Math.round(fitOf(p)), m = Math.round(morOf(p));
@@ -7243,7 +7290,7 @@ button.setmore > span:last-child { min-width: 0; }
         const ic = document.createElement('i'), tx = document.createElement('span'), sm = document.createElement('small');
         ic.textContent = a ? ABIL[a].i : lock ? '🔒' : '＋';
         tx.textContent = a ? ABIL[a].n : lock ? 'Skill 2' : 'Learn a skill';
-        sm.textContent = a ? 'Tap to see or change' : lock ? (o < AB_SLOT2 ? `Opens at rating ${AB_SLOT2}` : 'Learn the first one first') : `${AB_COST[k]} TP`;
+        sm.textContent = a ? 'Tap to see or change' : lock ? (o < AB_SLOT2 ? `Opens at rating ${AB_SLOT2}` : 'Learn the first one first') : `${AB_COST[k]} coins`;
         tx.appendChild(sm); bt.append(ic, tx);
         bt.onclick = () => { if (!lock) abPick(sqSel, k); };
         A.appendChild(bt);
@@ -7288,7 +7335,7 @@ button.setmore > span:last-child { min-width: 0; }
     const S = squadLoad(), p = S.pl[i]; if (!p) return;
     const ab = abOf(p), cur = ab[k], price = cur ? AB_SWAP : AB_COST[k], L = $('abList'); L.textContent = '';
     $('abTitle').textContent = cur ? 'Change skill' : 'Learn a skill';
-    $('abNote').textContent = `${p.n} · ${POS[p.pos]} · ` + (cur ? `Has ${ABIL[cur].n}. A different skill instead costs ${AB_SWAP} TP.` : `A skill costs ${price} TP and stays with him. You feel it in matches against the computer, in the career and the cup.`);
+    $('abNote').textContent = `${p.n} · ${POS[p.pos]} · ` + (cur ? `Has ${ABIL[cur].n}. A different skill instead costs ${AB_SWAP} coins.` : `A skill costs ${price} coins and stays with him. You feel it in matches against the computer, in the career and the cup.`);
     for (const a of abFor(p.pos)) {
       const bt = document.createElement('button'), A = ABIL[a], other = ab.includes(a) && a !== cur; bt.className = 'alt';
       const ic = document.createElement('i'), b = document.createElement('b'), sm = document.createElement('small');
@@ -7297,13 +7344,13 @@ button.setmore > span:last-child { min-width: 0; }
       bt.onclick = () => {
         if (a === cur) { $('abOv').hidden = true; return; }
         const S2 = squadLoad(), q = S2.pl[i];
-        if (S2.tp < price) { sm.textContent = `Need ${price - S2.tp} TP. Play matches or skill games.`; return; }
-        S2.tp -= price; const nb = abOf(q); nb[k] = a; q.ab = nb.filter(Boolean); squadSave(S2); sfx.win(); buzz(30);
+        const pr2 = loadProf(); if (pr2.coins < price) { sm.textContent = `Need ${price - pr2.coins} more coins.`; return; }
+        addCoins(-price); const nb = abOf(q); nb[k] = a; q.ab = nb.filter(Boolean); squadSave(S2); sfx.win(); buzz(30);
         $('abOv').hidden = true; sqRefresh();
       };
       L.appendChild(bt);
     }
-    paintTP(S); $('abOv').hidden = false;
+    paintCoins(); $('abOv').hidden = false;
   }
   function squadInit() {
     $('goClub').onclick = clubShow; $('clClose').onclick = () => { $('clubOv').hidden = true; hubPaint(); };
@@ -7649,15 +7696,31 @@ button.setmore > span:last-child { min-width: 0; }
     const who = mtSel >= 0 ? S.pl[xi[mtSel]] : mtSelB >= 0 ? S.pl[mtSelB] : null;
     const sb = $('mtSwapB'); sb.hidden = !who; sb.onclick = () => { mtSel = mtSelB = -1; mtArm = false; mtPaintSide(); mtDraw(); };
     $('mtOpenB').hidden = !who; $('mtNone').hidden = !!who;
+    { const SB = $('mtSubs'); SB.textContent = ''; if (!who) { const h = document.createElement('div'); h.className = 'lbl'; h.textContent = 'Bench'; SB.appendChild(h);
+      S.pl.map((q, i) => ({ q, i })).filter(x => !on.has(x.i)).sort((a, b) => ovr(b.q) - ovr(a.q)).forEach(({ q, i }) => { const b = document.createElement('button'); b.className = 'alt mtswr';
+        b.innerHTML = `<b class="o">${ovr(q)}</b><span class="ps">${DPOSS_(dpOf(q))}</span><span class="n"></span><small>Tap to bring him on</small>`; b.querySelector('.n').textContent = q.n; b.onclick = () => mtBenchTap(i); SB.appendChild(b); }); } }
     $('mtOpenB').onclick = () => { $('mtPS').hidden = false; $('mtPS').scrollTop = 0; };
     $('mtPSx').onclick = () => { $('mtPS').hidden = true; mtPaintSide(); mtDraw(); };
     sqHome('mt'); $('mtPan').hidden = !who; if (!who) $('mtPS').hidden = true;
     if (who) {
       sqSel = S.pl.indexOf(who); sqPanelPaint(); guideHit('hold'); $('mtPSn').textContent = who.n;
       const o = ovr(who), hd = document.createElement('div'); hd.className = 'mtwho';
-      hd.innerHTML = `<span class="face">${faceSVG(who)}</span><span><b>${who.n}</b><small>${DPOSN[dpOf(who)]} · rating ${o} · form ${fitOf(who)}</small></span>`; sel.appendChild(hd);
-      const t = document.createElement('p'); t.className = 'mthint'; t.textContent = `Tap another player, on the pitch or the bench, to swap him with ${who.n.split(' ').slice(-1)[0]}.` + (mtSel >= 0 ? ' A green edge means he fits the spot.' : ''); sel.appendChild(t);
+      hd.innerHTML = `<span class="face">${faceSVG(who)}</span><span class="mwt"><b>${who.n}</b><small>${DPOSN[dpOf(who)]} · rating ${o}</small></span><button class="go mwd">Details ›</button><button class="alt mwx" aria-label="Close">✕</button>`; sel.appendChild(hd);
+      hd.querySelector('.mwd').onclick = () => $('mtOpenB').onclick(); hd.querySelector('.mwx').onclick = () => $('mtSwapB').onclick();
       if (mtSel >= 0) { const sp = slotPos(L[mtSel], mtSel, mtN); if (sp !== dpOf(who)) { const w = document.createElement('div'); w.className = 'warn'; w.textContent = `Playing ${DPOSN[sp].toLowerCase()} here: ${fitOvr(who, sp)} instead of ${o}`; sel.appendChild(w); } }
+      // who can take his place: everyone else, best for this spot first. One tap swaps them.
+      const lh = document.createElement('div'); lh.className = 'lbl'; lh.textContent = mtSel >= 0 ? 'Swap with' : 'Bring him on for'; sel.appendChild(lh);
+      const list = document.createElement('div'); list.className = 'mtswl';
+      const sn = q => q.n.split(' ').slice(-1)[0], rows = [];
+      if (mtSel >= 0) { const sp = slotPos(L[mtSel], mtSel, mtN);
+        S.pl.forEach((q, i) => { if (q === who) return; const slot = xi.indexOf(i); rows.push({ q, r: fitOvr(q, sp), fit: dpOf(q) === sp, tag: slot >= 0 ? 'On the pitch' : 'Bench', go: () => (slot >= 0 ? mtTap(slot) : mtBenchTap(i)) }); }); }
+      else xi.forEach((i, j) => { const q = S.pl[i]; if (!q) return; const sp = slotPos(L[j], j, mtN); rows.push({ q, r: fitOvr(q, sp), gain: fitOvr(who, sp) - fitOvr(q, sp), fit: dpOf(who) === sp, tag: `${sn(who)} would be ${fitOvr(who, sp)} here`, go: () => mtTap(j) }); });
+      rows.sort((a, b) => (b.gain != null ? b.gain - a.gain : b.r - a.r)).slice(0, 24).forEach(x => {
+        const b = document.createElement('button'); b.className = 'alt mtswr' + (x.fit ? ' fit' : '');
+        b.innerHTML = `<b class="o">${x.r}</b><span class="ps">${DPOSS_(dpOf(x.q))}</span><span class="n"></span><small>${x.tag}</small>`;
+        b.querySelector('.n').textContent = x.q.n; b.onclick = x.go; list.appendChild(b);
+      });
+      sel.appendChild(list);
     }
     sel.hidden = !who;
     const B = $('mtBench'); B.textContent = '';
@@ -7687,7 +7750,7 @@ button.setmore > span:last-child { min-width: 0; }
       b.onclick = () => { loadMT().lay[mtN] = f.map(q => q.slice()); saveMT(); setMyForm(mtN, CUST); mtFrom(); mtDraw(); };
       el.appendChild(b);
     });
-    $('mtLayTip').textContent = 'Tap a player to pick him, then tap another to swap them. Drag a player to move his spot. Red position text: he is out of position.';
+    $('mtLayTip').textContent = 'Tap a player on the pitch to change him. Drag him to move his spot.';
   }
   function mtDraw() {
     const c = $('mtCv'), mt = loadMT();
