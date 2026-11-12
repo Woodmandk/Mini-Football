@@ -3527,7 +3527,7 @@ table.st tr.fr td { color: var(--gold); }
     ball.vx = vx; ball.vy = vy; p.nopick = nopick; p.charging = false; p.hold = 0; p.pending = 0; p.pendB = 0; p.chB = false; p.holdB = 0; p.chE = false; p.holdE = 0; p.frozen = 0; p.hands = 0;
     ball.spinT = 0;
     if (setp) { if (ball.rs === 'corner') { ball.safe = 0.7; ball.safeT = setp.team; } setp = null; guard = 0.25; } // the set piece is taken: play on
-    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.kicker = isHuman(p) ? p.i : -1; ball.kickAt = performance.now(); // co-op: who kicked it, so the OTHER person gets the man who receives it
+    ball.lastTeam = p.team; ball.lastIdx = p.i; ball.kicker = isHuman(p) ? p.i : -1; ball.kickAt = performance.now(); p.relT = 0.5; // co-op: who kicked it, so the OTHER person gets the man who receives it
   }
   // FINTE (Avanceret styring): a quick cut, like a step-over. The way you push the stick picks the side; with the stick
   // pointing straight on (or let go) he cuts away from the nearest defender. A defender right in front may buy it and stumble
@@ -3837,6 +3837,14 @@ table.st tr.fr td { color: var(--gold); }
     if (near && stats) stats.sh[p.team]++;
     if (near) flash = { text: 'Header!', t: 0.7 };
     tone(180, 0.07, 'triangle', 0.12, -60);
+  }
+  // nothing of theirs to tackle: a team-mate has the ball, our own pass/cross is on its way with no opponent on it, or I kicked it a moment ago
+  function noTackle(p) {
+    if (p.relT > 0) return true;
+    const o = owner();
+    if (o) return o.team === p.team;
+    if (!(ball.last && ball.last.team === p.team)) return false;
+    return !P.some(q => on(q) && q.team !== p.team && dBall(q) < 70);
   }
   function startTackle(p) {
     if (p.tcd > 0 || p.tackle > 0 || p.recover > 0) return;
@@ -4961,7 +4969,7 @@ table.st tr.fr td { color: var(--gold); }
         }
       }
       p.stun = Math.max(0, p.stun - dt); p.recover = Math.max(0, p.recover - dt);
-      if (p.shT > 0) { p.shT -= dt; if (p.shT <= 0) p.shc = 0; } p.tcd -= dt; p.swcd -= dt; if (p.asw > 0) p.asw -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
+      if (p.shT > 0) { p.shT -= dt; if (p.shT <= 0) p.shc = 0; } p.tcd -= dt; if (p.relT > 0) p.relT -= dt; p.swcd -= dt; if (p.asw > 0) p.asw -= dt; p.nopick -= dt; p.cd -= dt; p.recv -= dt; if (p.heavy > 0) p.heavy -= dt;
       const has = ball.owner === p.i;
       const mag = Math.hypot(inp.x, inp.y);
       p.sprint = (inp.adv ? !!inp.c : (inp.sprint || mag > 0.97)) && p.stamina > 0.04 && mag > 0.2 && p.tackle <= 0;
@@ -5099,6 +5107,7 @@ table.st tr.fr td { color: var(--gold); }
         if (aDown && ownBall && dBall(p) < 320) p.ftArm = 2.5;
         if (p.ftArm > 0) { p.ftArm -= dt; if (!ownBall) p.ftArm = 0; else if (ball.z < 90 && dBall(p) < REACH + 28) { p.ftArm = 0; firstTime(p, inp); } }
         if (aDown && ownBall && dBall(p) < 320) { /* armed for a first-time finish, no tackle */ }
+        else if (aDown && !isKeeper(p) && noTackle(p)) { /* Daniel 2026-11-12: a second press right after your own pass or cross, or while a team-mate (your co-op partner) has it, is never a slide */ }
         else if (aDown && !(p.frozen > 0) && !(p.dive > 0)) {
           const o = owner(), d = o && o.team !== p.team ? Math.hypot(o.x - p.x, o.y - p.y) : 1e9;
           if (isKeeper(p) && inBox(p.team, p.x, p.y)) manualDive(p, inp);
