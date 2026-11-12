@@ -116,6 +116,7 @@ func build() -> void:
 	_goal(false)
 	_stands()
 	_boards()
+	_flags()
 	_floodlights()
 
 func _env() -> void:
@@ -350,6 +351,14 @@ func _boards() -> void:
 			l2.position = Vector3(sx * (HL + 4.2) - sx * 0.14, 0.5, z)
 			l2.rotation_degrees = Vector3(0, -90.0 * sx, 0)
 			add_child(l2)
+
+func _flags() -> void:
+	var pole := _mat(Color(0.95, 0.95, 0.95), 0.5)
+	var cloth := _mat(Color(1.0, 0.85, 0.15), 0.8)
+	for sx in [-1.0, 1.0]:
+		for sz in [-1.0, 1.0]:
+			_box(Vector3(0.05, 1.6, 0.05), Vector3(sx * HL, 0.8, sz * HW), pole)
+			_box(Vector3(0.42, 0.28, 0.02), Vector3(sx * (HL - 0.22), 1.44, sz * HW), cloth)
 
 func _floodlights() -> void:
 	var steel := _mat(Color(0.3, 0.32, 0.36), 0.5)

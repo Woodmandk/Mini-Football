@@ -47,6 +47,8 @@ class Human:
 	var pass_hold := -1.0
 	var switch_cool := 0.0
 	var local := true
+	var stam := 1.0
+	var tired := false
 
 var players := []
 var teams := [[], []]
@@ -125,6 +127,7 @@ var bot_mode := ""
 var bot_t := {}
 var bstats := {"have": 0, "shots": 0, "passes": 0, "tackles": 0, "switches": 0}
 var quality := 2
+var base_scale := 1.0
 var slow_t := 0.0
 var q_applied := -1
 var demo := false
@@ -133,6 +136,7 @@ var shot_at := 0.0
 var force_goal := -1.0
 var real_t := 0.0
 var version := "dev"
+var tst := [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0}]
 var stats := {"shots": 0, "passes": 0, "tackles": 0, "outs": 0, "saves": 0, "goals": 0, "fouls": 0, "offsides": 0, "pens": 0, "cards": 0}
 
 func side(t: int) -> float:
@@ -157,6 +161,8 @@ func _ready() -> void:
 			menu_arg = a.substr(7)
 		elif a.begins_with("--bot="):
 			bot_mode = a.substr(6)
+		elif a.begins_with("--scale="):
+			base_scale = float(a.substr(8))
 		elif a.begins_with("--diff="):
 			opt_diff = int(a.substr(7))
 	if FileAccess.file_exists("res://version.txt"):
@@ -466,8 +472,18 @@ func _menu_info() -> Dictionary:
 	return {
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web,
-		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(),
+		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(),
 	}
+
+func _stat_rows() -> Array:
+	var tot: int = maxi(tst[0]["poss"] + tst[1]["poss"], 1)
+	var p0 := int(round(100.0 * tst[0]["poss"] / tot))
+	return [
+		["POSSESSION", "%d%%" % p0, "%d%%" % (100 - p0)],
+		["SHOTS", str(tst[0]["shots"]), str(tst[1]["shots"])],
+		["SAVES", str(tst[0]["saves"]), str(tst[1]["saves"])],
+		["FOULS", str(tst[0]["fouls"]), str(tst[1]["fouls"])],
+	]
 
 func _result() -> String:
 	if score[0] == score[1]:
@@ -677,6 +693,10 @@ func _begin_match(with_intro: bool) -> void:
 	half = 1
 	kick_team = 0
 	rec.clear()
+	tst = [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0}]
+	for h in humans:
+		h.stam = 1.0
+		h.tired = false
 	hud.set_score(0, 0)
 	hud.set_clock(0)
 	hud.hide_banner()
@@ -780,6 +800,8 @@ func _kickoff(team: int) -> void:
 	hud.show_controls = screen == "match" and humans.size() > 0
 	fx("excite", 0.0)
 	snd("whistle")
+	if clock < 1.0 and half == 1:
+		fx("say", "And we are under way!")
 
 func _goal(team: int) -> void:
 	score[team] += 1
@@ -919,6 +941,7 @@ func _restart() -> void:
 
 func _foul(by, on) -> void:
 	stats["fouls"] += 1
+	tst[by.team]["fouls"] += 1
 	var pos: Vector3 = on.position
 	on.stun = 1.2
 	on.start_tackle()
@@ -1212,6 +1235,8 @@ func _play(dt: float) -> void:
 			elif e == "pass_up":
 				if h.pass_hold >= 0.0 and ball_owner == h.ctrl:
 					var m = _pass_target(h.ctrl, dir3, false)
+					if set_piece == "kick" and dir3.length() < 0.25:
+						m = _first_on(h.team, [6, 5, 7])
 					if m != null:
 						_pass(h.ctrl, m, h.pass_hold > 0.28)
 				h.pass_hold = -1.0
@@ -1271,7 +1296,13 @@ func _play(dt: float) -> void:
 			if p.recv and ball_owner == null and h.stick.length() < 0.5:
 				want = _run_to(p, aim, p.top_speed)
 			else:
-				var sp: float = p.top_speed * (1.0 if h.sprint else 0.8)
+				var run: bool = h.sprint and not h.tired and h.stick.length() > 0.3
+				h.stam = clampf(h.stam + (-0.2 if run else 0.13) * dt, 0.0, 1.0)
+				if h.stam <= 0.0:
+					h.tired = true
+				elif h.stam > 0.3:
+					h.tired = false
+				var sp: float = p.top_speed * (1.0 if run else 0.82)
 				if ball_owner == p:
 					sp *= 0.93
 				if h.charging:
@@ -1296,6 +1327,7 @@ func _play(dt: float) -> void:
 		ball.position = ball.position.lerp(tgt, clampf(dt * 22.0, 0.0, 1.0))
 		ball_vel = o.vel
 		ball_last = o
+		tst[o.team]["poss"] += 1
 		_tackles(dt)
 	else:
 		_ball_free(dt)
@@ -1561,6 +1593,7 @@ func _shoot(p, power: float, aim_z: float, err_k: float) -> void:
 	_release(p, dir * sp + Vector3(0, vy, 0))
 	shot_live = true
 	stats["shots"] += 1
+	tst[p.team]["shots"] += 1
 	fx("shake", 0.2 + 0.4 * power)
 	fx("punch", 1.5 + 3.0 * power)
 	snd("kick")
@@ -1683,6 +1716,7 @@ func _pickups() -> void:
 				ball_last = g
 				shot_live = false
 				stats["saves"] += 1
+				tst[t]["saves"] += 1
 				snd("touch")
 				snd("ooh")
 				fx("shake", 0.3)
@@ -1690,6 +1724,7 @@ func _pickups() -> void:
 			else:
 				if shot_live:
 					stats["saves"] += 1
+					tst[t]["saves"] += 1
 					snd("ooh")
 				snd("touch")
 				_give(g)
@@ -2025,6 +2060,7 @@ func _send_snap() -> void:
 	net.send({
 		"_": "s", "st": state, "t": snappedf(state_t, 0.01), "sc": score, "ck": int(clock), "p": _pack(),
 		"h": hc, "c": ch, "e": out_ev, "sr": players.find(scorer), "rp": hud.replay_on,
+		"ts": tst if state == "full" else null, "sm": snappedf(humans[1].stam, 0.02) if humans.size() > 1 else 1.0,
 	})
 	out_ev = []
 
@@ -2053,6 +2089,10 @@ func _guest_frame(dt: float) -> void:
 		if me < ch.size():
 			humans[me].charge = float(ch[me])
 		hud.show_controls = state == "play"
+		if snap.get("ts") != null:
+			tst = snap["ts"]
+		if humans.size() > me:
+			humans[me].stam = float(snap.get("sm", 1.0))
 		if state == "full" and prev != "full":
 			hud.show_menu("full", _menu_info())
 		elif state != "full" and prev == "full":
@@ -2133,6 +2173,13 @@ func _process(dt: float) -> void:
 			hud.lab_a = "SHOOT" if ours else "TACKLE"
 			hud.lab_b = "PASS" if ours else "SWITCH"
 			hud.charge = hm.charge
+			hud.stam = hm.stam
+			hud.ctrl_name = ("%d  %s" % [hm.ctrl.num, hm.ctrl.pname.to_upper()]) if hm.ctrl != null else ""
+			if state == "play" and hm.ctrl != null and ball_owner == hm.ctrl and set_piece != "pen":
+				var st2 := _stick() * view_flip
+				var tgt = _pass_target(hm.ctrl, Vector3(st2.x, 0, st2.y), false)
+				if tgt != null:
+					tgt.set_hint(Color(0.55, 0.95, 1.0))
 		_minimap()
 	crowd_au.volume_db = lerpf(crowd_au.volume_db, crowd_vol if screen == "match" else -26.0, clampf(rdt * 3.0, 0.0, 1.0))
 	_camera(rdt)
@@ -2242,11 +2289,17 @@ func _auto_quality(dt: float) -> void:
 				slow_t = 0.0
 		else:
 			slow_t = maxf(slow_t - dt, 0.0)
+	if net.web and shot_path == "":
+		var hpx: float = DisplayServer.window_get_size().y
+		var want := clampf(820.0 / maxf(hpx, 1.0), 0.5, 1.0)
+		if absf(want - base_scale) > 0.03:
+			base_scale = want
+			q_applied = -1
 	if quality != q_applied:
 		q_applied = quality
 		world.sun.shadow_enabled = quality >= 2
 		get_viewport().msaa_3d = Viewport.MSAA_2X if quality >= 2 else Viewport.MSAA_DISABLED
-		get_viewport().scaling_3d_scale = 1.0 if quality >= 1 else 0.7
+		get_viewport().scaling_3d_scale = (1.0 if quality >= 1 else 0.7) * base_scale
 		for p in players:
 			p.blob.visible = quality < 2
 
