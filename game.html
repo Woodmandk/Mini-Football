@@ -9395,13 +9395,14 @@ table.st tr.fr td { color: var(--gold); }
     else if (ball.trail.length) ball.trail.shift();
     let BL = BALLS[cfg.ball] || BALLS[0];
     if (wx === 2 && BL === BALLS[0] && state !== 'menu') BL = { c: '#ff8a1f', d: '#5a2200', tr: '255,150,60' }; // an orange winter ball, so it shows up in the snow
-    ball.trail.forEach(([x, y], i) => { ctx.fillStyle = `rgba(${BL.tr},${(i + 1) / (BL.fire ? 18 : 40)})`; ctx.beginPath(); ctx.arc(x, y, BRAD * (0.5 + i / 16), 0, Math.PI * 2); ctx.fill(); });
-    const z = Math.max(0, ball.z || 0), r = BRAD * (1 + z / 220), by = ball.y - z * 0.6;
-    ctx.fillStyle = `rgba(0,0,0,${0.3 / (1 + z / 80)})`; ctx.beginPath(); ctx.ellipse(ball.x + 2, ball.y + 3, BRAD, BRAD * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+    const DB = BRAD * 0.7; // Daniel 2026-11-12: the ball is drawn 30% smaller, in better proportion to the players (BRAD still decides how it plays)
+    ball.trail.forEach(([x, y], i) => { ctx.fillStyle = `rgba(${BL.tr},${(i + 1) / (BL.fire ? 18 : 40)})`; ctx.beginPath(); ctx.arc(x, y, DB * (0.5 + i / 16), 0, Math.PI * 2); ctx.fill(); });
+    const z = Math.max(0, ball.z || 0), r = DB * (1 + z / 220), by = ball.y - z * 0.6;
+    ctx.fillStyle = `rgba(0,0,0,${0.3 / (1 + z / 80)})`; ctx.beginPath(); ctx.ellipse(ball.x + 2, ball.y + 3, DB, DB * 0.8, 0, 0, Math.PI * 2); ctx.fill();
     // the ball rolls: its patches turn the way it travels, and the light always comes from the top left
     const now = performance.now(), bdt = Math.min(0.05, (now - (ball.rt || now)) / 1000); ball.rt = now;
     const ow = ball.owner >= 0 && P[ball.owner], rv = ow ? Math.hypot(ow.vx || 0, ow.vy || 0) : sp;
-    ball.rot = ((ball.rot || 0) + rv * bdt / (BRAD * 1.6)) % (Math.PI * 2);
+    ball.rot = ((ball.rot || 0) + rv * bdt / (DB * 1.6)) % (Math.PI * 2);
     const da = ow ? Math.atan2(ow.fy, ow.fx) : Math.atan2(ball.vy, ball.vx);
     ctx.fillStyle = BL.c; ctx.beginPath(); ctx.arc(ball.x, by, r, 0, Math.PI * 2); ctx.fill();
     ctx.save(); ctx.clip();
