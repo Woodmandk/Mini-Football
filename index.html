@@ -1089,7 +1089,7 @@ table.st tr.fr td { color: var(--gold); }
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
         <div class="logo"><span class="r">Bane</span><span class="b">bold</span></div>
-        <span class="mfver" id="mfVer">v12.11 19:21</span>
+        <span class="mfver" id="mfVer">v12.11 20:02</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
@@ -2440,7 +2440,7 @@ table.st tr.fr td { color: var(--gold); }
     const f = formOf(p), half = (PR - PL) / 2;
     return { x: p.team ? PR - f[0] * half : PL + f[0] * half, y: PT + f[1] * (PB - PT) };
   }
-  const MAXV = 180, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7, PASS_TAP = 0.16;
+  const MAXV = 196, ACC = 12, ACC_AI = 5.5, BALL_DAMP = 0.55, MAXCHARGE = 0.7, PASS_TAP = 0.16;
   const TACKLE_T = 0.38, TACKLE_V = 550;
   let TACKLE_REACH = REACH + 24;
   function setBallSize(big) { BRAD = big ? BALL_BIG : BALL_R; REACH = PRAD + BRAD; TACKLE_REACH = REACH + 24; }
@@ -3801,7 +3801,7 @@ table.st tr.fr td { color: var(--gold); }
     { const a = Math.atan2(p.fy, p.fx) + bell() * SPR.ang; p.fx = Math.cos(a); p.fy = Math.sin(a); }
     // a through ball is weighted to reach the spot about when he does (it rolls on a little further)
     // Daniel 2026-11-12: even a quick tap is a firm pass with real pace on it, never a slow roller
-    let speed = (through ? Math.max(440, Math.min(850, (d + 60) * 0.65 + 210)) : Math.max(480, Math.min(900, d * 1.1 + 340))) * 0.93 * WX().pass;
+    let speed = (through ? Math.max(470, Math.min(900, (d + 60) * 0.7 + 220)) : Math.max(510, Math.min(960, d * 1.2 + 360))) * 0.93 * WX().pass;
     if (hard) speed = Math.min(1050, speed * (1 + hard * 0.2)); // held AFLEVER: a bit more pace, but still weighted for him to take it
     const toKeeper = size > 1 && q.k === 0;
     if (toKeeper) speed = Math.min(speed, 560); // gentle back-pass
@@ -4014,7 +4014,7 @@ table.st tr.fr td { color: var(--gold); }
   function moveBody(p, inp, top, has, dt) {
     const g = WX().grip, mag = Math.min(1, Math.hypot(inp.x, inp.y)), pace = rat(p, 'spd');
     const B = bodyOf(p), agi = (0.84 + 0.1 * pace + 0.2 * rat(p, 'drb') - 0.06 * B.hN - 0.04 * B.mN) * (hasAb(p, 'tryl') ? 1.1 : 1) * (isKeeper(p) ? 1.2 : 1);
-    const accel = (300 + 230 * pace) * (1 - 0.05 * B.mN - 0.03 * B.hN) * g * (has ? 0.92 : 1) * (1 - 0.2 * tired(p)), brake = (700 + 250 * pace) * g; // Daniel 2026-11-12: as in FIFA it takes him most of a second to get up to full speed (about 0.7 s for a quick man, 1.1 s for a slow one)
+    const accel = (370 + 260 * pace) * (1 - 0.05 * B.mN - 0.03 * B.hN) * g * (has ? 0.92 : 1) * (1 - 0.2 * tired(p)), brake = (700 + 250 * pace) * g; // Daniel 2026-11-12: as in FIFA it takes him most of a second to get up to full speed (about 0.7 s for a quick man, 1.1 s for a slow one)
     const sp = Math.hypot(p.vx, p.vy);
     if (sp < 45 || p.jockey) { // on the spot, or jockeying (small side steps): footwork any way, no run-up needed
       const tx = inp.x * top, ty = inp.y * top, dx = tx - p.vx, dy = ty - p.vy, dl = Math.hypot(dx, dy);
