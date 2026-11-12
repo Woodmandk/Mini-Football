@@ -224,6 +224,11 @@ func start_dive(sd: float) -> void:
 	dive_side = sd
 	dive_n += 1
 
+func set_hint(col: Color) -> void:
+	# small arrow over the team mate a pass would go to
+	marker.visible = true
+	ring_mat.albedo_color = col
+
 func set_ring(on: bool, col: Color, arrow: bool) -> void:
 	ring.visible = on
 	marker.visible = on and arrow

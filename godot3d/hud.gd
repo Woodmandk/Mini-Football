@@ -7,6 +7,8 @@ var pass_down := false
 var sprint_down := false
 var ev := [] # queued events: "shoot_down", "shoot_up", "pass_down", "pass_up", "cam", "pause", "tap"
 var charge := 0.0
+var stam := 1.0
+var ctrl_name := ""
 var lab_a := "SHOOT"
 var lab_b := "PASS"
 var show_controls := false
@@ -463,31 +465,54 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			items.append([panel, Vector2(0, 60), 0.0])
 		"full":
 			var ft := _label("FULL TIME", 30, GOLD)
-			ft.position = Vector2(0, h * 0.5 - 150)
+			ft.position = Vector2(0, h * 0.5 - 216)
 			ft.size = Vector2(w, 40)
 			ft.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			menu.add_child(ft)
 			var sc := _label(str(info.get("score", "")), 120, Color.WHITE)
 			sc.add_theme_constant_override("outline_size", 16)
 			sc.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
-			sc.position = Vector2(0, h * 0.5 - 122)
+			sc.position = Vector2(0, h * 0.5 - 188)
 			sc.size = Vector2(w, 130)
 			sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			sc.pivot_offset = Vector2(w * 0.5, 65)
 			menu.add_child(sc)
 			var tn := _label("RED BISON", 22, Color(1.0, 0.55, 0.5), font2)
-			tn.position = Vector2(0, h * 0.5 - 76)
+			tn.position = Vector2(0, h * 0.5 - 142)
 			tn.size = Vector2(w * 0.5 - 190, 30)
 			tn.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			menu.add_child(tn)
 			var tn2 := _label("HARBOUR SHARKS", 22, Color(0.55, 0.75, 1.0), font2)
-			tn2.position = Vector2(w * 0.5 + 190, h * 0.5 - 76)
+			tn2.position = Vector2(w * 0.5 + 190, h * 0.5 - 142)
 			menu.add_child(tn2)
 			var rs := _label(str(info.get("result", "")), 40, GREEN.lightened(0.35) if str(info.get("result", "")).begins_with("YOU WIN") else Color.WHITE)
-			rs.position = Vector2(0, h * 0.5 + 14)
+			rs.position = Vector2(0, h * 0.5 - 56)
 			rs.size = Vector2(w, 50)
 			rs.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			menu.add_child(rs)
+			var srows: Array = info.get("stats", [])
+			var sy := h * 0.5 + 62.0
+			var sp := Panel.new()
+			sp.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.72), 14))
+			sp.position = Vector2(w * 0.5 - 230, sy - 8)
+			sp.size = Vector2(460, srows.size() * 24.0 + 18)
+			sp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			menu.add_child(sp)
+			for r in srows:
+				var l1 := _label(str(r[1]), 18, Color.WHITE)
+				l1.position = Vector2(w * 0.5 - 200, sy)
+				l1.size = Vector2(80, 24)
+				l1.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				menu.add_child(l1)
+				var l2 := _label(str(r[0]), 15, Color(1, 1, 1, 0.7), font2)
+				l2.position = Vector2(w * 0.5 - 100, sy + 2)
+				l2.size = Vector2(200, 24)
+				l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				menu.add_child(l2)
+				var l3 := _label(str(r[2]), 18, Color.WHITE)
+				l3.position = Vector2(w * 0.5 + 120, sy)
+				menu.add_child(l3)
+				sy += 24.0
 			if anim:
 				sc.scale = Vector2(2.6, 2.6)
 				sc.modulate.a = 0.0
@@ -496,7 +521,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				tw.tween_property(sc, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 				tw.tween_property(sc, "modulate:a", 1.0, 0.2)
 			items.append([rs, Vector2(0, 40), 0.35])
-			var by2 := h - 96.0
+			var by2 := h - 84.0
 			if str(info.get("role", "")) == "guest":
 				var wt := _label("Waiting for the host...", 20, Color(1, 1, 1, 0.8), font2)
 				wt.position = Vector2(w * 0.5 - 330, by2 + 22)
@@ -667,7 +692,10 @@ func _draw() -> void:
 	var b := _btn_pos()
 	_button(b["shoot"][0], b["shoot"][1], lab_a, shoot_down, Color(0.25, 0.85, 0.4))
 	_button(b["pass"][0], b["pass"][1], lab_b, pass_down, Color(0.95, 0.95, 0.95))
-	_button(b["sprint"][0], b["sprint"][1], "SPRINT", sprint_down, GOLD)
+	_button(b["sprint"][0], b["sprint"][1], "SPRINT", sprint_down, GOLD if stam > 0.3 else Color(0.9, 0.35, 0.25))
+	draw_arc(b["sprint"][0], b["sprint"][1] + 7.0, -PI * 0.5, -PI * 0.5 + TAU * stam, 40, Color(1.0, 0.84, 0.25, 0.85) if stam > 0.3 else Color(0.95, 0.3, 0.2, 0.9), 4.0, true)
+	if ctrl_name != "":
+		_text(ctrl_name, Vector2(size.x * 0.5, size.y - 138.0 * 68.0 / 105.0 - 20.0), 16, Color(1, 1, 1, 0.9))
 	if charge > 0.0:
 		var c: Vector2 = b["shoot"][0]
 		var col := Color(1.0, 0.9, 0.2).lerp(Color(1.0, 0.25, 0.15), clampf((charge - 0.6) / 0.4, 0.0, 1.0))

@@ -58,40 +58,72 @@ static func _noise(n: int, lp: float) -> PackedFloat32Array:
 		s[i] = y2
 	return s
 
+# band-pass filtered noise: the "aah" of many voices rather than plain hiss
+static func _voices(n: int, freq: float, q: float) -> PackedFloat32Array:
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var w0 := TAU * freq / RATE
+	var alpha := sin(w0) / (2.0 * q)
+	var b0 := alpha
+	var a0 := 1.0 + alpha
+	var a1 := -2.0 * cos(w0)
+	var a2 := 1.0 - alpha
+	var x1 := 0.0
+	var x2 := 0.0
+	var y1 := 0.0
+	var y2 := 0.0
+	for i in n:
+		var x := randf() * 2.0 - 1.0
+		var y := (b0 * x - b0 * x2 - a1 * y1 - a2 * y2) / a0
+		x2 = x1
+		x1 = x
+		y2 = y1
+		y1 = y
+		s[i] = y
+	return s
+
 static func crowd() -> AudioStreamWAV:
 	var n := RATE * 5
-	var s := _noise(n, 0.11)
-	var hi := _noise(n, 0.3)
+	var a := _voices(n, 520.0, 1.2)
+	var b := _voices(n, 1150.0, 1.5)
+	var lo := _noise(n, 0.05)
+	var s := PackedFloat32Array()
+	s.resize(n)
 	for i in n:
 		var t := float(i) / RATE
-		var m := 0.75 + 0.15 * sin(t * TAU / 5.0 * 2.0) + 0.1 * sin(t * TAU / 5.0 * 5.0 + 1.0)
-		s[i] = (s[i] * 5.5 + hi[i] * 0.8) * m
-	# crossfade the ends so the loop has no click
+		var m := 0.78 + 0.14 * sin(t * TAU / 5.0 * 2.0) + 0.08 * sin(t * TAU / 5.0 * 7.0 + 1.0)
+		s[i] = (a[i] * 2.2 + b[i] * 1.0 + lo[i] * 3.0) * m
 	var x := RATE / 2
 	for i in x:
-		var a := float(i) / x
-		s[i] = s[i] * a + s[n - x + i] * (1.0 - a)
+		var f := float(i) / x
+		s[i] = s[i] * f + s[n - x + i] * (1.0 - f)
 	s.resize(n - x)
 	return _wav(s, true)
 
 static func roar() -> AudioStreamWAV:
-	var n := int(RATE * 4.2)
-	var s := _noise(n, 0.16)
-	var hi := _noise(n, 0.45)
+	var n := int(RATE * 4.5)
+	var a := _voices(n, 640.0, 1.0)
+	var b := _voices(n, 1300.0, 1.3)
+	var c := _voices(n, 2500.0, 1.5)
+	var s := PackedFloat32Array()
+	s.resize(n)
 	for i in n:
 		var t := float(i) / RATE
-		var env := minf(t / 0.25, 1.0) * exp(-maxf(t - 1.2, 0.0) * 0.9)
-		var wob := 1.0 + 0.12 * sin(t * 19.0) + 0.08 * sin(t * 31.0)
-		s[i] = (s[i] * 6.5 + hi[i] * 1.6) * env * wob
+		var env := minf(t / 0.18, 1.0) * exp(-maxf(t - 1.4, 0.0) * 0.85)
+		var wob := 1.0 + 0.1 * sin(t * 17.0) + 0.07 * sin(t * 29.0)
+		s[i] = (a[i] * 4.2 + b[i] * 2.6 + c[i] * 1.4) * env * wob
 	return _wav(s)
 
 static func ooh() -> AudioStreamWAV:
-	var n := int(RATE * 1.3)
-	var s := _noise(n, 0.09)
+	var n := int(RATE * 1.4)
+	var a := _voices(n, 420.0, 1.6)
+	var b := _voices(n, 800.0, 2.0)
+	var s := PackedFloat32Array()
+	s.resize(n)
 	for i in n:
 		var t := float(i) / RATE
-		var env := minf(t / 0.12, 1.0) * exp(-maxf(t - 0.25, 0.0) * 3.2)
-		s[i] = s[i] * 9.0 * env
+		var env := minf(t / 0.1, 1.0) * exp(-maxf(t - 0.3, 0.0) * 3.0)
+		s[i] = (a[i] * 5.0 + b[i] * 2.0) * env
 	return _wav(s)
 
 static func net() -> AudioStreamWAV:
