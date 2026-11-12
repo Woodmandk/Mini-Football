@@ -72,6 +72,7 @@ var off_line := [0.0, 0.0]
 var trail: CPUParticles3D
 var land_ring: MeshInstance3D
 var ball_net := Vector3.ZERO
+var ball_spin := 0.0
 
 var score := [0, 0]
 var clock := 0.0
@@ -129,6 +130,8 @@ var bstats := {"have": 0, "shots": 0, "passes": 0, "tackles": 0, "switches": 0}
 var quality := 2
 var base_scale := 1.0
 var slow_t := 0.0
+var intro_len := 2.6
+var intro_t0 := -99.0
 var q_applied := -1
 var demo := false
 var shot_path := ""
@@ -136,7 +139,7 @@ var shot_at := 0.0
 var force_goal := -1.0
 var real_t := 0.0
 var version := "dev"
-var tst := [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0}]
+var tst := [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}]
 var stats := {"shots": 0, "passes": 0, "tackles": 0, "outs": 0, "saves": 0, "goals": 0, "fouls": 0, "offsides": 0, "pens": 0, "cards": 0}
 
 func side(t: int) -> float:
@@ -193,7 +196,7 @@ func _ready() -> void:
 	_build_audio()
 	if autotest or demo:
 		screen = "match"
-		_begin_match(false)
+		_begin_match(demo and OS.get_cmdline_user_args().has("--intro"))
 		if autotest:
 			if bot_mode != "":
 				humans = [Human.new()]
@@ -205,6 +208,9 @@ func _ready() -> void:
 	else:
 		_to_menu()
 		if menu_arg != "":
+			if menu_arg == "full":
+				tst[0]["g"] = ["STORM 12'", "BAK 40'"]
+				tst[1]["g"] = ["PIKE 77'"]
 			hud.show_menu(menu_arg, _menu_info())
 		else:
 			var jc: String = net.join_code()
@@ -307,7 +313,21 @@ func _build_teams() -> void:
 				socks = shirt
 			var boots: Color = [Color(0.08, 0.08, 0.08), Color(0.95, 0.95, 0.95), Color(1.0, 0.45, 0.1), Color(0.3, 0.9, 0.9)][rng.randi() % 4]
 			p.build(shirt, shorts, socks, skins[rng.randi() % skins.size()], hairs[rng.randi() % hairs.size()], boots)
-			p.top_speed = 7.3 + rng.randf() * 0.5 + (0.35 if p.role == "FW" else 0.0)
+			var base: Array = {"GK": [52, 30, 62, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}[p.role]
+			var up := 0
+			p.star = i == 9 or (i == 6 and t == 1) or (i == 7 and t == 0)
+			if p.star:
+				up = 8
+			p.pac = clampi(base[0] + up + rng.randi_range(-5, 5), 40, 96)
+			p.sho = clampi(base[1] + up + rng.randi_range(-5, 5), 25, 96)
+			p.pas = clampi(base[2] + up + rng.randi_range(-5, 5), 40, 96)
+			p.dfn = clampi(base[3] + up + rng.randi_range(-5, 5), 25, 96)
+			match p.role:
+				"GK": p.ovr = int(round(p.dfn * 0.8 + p.pas * 0.2))
+				"DF": p.ovr = int(round(p.dfn * 0.55 + p.pac * 0.25 + p.pas * 0.2))
+				"MF": p.ovr = int(round(p.pas * 0.45 + p.pac * 0.2 + p.sho * 0.2 + p.dfn * 0.15))
+				_: p.ovr = int(round(p.sho * 0.5 + p.pac * 0.35 + p.pas * 0.15))
+			p.top_speed = 6.95 + (p.pac - 50) * 0.027
 			add_child(p)
 			players.append(p)
 			teams[t].append(p)
@@ -462,6 +482,19 @@ func _do_fx(kind: String, a) -> void:
 			net.say(a)
 		"toast":
 			hud.toast(a)
+		"vs":
+			var st := []
+			for t in 2:
+				var best = teams[t][9]
+				for q in teams[t]:
+					if q.ovr > best.ovr:
+						best = q
+				st.append("%d  %s  %d" % [best.num, best.pname.to_upper(), best.ovr])
+			hud.show_vs(float(a), TEAM_NAMES, st, view_flip < 0.0)
+			intro_t0 = real_t if float(a) > 0.0 else -99.0
+			if float(a) > 0.0:
+				cam_pos = Vector3(-56, 5.0, 40 * view_flip)
+				cam_look = Vector3(-20, 1, 0)
 
 func _banner(text: String, col: Color, hold: float, small := "", fs := 96) -> void:
 	fx("banner", [text, col.to_html(), hold, small, fs])
@@ -473,6 +506,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(),
+		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
 func _stat_rows() -> Array:
@@ -693,7 +727,7 @@ func _begin_match(with_intro: bool) -> void:
 	half = 1
 	kick_team = 0
 	rec.clear()
-	tst = [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0}]
+	tst = [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}]
 	for h in humans:
 		h.stam = 1.0
 		h.tired = false
@@ -711,6 +745,7 @@ func _begin_match(with_intro: bool) -> void:
 	ball_vel = Vector3.ZERO
 	state = "intro"
 	state_t = 0.0
+	intro_len = 2.6
 	follow_on = false
 	cam_pos = Vector3(-30, 46, 78)
 	cam_look = Vector3(0, 0, 0)
@@ -719,8 +754,10 @@ func _begin_match(with_intro: bool) -> void:
 		if not crowd_au.playing:
 			crowd_au.play()
 		if with_intro:
-			_banner("RED BISON  v  HARBOUR SHARKS", Color(1, 1, 1), 1.9, "", 44)
+			intro_len = 5.4
+			fx("vs", 3.6)
 			snd("whoosh")
+			fx("excite", 0.7)
 
 func _formation(kicking: int, instant: bool) -> void:
 	for p in players:
@@ -811,6 +848,7 @@ func _goal(team: int) -> void:
 	kick_team = 1 - team
 	goal_idx = rec.size()
 	scorer = ball_last if (ball_last != null and ball_last.team == team) else teams[team][9]
+	tst[team]["g"].append("%s %d'" % [scorer.pname.to_upper(), int(clock / 60.0) + 1])
 	for p in players:
 		p.recv = false
 		p.mood_t = 0.0
@@ -1138,7 +1176,12 @@ func _tick(dt: float) -> void:
 	state_t += dt
 	match state:
 		"intro":
-			if state_t > 2.6:
+			if state_t > 0.7 and state_t < intro_len - 1.9:
+				for h in humans:
+					if h.evs.has("tap") or h.evs.has("shoot_down") or h.evs.has("pass_down"):
+						state_t = intro_len - 1.9
+						fx("vs", 0.0)
+			if state_t > intro_len:
 				_kickoff(kick_team)
 		"play":
 			_play(dt)
@@ -1222,7 +1265,7 @@ func _play(dt: float) -> void:
 					_human_tackle(h)
 			elif e == "shoot_up":
 				if h.charging and ball_owner == h.ctrl:
-					_shoot(h.ctrl, h.charge, _human_aim(h, dir3), 0.8)
+					_shoot(h.ctrl, h.charge, _human_aim(h, dir3), 0.8, 0.75 if h.charge < 0.72 else 0.2)
 				h.charging = false
 				h.charge = 0.0
 			elif e == "pass_down":
@@ -1422,9 +1465,12 @@ func _spin_ball(v: Vector3, dt: float) -> void:
 func _ball_free(dt: float) -> void:
 	ball_vel.y -= 9.8 * dt
 	ball_vel *= 1.0 - 0.05 * dt
+	if ball_spin != 0.0:
+		ball_vel = ball_vel.rotated(Vector3.UP, ball_spin * dt)
 	ball.position += ball_vel * dt
 	if ball.position.y <= BALL_R:
 		ball.position.y = BALL_R
+		ball_spin *= maxf(1.0 - 5.0 * dt, 0.0)
 		if ball_vel.y < -1.6:
 			ball_vel.y = -ball_vel.y * 0.52
 			ball_vel.x *= 0.82
@@ -1484,6 +1530,7 @@ func _release(p, v: Vector3) -> void:
 	ball_owner = null
 	ball.position = p.position + h * 0.75 + Vector3(0, BALL_R + 0.05, 0)
 	ball_vel = v
+	ball_spin = 0.0
 	ball_last = p
 	ball_ignore = p
 	ignore_t = 0.3
@@ -1558,6 +1605,7 @@ func _pass(p, m, lofted: bool) -> void:
 		dir2.y = 0.0
 		t = dir2.length() / vh
 		v = dir2.normalized() * vh * 1.03 + Vector3(0, 4.9 * t, 0)
+	v = v.rotated(Vector3.UP, (randf() - 0.5) * 2.0 * maxf(92 - p.pas, 0) * 0.0011 * (1.6 if lofted else 1.0))
 	var h = _hum_of(p)
 	var offs: bool = set_piece in ["", "fk", "kick"] and _is_offside(p, m)
 	_release(p, v)
@@ -1577,10 +1625,11 @@ func _human_aim(h, dir3: Vector3) -> float:
 		return clampf(dir3.z * 1.3, -1.0, 1.0) * GOAL_HW * 0.82
 	return (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * 0.62
 
-func _shoot(p, power: float, aim_z: float, err_k: float) -> void:
+func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	var s := side(p.team)
 	var from := ball.position
 	var d := Vector2(HL * s - from.x, aim_z - from.z).length()
+	err_k *= lerpf(1.3, 0.72, clampf((p.sho - 40) / 50.0, 0.0, 1.0))
 	var err := (randf() - 0.5) * (0.4 + d * 0.035 + power * 0.8) * err_k
 	var goal := Vector3(HL * s, 0, aim_z + err)
 	var dir := goal - from
@@ -1590,7 +1639,18 @@ func _shoot(p, power: float, aim_z: float, err_k: float) -> void:
 	var t := maxf(d / sp, 0.15)
 	var h := 0.35 + power * power * 2.1 + randf() * 0.6 * power * err_k
 	var vy := (h - 0.25) / t + 4.9 * t
+	# a curled shot starts wide of its target and bends back in
+	var spin := 0.0
+	if curl > 0.0 and d > 9.0:
+		spin = curl * lerpf(0.7, 1.15, clampf((p.sho - 50) / 40.0, 0.0, 1.0))
+		var wide := dir.rotated(Vector3.UP, -spin * t * 0.5)
+		var sg := signf(goal.z) if absf(goal.z) > 0.3 else (1.0 if randf() < 0.5 else -1.0)
+		if (wide.z - dir.z) * sg < 0.0:
+			spin = -spin
+			wide = dir.rotated(Vector3.UP, -spin * t * 0.5)
+		dir = wide
 	_release(p, dir * sp + Vector3(0, vy, 0))
+	ball_spin = spin
 	shot_live = true
 	stats["shots"] += 1
 	tst[p.team]["shots"] += 1
@@ -1640,7 +1700,7 @@ func _human_tackle(h) -> void:
 	if d < 2.6:
 		me_p.yaw = atan2(-to.x, -to.z)
 		me_p.vel = to.normalized() * 9.5
-	if d < 2.0 and protect_t <= 0.0 and c.role != "GK":
+	if d < 1.75 + me_p.dfn * 0.004 and protect_t <= 0.0 and c.role != "GK":
 		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
 		if front > -0.45:
 			c.stun = 0.6
@@ -1687,6 +1747,7 @@ func _tackles(dt: float) -> void:
 			var need: float = _cpu(o.team)["need"]
 			if _team_human(o.team):
 				need = 0.8
+			need *= lerpf(1.15, 0.88, clampf((o.dfn - 40) / 45.0, 0.0, 1.0))
 			if o.press_t > need - 0.15:
 				o.press_t = 0.0
 				o.commit_t = 0.15
@@ -1837,7 +1898,7 @@ func _ai_carrier(p, dt: float) -> Vector3:
 			if dist < 20.0 or randf() < 0.4:
 				var gk = teams[1 - p.team][0]
 				var az := (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * (0.5 + randf() * 0.28)
-				_shoot(p, 0.5 + randf() * 0.4, az, cpu["err"])
+				_shoot(p, 0.5 + randf() * 0.4, az, cpu["err"], 0.7 if (p.sho > 74 and randf() < 0.6) else 0.0)
 				return Vector3.ZERO
 		var pressured := nd < 4.2
 		if pressured or randf() < 0.25:
@@ -1904,16 +1965,22 @@ func _ai_keeper(p, dt: float) -> Vector3:
 		var t := (gx - b.x) / ball_vel.x
 		if t > 0.0 and t < 1.7:
 			var zc := b.z + ball_vel.z * t
+			if ball_spin != 0.0:
+				# the keeper reads most of the bend on a curled shot
+				var bent := ball_vel.rotated(Vector3.UP, ball_spin * t * 0.45)
+				if absf(bent.x) > 1.0:
+					zc = b.z + bent.z * ((gx - b.x) / bent.x)
 			if absf(zc) < GOAL_HW + 1.2:
 				p.react_t += dt
-				if p.react_t < 0.24:
+				if p.react_t < lerpf(0.27, 0.19, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
 				var dz: float = target.z - p.position.z
 				if absf(dz) > 1.0 and t < 0.6 and p.dive_t < 0.0:
 					var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 					p.start_dive(signf(Vector3(0, 0, dz).dot(right)))
-				var sp := 4.8 if p.dive_t >= 0.0 else 3.5
+					p.vel = Vector3(0, 0, signf(dz) * 4.5)
+				var sp := 4.5 if p.dive_t >= 0.0 else 3.5
 				return _run_to(p, target, sp)
 	p.react_t = 0.0
 	if ball_owner == null and absf(b.x - gx) < 15.0 and absf(b.z) < 18.0 and ball_vel.length() < 12.0:
@@ -2174,7 +2241,7 @@ func _process(dt: float) -> void:
 			hud.lab_b = "PASS" if ours else "SWITCH"
 			hud.charge = hm.charge
 			hud.stam = hm.stam
-			hud.ctrl_name = ("%d  %s" % [hm.ctrl.num, hm.ctrl.pname.to_upper()]) if hm.ctrl != null else ""
+			hud.ctrl_name = ("%d  %s  %d" % [hm.ctrl.num, hm.ctrl.pname.to_upper(), hm.ctrl.ovr]) if hm.ctrl != null else ""
 			if state == "play" and hm.ctrl != null and ball_owner == hm.ctrl and set_piece != "pen":
 				var st2 := _stick() * view_flip
 				var tgt = _pass_target(hm.ctrl, Vector3(st2.x, 0, st2.y), false)
@@ -2213,6 +2280,12 @@ func _camera(dt: float) -> void:
 		want_look = Vector3(f.x * 0.35, 0, f.z * 0.35)
 		want_fov = 44.0
 		k = 2.0
+	elif state == "intro" and real_t - intro_t0 < 3.5:
+		var it := real_t - intro_t0
+		want_look = Vector3(-14.0 + it * 4.0, 1.0, 0)
+		want_pos = Vector3(-52.0 + it * 13.0, 4.5 + it * 1.6, (38.0 - it * 2.0) * view_flip)
+		want_fov = 50.0
+		k = 2.2
 	elif state == "intro":
 		want_look = Vector3(0, 0, 0)
 		want_pos = Vector3(0, 21, 31 * view_flip)
