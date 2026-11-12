@@ -1089,7 +1089,7 @@ table.st tr.fr td { color: var(--gold); }
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
         <div class="logo"><span class="r">Bane</span><span class="b">bold</span></div>
-        <span class="mfver" id="mfVer">v12.11 20:02</span>
+        <span class="mfver" id="mfVer">v12.11 20:24</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
@@ -5052,11 +5052,24 @@ table.st tr.fr td { color: var(--gold); }
   // ---------- Simulation ----------
   const remoteIn = new Map(); // peer -> input
   const ZERO = { x: 0, y: 0, a: false, b: false };
+  // our pass is meant for a team-mate: the others leave it for him. Never the man YOU control (you went for it: you take it, as in FIFA),
+  // not once it has been deflected, and not when the man it was meant for can't get there (he is well behind the ball)
+  function leaveIt(p) {
+    const L = ball.last; if (!L || !L.pass || L.defl || !(L.to >= 0) || p.team !== L.team || p.i === L.to || isHuman(p)) return false;
+    const q = P[L.to]; return !!(q && q.recv > 0 && on(q) && dBall(q) < dBall(p) + 120);
+  }
+  // where a ball in the air comes down to about chest height, from how it is really flying (so a receiver goes to the real spot, not the aimed one)
+  function dropSpot(h = 30) {
+    if (ball.z <= h && ball.vz <= 0) return [ball.x, ball.y];
+    const disc = ball.vz * ball.vz + 2 * GRAV * (ball.z - h); if (disc < 0) return [ball.x, ball.y];
+    const t = (ball.vz + Math.sqrt(disc)) / GRAV, ln = Math.log(0.85), f = (Math.pow(0.85, t) - 1) / ln;
+    return [ball.x + ball.vx * f, ball.y + ball.vy * f];
+  }
   function meetInput(p) {
     const L = ball.last;
     let tx = ball.x, ty = ball.y, spr = false;
     const v2 = ball.vx * ball.vx + ball.vy * ball.vy;
-    if (L.pt && (dBall(p) > 110 || (L.lp && ball.z > 20))) { tx = L.pt[0]; ty = L.pt[1]; spr = true; } // a high pass: wait where it comes down
+    if (L.pt && (dBall(p) > 110 || (L.lp && ball.z > 20))) { [tx, ty] = ball.z > 4 || ball.vz > 0 ? dropSpot() : L.pt; spr = true; } // a high pass: get to where it really comes down
     else if (v2 > 900) {
       const t = Math.max(0, ((p.x - ball.x) * ball.vx + (p.y - ball.y) * ball.vy) / v2);
       tx = ball.x + ball.vx * t * 0.6; ty = ball.y + ball.vy * t * 0.6;
@@ -5305,7 +5318,7 @@ table.st tr.fr td { color: var(--gold); }
               if (crossSpot(p) && crossTarget(p, inp.x, inp.y)) { cross(p, inp.x, inp.y); ball.last.ic = true; flash = { text: 'Cross!', t: 0.6 }; if (stats) stats.pa[p.team]++; }
               else {
                 const q = passTarget(p, inp.x, inp.y, pw, true);
-                if (q) { const ld = 0.4 + pw * 0.25; lob(p, q.x + q.vx * ld - p.x, q.y + q.vy * ld - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
+                if (q) { const ld = Math.max(0.5, Math.min(0.9, Math.hypot(q.x - p.x, q.y - p.y) / 520)) * 0.9; lob(p, q.x + q.vx * ld - p.x, q.y + q.vy * ld - p.y, q, true); ball.last.lp = true; q.recv = 2.4; if (stats) stats.pa[p.team]++; }
               }
             }
           }
@@ -5459,7 +5472,7 @@ table.st tr.fr td { color: var(--gold); }
       const keeperCatch = p => size > 1 && p.k === 0 && Math.abs(p.x - (p.team ? PR : PL)) < 170 && Math.abs(p.y - CY) < 170;
       // a cross: the keeper claims it when he gets there first. His hands go higher than their heads, so he gets a few steps' start, more the better he is
       const kClaim = p => { const dk = dBall(p), da = P.filter(o => o.team !== p.team && on(o) && o.stun <= 0).reduce((m, o) => Math.min(m, dBall(o)), 1e9); return dk < da + 8 + 22 * keeperQ(p); };
-      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !(ball.last && ball.last.pass && ball.last.to >= 0 && p.team === ball.last.team && p.i !== ball.last.to && P[ball.last.to] && P[ball.last.to].recv > 0) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !kClaim(p)))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + (shotVs(p) && !(p.dive > 0) ? 4 : oppPass(p) ? 3 : 12) + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 && !shotVs(p) ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0) + (ball.last && ball.last.pass && ball.last.team !== p.team && ball.z < 26 && hasAb(p, 'laeser') ? 18 : 0)).sort((a, b) => dBall(a) - dBall(b));
+      const cands = P.filter(p => on(p) && p.stun <= 0 && p.nopick <= 0 && !leaveIt(p) && (ball.z < 26 || (keeperCatch(p) && (ball.z < 46 || (ball.z < 75 && !(ball.last && ball.last.cross && !kClaim(p)))))) && dBall(p) < (p.tackle > 0 ? TACKLE_REACH : REACH + (shotVs(p) && !(p.dive > 0) ? 4 : oppPass(p) ? 3 : 12) + (ball.last && ball.last.pass && ball.last.to === p.i && p.recv > 0 ? 14 : 0)) + (keeperCatch(p) && ball.z > 0 && !shotVs(p) ? 8 : 0) + (p.dive > 0 && isKeeper(p) ? 6 : 0) + (ball.last && ball.last.pass && ball.last.team !== p.team && ball.z < 26 && hasAb(p, 'laeser') ? 18 : 0)).sort((a, b) => dBall(a) - dBall(b));
       const sp2 = Math.hypot(ball.vx, ball.vy);
       // the keeper always catches a pass from his own team
       if (ball.last && ball.last.pass) {
@@ -5509,18 +5522,18 @@ table.st tr.fr td { color: var(--gold); }
       }
       if (ball.owner < 0 && ball.last && ball.last.pass && ball.last.lp && ball.vz <= 0 && ball.z < 75) { // a high pass coming down: the man it is meant for takes it on his chest
         const q = P[ball.last.to];
-        if (q && on(q) && q.stun <= 0 && !(q.ftArm > 0) && !(q.hdArm > 0) && dBall(q) < REACH + 26) grab(q);
+        if (q && on(q) && q.stun <= 0 && !(q.ftArm > 0) && !(q.hdArm > 0) && dBall(q) < REACH + 30) grab(q);
       }
       if (ball.owner < 0 && ball.z > 20 && ball.z < 90 && !(ball.headCd > 0) && !(ball.last && (ball.last.punt || ball.last.cross || ball.last.fk) && ball.vz > 0)) { // headers (not while a long kick or a cross is still climbing)
         // who goes up for it: the computer's men on their own, YOUR man only if you pressed for a header
-        const ok = p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !(ball.last && ball.last.pass && ball.last.team === p.team && ball.last.to >= 0 && ball.last.to !== p.i && P[ball.last.to] && P[ball.last.to].recv > 0) /* a cross or lob meant for a team-mate: he leaves it for him */ && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && (!isHuman(p) || p.hdArm > 0) && canHead(p);
+        const ok = p => on(p) && p.stun <= 0 && p.tackle <= 0 && !(ball.last && ball.last.lp && p.team === ball.last.team) && !leaveIt(p) /* a cross or lob meant for a team-mate: he leaves it for him */ && !(size > 1 && p.k === 0) && !(p.i === ball.lastIdx && ball.loose < 0.5) && (!isHuman(p) || p.hdArm > 0) && canHead(p);
         const first = P.filter(p => ok(p) && dBall(p) < REACH + 8);
         if (first.length) aerialDuel(P.filter(p => ok(p) && dBall(p) < REACH + 24)); // the first man there, and anyone right on him, contest it
       }
       if (ball.owner < 0 && ball.z < 26) {
         for (const p of P) {
           if (!on(p)) continue;
-          if (ball.last && ball.last.pass && ball.last.team === p.team && ball.last.to !== p.i && P[ball.last.to] && P[ball.last.to].recv > 0) continue; // our pass meant for someone else: he lets it run (steps over it), as in FIFA
+          if (leaveIt(p)) continue; // our pass meant for someone else: he lets it run (steps over it), as in FIFA
           const dx = ball.x - p.x, dy = ball.y - p.y, d = Math.hypot(dx, dy);
           if (d < REACH && d > 0) {
             const nx = dx / d, ny = dy / d; ball.x = p.x + nx * REACH; ball.y = p.y + ny * REACH;
@@ -9988,15 +10001,19 @@ table.st tr.fr td { color: var(--gold); }
       if (!drill.fo && a <= 0) drill.fi = 0;
       if (a > 0) { ctx.fillStyle = `rgba(5,12,9,${a.toFixed(3)})`; ctx.fillRect(0, 0, sw, sh); }
     }
-    const text = (replay && replay.t >= 0) ? '' : banner || (flash ? flash.text : '');
+    let text = (replay && replay.t >= 0) ? '' : banner || (flash ? flash.text : '');
+    if (text && !banner && caption && cfg.crowd && !(pause > 0) && !/card$|^[1-4]$/.test(text)) text = ''; // the commentator's line is already up there: one line is enough
     if (text) {
       const big = /^[1-4]$/.test(text);
-      const bf = Math.min(sw * (big ? 0.16 : 0.1), big ? 110 : 64) * (banner ? 1 : 0.55);
+      // Daniel 2026-11-12: words during live play (Advantage!, Header!, Save!...) must not cover the game: small, up under the scoreboard.
+      // Only the big moments when play has stopped (a goal, half time, a card) get the middle of the screen
+      const live = !banner && !big && !(pause > 0) && !/card$/.test(text);
+      const bf = Math.min(sw * (big ? 0.16 : 0.1), big ? 110 : 64) * (banner ? 1 : live ? 0.36 : 0.55);
       ctx.font = `700 ${bf}px ${col.font}`; ctx.textBaseline = 'middle';
       let tw = ctx.measureText(text).width, fz = bf; if (tw > sw * 0.84) { fz = bf * sw * 0.84 / tw; ctx.font = `700 ${fz}px ${col.font}`; tw = sw * 0.84; } // long lines shrink to fit
       if (text !== hudTxt) { hudTxt = text; hudT0 = performance.now(); }
       const age = (performance.now() - hudT0) / 1000, pop = age < 0.25 ? 0.6 + 0.4 * Math.sin(age / 0.25 * Math.PI / 2) + Math.sin(age / 0.25 * Math.PI) * 0.12 : 1;
-      const goalT = text === 'GOAL!', ty = sh * 0.42;
+      const goalT = text === 'GOAL!', ty = live ? sh * 0.15 : sh * 0.42;
       ctx.save(); ctx.translate(sw / 2, ty); ctx.scale(pop, pop);
       if (!big) { // a ribbon behind the words, gold edged; a goal gets the scoring team's colour
         const rw = tw + fz * 1.6, rh = fz * 1.35, gc = goalT && lastGoalTeam >= 0 ? (lastGoalTeam ? col.away : col.home) : null;
