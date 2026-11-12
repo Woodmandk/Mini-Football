@@ -40,6 +40,11 @@ var _banner_tw: Tween
 var _toast: Label
 var _toast_tw: Tween
 var _code := ""
+var vs_t := -1.0
+var vs_len := 0.0
+var vs_names := ["", ""]
+var vs_stars := ["", ""]
+var vs_swap := false
 
 const STICK_R := 62.0
 const GREEN := Color(0.2, 0.78, 0.38)
@@ -228,6 +233,49 @@ func show_banner(text: String, col: Color, hold := 1.6, small := "", fs := 96) -
 		_banner_tw.tween_property(banner, "modulate:a", 0.0, 0.4).set_delay(hold)
 		_banner_tw.tween_property(banner, "scale", Vector2(1.25, 1.25), 0.4).set_delay(hold)
 		_banner_tw.tween_property(sub, "modulate:a", 0.0, 0.4).set_delay(hold)
+
+func show_vs(length: float, names: Array, stars: Array, swap: bool) -> void:
+	vs_len = length
+	vs_t = 0.0 if length > 0.0 else -1.0
+	vs_names = names
+	vs_stars = stars
+	vs_swap = swap
+
+func _vs() -> void:
+	var o := minf(vs_t / 0.45, 1.0)
+	var out := clampf((vs_t - (vs_len - 0.4)) / 0.4, 0.0, 1.0)
+	var e := (1.0 - pow(1.0 - o, 3.0)) * (1.0 - out * out)
+	var w := size.x * 0.44
+	var hgt := 112.0
+	var y := size.y * 0.5 - hgt * 0.5 + 30.0
+	var cols := [Color(0.86, 0.14, 0.14), Color(0.16, 0.38, 0.92)]
+	for i in 2:
+		var t := (1 - i) if vs_swap else i
+		var x := (-w + e * w) if i == 0 else (size.x - e * w)
+		var r := Rect2(x, y, w, hgt)
+		draw_rect(r, Color(DARK.r, DARK.g, DARK.b, 0.86))
+		var bar := Rect2(x + (w - 14.0 if i == 0 else 0.0), y, 14.0, hgt)
+		draw_rect(bar, cols[t])
+		draw_rect(Rect2(x, y + hgt - 5.0, w, 5.0), Color(cols[t].r, cols[t].g, cols[t].b, 0.8))
+		var cx := x + w * 0.5 + (-20.0 if i == 0 else 20.0)
+		var nm: String = vs_names[t]
+		var fs := 40
+		while fs > 20 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w - 90.0:
+			fs -= 2
+		_text(nm, Vector2(cx, y + 52.0), fs, Color.WHITE)
+		_text("STAR PLAYER   " + vs_stars[t], Vector2(cx, y + 88.0), 17, GOLD)
+	var pop := clampf((vs_t - 0.3) / 0.25, 0.0, 1.0) * (1.0 - out)
+	if pop > 0.0:
+		var c := Vector2(size.x * 0.5, y + hgt * 0.5)
+		var rad := 44.0 * (1.0 + (1.0 - pop) * 0.8)
+		draw_circle(c, rad, Color(GOLD.r, GOLD.g, GOLD.b, pop))
+		draw_arc(c, rad, 0, TAU, 48, Color(DARK.r, DARK.g, DARK.b, pop), 4.0, true)
+		var s := "VS"
+		var sw := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, 40).x
+		draw_string(font, c + Vector2(-sw * 0.5, 14), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 40, Color(DARK.r, DARK.g, DARK.b, pop))
+		_text("KICK-OFF", Vector2(size.x * 0.5, y - 26.0), 22, Color(1, 1, 1, pop))
+		if vs_t > 1.0:
+			_text("tap to skip", Vector2(size.x * 0.5, size.y - 26.0), 15, Color(1, 1, 1, 0.6 * pop))
 
 func hide_banner() -> void:
 	if _banner_tw:
@@ -464,6 +512,12 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			panel.add_child(_btn("LEAVE MATCH", "menu", null, "alt", Vector2(30, 164), Vector2(pw - 60, 60), 22))
 			items.append([panel, Vector2(0, 60), 0.0])
 		"full":
+			var dim := ColorRect.new()
+			dim.color = Color(0.0, 0.03, 0.02, 0.5)
+			dim.position = Vector2.ZERO
+			dim.size = Vector2(w, h)
+			dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			menu.add_child(dim)
 			var ft := _label("FULL TIME", 30, GOLD)
 			ft.position = Vector2(0, h * 0.5 - 216)
 			ft.size = Vector2(w, 40)
@@ -485,6 +539,13 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var tn2 := _label("HARBOUR SHARKS", 22, Color(0.55, 0.75, 1.0), font2)
 			tn2.position = Vector2(w * 0.5 + 190, h * 0.5 - 142)
 			menu.add_child(tn2)
+			for gi in 2:
+				var gl := _label(str(info.get("g%d" % gi, "")), 15, Color(1, 1, 1, 0.85), font2)
+				gl.position = Vector2(0 if gi == 0 else w * 0.5 + 190, h * 0.5 - 114)
+				gl.size = Vector2(w * 0.5 - 190, 22)
+				gl.clip_text = true
+				gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if gi == 0 else HORIZONTAL_ALIGNMENT_LEFT
+				menu.add_child(gl)
 			var rs := _label(str(info.get("result", "")), 40, GREEN.lightened(0.35) if str(info.get("result", "")).begins_with("YOU WIN") else Color.WHITE)
 			rs.position = Vector2(0, h * 0.5 - 56)
 			rs.size = Vector2(w, 50)
@@ -656,7 +717,11 @@ func _set_btn(k: String, down: bool) -> void:
 
 func _process(dt: float) -> void:
 	_t += dt / maxf(Engine.time_scale, 0.05)
-	bug.visible = in_match and not replay_on
+	bug.visible = in_match and not replay_on and vs_t < 0.0
+	if vs_t >= 0.0:
+		vs_t += dt / maxf(Engine.time_scale, 0.05)
+		if vs_t > vs_len or not in_match:
+			vs_t = -1.0
 	queue_redraw()
 
 func _draw() -> void:
@@ -677,6 +742,9 @@ func _draw() -> void:
 		_text("tap to skip", Vector2(size.x - 80, size.y - bar * 0.5 + 6), 16, Color(1, 1, 1, 0.7))
 		return
 	if menu_name != "":
+		return
+	if vs_t >= 0.0:
+		_vs()
 		return
 	# camera + pause buttons
 	var r := _cam_rect()
