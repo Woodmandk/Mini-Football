@@ -124,3 +124,12 @@ static func post() -> AudioStreamWAV:
 		var t := float(i) / RATE
 		s[i] = (sin(t * TAU * 640.0) + 0.6 * sin(t * TAU * 1530.0) + 0.3 * sin(t * TAU * 2710.0)) * exp(-t * 11.0) * 0.4
 	return _wav(s)
+
+static func whoosh() -> AudioStreamWAV:
+	var n := int(RATE * 0.5)
+	var s := _noise(n, 0.25)
+	for i in n:
+		var t := float(i) / RATE
+		var env := sin(clampf(t / 0.5, 0.0, 1.0) * PI)
+		s[i] = s[i] * 3.0 * env * env
+	return _wav(s)

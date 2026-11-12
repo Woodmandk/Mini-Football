@@ -7,6 +7,7 @@ const GOAL_HW := 3.66
 const GOAL_H := 2.44
 
 var crowd_mat: ShaderMaterial
+var sun: DirectionalLight3D
 var nets := {} # true = +x goal, false = -x goal -> Node3D
 var net_t := {true: 9.0, false: 9.0}
 var excite := 0.0
@@ -136,7 +137,7 @@ func _env() -> void:
 	e.tonemap_white = 1.4
 	we.environment = e
 	add_child(we)
-	var sun := DirectionalLight3D.new()
+	sun = DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-52, -38, 0)
 	sun.light_color = Color(1.0, 0.96, 0.86)
 	sun.light_energy = 1.15

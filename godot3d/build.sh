@@ -8,3 +8,4 @@ V="v$(TZ=Europe/Copenhagen date "+%d.%m %H:%M")"
 printf '%s' "$V" > version.txt
 "$G" --headless --import >/dev/null 2>&1 || true
 "$G" --headless --export-release "Web" ../3d/index.html
+cp web/net.js ../3d/net.js

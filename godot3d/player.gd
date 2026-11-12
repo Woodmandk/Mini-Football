@@ -24,6 +24,16 @@ var dive_t := -1.0
 var dive_side := 0.0
 var mood := 0 # 0 normal, 1 scorer, 2 happy, 3 sad
 var mood_t := 0.0
+var kick_n := 0
+var tackle_n := 0
+var dive_n := 0
+var pname := ""
+var num := 0
+var net_pos := Vector3.ZERO
+var net_yaw := 0.0
+var marker: MeshInstance3D
+var blob: MeshInstance3D
+var ring_mat: StandardMaterial3D
 
 var body: Node3D
 var torso: Node3D
@@ -129,15 +139,44 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	t.rings = 24
 	t.ring_segments = 4
 	ring.mesh = t
-	var rm := StandardMaterial3D.new()
-	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.albedo_color = Color(1.0, 0.92, 0.25)
-	ring.material_override = rm
+	ring_mat = StandardMaterial3D.new()
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.albedo_color = Color(1.0, 0.92, 0.25)
+	ring.material_override = ring_mat
 	ring.scale = Vector3(1, 0.08, 1)
 	ring.position = Vector3(0, 0.04, 0)
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	ring.visible = false
 	add_child(ring)
+	# soft round shadow, used when real shadows are switched off on weak phones
+	blob = MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.42
+	bm.bottom_radius = 0.42
+	bm.height = 0.01
+	bm.radial_segments = 12
+	blob.mesh = bm
+	var bmat := StandardMaterial3D.new()
+	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bmat.albedo_color = Color(0, 0, 0, 0.32)
+	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	blob.material_override = bmat
+	blob.position = Vector3(0, 0.02, 0)
+	blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	blob.visible = false
+	add_child(blob)
+	marker = MeshInstance3D.new()
+	var cone := CylinderMesh.new()
+	cone.top_radius = 0.17
+	cone.bottom_radius = 0.0
+	cone.height = 0.3
+	cone.radial_segments = 4
+	marker.mesh = cone
+	marker.material_override = ring_mat
+	marker.position = Vector3(0, 2.2, 0)
+	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	marker.visible = false
+	add_child(marker)
 	scale = Vector3.ONE * 1.22
 
 func fwd() -> Vector3:
@@ -151,6 +190,22 @@ func face(dir: Vector3, rate: float, dt: float) -> void:
 
 func start_kick() -> void:
 	kick_t = 0.0
+	kick_n += 1
+
+func start_tackle() -> void:
+	tackle_t = 0.0
+	tackle_n += 1
+
+func start_dive(sd: float) -> void:
+	dive_t = 0.0
+	dive_side = sd
+	dive_n += 1
+
+func set_ring(on: bool, col: Color, arrow: bool) -> void:
+	ring.visible = on
+	marker.visible = on and arrow
+	if on:
+		ring_mat.albedo_color = col
 
 func animate(dt: float) -> void:
 	rotation.y = yaw
