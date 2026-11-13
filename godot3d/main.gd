@@ -126,6 +126,8 @@ class Human:
 	var lob_hold := -1.0
 	var def_hold := -1.0
 	var pull_n := 0
+	var ot := 0
+	var ot_t := 0.0
 	var pull_t := 0.0
 	var meter := 0.0
 	var tired := false
@@ -241,6 +243,10 @@ var version := "dev"
 var shp := [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]
 var autotest_on := OS.get_cmdline_user_args().has("--autotest")
 var bot_slide := OS.get_cmdline_user_args().has("--slide")
+var long_test := OS.get_cmdline_user_args().has("--longtest")
+var long_t := 0.0
+var long_n := 0
+var long_arm := 0.0
 var bot_hold := OS.get_cmdline_user_args().has("--hold")
 var tst := [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}]
 var stats := {"shots": 0, "passes": 0, "tackles": 0, "outs": 0, "saves": 0, "goals": 0, "fouls": 0, "offsides": 0, "pens": 0, "cards": 0}
@@ -1269,7 +1275,7 @@ func _derive(p) -> void:
 	var dri: float = p.pas * 0.55 + p.pac * 0.45 - (8.0 if p.role in ["DF", "GK"] else 0.0)
 	var dk: float = clampf((dri - 50.0) / 40.0, 0.0, 1.0)
 	p.turn_k = lerpf(0.8, 1.25, dk)
-	p.carry_k = lerpf(0.92, 0.965, dk)
+	p.carry_k = lerpf(0.88, 0.94, dk)
 	p.phy = clampf(p.dfn * 0.7 + (100 - p.pac) * 0.3 + (6.0 if p.role == "DF" else 0.0), 35.0, 99.0)
 
 func _apply_sound(save: bool) -> void:
@@ -1986,11 +1992,19 @@ func _switch_for_pass(t: int, m) -> void:
 	var worst := 0.0
 	for h in humans:
 		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0:
+			# a man who stands in the path of the pass, or close to the receiver, is kept: he can win it himself
+			var ln: Vector3 = m.position - ball.position
+			ln.y = 0.0
+			var hp: Vector3 = h.ctrl.position - ball.position
+			hp.y = 0.0
+			var tl: float = clampf(hp.dot(ln) / maxf(ln.length_squared(), 0.01), 0.0, 1.0)
+			if (hp - ln * tl).length() < 5.0 or h.ctrl.position.distance_to(m.position) < 9.0:
+				continue
 			var d2: float = h.ctrl.position.distance_to(spot)
 			if d2 > worst:
 				worst = d2
 				hw = h
-	if hw != null and bd + 5.0 < worst:
+	if hw != null and bd + 7.0 < worst:
 		hw.ctrl = best
 		hw.switch_cool = 0.9
 
@@ -2205,9 +2219,29 @@ func _play(dt: float) -> void:
 			h.evs.append("pass_up")
 		if h.lob_hold >= 0.6:
 			h.evs.append("lob_up")
+		# is a pass from a team mate on its way to my man?
+		var coming: bool = ball_owner == null and h.ctrl.recv and ball_last != null and ball_last.team == h.team
+		# First-time play: a button pressed while the pass is still on its way is carried out the moment the ball arrives.
+		if h.ot > 0:
+			h.ot_t -= dt
+			if mine and set_piece == "":
+				var k1: int = h.ot
+				h.ot = 0
+				if k1 == 3:
+					_shoot(h.ctrl, 0.62, _human_aim(h, dir3), 0.95, 0.2)
+				else:
+					var m1 = _pass_target(h.ctrl, dir3, false, 22.0 if k1 == 2 else -1.0)
+					if m1 != null:
+						_pass(h.ctrl, m1, k1 == 2)
+				mine = ball_owner == h.ctrl
+			elif h.ot_t <= 0.0 or (ball_owner != null and ball_owner != h.ctrl):
+				h.ot = 0
 		for e in h.evs:
 			if e == "shoot_down":
-				if mine and set_piece in ["corner", "throw"]:
+				if coming:
+					h.ot = 3
+					h.ot_t = 1.6
+				elif mine and set_piece in ["corner", "throw"]:
 					var cm = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false)
 					if cm != null:
 						_pass(h.ctrl, cm, true, set_piece == "corner")
@@ -2233,6 +2267,9 @@ func _play(dt: float) -> void:
 					pass
 				elif mine:
 					h.pass_hold = 0.0
+				elif coming:
+					h.ot = 1
+					h.ot_t = 1.6
 				else:
 					_switch(h)
 			elif e == "pass_up":
@@ -2250,6 +2287,9 @@ func _play(dt: float) -> void:
 			elif e == "lob_down":
 				if mine and set_piece != "pen":
 					h.lob_hold = 0.0
+				elif coming:
+					h.ot = 2
+					h.ot_t = 1.6
 			elif e == "lob_up":
 				# the high ball has its own button: the longer the hold, the further the man it looks for
 				if h.lob_hold >= 0.0 and ball_owner == h.ctrl:
@@ -2285,8 +2325,8 @@ func _play(dt: float) -> void:
 		if oc != null and oc.team != h.team and oc.role != "GK" and h.auto_cool <= 0.0 and protect_t <= 0.0 and h.ctrl.stun <= 0.0 and h.stick.length() > 0.3 and set_piece == "":
 			var tb: Vector3 = ball.position - h.ctrl.position
 			tb.y = 0.0
-			var rc: float = 1.3 + (h.ctrl.dfn - 60) * 0.006 - (oc.phy - 60) * 0.004
-			if tb.length() < rc * 0.8 and dir3.normalized().dot(tb.normalized()) > 0.25 and oc.fwd().dot((h.ctrl.position - oc.position).normalized()) > -0.3:
+			var rc: float = 1.55 + (h.ctrl.dfn - 60) * 0.006 - (oc.phy - 60) * 0.004
+			if tb.length() < rc * 0.85 and dir3.normalized().dot(tb.normalized()) > 0.1 and oc.fwd().dot((h.ctrl.position - oc.position).normalized()) > -0.3:
 				h.auto_cool = 1.2
 				_human_tackle(h, true)
 	# --- who chases
@@ -2318,7 +2358,16 @@ func _play(dt: float) -> void:
 		if ball_owner == null and chaser[t] != null and _hum_of(chaser[t]) == null:
 			var h = _nearest_human(t, aim)
 			if h != null and h.switch_cool <= 0.0 and h.ctrl != null and not h.ctrl.recv:
-				if chaser[t].position.distance_to(aim) + 3.0 < h.ctrl.position.distance_to(aim):
+				# Not while your man can still cut the ball out himself: standing in or near the path of an
+				# opponent's pass you keep him, however close someone else is to where it will land.
+				var ln: Vector3 = aim - ball.position
+				ln.y = 0.0
+				var hp: Vector3 = h.ctrl.position - ball.position
+				hp.y = 0.0
+				var tl: float = clampf(hp.dot(ln) / maxf(ln.length_squared(), 0.01), 0.0, 1.0)
+				var in_lane: bool = (hp - ln * tl).length() < 5.0
+				var margin := 3.0 if ball_last == null or ball_last.team == t else 6.0
+				if not in_lane and chaser[t].position.distance_to(aim) + margin < h.ctrl.position.distance_to(aim):
 					h.ctrl = chaser[t]
 					h.switch_cool = 0.8
 	# --- who offers for the ball and who runs in behind
@@ -2421,8 +2470,8 @@ func _play(dt: float) -> void:
 						want += Vector3(h.stick.x, 0, h.stick.y) * p.top_speed * 0.35
 						var tb2: Vector3 = ball.position - p.position
 						tb2.y = 0.0
-						var rc2: float = 1.5 + (p.dfn - 60) * 0.006 - (oc2.phy - 60) * 0.004
-						if h.auto_cool <= 0.0 and protect_t <= 0.0 and p.stun <= 0.0 and tb2.length() < rc2 * 0.85 and oc2.fwd().dot((p.position - oc2.position).normalized()) > -0.3:
+						var rc2: float = 1.75 + (p.dfn - 60) * 0.006 - (oc2.phy - 60) * 0.004
+						if h.auto_cool <= 0.0 and protect_t <= 0.0 and p.stun <= 0.0 and tb2.length() < rc2 * 0.9 and oc2.fwd().dot((p.position - oc2.position).normalized()) > -0.3:
 							h.auto_cool = 0.9
 							_human_tackle(h, true)
 				if not (ball_owner == p and set_piece != ""):
@@ -2886,9 +2935,11 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	var dir := goal - from
 	dir.y = 0.0
 	dir = dir.normalized()
-	var sp := 19.0 + 13.0 * power
+	# from distance a full strike is hit harder and dips under the bar; close in, full power still tends to fly over
+	var lk: float = clampf((d - 16.0) / 8.0, 0.0, 1.0)
+	var sp := 19.0 + 13.0 * power + 4.0 * lk * clampf((power - 0.75) / 0.25, 0.0, 1.0)
 	var t := maxf(d / sp, 0.15)
-	var h := 0.35 + power * power * 2.1 + randf() * 0.6 * power * err_k
+	var h := 0.35 + power * power * lerpf(2.1, 1.65, lk) + randf() * lerpf(0.6, 0.45, lk) * power * err_k
 	var vy := (h - 0.25) / t + 4.9 * t
 	# a curled shot starts wide of its target and bends back in
 	var spin := 0.0
@@ -2968,7 +3019,7 @@ func _human_tackle(h, standing := false) -> void:
 		me_p.yaw = atan2(-to.x, -to.z)
 		me_p.vel = to.normalized() * 7.2
 	# reach: a better defender gets a longer leg in, a stronger carrier holds him off
-	var reach: float = 1.5 + (me_p.dfn - 60) * 0.006 - (c.phy - 60) * 0.004
+	var reach: float = 1.8 + (me_p.dfn - 60) * 0.006 - (c.phy - 60) * 0.004
 	if bd < reach and protect_t <= 0.0 and c.role != "GK":
 		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
 		var pd: float = me_p.position.distance_to(c.position)
@@ -3129,7 +3180,7 @@ func _pickups() -> void:
 		if absf(b.x - gx) > 16.5 or absf(b.z) > 20.16:
 			continue
 		var gq: float = clampf((g.dfn - 60) / 30.0, 0.0, 1.0)
-		var reach := 0.8 + (lerpf(0.66, 0.82, gq) if g.dive_t >= 0.0 else 0.0)
+		var reach := 0.8 + (lerpf(0.72, 0.86, gq) if g.dive_t >= 0.0 else 0.0)
 		# high balls are harder to reach, so the top corners are open to a good shot
 		if shot_live:
 			reach -= maxf(b.y - 1.5, 0.0) * 0.45
@@ -3493,7 +3544,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 					zc = b.z + bent.z * ((gx - b.x) / bent.x)
 			if absf(zc) < GOAL_HW + 1.2:
 				p.react_t += dt
-				if p.react_t < lerpf(0.29, 0.2, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
+				if p.react_t < lerpf(0.27, 0.19, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
 				# off his line he saves where he stands instead of running back to the goal line
@@ -3920,7 +3971,9 @@ func _camera(dt: float) -> void:
 	else:
 		var off := Vector3(0, 21.0, 31.0)
 		var fx2 := clampf(f.x, -HL + 8.0, HL - 8.0)
-		var foc := Vector3(fx2, 0, f.z * 0.6)
+		# on the near side the camera comes with the ball, so the touchline under the buttons stays in view
+		var nz: float = f.z * view_flip
+		var foc := Vector3(fx2, 0, maxf(nz * 0.6, nz - 4.0) * view_flip)
 		want_fov = 27.0
 		if cam_mode == 1:
 			off = Vector3(0, 38.0, 5.0)
@@ -3980,6 +4033,34 @@ func _auto_quality(dt: float) -> void:
 
 # Test only: a scripted "thumb" that plays through the same inputs as a person, to exercise the human code paths.
 func _bot_inputs(dt: float) -> void:
+	if long_test:
+		# long shot test: again and again a full power shot from 24-30 m aimed at a corner
+		long_t -= dt
+		if state == "play" and set_piece == "" and long_t <= 0.0 and humans.size() > 0:
+			long_t = 3.0
+			var lp = humans[0].ctrl
+			if lp != null and lp.role != "GK":
+				var ls := side(lp.team)
+				lp.position = Vector3((HL - 24.0 - randf() * 6.0) * ls, 0, randf_range(-10.0, 10.0))
+				lp.vel = Vector3.ZERO
+				lp.stun = 0.0
+				protect_t = 0.0
+				_give(lp)
+				ball.position = lp.position + Vector3(0.5 * ls, BALL_R, 0)
+				protect_t = 1.6
+				long_arm = 1.3
+		if long_arm > 0.0:
+			long_arm -= dt
+			var lq = humans[0].ctrl
+			if long_arm <= 0.0 and ball_owner == lq and state == "play":
+				var before: int = stats["shots"]
+				_shoot(lq, 1.0, (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * 0.82, 0.8, 0.2)
+				if stats["shots"] > before:
+					long_n += 1
+		if state == "full" and long_n > 0:
+			print("AUTOTEST long shots=", long_n, " goals=", score[humans[0].team])
+			long_n = 0
+		return
 	for h in humans:
 		var p = h.ctrl
 		if p == null:
