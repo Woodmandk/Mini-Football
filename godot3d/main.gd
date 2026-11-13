@@ -11,7 +11,9 @@ const Career := preload("res://career.gd")
 
 const DIVE_V := 4.9
 const HL := 52.5
-const TEMPO := 1.15
+const TEMPO := 1.25
+const SLIDE_T := 0.38
+const SLIDE_V := 27.0
 const HW := 34.0
 const GOAL_HW := 3.66
 const GOAL_H := 2.44
@@ -881,7 +883,7 @@ func _build_audio() -> void:
 	var defs := {
 		"kick": Sfx.kick(1.0), "touch": Sfx.kick(0.45), "whistle": Sfx.whistle(0.5), "whistle_long": Sfx.whistle(1.1),
 		"roar": Sfx.roar(), "ooh": Sfx.ooh(), "net": Sfx.net(), "blip": Sfx.blip(), "post": Sfx.post(),
-		"blip2": Sfx.blip(1320.0), "whoosh": Sfx.whoosh(),
+		"blip2": Sfx.blip(1320.0), "whoosh": Sfx.whoosh(), "slide": Sfx.slide(), "win": Sfx.win(), "thud": Sfx.thud(), "jingle": Sfx.jingle(),
 	}
 	for k in defs:
 		var p := AudioStreamPlayer.new()
@@ -1121,6 +1123,7 @@ func _to_menu() -> void:
 	for p in players:
 		p.off = false
 		p.yellow = 0
+		p.set_meta("fouls", 0)
 		p.visible = true
 	_kickoff(0)
 	if not crowd_au.playing:
@@ -1645,6 +1648,7 @@ func _begin_match(with_intro: bool) -> void:
 	for p in players:
 		p.off = false
 		p.yellow = 0
+		p.set_meta("fouls", 0)
 		p.visible = true
 	_formation(0, true)
 	ball_owner = null
@@ -1792,6 +1796,7 @@ func _goal(team: int) -> void:
 	fx("shake", 1.0)
 	snd("net")
 	snd("roar")
+	snd("jingle")
 	fx("excite", 1.0)
 	fx("confetti", ball.position.x * 0.72)
 	fx("vib", 180)
@@ -2025,28 +2030,49 @@ func _header(p) -> void:
 	if kind == "shot":
 		fx("punch", 2.0)
 
-func _foul(by, on) -> void:
+func _foul(by, on, man_first := false) -> void:
 	stats["fouls"] += 1
 	tst[by.team]["fouls"] += 1
 	var pos: Vector3 = on.position
-	on.stun = 1.2
-	on.start_fall(1.2)
 	by.stun = 0.8
 	var gx := -HL * side(by.team)
 	var in_box := absf(pos.x - gx) < 16.5 and absf(pos.z) < 20.16
 	var closing: float = (by.vel - on.vel).length()
 	var card := ""
 	# a booking is for a reckless challenge, not for every foul
-	if closing > (5.5 if in_box else 7.0):
+	# (2D rule) from behind at speed, or the same man fouling again and again
+	var nf: int = int(by.get_meta("fouls", 0)) + 1
+	by.set_meta("fouls", nf)
+	var rear: bool = on.fwd().dot((on.position - by.position).normalized()) > 0.5
+	var slid: bool = by.tackle_t >= 0.0
+	if (slid and rear and man_first) or (not slid and closing > (5.5 if in_box else 7.0)) or nf >= 3:
 		by.yellow += 1
 		stats["cards"] += 1
 		card = "YELLOW CARD"
 		if by.yellow >= 2:
 			card = "RED CARD"
 			by.off = true
+	# advantage, as in the 2D game: the fouled side still has the ball, so the referee lets them play on.
+	# A red card or a penalty always stops the game.
+	var o = ball_owner
+	if not in_box and card != "RED CARD" and o != null and o.team == on.team and set_piece == "" and state == "play":
+		stats["adv"] = int(stats.get("adv", 0)) + 1
+		by.stun = 1.1
+		by.vel = Vector3.ZERO
+		on.stun = maxf(on.stun, 0.12)
+		protect_t = maxf(protect_t, 0.6)
+		snd("thud")
+		if not _quiet():
+			_banner("ADVANTAGE", Color(1, 1, 1), 0.9, card, 44)
+			fx("say", "The referee lets play go on. Advantage!")
+			fx("vib", 60)
+		return
+	on.stun = 1.2
+	on.start_fall(1.2)
 	if in_box:
 		stats["pens"] += 1
 	snd("whistle")
+	snd("thud")
 	if not _quiet():
 		var who := "%d  %s" % [by.num, by.pname.to_upper()]
 		if in_box:
@@ -2895,9 +2921,10 @@ func _idle_players(dt: float) -> void:
 		_move(p, Vector3.ZERO, dt)
 
 func _move(p, want: Vector3, dt: float) -> void:
-	if p.tackle_t >= 0.0 and p.tackle_t < 0.52 and p.slide_live:
-		# sliding on the grass: he keeps going and only friction slows him
-		p.vel = p.vel.move_toward(Vector3.ZERO, 21.0 * dt)
+	if p.tackle_t >= 0.0 and p.tackle_t < SLIDE_T and p.slide_live:
+		# sliding on the grass, the 2D game's curve: a burst that eases off to under half
+		var sk: float = 0.45 + 0.55 * (1.0 - p.tackle_t / SLIDE_T)
+		p.vel = p.slide_dir * SLIDE_V * sk
 		p.position += p.vel * dt
 		p.position.x = clampf(p.position.x, -HL - 2.5, HL + 2.5)
 		p.position.z = clampf(p.position.z, -HW - 2.5, HW + 2.5)
@@ -3350,23 +3377,31 @@ func _slide_tackle(h) -> void:
 	var dirs: Vector3 = me_p.fwd()
 	var to: Vector3 = ball.position - me_p.position
 	to.y = 0.0
-	if to.length() < 8.0 and to.length() > 0.1 and (c == null or c.team != h.team):
-		var lead: Vector3 = to + (c.vel * 0.35 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.35)
+	if to.length() < 12.0 and to.length() > 0.1 and (c == null or c.team != h.team):
+		var lead: Vector3 = to + (c.vel * 0.18 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.18)
 		dirs = lead.normalized()
 		me_p.yaw = atan2(-dirs.x, -dirs.z)
 	# like the 2D game: a fast burst along the grass, more than twice his running speed, about six metres
-	me_p.vel = dirs * 17.5
+	me_p.slide_dir = dirs
+	me_p.vel = dirs * SLIDE_V
 	me_p.slide_live = true
-	me_p.stun = 0.72
+	me_p.slide_fx = 0.0
+	me_p.stun = SLIDE_T + 0.3
+	snd("slide")
 	fx("dust", [me_p.position.x, me_p.position.z])
 
 func _slides() -> void:
 	for p in players:
 		if not p.slide_live:
 			continue
-		if p.tackle_t < 0.0 or p.tackle_t > 0.54:
+		if p.tackle_t < 0.0 or p.tackle_t > SLIDE_T + 0.02:
 			p.slide_live = false
 			continue
+		# grass flies up all the way along the slide
+		p.slide_fx -= get_process_delta_time()
+		if p.slide_fx <= 0.0:
+			p.slide_fx = 0.07
+			fx("dust", [p.position.x, p.position.z])
 		var c = ball_owner
 		var bd: float = Vector2(p.position.x - ball.position.x, p.position.z - ball.position.z).length()
 		if c == null:
@@ -3384,8 +3419,9 @@ func _slides() -> void:
 					c.stun = 0.6
 					c.start_fall(0.6)
 					stats["tackles"] += 1
-					snd("touch")
-					fx("shake", 0.25)
+					snd("win")
+					fx("shake", 0.3)
+					fx("vib", 40)
 					p.stun = 0.3
 					_give(p)
 					protect_t = 0.7
@@ -3394,7 +3430,7 @@ func _slides() -> void:
 			elif pd < 0.75:
 				# missed the ball and took the man
 				p.slide_live = false
-				_foul(p, c)
+				_foul(p, c, true)
 
 func _tackles(dt: float) -> void:
 	var c = ball_owner
@@ -4328,9 +4364,10 @@ func _camera(dt: float) -> void:
 		want_fov = 27.0
 		if cam_mode == 1:
 			# from above, like the old 2D game: a wide slice of the pitch, tilted just enough to read the players
+			# the same slice as the 2D game showed: about 42 m of the pitch from top to bottom
 			off = Vector3(0, 60.0, 6.0)
-			foc = Vector3(clampf(f.x, -HL + 25.0, HL - 25.0), 0, clampf(f.z * view_flip, -21.0, 24.0) * view_flip)
-			want_fov = 28.0
+			foc = Vector3(clampf(f.x, -HL + 40.0, HL - 40.0), 0, clampf(f.z * view_flip, -15.0, 18.5) * view_flip)
+			want_fov = 38.5
 		elif cam_mode == 2:
 			off = Vector3(0, 9.0, 14.5)
 			foc = Vector3(f.x, 0.5, f.z)

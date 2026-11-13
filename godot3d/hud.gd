@@ -336,7 +336,9 @@ func show_banner(text: String, col: Color, hold := 1.6, small := "", fs := 96) -
 	banner.add_theme_font_size_override("font_size", fs)
 	banner.add_theme_color_override("font_color", col)
 	banner.pivot_offset = size * 0.5
-	banner.scale = Vector2(3.2, 3.2)
+	# small words during live play sit up under the scoreboard, so they never cover the game
+	banner.position.y = -size.y * 0.33 if fs <= 48 else 0.0
+	banner.scale = Vector2(3.2, 3.2) if fs > 48 else Vector2(1.6, 1.6)
 	banner.modulate.a = 0.0
 	banner.rotation = -0.08
 	sub.text = small
