@@ -566,9 +566,12 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					_pulse(pm)
 			var rx2 := w * 0.56 + 10.0
 			var rw := w - rx2 - 40.0
-			var sq := _btn("SQUAD", "c_squad", null, "alt", Vector2(rx2, 100), Vector2(rw * 0.5 - 6, 78), 28)
-			var tbn := _btn("TABLE", "c_table", null, "alt", Vector2(rx2 + rw * 0.5 + 6, 100), Vector2(rw * 0.5 - 6, 78), 28)
+			var sq := _btn("SQUAD", "c_squad", null, "alt", Vector2(rx2, 100), Vector2(rw / 3.0 - 6, 78), 21)
+			var mkb := _btn("TRANSFERS", "c_market", null, "alt", Vector2(rx2 + rw / 3.0 + 3, 100), Vector2(rw / 3.0 - 6, 78), 21)
+			var tbn := _btn("TABLE", "c_table", null, "alt", Vector2(rx2 + rw * 2.0 / 3.0 + 6, 100), Vector2(rw / 3.0 - 6, 78), 21)
 			menu.add_child(sq)
+			menu.add_child(mkb)
+			items.append([mkb, Vector2(80, 0), 0.08])
 			menu.add_child(tbn)
 			items.append([sq, Vector2(80, 0), 0.05])
 			items.append([tbn, Vector2(80, 0), 0.1])
@@ -666,10 +669,11 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			bl.position = Vector2(bx3, 96)
 			menu.add_child(bl)
 			var bn := 0
+			var bcols := 3 if sqd.size() - 11 <= 6 else 4
 			for qi in sqd.size():
 				if xi.has(qi) or xi.has(float(qi)):
 					continue
-				var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % 3) * (bw3 / 3.0), 118 + (bn / 3) * 54), Vector2(bw3 / 3.0 - 6, 48), pcol, qi == sel, false)
+				var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), 118 + (bn / bcols) * 54), Vector2(bw3 / bcols - 6, 48), pcol, qi == sel, false)
 				menu.add_child(bb)
 				bn += 1
 			var dp := Panel.new()
@@ -708,8 +712,14 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				xl.position = Vector2(16, 162)
 				dp.add_child(xl)
 				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) < int(sp2["pot"])
-				var trb := _btn("TRAIN  +1   (%d COINS)" % int(sp2["cost"]), "c_train", null, "primary" if can else "off", Vector2(bx3 + 16, 232 + dp.size.y - 62), Vector2(bw3 - 32, 48), 18)
+				var on_bench: bool = not (xi.has(sel) or xi.has(float(sel)))
+				var tw3 := (bw3 - 32) * (0.6 if on_bench else 1.0)
+				var trb := _btn("TRAIN  +1   (%d COINS)" % int(sp2["cost"]), "c_train", null, "primary" if can else "off", Vector2(bx3 + 16, 232 + dp.size.y - 62), Vector2(tw3, 48), 17)
 				menu.add_child(trb)
+				if on_bench:
+					var sure2: bool = int(c3.get("sell_sure", -1)) == sel
+					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  (%d)" % int(sp2["sell"]), "c_sell", null, "ghost", Vector2(bx3 + 16 + tw3 + 8, 232 + dp.size.y - 62), Vector2(bw3 - 32 - tw3 - 8, 48), 14)
+					menu.add_child(slb)
 			else:
 				var hint2 := _label("Tap a player to see him.
 Tap another to swap the two.
@@ -720,7 +730,7 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				dp.add_child(hint2)
 			if str(c3.get("msg", "")) != "":
 				var ms := _label(str(c3.get("msg", "")), 15, GOLD, font2)
-				ms.position = Vector2(bx3, 208)
+				ms.position = Vector2(bx3 + 16, 232 + dp.size.y - 90)
 				menu.add_child(ms)
 			var co3 := _label("COINS  %d" % int(c3.get("coins", 0)), 22, GOLD)
 			co3.position = Vector2(w - 260, 20)
@@ -731,6 +741,68 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var fb := _btn("FORMATION:  " + str(c3.get("fname", "4-3-3")), "c_form", null, "alt", Vector2(158, 14), Vector2(230, 48), 17)
 			menu.add_child(fb)
 			menu.add_child(bk3)
+		"market":
+			_title("TRANSFERS", "New players are offered after every match")
+			var c5: Dictionary = info.get("car", {})
+			var mk: Array = c5.get("market", [])
+			var pcol5 := {"GK": Color(0.95, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
+			var tw5 := minf(w - 80.0, 1060.0)
+			var tx5 := (w - tw5) * 0.5
+			var rh5 := minf(66.0, (h - 150.0) / 6.0)
+			var heads5 := [["PLAYER", 0.04], ["AGE", 0.27], ["RATING", 0.35], ["CAN REACH", 0.44], ["PAC", 0.56], ["SHO", 0.62], ["PAS", 0.68], ["DEF", 0.74]]
+			for hd in heads5:
+				var hl5 := _label(str(hd[0]), 13, Color(1, 1, 1, 0.6), font2)
+				hl5.position = Vector2(tx5 + float(hd[1]) * tw5, 94)
+				menu.add_child(hl5)
+			for mi in mk.size():
+				var mp: Dictionary = mk[mi]
+				var rp5 := Panel.new()
+				rp5.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.88), 12, Color(1, 1, 1, 0.12)))
+				rp5.position = Vector2(tx5, 114 + mi * rh5)
+				rp5.size = Vector2(tw5, rh5 - 6)
+				rp5.mouse_filter = Control.MOUSE_FILTER_PASS
+				menu.add_child(rp5)
+				items.append([rp5, Vector2(0, 30), 0.04 * mi])
+				var chip5 := ColorRect.new()
+				chip5.color = pcol5.get(str(mp["pos"]), Color.WHITE)
+				chip5.position = Vector2(12, 9)
+				chip5.size = Vector2(7, rh5 - 24)
+				rp5.add_child(chip5)
+				var cy5 := (rh5 - 6) * 0.5
+				var n5 := _label(str(mp["n"]), 20, Color.WHITE)
+				n5.position = Vector2(0.04 * tw5, cy5 - 24)
+				rp5.add_child(n5)
+				var p5 := _label({"GK": "GOALKEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}[str(mp["pos"])], 12, pcol5.get(str(mp["pos"]), Color.WHITE), font2)
+				p5.position = Vector2(0.04 * tw5, cy5 + 2)
+				rp5.add_child(p5)
+				var vals5 := [[str(mp["age"]), 0.27, 18, Color(1, 1, 1, 0.85)], [str(mp["ovr"]), 0.35, 26, GOLD], [str(mp["pot"]), 0.44, 20, GREEN.lightened(0.3)],
+					[str(mp["st"][0]), 0.56, 17, Color.WHITE], [str(mp["st"][1]), 0.62, 17, Color.WHITE], [str(mp["st"][2]), 0.68, 17, Color.WHITE], [str(mp["st"][3]), 0.74, 17, Color.WHITE]]
+				for v5 in vals5:
+					var vl5 := _label(str(v5[0]), int(v5[2]), v5[3])
+					vl5.position = Vector2(float(v5[1]) * tw5, cy5 - int(v5[2]) * 0.72)
+					rp5.add_child(vl5)
+				var can5: bool = int(c5.get("coins", 0)) >= int(mp["price"])
+				var bb5 := _btn("BUY   %d" % int(mp["price"]), "c_buy", mi, "primary" if can5 else "alt", Vector2(tx5 + tw5 * 0.81, 114 + mi * rh5 + 6), Vector2(tw5 * 0.19 - 8, rh5 - 18), 18)
+				menu.add_child(bb5)
+			if mk.is_empty():
+				var em5 := _label("You have signed everyone. New players come after the next match.", 18, Color(1, 1, 1, 0.8), font2)
+				em5.position = Vector2(0, h * 0.45)
+				em5.size = Vector2(w, 30)
+				em5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				menu.add_child(em5)
+			if str(c5.get("msg", "")) != "":
+				var ms5 := _label(str(c5.get("msg", "")), 17, GOLD)
+				ms5.position = Vector2(0, h - 34)
+				ms5.size = Vector2(w, 26)
+				ms5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				menu.add_child(ms5)
+			var co5 := _label("COINS  %d" % int(c5.get("coins", 0)), 22, GOLD)
+			co5.position = Vector2(w - 260, 20)
+			co5.size = Vector2(230, 34)
+			co5.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			menu.add_child(co5)
+			var bk5 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
+			menu.add_child(bk5)
 		"teams":
 			_title("PICK YOUR TEAM", "")
 			var cl: Array = info.get("clubs", [])
