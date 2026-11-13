@@ -138,6 +138,7 @@ class Human:
 	var hi := false
 	var def_hold := -1.0
 	var pull_n := 0
+	var shc := 0.0
 	var ot := 0
 	var ot_t := 0.0
 	var pull_t := 0.0
@@ -1467,8 +1468,6 @@ func _action(act: String, arg = null) -> void:
 			opt_voice = not opt_voice
 			_apply_sound(true)
 			hud.refresh(_menu_info())
-		"cam":
-			cam_mode = (cam_mode + 1) % CAMS.size()
 
 # What a player's numbers mean on the pitch, so that no two players feel the same:
 # pace = top speed and how fast he gets there, touch (passing + pace) = how tightly he turns and how
@@ -2289,9 +2288,6 @@ func _frame(dt: float) -> void:
 	var evs: Array = hud.ev.duplicate()
 	hud.ev.clear()
 	_keys_to_events(evs)
-	if evs.has("cam"):
-		cam_mode = (cam_mode + 1) % CAMS.size()
-		au["blip"].play()
 	if evs.has("pause"):
 		_action("pause")
 	if screen == "menu":
@@ -2387,7 +2383,7 @@ func _tick(dt: float) -> void:
 		h.evs.clear()
 
 func _keys_to_events(evs: Array) -> void:
-	var map := {KEY_SPACE: "shoot", KEY_X: "pass", KEY_E: "lob", KEY_Q: "thru", KEY_C: "cam", KEY_ESCAPE: "pause"}
+	var map := {KEY_SPACE: "shoot", KEY_X: "pass", KEY_E: "lob", KEY_Q: "thru", KEY_ESCAPE: "pause"}
 	for k in map:
 		var d := Input.is_physical_key_pressed(k)
 		var was: bool = _keys.get(k, false)
@@ -2604,9 +2600,17 @@ func _play(dt: float) -> void:
 			var tb: Vector3 = ball.position - h.ctrl.position
 			tb.y = 0.0
 			var rc: float = 1.55 + (h.ctrl.dfn - 60) * 0.006 - (oc.phy - 60) * 0.004
-			if tb.length() < rc * 0.85 and dir3.normalized().dot(tb.normalized()) > 0.1 and oc.fwd().dot((h.ctrl.position - oc.position).normalized()) > -0.3:
-				h.auto_cool = 1.2
-				_human_tackle(h, true)
+			# shoulder to shoulder, as in the 2D game: not at once, but a contest that builds while you have a foot
+			# on the ball side. Quicker when the ball is out of his feet, never while his body shields it.
+			var qh: float = _tq(h.ctrl, oc)
+			if tb.length() < 0.95 and dir3.normalized().dot(tb.normalized()) > 0.3 and oc.fwd().dot((h.ctrl.position - oc.position).normalized()) > -0.1 and qh > 0.2:
+				h.shc += maxf(qh, 0.0) * dt * 2.4
+				if h.shc >= 1.0:
+					h.shc = 0.0
+					h.auto_cool = 1.2
+					_human_tackle(h, true)
+			else:
+				h.shc = maxf(h.shc - dt * 1.5, 0.0)
 	# --- who chases
 	var chaser := [null, null]
 	var second := [null, null]
@@ -2768,7 +2772,7 @@ func _play(dt: float) -> void:
 						var tb2: Vector3 = ball.position - p.position
 						tb2.y = 0.0
 						var rc2: float = 1.75 + (p.dfn - 60) * 0.006 - (oc2.phy - 60) * 0.004
-						if h.auto_cool <= 0.0 and protect_t <= 0.0 and p.stun <= 0.0 and tb2.length() < rc2 * 0.9 and oc2.fwd().dot((p.position - oc2.position).normalized()) > -0.3:
+						if h.auto_cool <= 0.0 and protect_t <= 0.0 and p.stun <= 0.0 and tb2.length() < rc2 * 0.9 and oc2.fwd().dot((p.position - oc2.position).normalized()) > -0.3 and _tq(p, oc2) >= 0.5:
 							h.auto_cool = 0.9
 							_human_tackle(h, true)
 				if not (ball_owner == p and set_piece != ""):
@@ -3341,7 +3345,7 @@ func _human_tackle(h, standing := false) -> void:
 		me_p.yaw = atan2(-to.x, -to.z)
 		me_p.vel = to.normalized() * 7.2
 	# reach: a better defender gets a longer leg in, a stronger carrier holds him off
-	var reach: float = 1.8 + (me_p.dfn - 60) * 0.006 - (c.phy - 60) * 0.004
+	var reach: float = 1.6
 	if bd < reach and protect_t <= 0.0 and not c.hands():
 		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
 		var pd: float = me_p.position.distance_to(c.position)
@@ -3359,12 +3363,7 @@ func _human_tackle(h, standing := false) -> void:
 					snd("touch")
 			me_p.stun = 0.15
 			return
-		c.stun = 0.35
-		c.vel *= 0.3
-		stats["tackles"] += 1
-		snd("touch")
-		_give(me_p)
-		protect_t = 0.6
+		_poke(me_p, c)
 		return
 	me_p.stun = 0.22
 
@@ -3432,6 +3431,66 @@ func _slides() -> void:
 				p.slide_live = false
 				_foul(p, c, true)
 
+# How good the moment is for a foot in, the 2D game's rule (no dice): how close the foot is to the ball,
+# whether the ball is out of his feet (sprinting) or tucked in (slow, turning), whether his body is between
+# you and the ball (he shields it), the angle, whether you are set or flying in, and defending against his dribbling.
+# 0.5 or more wins it clean, 0.36 or more knocks it loose, less is a miss.
+func _tq(p, c) -> float:
+	var dt2: float = Vector2(p.position.x - ball.position.x, p.position.z - ball.position.z).length()
+	var dpo: float = maxf(Vector2(p.position.x - c.position.x, p.position.z - c.position.z).length(), 0.01)
+	var reach: float = 1.3 + clampf((p.dfn - 40) / 55.0, 0.0, 1.0) * 0.25
+	if dt2 > reach:
+		return -1.0
+	var cs: float = c.vel.length()
+	var ctop: float = maxf(c.top_speed, 1.0)
+	var expo := 0.25
+	if c.skill_t >= 0.0:
+		expo = 0.0
+	elif cs > ctop * 0.3:
+		expo = 1.0 if cs > ctop * 0.88 else 0.45
+	var shield: float = clampf((dt2 - dpo - 0.06) / 0.37, 0.0, 1.0)
+	var rear: float = -c.fwd().dot((p.position - c.position) / dpo)
+	var ang: float = 0.07 if rear < -0.3 else (0.03 if rear < 0.3 else -0.12)
+	var ptop: float = maxf(p.top_speed, 1.0)
+	var setk: float = 0.06 if p.vel.length() < ptop * 0.65 else 0.0
+	var vin: float = p.vel.dot((c.position - p.position) / dpo)
+	var lunge: float = maxf(0.0, vin - ptop * 0.75) / ptop
+	var cdr: float = clampf((c.ovr - 40) / 55.0, 0.0, 1.0)
+	var duel: float = (clampf((p.dfn - 40) / 55.0, 0.0, 1.0) - (cdr * 0.6 + clampf((c.pac - 40) / 55.0, 0.0, 1.0) * 0.2 + clampf((c.phy - 40) / 55.0, 0.0, 1.0) * 0.2)) * 0.3
+	return 0.14 + (1.0 - dt2 / reach) * 0.3 + expo * 0.38 - shield * (0.35 + 0.3 * clampf((c.phy - 40) / 55.0, 0.0, 1.0)) + ang + setk - lunge * 0.3 + duel - (0.3 if c.skill_t >= 0.0 else 0.0)
+
+# The foot goes in: won clean, knocked loose between the two, or missed. Returns true when the ball changed hands or went loose.
+func _poke(p, c) -> bool:
+	var q := _tq(p, c)
+	stats["pq"] = int(stats.get("pq", 0)) + 1
+	if q >= 0.5:
+		c.stun = 0.4
+		c.vel *= 0.3
+		stats["tackles"] += 1
+		snd("win")
+		_give(p)
+		protect_t = 0.7
+		return true
+	if q >= 0.36:
+		# a toe on it: it squirts loose and whoever reacts first has it
+		var dv: Vector3 = ball.position - p.position
+		dv.y = 0.0
+		ball_owner = null
+		ball_vel = dv.normalized() * 4.7 + c.vel * 0.35
+		ball_last = p
+		ball_ignore = c
+		ignore_t = 0.25
+		c.vel *= 0.6
+		p.vel *= 0.5
+		snd("touch")
+		stats["nick"] = int(stats.get("nick", 0)) + 1
+		return true
+	# missed: he is past you
+	p.stun = 0.3 + (0.25 if q < 0.0 else 0.0)
+	p.vel *= 0.3
+	stats["pmiss"] = int(stats.get("pmiss", 0)) + 1
+	return false
+
 func _tackles(dt: float) -> void:
 	var c = ball_owner
 	if c == null or c.hands() or protect_t > 0.0:
@@ -3464,20 +3523,10 @@ func _tackles(dt: float) -> void:
 			if o.commit_t <= 0.0:
 				o.commit_t = -1.0
 				o.step_t = 0.0
-				if d > 1.15:
-					# missed: he is beaten and you are away
-					o.stun = 0.7
-				elif front > -0.35 or c.vel.length() < 2.0:
-					# a standing tackle: he takes the ball and the carrier only stumbles
-					c.stun = 0.35
-					c.vel *= 0.3
-					stats["tackles"] += 1
-					snd("touch")
-					_give(o)
-					protect_t = 0.7
-					return
-				else:
+				if front < -0.5 and d < 1.15 and c.vel.length() >= 2.0:
 					_foul(o, c)
+					return
+				if _poke(o, c):
 					return
 			continue
 		# only the man who steps in makes a tackle; anyone else only if you run right into him
@@ -3486,7 +3535,9 @@ func _tackles(dt: float) -> void:
 		reach += (o.dfn - 60) * 0.004 - (c.phy - 60) * 0.004
 		# a man who stands still on the ball can be robbed from any side
 		var still: bool = c.vel.length() < 2.0
-		if d < reach and (still or front > (0.0 if stepping else 0.3)):
+		# a clever defender waits until the ball is out of your feet; a poor one goes in early
+		var want_q: float = 0.42 - (1.0 - clampf((o.dfn - 40) / 45.0, 0.0, 1.0)) * 0.2
+		if d < reach + 0.25 and (still or front > (0.0 if stepping else 0.3)) and _tq(o, c) >= want_q:
 			o.press_t += dt
 			var need: float = _cpu(o.team)["need"]
 			if _team_human(o.team):
@@ -4190,7 +4241,7 @@ func _process(dt: float) -> void:
 		_spin_ball(ball_vel, dt * anim_rate)
 	var loose: bool = ball_owner == null
 	# seen from above everything is further away: the ball and the men are drawn bigger (the play itself is the same)
-	var top: bool = cam_mode == 1 and screen == "match" and state in ["play", "dead"]
+	var top: bool = cam_mode == 1
 	var bs := 1.0
 	if top:
 		bs = 3.4 * (1.0 + clampf(ball.position.y - BALL_R, 0.0, 12.0) * 0.07)
@@ -4314,7 +4365,35 @@ func _camera(dt: float) -> void:
 	var want_fov := 38.0
 	var k := 3.2
 	fov_punch = maxf(fov_punch - dt * 9.0, 0.0)
-	if screen == "menu":
+	if cam_mode == 1 and screen == "menu":
+		# behind the menus: a slow drift over the pitch, seen from above like the match
+		var a := real_t * 0.08
+		want_look = Vector3(sin(a) * 14.0, 0, cos(a * 0.7) * 5.0)
+		want_pos = want_look + Vector3(0, 60.0, 6.0)
+		want_fov = 38.5
+		k = 2.0
+	elif cam_mode == 1 and state in ["intro", "replay", "goal", "full"]:
+		# the whole game is seen from above now: kick-off line-up, goals and replays too.
+		# Replays and goals come a little closer, so you see who did what.
+		var hw := 40.0
+		var c2 := Vector3(f.x, 0, f.z)
+		want_fov = 38.5
+		k = 3.0
+		if state == "replay":
+			want_fov = 29.0
+			hw = 30.0
+			k = 5.0
+		elif state == "goal":
+			want_fov = 31.0
+			hw = 32.0
+			if scorer != null and state_t > 0.5:
+				c2 = Vector3(scorer.position.x, 0, scorer.position.z)
+		else:
+			c2 = Vector3.ZERO
+		var hh: float = hw * 0.47
+		want_look = Vector3(clampf(c2.x, -HL - 4.0 + hw, HL + 4.0 - hw), 0, clampf(c2.z * view_flip, -HW - 3.0 + hh, HW + 6.0 - hh) * view_flip)
+		want_pos = want_look + Vector3(0, 60.0, 6.0 * view_flip)
+	elif screen == "menu":
 		var a := real_t * 0.1
 		want_pos = Vector3(sin(a) * 62.0, 15.0 + sin(a * 0.7) * 4.0, cos(a) * 50.0)
 		want_look = Vector3(f.x * 0.35, 0, f.z * 0.35)
