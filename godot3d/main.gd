@@ -13,7 +13,7 @@ const DIVE_V := 4.9
 const HL := 52.5
 const TEMPO := 1.25
 const SLIDE_T := 0.38
-const SLIDE_V := 27.0
+const SLIDE_V := 23.0
 const HW := 34.0
 const GOAL_HW := 3.66
 const GOAL_H := 2.44
@@ -195,6 +195,8 @@ var opt_voice := true
 var opt_len := 1
 var opt_mode := "coop"
 var room := ""
+var wait_friend := 0.0
+var start_msg = null
 var tick_n := 0
 var net_acc := 0.0
 var rec_acc := 0.0
@@ -1478,7 +1480,8 @@ func _derive(p) -> void:
 	var dri: float = p.pas * 0.55 + p.pac * 0.45 - (8.0 if p.role in ["DF", "GK"] else 0.0)
 	var dk: float = clampf((dri - 50.0) / 40.0, 0.0, 1.0)
 	p.turn_k = lerpf(0.8, 1.25, dk)
-	p.carry_k = lerpf(0.88, 0.94, dk)
+	# with the ball he is almost as quick as without it, so a man who gets past his marker is away
+	p.carry_k = lerpf(0.95, 0.99, dk)
 	p.phy = clampf(p.dfn * 0.7 + (100 - p.pac) * 0.3 + (6.0 if p.role == "DF" else 0.0), 35.0, 99.0)
 
 func _apply_sound(save: bool) -> void:
@@ -1519,7 +1522,9 @@ func _host_start() -> void:
 		_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
 	screen = "match"
 	hud.show_menu("", {})
-	net.send({"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs, "forms": forms, "sq": sq})
+	start_msg = {"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs, "forms": forms, "sq": sq}
+	wait_friend = 0.0
+	net.send(start_msg)
 	_begin_match(true)
 
 func _guest_start(m: Dictionary) -> void:
@@ -1566,7 +1571,12 @@ func _net_poll() -> void:
 					hud.refresh(_menu_info())
 			"open":
 				net.connected = true
-				if net.role == "host":
+				if net.role == "host" and screen == "match" and wait_friend > 0.0 and start_msg != null:
+					# the friend is back after a lost connection: straight into the running match again
+					wait_friend = 0.0
+					net.send(start_msg)
+					hud.toast("Your friend is back")
+				elif net.role == "host":
 					_send_lobby()
 				else:
 					net.send({"_": "club", "id": opt_club})
@@ -1599,13 +1609,20 @@ func _net_poll() -> void:
 						h.evs.append(str(e))
 			"close":
 				net.connected = false
-				if net.role == "guest":
+				if net.role == "guest" and screen == "match" and room.length() == 4:
+					# the connection dropped in the middle of a match: call the room again instead of giving up
+					hud.toast("Connection lost. Joining again...")
+					net.join(room)
+				elif net.role == "guest":
 					_to_menu()
 					hud.toast("The host left the match")
 				elif screen == "match":
-					if humans.size() > 1:
-						humans.remove_at(1)
-					hud.toast("Your friend left - playing on against the computer")
+					if humans.size() > 1 and wait_friend <= 0.0:
+						# keep his place for a while: a phone often loses the line for a few seconds only
+						wait_friend = 25.0
+						humans[1].stick = Vector2.ZERO
+						humans[1].sprint = false
+						hud.toast("Your friend lost the connection. Waiting for him...")
 				else:
 					hud.show_menu("lobby", _menu_info())
 			"err":
@@ -2683,17 +2700,24 @@ func _play(dt: float) -> void:
 		near_m.sort_custom(func(a, b): return a[0] < b[0])
 		for i in mini(2, near_m.size()):
 			sup[ot].append(near_m[i][1])
-		if not fws.is_empty() and ball_owner.position.x * side(ot) > -22.0:
+		if not fws.is_empty() and ball_owner.position.x * side(ot) > -40.0:
 			# the forwards take turns, a new run about every six seconds
 			var k0 := int(clock / 108.0)
 			var rn = fws[k0 % fws.size()]
 			if not sup[ot].has(rn):
 				runner[ot].append(rn)
-			# in their half a second man goes too
-			if fws.size() > 1 and ball_owner.position.x * side(ot) > 0.0:
+			# from the middle third on a second man goes too
+			if fws.size() > 1 and ball_owner.position.x * side(ot) > -14.0:
 				var rn2 = fws[(k0 + 1) % fws.size()]
 				if not sup[ot].has(rn2):
 					runner[ot].append(rn2)
+			# and in their half a midfielder breaks forward as well, so there is always someone to play it up to
+			if ball_owner.position.x * side(ot) > 4.0:
+				for nm in near_m:
+					var mq = nm[1]
+					if mq.role == "MF" and not sup[ot].has(mq) and not runner[ot].has(mq) and mq.position.x * side(ot) < ball_owner.position.x * side(ot) + 12.0:
+						runner[ot].append(mq)
+						break
 	# --- move everyone
 	for p in players:
 		var want := Vector3.ZERO
@@ -3376,7 +3400,11 @@ func _slide_tackle(h) -> void:
 	var dirs: Vector3 = me_p.fwd()
 	var to: Vector3 = ball.position - me_p.position
 	to.y = 0.0
-	if to.length() < 12.0 and to.length() > 0.1 and (c == null or c.team != h.team):
+	# he only finds the ball by himself when it is close and in front of him; from further out you aim the slide yourself
+	if h.stick.length() > 0.3 and to.length() >= 4.0:
+		dirs = Vector3(h.stick.x, 0, h.stick.y).normalized()
+		me_p.yaw = atan2(-dirs.x, -dirs.z)
+	if to.length() < 4.0 and to.length() > 0.1 and dirs.dot(to.normalized()) > 0.35 and (c == null or c.team != h.team):
 		var lead: Vector3 = to + (c.vel * 0.18 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.18)
 		dirs = lead.normalized()
 		me_p.yaw = atan2(-dirs.x, -dirs.z)
@@ -3394,7 +3422,10 @@ func _slides() -> void:
 		if not p.slide_live:
 			continue
 		if p.tackle_t < 0.0 or p.tackle_t > SLIDE_T + 0.02:
+			# the slide found nothing: he is on the grass for a second, and the man with the ball is away
 			p.slide_live = false
+			p.stun = maxf(p.stun, 1.0)
+			p.vel *= 0.3
 			continue
 		# grass flies up all the way along the slide
 		p.slide_fx -= get_process_delta_time()
@@ -4218,6 +4249,13 @@ func _guest_frame(dt: float) -> void:
 
 func _process(dt: float) -> void:
 	real_t += dt
+	if wait_friend > 0.0:
+		wait_friend -= dt
+		if wait_friend <= 0.0 or screen != "match":
+			wait_friend = 0.0
+			if screen == "match" and net.role == "host" and not net.connected and humans.size() > 1:
+				humans.remove_at(1)
+				hud.toast("Your friend left - playing on against the computer")
 	if net.web and screen == "menu":
 		# is a newer version out? The page asks the server now and then; here we only read its answer
 		upd_t -= dt
