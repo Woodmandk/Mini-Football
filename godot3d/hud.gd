@@ -1036,7 +1036,10 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				menu.add_child(tb2)
 				var rx := w - col_w - 40.0
 				var cot := str(info.get("co_text", ""))
-				var md := _btn(("CAREER TOGETHER" if cot != "" else "SAME TEAM") if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 24)
+				var md := _btn((("CAREER TOGETHER" if cot != "" else "SAME TEAM") if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER") + "  ›", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 22)
+				var mt := _label("MODE  ·  TAP TO CHANGE", 14, Color(1, 1, 1, 0.7), font2)
+				mt.position = Vector2(rx + 4, 68)
+				menu.add_child(mt)
 				menu.add_child(md)
 				items.append([md, Vector2(80, 0), 0.05])
 				var mh := _label((cot if cot != "" else "You two against the computer") if str(info.get("mode", "")) == "coop" else "Your team against your friend's: " + str(info["clubs"][int(info.get("gclub", 1))]["n"]), 16, Color(1, 1, 1, 0.75), font2)

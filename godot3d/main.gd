@@ -2564,8 +2564,18 @@ func _pass(p, m, lofted: bool, cross := false) -> void:
 	stats["passes"] += 1
 	snd("kick" if (lofted or d > 22.0) and not thrown else "touch")
 	if h != null and m.role != "GK" and _hum_of(m) == null:
-		h.ctrl = m
-		h.switch_cool = 0.5
+		# Two people on one team: the pass goes to your partner. He takes over the receiver,
+		# and you keep the man who passed, free to run for the return ball.
+		var mate = null
+		for h2 in humans:
+			if h2 != h and h2.team == h.team:
+				mate = h2
+		if mate != null:
+			mate.ctrl = m
+			mate.switch_cool = 0.5
+		else:
+			h.ctrl = m
+			h.switch_cool = 0.5
 
 func _human_aim(h, dir3: Vector3) -> float:
 	var gk = teams[1 - h.team][0]
