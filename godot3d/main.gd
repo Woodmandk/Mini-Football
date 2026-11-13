@@ -62,6 +62,9 @@ var sq_over := []
 var form_over := ""
 var co_got := false
 var test_ft := 0.0
+var wd_clock := -1.0
+var wd_n := 0
+var wd_all := 0
 var test_t := 0.0
 var co_text := ""
 var co_pay := []
@@ -95,10 +98,15 @@ var car_sel := -1
 var car_msg := ""
 var car_sure := false
 var car_sell := -1
+var subs_left := 3
+var sub_sel := -1
+var sub_off := []
+var sub_played := []
 const CAMS := ["TV", "TOP", "CLOSE"]
 const N_F := 11 # numbers per player in a packed frame
 
 class Human:
+	var dead_t := 0.0
 	var team := 0
 	var ctrl = null
 	var stick := Vector2.ZERO
@@ -293,6 +301,13 @@ func _ready() -> void:
 			career_on = true
 			_set_clubs(int(car.d["club"]), car.next_match()[0], true)
 		_begin_match(demo and OS.get_cmdline_user_args().has("--intro"))
+		if car_test and menu_arg in ["subs", "pause"]:
+			for p in players:
+				p.fit = randf_range(0.4, 1.0)
+			_substitute(9, 12)
+			sub_sel = 7
+			print("SUBTEST ", teams[0][9].pname, " num=", teams[0][9].num, " left=", subs_left, " played=", sub_played)
+			hud.show_menu(menu_arg, _menu_info())
 		if autotest:
 			if bot_mode != "":
 				humans = [Human.new()]
@@ -529,7 +544,8 @@ func _build_teams() -> void:
 					p.pas += lv
 					p.dfn += lv
 					p.ovr += lv
-			p.top_speed = 6.95 + (p.pac - 50) * 0.027
+			p.base_top = 6.95 + (p.pac - 50) * 0.027
+			p.top_speed = p.base_top
 			add_child(p)
 			players.append(p)
 			teams[t].append(p)
@@ -711,9 +727,54 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "career": career_on, "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
+		"car": _car_info(), "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
+
+# The substitution screen: who is on the pitch and how tired, and who is on the bench.
+func _subs_info() -> Dictionary:
+	if not career_on or teams[0].size() < 11:
+		return {}
+	var on := []
+	var on_sq := []
+	for p in teams[0]:
+		on.append({"slot": p.idx, "n": p.pname.to_upper(), "num": p.num, "role": p.role, "ovr": p.ovr, "fit": p.fit, "off": p.off})
+		on_sq.append(p.sq)
+	var bench := []
+	for i in (car.d["squad"] as Array).size():
+		if on_sq.has(i) or sub_off.has(i):
+			continue
+		var pl: Dictionary = car.d["squad"][i]
+		bench.append({"sq": i, "n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl)})
+	return {"left": subs_left, "on": on, "bench": bench, "sel": sub_sel}
+
+# Bring a bench player on for the man in this place. He takes over the place with fresh legs.
+func _substitute(slot: int, sq_i: int) -> void:
+	if subs_left <= 0 or slot < 0 or slot >= teams[0].size() or sub_off.has(sq_i):
+		return
+	var p = teams[0][slot]
+	if p.off:
+		return
+	var pl: Dictionary = car.d["squad"][sq_i]
+	var old_name: String = p.pname
+	sub_off.append(p.sq)
+	if not sub_played.has(sq_i):
+		sub_played.append(sq_i)
+	var off_pos := -6 if str(pl["pos"]) != p.role else 0
+	p.sq = sq_i
+	p.pname = str(pl["n"])
+	p.set_num(int(pl["num"]))
+	p.pac = int(pl["pac"]) + off_pos
+	p.sho = int(pl["sho"]) + off_pos
+	p.pas = int(pl["pas"]) + off_pos
+	p.dfn = int(pl["dfn"]) + off_pos
+	p.ovr = Career.ovr_of(pl) + off_pos
+	p.base_top = 6.95 + (p.pac - 50) * 0.027
+	p.fit = 1.0
+	subs_left -= 1
+	snd("whistle")
+	fx("say", "Substitution. %s comes on for %s." % [p.pname, old_name])
+	hud.toast("%s ON  ·  %s OFF" % [p.pname.to_upper(), old_name.to_upper()])
 
 # Everything the career screens show.
 func _car_info() -> Dictionary:
@@ -972,6 +1033,18 @@ func _action(act: String, arg = null) -> void:
 				if net.role == "":
 					paused = true
 				hud.show_menu("pause", _menu_info())
+		"subs":
+			if career_on and net.role != "guest":
+				sub_sel = -1
+				hud.show_menu("subs", _menu_info())
+		"sub_pick":
+			sub_sel = -1 if sub_sel == int(arg) else int(arg)
+			hud.refresh(_menu_info())
+		"sub_in":
+			if sub_sel >= 0:
+				_substitute(sub_sel, int(arg))
+				sub_sel = -1
+				hud.refresh(_menu_info())
 		"resume":
 			paused = false
 			hud.show_menu("", {})
@@ -1110,6 +1183,15 @@ func _net_poll() -> void:
 # ---------------------------------------------------------------- match flow
 
 func _begin_match(with_intro: bool) -> void:
+	subs_left = 3
+	sub_sel = -1
+	sub_off = []
+	sub_played = []
+	if career_on:
+		for x in car.d["xi"]:
+			sub_played.append(int(x))
+	for p in players:
+		p.fit = 1.0
 	test_t = Time.get_ticks_msec() / 1000.0
 	car_goals = []
 	car_lines = []
@@ -1642,8 +1724,24 @@ func _physics_process(dt: float) -> void:
 		for i in 30:
 			_bot_inputs(1.0 / 60.0)
 			_tick(1.0 / 60.0)
+			if clock != wd_clock:
+				wd_clock = clock
+				wd_n = 0
+			wd_n += 1
+			wd_all += 1
+			if wd_all % 6000 == 0:
+				print("AUTOTEST tick=", wd_all, " state=", state, " t=", snappedf(state_t, 0.1), " set=", set_piece, " clock=", int(clock), " owner=", players.find(ball_owner), " ball=", ball.position, " hctrl=", players.find(humans[0].ctrl) if humans.size() > 0 else -9)
+			if wd_n == 4000:
+				var hc2 = humans[0].ctrl if humans.size() > 0 else null
+				print("AUTOTEST STUCK state=", state, " t=", state_t, " set=", set_piece, " clock=", clock, " owner=", players.find(ball_owner), " ball=", ball.position, " hctrl=", players.find(hc2), " forms=", forms, " clubs=", clubs, " kick_team=", kick_team)
+				get_tree().quit()
+				return
 			if state == "full":
 				print("AUTOTEST score=", score, " stats=", stats, " bot=", bstats)
+				var fits := []
+				for p in teams[0]:
+					fits.append(snappedf(p.fit, 0.01))
+				print("AUTOTEST fit=", fits)
 				if career_on:
 					car_lines = car.finish_match(score[0], score[1], [9] if score[0] > 0 else [])
 					print("AUTOTEST career=", car_lines, " round=", car.d["round"], " rank=", car.rank_of(int(car.d["club"])), " names=", players[9].pname, "/", players[9].ovr)
@@ -1775,12 +1873,20 @@ func _cpu(t: int) -> Dictionary:
 	return DIFF[opt_diff]
 
 func _play(dt: float) -> void:
-	clock += dt * 5400.0 / LENGTHS[opt_len]
+	var gdt: float = dt * 5400.0 / LENGTHS[opt_len]
+	clock += gdt
+	# match fitness: everyone tires, those who run the most tire the most, and tired legs are slower
+	for p in players:
+		var sr: float = clampf(p.vel.length() / maxf(p.base_top, 1.0), 0.0, 1.2)
+		p.fit = maxf(p.fit - gdt * (0.00002 + 0.00012 * sr * sr), 0.0)
+		p.top_speed = p.base_top * (0.84 + 0.16 * p.fit)
 	ignore_t -= dt
 	protect_t -= dt
 	if force_kind != "" and state_t > 3.0:
 		if force_kind == "corner":
 			_out("corner", Vector3(HL - 0.6, 0, HW - 0.6), 0)
+		elif force_kind == "pen" or force_kind == "pen0":
+			_out("pen", Vector3.ZERO, 0 if force_kind == "pen0" else 1, 2.0)
 		else:
 			_out("throw", Vector3(20, 0, HW - 0.3), 0)
 		force_kind = ""
@@ -1893,6 +1999,14 @@ func _play(dt: float) -> void:
 			p.stun -= dt
 		elif pen_wait:
 			want = Vector3.ZERO
+			if p == ball_owner and h == null:
+				want = _ai_carrier(p, dt)
+			elif p == ball_owner:
+				# a human taker who never shoots: the penalty is taken for him after ten seconds
+				h.dead_t += dt
+				if h.dead_t > 10.0 and not h.charging:
+					h.dead_t = 0.0
+					_shoot(p, 0.6, (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * 0.6, 1.0)
 		elif h != null:
 			if p.recv and ball_owner == null and h.stick.length() < 0.5:
 				want = _run_to(p, aim, p.top_speed)
@@ -1909,9 +2023,20 @@ func _play(dt: float) -> void:
 				if h.charging:
 					sp *= 0.6
 				want = Vector3(h.stick.x, 0, h.stick.y) * sp
+				if not (ball_owner == p and set_piece != ""):
+					h.dead_t = 0.0
 				if ball_owner == p and set_piece in ["corner", "throw", "gk", "fk", "kick"]:
 					# a dead ball is played from where it lies: the stick only turns the taker
 					want = Vector3.ZERO
+					# nobody waits for ever: after ten seconds the taker plays it himself
+					h.dead_t += dt
+					if h.dead_t > 10.0:
+						h.dead_t = 0.0
+						var dm = _cross_target(p) if set_piece == "corner" else _pass_target(p, Vector3.ZERO, true)
+						if dm == null:
+							dm = _first_on(h.team, [6, 5, 7])
+						if dm != null:
+							_pass(p, dm, set_piece == "corner" or set_piece == "gk", set_piece == "corner")
 					if h.stick.length() > 0.3 and set_piece != "kick":
 						p.face(Vector3(h.stick.x, 0, h.stick.y), 9.0, dt)
 		elif p == ball_owner:
@@ -1951,6 +2076,8 @@ func _play(dt: float) -> void:
 	if half == 1 and clock >= 2700.0 and (ball_owner != null or clock > 2790.0) and absf(ball.position.x) < 32.0:
 		half = 2
 		clock = 2700.0
+		for p in players:
+			p.fit = minf(p.fit + 0.08, 1.0)
 		state = "half"
 		state_t = 0.0
 		ball_owner = null
@@ -1983,7 +2110,7 @@ func _full_time() -> void:
 	if score[0] != score[1]:
 		fx("excite", 0.6)
 	if career_on:
-		car_lines = car.finish_match(score[0], score[1], car_goals)
+		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1]] + ([str(car.d["note"])] if car.season_over() else [])]
 	hud.show_menu("full", _menu_info())
@@ -3036,7 +3163,7 @@ func _bot_inputs(dt: float) -> void:
 				var nd := 99.0
 				for o in teams[1 - h.team]:
 					nd = minf(nd, o.position.distance_to(p.position))
-				if nd < 3.5:
+				if nd < 3.5 or set_piece != "":
 					h.evs.append("pass_down")
 					h.evs.append("pass_up")
 					bstats["passes"] += 1

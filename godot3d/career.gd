@@ -235,7 +235,7 @@ func _book(a: int, b: int, ga: int, gb: int) -> void:
 
 # Books your result, plays the rest of the round, pays out coins and grows the players who played.
 # Returns lines for the full-time screen.
-func finish_match(mine: int, theirs: int, scorers: Array) -> Array:
+func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) -> Array:
 	var me: int = int(d["club"])
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
@@ -265,7 +265,7 @@ func finish_match(mine: int, theirs: int, scorers: Array) -> Array:
 	last_coins = coins
 	market_refresh()
 	lines.append("+%d COINS" % coins)
-	for i in d["xi"]:
+	for i in (played if not played.is_empty() else d["xi"]):
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["apps"] = int(pl["apps"]) + 1
 		var xp := 22 + (10 if mine > theirs else 0)
