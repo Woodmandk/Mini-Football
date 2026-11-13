@@ -1100,7 +1100,7 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				["SHOOT", "Hold to load power, let go to shoot. Short taps curl. At a corner kick: cross."],
 				["PASS", "A pass along the ground, the way the stick points. Hold longer for a harder pass to a man further away."],
 				["LOB", "A high ball over the defenders. Hold longer to reach a man further away."],
-				["TACKLE", "Standing tackle: step in and take the ball. At a sprint from a few steps away: slide. Never from behind."],
+				["TACKLE", "Tap: standing tackle. Hold: your man closes down and wins the ball himself. At a sprint: slide. From behind: a tug slows him, three is a foul."],
 				["SWITCH", "Without the ball: change to the player nearest the ball."],
 				["SPRINT", "Pull your thumb further out, past the outer ring. The ring shows your breath."],
 			]

@@ -44,6 +44,7 @@ var _yaw_prev := 0.0
 var _turn := 0.0
 var _idle_t := 0.0
 var tackle_t := -1.0
+var slide_live := false
 var dive_t := -1.0
 var dive_side := 0.0
 var mood := 0 # 0 normal, 1 scorer, 2 happy, 3 sad
