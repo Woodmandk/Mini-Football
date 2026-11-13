@@ -43,12 +43,19 @@ void fragment() {
 	m = max(m, ln(length(q - vec2(52.5, 34.0)) - 1.0, w, aa) * inside);
 	float stripe = mod(floor((p.x + 52.5) / 5.833), 2.0);
 	float stripe2 = mod(floor((p.y + 34.0) / 5.666), 2.0);
-	vec3 g1 = vec3(0.115, 0.30, 0.10);
-	vec3 g2 = vec3(0.145, 0.355, 0.12);
+	vec3 g1 = vec3(0.105, 0.295, 0.095);
+	vec3 g2 = vec3(0.15, 0.375, 0.125);
 	vec3 grass = mix(g1, g2, stripe);
 	grass *= 0.96 + 0.04 * stripe2;
 	float n = hash(floor(p * 24.0)) * 0.6 + hash(floor(p * 7.0)) * 0.4;
 	grass *= 0.95 + 0.10 * n;
+	// big soft patches so the turf is not one flat colour, and worn grass in the goal mouths and centre spot
+	float big = sin(p.x * 0.11 + 1.3) * sin(p.y * 0.14 + 0.4) * 0.5 + sin(p.x * 0.031 - p.y * 0.045) * 0.5;
+	grass *= 1.0 + 0.045 * big;
+	float wear = (1.0 - smoothstep(1.5, 7.0, length((q - vec2(52.5 - 3.0, 0.0)) * vec2(1.0, 0.55)))) * 0.5;
+	wear = max(wear, (1.0 - smoothstep(0.5, 4.0, length(p))) * 0.25);
+	wear *= 0.55 + 0.45 * hash(floor(p * 3.0));
+	grass = mix(grass, vec3(0.27, 0.33, 0.13), wear * 0.55);
 	if (inside < 0.5) {
 		float edge = max(q.x - 52.5, q.y - 34.0);
 		grass = mix(grass * 0.9, vec3(0.08, 0.2, 0.08), clamp(edge / 5.0, 0.0, 1.0));
@@ -75,8 +82,12 @@ shader_type spatial;
 render_mode specular_disabled;
 uniform float excite = 0.0;
 varying vec3 col;
+varying float ly;
+varying float pid;
 void vertex() {
 	float id = float(INSTANCE_ID);
+	ly = VERTEX.y;
+	pid = id;
 	float ph = fract(id * 0.6180339) * 6.2831;
 	float sp = 2.0 + fract(id * 0.371) * 2.0;
 	float calm = sin(TIME * sp * 0.6 + ph) * 0.03;
@@ -86,7 +97,14 @@ void vertex() {
 	col = COLOR.rgb;
 }
 void fragment() {
-	ALBEDO = col;
+	// each fan is a shirt with a head and hair on top, so the stands read as people and not as blocks
+	vec3 skin = mix(vec3(0.93, 0.74, 0.58), vec3(0.45, 0.29, 0.2), step(0.72, fract(pid * 0.4142)));
+	vec3 hair = mix(vec3(0.12, 0.09, 0.07), vec3(0.62, 0.45, 0.22), step(0.8, fract(pid * 0.2718)));
+	vec3 c = col;
+	c = mix(c, skin, step(0.15, ly));
+	c = mix(c, hair, step(0.33, ly));
+	c = mix(c, col * 0.55, 1.0 - step(-0.3, ly));
+	ALBEDO = c;
 	ROUGHNESS = 0.9;
 }
 """

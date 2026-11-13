@@ -127,6 +127,17 @@ static func _sphere(r: float) -> SphereMesh:
 		s.rings = 6
 		_meshes[k] = s
 	return _meshes[k]
+static func _cyl(rt: float, rb: float, h: float) -> CylinderMesh:
+	var k := "y%s_%s_%s" % [rt, rb, h]
+	if not _meshes.has(k):
+		var c := CylinderMesh.new()
+		c.top_radius = rt
+		c.bottom_radius = rb
+		c.height = h
+		c.radial_segments = 10
+		c.rings = 1
+		_meshes[k] = c
+	return _meshes[k]
 static func _box(v: Vector3) -> BoxMesh:
 	var k := "b%s" % v
 	if not _meshes.has(k):
@@ -139,12 +150,18 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	body = Node3D.new()
 	add_child(body)
 	# hips / shorts
-	_part(body, _box(Vector3(0.40, 0.30, 0.25)), mat(shorts), Vector3(0, 0.93, 0))
+	_part(body, _cyl(0.185, 0.225, 0.30), mat(shorts), Vector3(0, 0.93, 0), Vector3(1.0, 1.0, 0.66))
 	# torso
 	torso = Node3D.new()
 	torso.position = Vector3(0, 1.05, 0)
 	body.add_child(torso)
 	_part(torso, _capsule(0.215, 0.72), mat(shirt), Vector3(0, 0.33, 0), Vector3(1.0, 1.0, 0.68))
+	# kit trim: collar, side panels, hem
+	var trim := shorts if shorts.to_html() != shirt.to_html() else socks
+	_part(torso, _cyl(0.085, 0.10, 0.05), mat(trim), Vector3(0, 0.655, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_part(torso, _box(Vector3(0.435, 0.34, 0.07)), mat(trim), Vector3(0, 0.27, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_part(torso, _sphere(0.095), mat(shirt), Vector3(-0.235, 0.575, 0))
+	_part(torso, _sphere(0.095), mat(shirt), Vector3(0.235, 0.575, 0))
 	# shirt number on the back
 	if num > 0:
 		var nl := Label3D.new()
@@ -165,7 +182,27 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	torso.add_child(head)
 	_part(head, _capsule(0.06, 0.16), mat(skin), Vector3(0, -0.02, 0))
 	_part(head, _sphere(0.135), mat(skin), Vector3(0, 0.13, 0))
-	_part(head, _sphere(0.142), mat(hair), Vector3(0, 0.165, 0.025), Vector3(1.0, 0.8, 1.0))
+	# hair: a few styles so the players do not all look the same
+	var hs := (num * 7 + idx * 3) % 6
+	if hs == 0:
+		_part(head, _sphere(0.138), mat(hair), Vector3(0, 0.15, 0.012), Vector3(1.0, 0.86, 1.0)) # shaved
+	elif hs == 1:
+		_part(head, _sphere(0.142), mat(hair), Vector3(0, 0.165, 0.025), Vector3(1.0, 0.8, 1.0))
+		_part(head, _box(Vector3(0.19, 0.07, 0.16)), mat(hair), Vector3(0, 0.275, -0.03)) # quiff
+	elif hs == 2:
+		_part(head, _sphere(0.175), mat(hair), Vector3(0, 0.19, 0.03), Vector3(1.0, 0.9, 1.0)) # big curls
+	elif hs == 3:
+		_part(head, _sphere(0.142), mat(hair), Vector3(0, 0.165, 0.025), Vector3(1.0, 0.8, 1.0))
+		_part(head, _sphere(0.062), mat(hair), Vector3(0, 0.25, 0.12)) # bun
+	elif hs == 4:
+		_part(head, _sphere(0.146), mat(hair), Vector3(0, 0.15, 0.04), Vector3(1.0, 1.0, 1.0)) # longer at the back
+		_part(head, _capsule(0.03, 0.14), mat(trim), Vector3(0, 0.185, -0.105), Vector3(4.2, 0.25, 1.0)) # head band
+	else:
+		_part(head, _sphere(0.142), mat(hair), Vector3(0, 0.165, 0.025), Vector3(1.0, 0.8, 1.0))
+	# face
+	var dark := mat(Color(0.08, 0.06, 0.05))
+	_part(head, _sphere(0.014), dark, Vector3(-0.048, 0.14, -0.121), Vector3(1.0, 1.2, 0.5)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_part(head, _sphere(0.014), dark, Vector3(0.048, 0.14, -0.121), Vector3(1.0, 1.2, 0.5)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# arms
 	arm_l = Node3D.new()
 	arm_l.position = Vector3(-0.27, 0.58, 0)
@@ -178,10 +215,12 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	var k := 0
 	for a in [arm_l, arm_r]:
 		_part(a, _capsule(0.075, 0.36), mat(shirt), Vector3(0, -0.13, 0))
+		_part(a, _cyl(0.079, 0.079, 0.035), mat(trim), Vector3(0, -0.275, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		var f: Node3D = fore_l if k == 0 else fore_r
 		f.position = Vector3(0, -0.29, 0)
 		a.add_child(f)
 		_part(f, _capsule(0.055, 0.34), mat(skin), Vector3(0, -0.14, 0))
+		_part(f, _sphere(0.062), mat(skin), Vector3(0, -0.31, 0), Vector3(0.8, 1.15, 1.0))
 		k += 1
 	# legs
 	leg_l = Node3D.new()
@@ -194,13 +233,15 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	shin_r = Node3D.new()
 	k = 0
 	for l in [leg_l, leg_r]:
-		_part(l, _capsule(0.098, 0.26), mat(shorts), Vector3(0, -0.1, 0))
+		_part(l, _cyl(0.1, 0.122, 0.27), mat(shorts), Vector3(0, -0.1, 0))
 		_part(l, _capsule(0.088, 0.46), mat(skin), Vector3(0, -0.23, 0))
 		var s: Node3D = shin_l if k == 0 else shin_r
 		s.position = Vector3(0, -0.45, 0)
 		l.add_child(s)
 		_part(s, _capsule(0.076, 0.46), mat(socks), Vector3(0, -0.2, 0))
-		_part(s, _box(Vector3(0.13, 0.1, 0.3)), mat(boots, 0.4), Vector3(0, -0.42, -0.06))
+		_part(s, _cyl(0.08, 0.08, 0.04), mat(trim), Vector3(0, -0.03, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_part(s, _capsule(0.062, 0.3), mat(boots, 0.4), Vector3(0, -0.415, -0.065), Vector3(1.05, 1.0, 0.8)).rotation.x = PI * 0.5
+		_part(s, _box(Vector3(0.115, 0.022, 0.27)), mat(Color(0.1, 0.1, 0.12)), Vector3(0, -0.468, -0.065)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		k += 1
 	# ring under the player you control
 	ring = MeshInstance3D.new()
@@ -423,6 +464,11 @@ func animate(dt: float) -> void:
 			# side-foot pass: the foot opens out
 			spread_r = lerpf(spread_r, 0.22, kk)
 			turn = lerpf(0.0, -0.25, kk)
+		else:
+			# a proper strike: hips open on the way in and whip through the ball
+			turn = lerpf(0.32, -0.38, hit) * kk * kick_pw
+			roll += lerpf(0.0, 0.14, hit) * kk * kick_pw
+			knee_l = lerpf(knee_l, -0.42, kk)
 		ab_l = lerpf(ab_l, -1.15 - 0.3 * kick_pw, kk)
 		sh_l = lerpf(sh_l, 0.7, kk)
 		sh_r = lerpf(sh_r, -0.9 * kick_pw - 0.2, kk)
