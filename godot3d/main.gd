@@ -308,6 +308,49 @@ func _ready() -> void:
 			sub_sel = 7
 			print("SUBTEST ", teams[0][9].pname, " num=", teams[0][9].num, " left=", subs_left, " played=", sub_played)
 			hud.show_menu(menu_arg, _menu_info())
+		if OS.get_cmdline_user_args().has("--passtest"):
+			# measures passes: speed off the foot, time to the receiver, speed and height on arrival
+			for lofted in [false, true]:
+				for dd in [6.4, 10.0, 15.0, 20.0, 30.0, 40.0]:
+					var pp = teams[0][9]
+					var mm = teams[0][6]
+					pp.position = Vector3(-20, 0, 0)
+					mm.position = Vector3(-20 + dd, 0, 0)
+					mm.vel = Vector3.ZERO
+					ball_owner = pp
+					set_piece = ""
+					_pass(pp, mm, lofted)
+					var v0 := Vector2(ball_vel.x, ball_vel.z).length()
+					var tt := 0.0
+					var apex := 0.0
+					var bounces := 0
+					var was_up := true
+					while ball.position.x < mm.position.x - 0.5 and tt < 8.0 and Vector2(ball_vel.x, ball_vel.z).length() > 0.05:
+						_ball_free(1.0 / 60.0)
+						tt += 1.0 / 60.0
+						apex = maxf(apex, ball.position.y)
+						if ball.position.y <= BALL_R + 0.01 and was_up:
+							bounces += 1
+						was_up = ball.position.y > BALL_R + 0.01
+					print("PASSTEST lofted=", lofted, " d=", dd, " v0=", snappedf(v0, 0.1), " t=", snappedf(tt, 0.01), " arrive_v=", snappedf(Vector2(ball_vel.x, ball_vel.z).length(), 0.1), " y=", snappedf(ball.position.y, 0.01), " apex=", snappedf(apex, 0.1), " reached=", ball.position.x >= mm.position.x - 0.6, " landings=", bounces)
+			for dd2 in [12.0, 25.0, 38.0]:
+				for rep in 3:
+					_kickoff(0)
+					var p2 = teams[0][6]
+					var m2 = teams[0][9]
+					p2.position = Vector3(-30, 0, -5 + rep * 5)
+					m2.position = Vector3(-30 + dd2, 0, rep * 6 - 6)
+					ball_owner = p2
+					set_piece = ""
+					state = "play"
+					_pass(p2, m2, true)
+					var t2 := 0.0
+					while ball_owner == null and t2 < 6.0 and state == "play":
+						_tick(1.0 / 60.0)
+						t2 += 1.0 / 60.0
+					print("LOBTEST d=", dd2, " got=", players.find(ball_owner), " (want 9) t=", snappedf(t2, 0.01), " state=", state, " recv_dist_from_start=", snappedf(m2.position.distance_to(Vector3(-30 + dd2, 0, rep * 6 - 6)), 0.1))
+			get_tree().quit()
+			return
 		if autotest:
 			if bot_mode != "":
 				humans = [Human.new()]
@@ -2355,19 +2398,20 @@ func _pass(p, m, lofted: bool, cross := false) -> void:
 		tc = dir4.length() / vc
 		v = dir4.normalized() * vc + Vector3(0, (2.05 - 0.3) / tc + 4.9 * tc, 0)
 	elif not lofted:
-		var sp := clampf(7.0 + d * 0.72, 10.0, 25.0)
+		var sp := clampf(5.2 + d * 0.66, 8.5, 24.0)
 		var aim: Vector3 = m.position + m.vel * (d / sp) * 0.8
 		var dir: Vector3 = (aim - p.position)
 		dir.y = 0.0
 		v = dir.normalized() * sp + Vector3(0, 0.6, 0)
 	else:
-		var vh := clampf(9.0 + d * 0.36, 12.0, 23.0)
-		var t := d / vh
+		# a real high ball: it hangs in the air (about 1.2 s over 10 m, 2.1 s over 30 m) and drops at the receiver's feet
+		var t := clampf(0.8 + d * 0.043, 1.0, 2.7)
 		var aim2: Vector3 = m.position + m.vel * t * 0.7 + Vector3(side(p.team) * 2.0, 0, 0)
 		var dir2: Vector3 = (aim2 - p.position)
 		dir2.y = 0.0
-		t = dir2.length() / vh
-		v = dir2.normalized() * vh * 1.03 + Vector3(0, 4.9 * t, 0)
+		t = clampf(0.8 + dir2.length() * 0.043, 1.0, 2.7)
+		var vh := dir2.length() / t * (1.0 + 0.026 * t)
+		v = dir2.normalized() * vh + Vector3(0, 4.9 * t + 0.12 * t * t, 0)
 	v = v.rotated(Vector3.UP, (randf() - 0.5) * 2.0 * maxf(92 - p.pas, 0) * 0.0011 * (1.6 if lofted else 1.0))
 	var h = _hum_of(p)
 	var offs: bool = set_piece in ["", "fk", "kick"] and _is_offside(p, m)
