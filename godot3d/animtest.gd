@@ -92,6 +92,19 @@ func _process(_dt: float) -> void:
 			p.vel = Vector3.ZERO
 			if n == start:
 				p.start_dive(1.0)
+		"skill":
+			p.vel = p.fwd() * 6.0
+			if n == start:
+				p.start_kick(0.5, 3)
+		"header":
+			p.vel = Vector3.ZERO
+			if n == start:
+				p.start_kick(0.7, 1)
+		"throw":
+			p.vel = Vector3.ZERO
+			p.hold_up = n < start + 12
+			if n == start + 12:
+				p.start_kick(0.5, 2)
 		"fall":
 			p.vel = p.fwd() * (6.0 if n < start else maxf(3.0 - (n - start) * 0.3, 0.0))
 			if n == start:
