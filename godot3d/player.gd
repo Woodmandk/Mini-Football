@@ -558,7 +558,7 @@ func animate(dt: float) -> void:
 	if tackle_t >= 0.0:
 		tackle_t += dt
 		var down := _ease(tackle_t / 0.12)
-		var up := _ease((tackle_t - 0.40) / 0.15)
+		var up := _ease((tackle_t - 0.74) / 0.18)
 		var s := down * (1.0 - up)
 		lean = lerpf(lean, 1.0, s)
 		by = lerpf(by, -0.36, s)
@@ -579,7 +579,7 @@ func animate(dt: float) -> void:
 		head_x = lerpf(head_x, -0.3, s)
 		tw = lerpf(tw, 0.0, s)
 		k = clampf(dt * 26.0, 0.0, 1.0)
-		if tackle_t > 0.55:
+		if tackle_t > 0.92:
 			tackle_t = -1.0
 	# keeper dive: push off, fly flat with both hands to the ball, land, get up
 	if dive_t >= 0.0:

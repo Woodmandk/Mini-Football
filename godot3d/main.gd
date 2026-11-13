@@ -125,6 +125,8 @@ class Human:
 	var skill_cool := 0.0
 	var auto_cool := 0.0
 	var lob_hold := -1.0
+	var thru_hold := -1.0
+	var hi := false
 	var def_hold := -1.0
 	var pull_n := 0
 	var ot := 0
@@ -154,6 +156,9 @@ var off_spot := Vector3.ZERO
 var off_line := [0.0, 0.0]
 var trail: CPUParticles3D
 var land_ring: MeshInstance3D
+var hit_ring: MeshInstance3D
+var hit_t := 9.0
+var hit_k := 1.0
 var meter_bg: MeshInstance3D
 var meter_fg: MeshInstance3D
 var meter_mat: StandardMaterial3D
@@ -199,6 +204,7 @@ var anim_rate := 1.0
 
 var cam: Camera3D
 var cam_mode := 1
+var bot_thru := false
 var cam_pos := Vector3(0, 40, 70)
 var cam_look := Vector3.ZERO
 var cam_fov := 38.0
@@ -280,6 +286,8 @@ func _ready() -> void:
 			shot_at = float(a.substr(5))
 		elif a.begins_with("--goal="):
 			force_goal = float(a.substr(7))
+		elif a == "--thru":
+			bot_thru = true
 		elif a.begins_with("--cam="):
 			cam_mode = int(a.substr(6))
 		elif a.begins_with("--menu="):
@@ -612,6 +620,20 @@ func _build_ball() -> void:
 	land_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	land_ring.visible = false
 	add_child(land_ring)
+	# a quick white ring on the grass where the ball is struck
+	hit_ring = MeshInstance3D.new()
+	var ht := TorusMesh.new()
+	ht.inner_radius = 0.82
+	ht.outer_radius = 1.0
+	hit_ring.mesh = ht
+	var hm := StandardMaterial3D.new()
+	hm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	hm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	hm.albedo_color = Color(1, 1, 1, 0.8)
+	hit_ring.material_override = hm
+	hit_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	hit_ring.visible = false
+	add_child(hit_ring)
 
 static func _cdist(a: Color, b: Color) -> float:
 	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
@@ -863,6 +885,9 @@ func _do_fx(kind: String, a) -> void:
 			hud.do_flash(a)
 		"shake":
 			shake = maxf(shake, a)
+			hit_t = 0.0
+			hit_k = clampf(float(a), 0.25, 1.0)
+			hit_ring.position = Vector3(ball.position.x, 0.06, ball.position.z)
 		"punch":
 			fov_punch = maxf(fov_punch, a)
 		"pop":
@@ -2085,7 +2110,7 @@ func _frame(dt: float) -> void:
 	var sprint: bool = hud.sprint_down or Input.is_physical_key_pressed(KEY_SHIFT)
 	var acts := []
 	for e in evs:
-		if e in ["shoot_down", "shoot_up", "pass_down", "pass_up", "tap", "lob_down", "lob_up"]:
+		if e in ["shoot_down", "shoot_up", "pass_down", "pass_up", "tap", "lob_down", "lob_up", "thru_down", "thru_up", "hi"]:
 			acts.append(e)
 	_sprint_was = sprint
 	if net.role == "guest":
@@ -2168,7 +2193,7 @@ func _tick(dt: float) -> void:
 		h.evs.clear()
 
 func _keys_to_events(evs: Array) -> void:
-	var map := {KEY_SPACE: "shoot", KEY_X: "pass", KEY_E: "lob", KEY_C: "cam", KEY_ESCAPE: "pause"}
+	var map := {KEY_SPACE: "shoot", KEY_X: "pass", KEY_E: "lob", KEY_Q: "thru", KEY_C: "cam", KEY_ESCAPE: "pause"}
 	for k in map:
 		var d := Input.is_physical_key_pressed(k)
 		var was: bool = _keys.get(k, false)
@@ -2244,6 +2269,8 @@ func _play(dt: float) -> void:
 			h.evs.append("pass_up")
 		if h.lob_hold >= 0.6:
 			h.evs.append("lob_up")
+		if h.thru_hold >= 0.6:
+			h.evs.append("thru_up")
 		# is a pass from a team mate on its way to my man?
 		var coming: bool = ball_owner == null and h.ctrl.recv and ball_last != null and ball_last.team == h.team
 		# First-time play: a button pressed while the pass is still on its way is carried out the moment the ball arrives.
@@ -2262,7 +2289,35 @@ func _play(dt: float) -> void:
 			elif h.ot_t <= 0.0 or (ball_owner != null and ball_owner != h.ctrl):
 				h.ot = 0
 		for e in h.evs:
-			if e == "shoot_down":
+			# thumb slid up on PASS: the same pass goes high
+			if e == "pass_up" and h.hi and h.pass_hold >= 0.0 and set_piece != "kick":
+				h.lob_hold = h.pass_hold
+				h.pass_hold = -1.0
+				e = "lob_up"
+			if e == "hi":
+				h.hi = true
+			elif e == "thru_down":
+				h.hi = false
+				if mine and set_piece != "pen":
+					h.thru_hold = 0.0
+				elif coming:
+					h.ot = 1
+					h.ot_t = 1.6
+			elif e == "thru_up":
+				# through ball: into the space in front of the runner, not to his feet
+				if h.thru_hold >= 0.0 and ball_owner == h.ctrl:
+					var tpw: float = clampf(h.thru_hold / 0.6, 0.0, 1.0)
+					pass_pw = tpw
+					var mt = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, 12.0 + 26.0 * tpw, true)
+					if mt == null and set_piece != "":
+						mt = _pass_target(h.ctrl, Vector3.ZERO, false)
+					if mt != null:
+						if set_piece == "":
+							_pass(h.ctrl, mt, h.hi, false, 5.0 + 6.0 * tpw)
+						else:
+							_pass(h.ctrl, mt, h.hi or set_piece in ["corner", "gk"], set_piece == "corner")
+				h.thru_hold = -1.0
+			elif e == "shoot_down":
 				if coming:
 					h.ot = 3
 					h.ot_t = 1.6
@@ -2292,6 +2347,7 @@ func _play(dt: float) -> void:
 					pass
 				elif mine:
 					h.pass_hold = 0.0
+					h.hi = false
 				elif coming:
 					h.ot = 1
 					h.ot_t = 1.6
@@ -2338,11 +2394,14 @@ func _play(dt: float) -> void:
 		if ball_owner != h.ctrl:
 			h.pass_hold = -1.0
 			h.lob_hold = -1.0
+			h.thru_hold = -1.0
+		if h.thru_hold >= 0.0:
+			h.thru_hold += dt
 		if h.pass_hold >= 0.0:
 			h.pass_hold += dt
 		if h.lob_hold >= 0.0:
 			h.lob_hold += dt
-		h.meter = maxf(h.charge, maxf(h.pass_hold, h.lob_hold) / 0.6)
+		h.meter = maxf(h.charge, maxf(maxf(h.pass_hold, h.lob_hold), h.thru_hold) / 0.6)
 		# Tackle help: run your man into the ball and he puts his foot in by himself.
 		h.auto_cool -= dt
 		h.pull_t -= dt
@@ -2443,9 +2502,11 @@ func _play(dt: float) -> void:
 		var h = _hum_of(p)
 		if p.stun > 0.0:
 			p.stun -= dt
-		elif set_piece == "kick" and ball_owner != null and p.team != ball_owner.team:
-			# kick-off: the other team may not move in until the ball is played
+		elif set_piece == "kick" and ball_owner != null and p != ball_owner:
+			# kick-off: everybody stays where he stands until the ball is played
 			want = Vector3.ZERO
+			if h != null:
+				h.dead_t = 0.0
 		elif pen_wait:
 			want = Vector3.ZERO
 			if p == ball_owner and h == null:
@@ -2666,9 +2727,9 @@ func _idle_players(dt: float) -> void:
 		_move(p, Vector3.ZERO, dt)
 
 func _move(p, want: Vector3, dt: float) -> void:
-	if p.tackle_t >= 0.0 and p.tackle_t < 0.42 and p.slide_live:
+	if p.tackle_t >= 0.0 and p.tackle_t < 0.76 and p.slide_live:
 		# sliding on the grass: he keeps going and only friction slows him
-		p.vel = p.vel.move_toward(Vector3.ZERO, 6.5 * dt)
+		p.vel = p.vel.move_toward(Vector3.ZERO, 7.0 * dt)
 		p.position += p.vel * dt
 		p.position.x = clampf(p.position.x, -HL - 2.5, HL + 2.5)
 		p.position.z = clampf(p.position.z, -HW - 2.5, HW + 2.5)
@@ -2839,7 +2900,7 @@ func _release(p, v: Vector3, kind := 0) -> void:
 		q.recv = false
 		q.offside = false
 
-func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0):
+func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0, thru := false):
 	var best = null
 	var bs := -1e9
 	var s := side(p.team)
@@ -2865,6 +2926,9 @@ func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0):
 			sc += n.x * s * 1.6 - absf(d - 15.0) * 0.04
 		if m.role == "GK":
 			sc -= 3.0
+		if thru:
+			# a through ball looks for the man going forward
+			sc += clampf(m.vel.x * s, -2.0, 7.0) * 0.22 + clampf((m.position.x - p.position.x) * s, -10.0, 10.0) * 0.08
 		if set_piece in ["", "fk", "kick"] and _is_offside(p, m):
 			if ai:
 				continue
@@ -2886,12 +2950,20 @@ func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0):
 			best = m
 	return best
 
-func _pass(p, m, lofted: bool, cross := false) -> void:
+func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	var to: Vector3 = m.position - p.position
 	to.y = 0.0
 	var d := to.length()
 	var v := Vector3.ZERO
 	var thrown := set_piece == "throw"
+	var leadv := Vector3.ZERO
+	if lead > 0.0:
+		var md: Vector3 = m.vel
+		md.y = 0.0
+		leadv = Vector3(side(p.team), 0, 0) * 0.7
+		if md.length() > 1.5:
+			leadv += md.normalized() * 0.45
+		leadv = leadv.normalized() * lead
 	if thrown:
 		# thrown by hand: a soft arc, never far
 		var vt := clampf(6.0 + d * 0.42, 7.0, 14.5)
@@ -2917,17 +2989,24 @@ func _pass(p, m, lofted: bool, cross := false) -> void:
 		if pass_pw >= 0.0:
 			# a held pass is struck harder
 			sp = minf(sp * lerpf(0.97, 1.18, pass_pw), 29.0)
-		var aim: Vector3 = m.position + m.vel * (d / sp) * 0.8
+		var aim: Vector3 = m.position + m.vel * (d / sp) * 0.8 + leadv
+		aim.x = clampf(aim.x, -HL + 3.0, HL - 3.0)
+		aim.z = clampf(aim.z, -HW + 2.0, HW - 2.0)
 		var dir: Vector3 = (aim - p.position)
 		dir.y = 0.0
+		if lead > 0.0:
+			# weighted to slow down in front of him
+			sp = clampf(8.5 + dir.length() * 0.72, 13.0, 27.0)
 		v = dir.normalized() * sp + Vector3(0, 0.6, 0)
 	else:
-		# a real high ball: it hangs in the air (about 1.2 s over 10 m, 2.1 s over 30 m) and drops at the receiver's feet
-		var t := clampf(0.8 + d * 0.043, 1.0, 2.7)
-		var aim2: Vector3 = m.position + m.vel * t * 0.7 + Vector3(side(p.team) * 2.0, 0, 0)
+		# a real high ball: about 1.0 s over 10 m, 1.6 s over 30 m, and drops at the receiver's feet
+		var t := clampf(0.62 + d * 0.034, 0.8, 2.15)
+		var aim2: Vector3 = m.position + m.vel * t * 0.7 + (leadv * 1.2 if lead > 0.0 else Vector3(side(p.team) * 2.0, 0, 0))
+		aim2.x = clampf(aim2.x, -HL + 3.0, HL - 3.0)
+		aim2.z = clampf(aim2.z, -HW + 2.0, HW - 2.0)
 		var dir2: Vector3 = (aim2 - p.position)
 		dir2.y = 0.0
-		t = clampf(0.8 + dir2.length() * 0.043, 1.0, 2.7)
+		t = clampf(0.62 + dir2.length() * 0.034, 0.8, 2.15)
 		var vh := dir2.length() / t * (1.0 + 0.026 * t)
 		v = dir2.normalized() * vh + Vector3(0, 4.9 * t + 0.12 * t * t, 0)
 	v = v.rotated(Vector3.UP, (randf() - 0.5) * 2.0 * maxf(92 - p.pas, 0) * 0.0011 * (1.6 if lofted else 1.0))
@@ -2944,6 +3023,8 @@ func _pass(p, m, lofted: bool, cross := false) -> void:
 	pass_from = p
 	pass_pw = -1.0
 	snd("kick" if (lofted or d > 22.0) and not thrown else "touch")
+	if lofted and not thrown:
+		fx("shake", 0.1)
 	if h != null and m.role != "GK" and _hum_of(m) == null:
 		h.ctrl = m
 		h.switch_cool = 0.5
@@ -3100,19 +3181,21 @@ func _slide_tackle(h) -> void:
 	var dirs: Vector3 = me_p.fwd()
 	var to: Vector3 = ball.position - me_p.position
 	to.y = 0.0
-	if to.length() < 5.0 and to.length() > 0.1 and (c == null or c.team != h.team):
-		var lead: Vector3 = to + (c.vel * 0.25 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.25)
+	if to.length() < 8.0 and to.length() > 0.1 and (c == null or c.team != h.team):
+		var lead: Vector3 = to + (c.vel * 0.35 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.35)
 		dirs = lead.normalized()
 		me_p.yaw = atan2(-dirs.x, -dirs.z)
-	me_p.vel = dirs * maxf(me_p.vel.length() + 2.0, 9.5)
+	# a long glide over the grass, about seven metres
+	me_p.vel = dirs * maxf(me_p.vel.length() + 3.0, 11.5)
 	me_p.slide_live = true
-	me_p.stun = 0.8
+	me_p.stun = 1.05
+	fx("dust", [me_p.position.x, me_p.position.z])
 
 func _slides() -> void:
 	for p in players:
 		if not p.slide_live:
 			continue
-		if p.tackle_t < 0.0 or p.tackle_t > 0.46:
+		if p.tackle_t < 0.0 or p.tackle_t > 0.8:
 			p.slide_live = false
 			continue
 		var c = ball_owner
@@ -3888,7 +3971,28 @@ func _process(dt: float) -> void:
 	if not paused:
 		_spin_ball(ball_vel, dt * anim_rate)
 	var loose: bool = ball_owner == null
-	trail.emitting = loose and ball_vel.length() > 17.0 and screen == "match"
+	# seen from above everything is further away: the ball and the men are drawn bigger (the play itself is the same)
+	var top: bool = cam_mode == 1 and screen == "match" and state in ["play", "dead"]
+	var bs := 1.0
+	if top:
+		bs = 2.0 * (1.0 + clampf(ball.position.y - BALL_R, 0.0, 12.0) * 0.09)
+	ball_mesh.scale = ball_mesh.scale.lerp(Vector3.ONE * bs, clampf(rdt * 10.0, 0.0, 1.0))
+	ball_mesh.position.y = BALL_R * ((2.0 if top else 1.0) - 1.0)
+	# from above a slim figure is only a head and two arms: there the men are drawn broad and chunky
+	var psc := Vector3(2.1, 1.4, 2.1) if top else Vector3.ONE * 1.22
+	for p in players:
+		if absf(p.scale.x - psc.x) > 0.005:
+			p.scale = psc
+	trail.scale_amount_min = 2.6 if top else 1.0
+	trail.scale_amount_max = 2.6 if top else 1.0
+	trail.emitting = loose and ball_vel.length() > (12.0 if top else 17.0) and screen == "match"
+	hit_t += rdt
+	hit_ring.visible = hit_t < 0.32 and screen == "match"
+	if hit_ring.visible:
+		var hk := hit_t / 0.32
+		var hs := (0.8 + 4.2 * hk) * (0.6 + 0.6 * hit_k) * (1.5 if top else 1.0)
+		hit_ring.scale = Vector3(hs, 0.04, hs)
+		hit_ring.material_override.albedo_color = Color(1, 1, 1, 0.85 * (1.0 - hk))
 	# landing ring for high balls
 	var show_ring := false
 	if loose and state == "play" and ball.position.y > 1.6 and screen == "match":
@@ -4066,7 +4170,7 @@ func _camera(dt: float) -> void:
 		cam_look = cam_look.lerp(want_look, a3)
 		cam_fov = lerpf(cam_fov, want_fov, a3)
 	shake = maxf(shake - dt * 2.2, 0.0)
-	var off2 := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake * 0.7
+	var off2 := Vector3(randf() - 0.5, randf() - 0.5, randf() - 0.5) * shake * (1.7 if cam_mode == 1 else 0.7)
 	cam.fov = cam_fov - fov_punch
 	if cam_pos.distance_to(cam_look) > 0.5:
 		cam.look_at_from_position(cam_pos + off2, cam_look, Vector3.UP)
@@ -4162,8 +4266,14 @@ func _bot_inputs(dt: float) -> void:
 					var lat := Vector2(-h.stick.y, h.stick.x)
 					h.stick = (h.stick + lat * signf(lat.dot(Vector2(aw.x, aw.z))) * 0.9).normalized()
 				if (nd < 3.5 and bot_mode != "dribble") or set_piece != "":
-					h.evs.append("pass_down")
-					h.evs.append("pass_up")
+					if bot_thru and set_piece == "":
+						h.evs.append("thru_down")
+						if bstats["passes"] % 3 == 0:
+							h.evs.append("hi")
+						h.evs.append("thru_up")
+					else:
+						h.evs.append("pass_down")
+						h.evs.append("pass_up")
 					bstats["passes"] += 1
 					t = 0.5
 		elif ball_owner != null and ball_owner.team == h.team:

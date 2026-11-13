@@ -6,6 +6,9 @@ var shoot_down := false
 var pass_down := false
 var sprint_down := false
 var lob_down := false
+var thru_down := false
+var hi_btn := ""
+var _starts := {}
 var ev := [] # queued events: "shoot_down", "shoot_up", "pass_down", "pass_up", "cam", "pause", "tap"
 var charge := 0.0
 var stam := 1.0
@@ -1098,8 +1101,8 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var rows := [
 				["MOVE", "Slide your left thumb anywhere on the left side."],
 				["SHOOT", "Hold to load power, let go to shoot. Short taps curl. At a corner kick: cross."],
-				["PASS", "Along the ground, the way the stick points. Hold longer for a man further away."],
-				["LOB", "A high ball over the defenders. Hold longer to reach a man further away."],
+				["PASS", "To a man's feet, the way the stick points. Hold longer for a man further away."],
+				["THROUGH", "Into space in front of a runner. Thumb up on PASS or THROUGH: high ball."],
 				["TACKLE", "Tap: tackle. Hold: he closes down and wins the ball himself. At a sprint: slide."],
 				["SWITCH", "Without the ball: change to the player nearest the ball."],
 				["SPRINT", "Pull your thumb further out, past the outer ring. The ring shows your breath."],
@@ -1307,7 +1310,7 @@ func _btn_pos() -> Dictionary:
 	return {
 		"shoot": [Vector2(s.x - 92, s.y - 92), 56.0],
 		"pass": [Vector2(s.x - 218, s.y - 66), 46.0],
-		"lob": [Vector2(s.x - 196, s.y - 176), 40.0],
+		"thru": [Vector2(s.x - 196, s.y - 176), 42.0],
 	}
 
 func _cam_rect() -> Rect2:
@@ -1342,6 +1345,9 @@ func _input(e: InputEvent) -> void:
 			for k in b:
 				if p.distance_to(b[k][0]) < b[k][1] + 14.0:
 					_ids[e.index] = k
+					_starts[e.index] = p
+					if k != "shoot":
+						hi_btn = ""
 					_set_btn(k, true)
 					return
 			if p.x < size.x * 0.5 and _stick_id == -1:
@@ -1356,8 +1362,15 @@ func _input(e: InputEvent) -> void:
 				sprint_down = false
 			elif _ids.has(e.index):
 				_set_btn(_ids[e.index], false)
+				if hi_btn == _ids[e.index]:
+					hi_btn = ""
 				_ids.erase(e.index)
 	elif e is InputEventScreenDrag:
+		if _ids.has(e.index) and _ids[e.index] in ["pass", "thru"] and hi_btn == "" and lab_a == "SHOOT":
+			# slide the thumb up from PASS or THROUGH: the ball goes high
+			if _starts.get(e.index, e.position).y - e.position.y > 30.0:
+				hi_btn = _ids[e.index]
+				ev.append("hi")
 		if e.index == _stick_id:
 			_stick_pos = e.position
 			var d := _stick_pos - _stick_base
@@ -1380,10 +1393,10 @@ func _set_btn(k: String, down: bool) -> void:
 		if pass_down != down:
 			ev.append("pass_down" if down else "pass_up")
 		pass_down = down
-	elif k == "lob":
-		if lob_down != down:
-			ev.append("lob_down" if down else "lob_up")
-		lob_down = down
+	elif k == "thru":
+		if thru_down != down:
+			ev.append("thru_down" if down else "thru_up")
+		thru_down = down
 
 # ---------------------------------------------------------------- drawing
 
@@ -1439,7 +1452,16 @@ func _draw() -> void:
 		_button(b["shoot"][0], b["shoot"][1], lab_a, shoot_down, Color(0.25, 0.85, 0.4))
 	_button(b["pass"][0], b["pass"][1], lab_b, pass_down, Color(0.95, 0.95, 0.95))
 	if lab_a == "SHOOT":
-		_button(b["lob"][0], b["lob"][1], "LOB", lob_down, Color(0.55, 0.8, 1.0))
+		_button(b["thru"][0], b["thru"][1], "THROUGH", thru_down, Color(0.55, 0.8, 1.0))
+		for hk in ["pass", "thru"]:
+			# the little arrow says: slide up for a high ball
+			var hc: Vector2 = b[hk][0] - Vector2(0, b[hk][1] + 9.0)
+			var on: bool = hi_btn == hk
+			var hcol := Color(1.0, 0.85, 0.2, 1.0) if on else Color(1, 1, 1, 0.45)
+			draw_polyline(PackedVector2Array([hc + Vector2(-9, 5), hc + Vector2(0, -4), hc + Vector2(9, 5)]), hcol, 3.0, true)
+			if on:
+				draw_arc(b[hk][0], b[hk][1] + 4.0, 0, TAU, 48, hcol, 3.0, true)
+				_text("HIGH", hc - Vector2(0, 10), 14, hcol)
 	if ctrl_name != "":
 		_text(ctrl_name, Vector2(size.x * 0.5, size.y - 138.0 * 68.0 / 105.0 - 20.0), 16, Color(1, 1, 1, 0.9))
 	if charge > 0.0:
