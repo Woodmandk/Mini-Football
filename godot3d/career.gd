@@ -12,6 +12,7 @@ var d := {}
 var web := false
 
 var last_coins := 0
+var names := []
 
 func has_save() -> bool:
 	return not d.is_empty()
@@ -262,6 +263,7 @@ func finish_match(mine: int, theirs: int, scorers: Array) -> Array:
 	var coins := 15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
+	market_refresh()
 	lines.append("+%d COINS" % coins)
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
@@ -341,6 +343,98 @@ func swap(a: int, b: int) -> void:
 	elif ib >= 0:
 		xi[ib] = a
 	save()
+
+# ---- transfer market
+
+const SQUAD_MAX := 19
+const SQUAD_MIN := 14
+
+static func value(pl: Dictionary) -> int:
+	var o := ovr_of(pl)
+	var v := 30.0 + pow(maxf(o - 55.0, 0.0), 2.0) * 0.9 + maxf(int(pl["pot"]) - o, 0.0) * 6.0 - maxf(int(pl["age"]) - 29.0, 0.0) * 15.0
+	return maxi(int(round(v / 5.0)) * 5, 20)
+
+static func sell_value(pl: Dictionary) -> int:
+	return int(round(value(pl) * 0.7 / 5.0)) * 5
+
+# Six new players for sale, around your own level, a few clearly better.
+func market_refresh() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var taken := []
+	for pl in d["squad"]:
+		taken.append(str(pl["n"]))
+	var pool := []
+	for n in names:
+		if not taken.has(str(n)):
+			pool.append(n)
+	pool.shuffle()
+	var lv := int(round(my_strength()))
+	var roles := ["GK", "DF", "DF", "MF", "MF", "FW", "FW"]
+	roles.shuffle()
+	var out := []
+	for i in mini(6, pool.size()):
+		var role: String = roles[i]
+		var base: Array = ROLE_BASE[role]
+		var q: int = lv - 72 + [-3, 0, 2, 4, 6, 9][i] + rng.randi_range(-1, 1)
+		var pl := {
+			"n": pool[i], "num": 0, "pos": role, "age": rng.randi_range(17, 31), "xp": 0, "g": 0, "apps": 0,
+			"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
+			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
+		}
+		pl["pot"] = clampi(ovr_of(pl) + rng.randi_range(2, 14) - maxi(int(pl["age"]) - 23, 0) * 2, ovr_of(pl), 95)
+		out.append(pl)
+	out.sort_custom(func(a, b): return ovr_of(a) > ovr_of(b))
+	d["market"] = out
+	save()
+
+func market() -> Array:
+	if not d.has("market"):
+		market_refresh()
+	return d["market"]
+
+func buy(i: int) -> String:
+	var m: Array = market()
+	if i < 0 or i >= m.size():
+		return ""
+	var pl: Dictionary = m[i]
+	var price := value(pl)
+	if (d["squad"] as Array).size() >= SQUAD_MAX:
+		return "Your squad is full. Sell a player from the bench first."
+	if int(d["coins"]) < price:
+		return "You need %d more coins." % (price - int(d["coins"]))
+	var used := []
+	for s in d["squad"]:
+		used.append(int(s["num"]))
+	for n in range(2, 99):
+		if not used.has(n):
+			pl["num"] = n
+			break
+	d["coins"] = int(d["coins"]) - price
+	d["squad"].append(pl)
+	m.remove_at(i)
+	save()
+	return "%s SIGNED" % str(pl["n"]).to_upper()
+
+func sell(i: int) -> String:
+	var sq: Array = d["squad"]
+	if i < 0 or i >= sq.size():
+		return ""
+	for x in d["xi"]:
+		if int(x) == i:
+			return "Move him to the bench before you sell him."
+	if sq.size() <= SQUAD_MIN:
+		return "You need at least %d players." % SQUAD_MIN
+	var pl: Dictionary = sq[i]
+	var got := sell_value(pl)
+	d["coins"] = int(d["coins"]) + got
+	sq.remove_at(i)
+	var xi := []
+	for x in d["xi"]:
+		xi.append(int(x) - 1 if int(x) > i else int(x))
+	d["xi"] = xi
+	save()
+	return "%s SOLD FOR %d COINS" % [str(pl["n"]).to_upper(), got]
 
 func train_cost(pl: Dictionary) -> int:
 	return 40 + maxi(ovr_of(pl) - 60, 0) * 6

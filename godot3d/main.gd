@@ -94,6 +94,7 @@ var car_lines := []
 var car_sel := -1
 var car_msg := ""
 var car_sure := false
+var car_sell := -1
 const CAMS := ["TV", "TOP", "CLOSE"]
 const N_F := 11 # numbers per player in a packed frame
 
@@ -249,6 +250,7 @@ func _ready() -> void:
 		version = FileAccess.get_file_as_string("res://version.txt").strip_edges()
 	net = NetS.new()
 	car = Career.new()
+	car.names = SURNAMES
 	car.load_save(net.web)
 	if new_car:
 		car.wipe()
@@ -305,13 +307,26 @@ func _ready() -> void:
 			if menu_arg == "full":
 				tst[0]["g"] = ["STORM 12'", "BAK 40'"]
 				tst[1]["g"] = ["PIKE 77'"]
-			if menu_arg in ["career", "table", "cfull"] or menu_arg.begins_with("squad"):
+			if menu_arg in ["career", "table", "cfull", "market"] or menu_arg.begins_with("squad"):
 				_action("career")
+			if menu_arg == "buytest":
+				_action("career")
+				car.d["coins"] = 3000
+				for bi in 3:
+					_action("c_buy", 0)
+				print("BUYTEST after buy size=", car.d["squad"].size(), " coins=", car.d["coins"], " msg=", car_msg)
+				car_sel = 12
+				_action("c_sell")
+				_action("c_sell")
+				print("BUYTEST after sell size=", car.d["squad"].size(), " coins=", car.d["coins"], " msg=", car_msg, " xi=", car.d["xi"])
+				car_sel = 13
+				menu_arg = "squad9"
 			if menu_arg.begins_with("squad"):
-				for fi2 in int(menu_arg.substr(5)) if menu_arg.length() > 5 else 0:
+				for fi2 in (int(menu_arg.substr(5)) % 9) if menu_arg.length() > 5 else 0:
 					_action("c_form")
+				if menu_arg != "squad9":
+					car_sel = 9
 				menu_arg = "squad"
-				car_sel = 9
 			if menu_arg == "cfull":
 				career_on = true
 				_set_clubs(int(car.d["club"]), car.next_match()[0], true)
@@ -720,7 +735,10 @@ func _car_info() -> Dictionary:
 	for i in (d["squad"] as Array).size():
 		var pl: Dictionary = d["squad"][i]
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
-			"xp": int(pl["xp"]), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl)})
+			"xp": int(pl["xp"]), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl)})
+	var mk := []
+	for pl in car.market():
+		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl)})
 	var roles := []
 	for f in FORMS[car.form()]:
 		roles.append([f[0], f[1], f[2]])
@@ -728,7 +746,7 @@ func _car_info() -> Dictionary:
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
 		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [],
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
-		"form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
+		"market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 	}
 
 func _stat_rows() -> Array:
@@ -825,12 +843,14 @@ func _action(act: String, arg = null) -> void:
 		"c_table":
 			hud.show_menu("table", _menu_info())
 		"c_squad":
+			car_sell = -1
 			car_sel = -1
 			car_msg = ""
 			hud.show_menu("squad", _menu_info())
 		"c_pick":
 			var pi := int(arg)
 			car_msg = ""
+			car_sell = -1
 			if car_sel == pi:
 				car_sel = -1
 			elif car_sel < 0:
@@ -849,6 +869,25 @@ func _action(act: String, arg = null) -> void:
 				car_msg = r2 if r2 != "" else "Not enough coins, or he has reached his best"
 				if r2 != "":
 					au["blip2"].play()
+				hud.refresh(_menu_info())
+		"c_market":
+			car_msg = ""
+			hud.show_menu("market", _menu_info())
+		"c_buy":
+			car_msg = car.buy(int(arg))
+			if car_msg.ends_with("SIGNED"):
+				au["blip2"].play()
+			hud.refresh(_menu_info())
+		"c_sell":
+			if car_sel >= 0:
+				if car_sell == car_sel:
+					car_msg = car.sell(car_sel)
+					if car_msg.contains("SOLD"):
+						car_sel = -1
+						au["blip2"].play()
+					car_sell = -1
+				else:
+					car_sell = car_sel
 				hud.refresh(_menu_info())
 		"c_form":
 			var fi := (FORM_NAMES.find(car.form()) + 1) % FORM_NAMES.size()
