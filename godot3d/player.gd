@@ -51,6 +51,7 @@ var pas := 65
 var dfn := 60
 var ovr := 70
 var star := false
+var sq := -1
 var num := 0
 var net_pos := Vector3.ZERO
 var net_yaw := 0.0
