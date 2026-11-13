@@ -122,6 +122,7 @@ class Human:
 	var local := true
 	var stam := 1.0
 	var skill_cool := 0.0
+	var auto_cool := 0.0
 	var tired := false
 
 var players := []
@@ -1863,30 +1864,76 @@ func _assign_defenders(t: int, force: bool) -> void:
 	for h in humans:
 		if h.team == t and not hs.has(h) and h.ctrl != null:
 			used.append(h.ctrl)
+	# the best few places, one per thumb. A man who is already on one of them keeps it,
+	# so two people on a team never take each other's player.
+	var top := []
+	for c in cands:
+		if not used.has(c[1]) and top.size() < hs.size():
+			top.append(c[1])
+	var need := []
 	for h in hs:
-		for c in cands:
-			if not used.has(c[1]):
-				if h.ctrl != c[1]:
-					h.ctrl = c[1]
-					h.switch_cool = 0.7
-				used.append(c[1])
-				break
+		if h.ctrl != null and top.has(h.ctrl):
+			top.erase(h.ctrl)
+		else:
+			need.append(h)
+	for h in need:
+		if top.is_empty():
+			break
+		# of the places left, each takes the one nearest his own man
+		var bi := 0
+		if h.ctrl != null:
+			for i in top.size():
+				if top[i].position.distance_to(h.ctrl.position) < top[bi].position.distance_to(h.ctrl.position):
+					bi = i
+		h.ctrl = top[bi]
+		h.switch_cool = 0.7
+		top.remove_at(bi)
 
 func _switch(h) -> void:
+	# SWITCH walks through the three players nearest the ball, never one your partner is playing
+	var c := []
+	for p in teams[h.team]:
+		if p.role == "GK" or p.off or (_hum_of(p) != null and p != h.ctrl):
+			continue
+		c.append([p.position.distance_to(ball.position), p])
+	c.sort_custom(func(a, b): return a[0] < b[0])
+	var n: int = mini(c.size(), 3)
+	if n > 0:
+		var at := -1
+		for i in n:
+			if c[i][1] == h.ctrl:
+				at = i
+		h.ctrl = c[(at + 1) % n][1]
+	h.switch_cool = 1.6
+	if h.local:
+		au["blip"].play()
+
+# the other side plays a pass: put a defender who can get to the receiver under a thumb, like FIFA's auto switch
+func _switch_for_pass(t: int, m) -> void:
+	var own_goal := Vector3(-HL * side(t), 0, 0)
+	var spot: Vector3 = m.position + (own_goal - m.position).normalized() * 2.0
 	var best = null
 	var bd := 1e9
-	for p in teams[h.team]:
-		if p.role == "GK" or p == h.ctrl or _hum_of(p) != null or p.off:
+	for p in teams[t]:
+		if p.role == "GK" or p.off or _hum_of(p) != null:
 			continue
-		var d: float = p.position.distance_to(ball.position)
+		var d: float = p.position.distance_to(spot)
 		if d < bd:
 			bd = d
 			best = p
-	if best != null:
-		h.ctrl = best
-	h.switch_cool = 0.9
-	if h.local:
-		au["blip"].play()
+	if best == null:
+		return
+	var hw = null
+	var worst := 0.0
+	for h in humans:
+		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0:
+			var d2: float = h.ctrl.position.distance_to(spot)
+			if d2 > worst:
+				worst = d2
+				hw = h
+	if hw != null and bd + 5.0 < worst:
+		hw.ctrl = best
+		hw.switch_cool = 0.9
 
 # ---------------------------------------------------------------- main loop
 
@@ -1944,13 +1991,6 @@ func _frame(dt: float) -> void:
 	for e in evs:
 		if e in ["shoot_down", "shoot_up", "pass_down", "pass_up", "tap", "lob"]:
 			acts.append(e)
-	if sprint and not _sprint_was:
-		# two quick taps on SPRINT: a skill move
-		if real_t - _sprint_t < 0.36:
-			acts.append("skill")
-			_sprint_t = -9.0
-		else:
-			_sprint_t = real_t
 	_sprint_was = sprint
 	if net.role == "guest":
 		net_acc += dt
@@ -2107,7 +2147,7 @@ func _play(dt: float) -> void:
 				elif mine:
 					h.charging = true
 					h.charge = 0.0
-				else:
+				elif ball_owner == null or ball_owner.team != h.team:
 					_human_tackle(h)
 			elif e == "shoot_up":
 				if h.charging and ball_owner == h.ctrl:
@@ -2157,6 +2197,16 @@ func _play(dt: float) -> void:
 					h.charge = 0.0
 		if h.pass_hold >= 0.0:
 			h.pass_hold += dt
+		# Tackle help: run your man into the ball and he puts his foot in by himself.
+		h.auto_cool -= dt
+		var oc = ball_owner
+		if oc != null and oc.team != h.team and oc.role != "GK" and h.auto_cool <= 0.0 and protect_t <= 0.0 and h.ctrl.stun <= 0.0 and h.stick.length() > 0.3 and set_piece == "":
+			var tb: Vector3 = ball.position - h.ctrl.position
+			tb.y = 0.0
+			var rc: float = 1.3 + (h.ctrl.dfn - 60) * 0.006 - (oc.phy - 60) * 0.004
+			if tb.length() < rc * 0.8 and dir3.normalized().dot(tb.normalized()) > 0.25 and oc.fwd().dot((h.ctrl.position - oc.position).normalized()) > -0.3:
+				h.auto_cool = 1.2
+				_human_tackle(h, true)
 	# --- who chases
 	var chaser := [null, null]
 	var second := [null, null]
@@ -2614,18 +2664,10 @@ func _pass(p, m, lofted: bool, cross := false) -> void:
 	stats["passes"] += 1
 	snd("kick" if (lofted or d > 22.0) and not thrown else "touch")
 	if h != null and m.role != "GK" and _hum_of(m) == null:
-		# Two people on one team: the pass goes to your partner. He takes over the receiver,
-		# and you keep the man who passed, free to run for the return ball.
-		var mate = null
-		for h2 in humans:
-			if h2 != h and h2.team == h.team:
-				mate = h2
-		if mate != null:
-			mate.ctrl = m
-			mate.switch_cool = 0.5
-		else:
-			h.ctrl = m
-			h.switch_cool = 0.5
+		h.ctrl = m
+		h.switch_cool = 0.5
+	if _team_human(1 - p.team):
+		_switch_for_pass(1 - p.team, m)
 
 func _human_aim(h, dir3: Vector3) -> float:
 	var gk = teams[1 - h.team][0]
@@ -2715,14 +2757,14 @@ func _give(p) -> void:
 			h2.ctrl = p
 	_assign_defenders(1 - p.team, prev == null or prev.team != p.team)
 
-func _human_tackle(h) -> void:
+func _human_tackle(h, standing := false) -> void:
 	var c = ball_owner
 	var me_p = h.ctrl
 	if me_p.stun > 0.0 or me_p.tackle_t >= 0.0:
 		return
 	var bd: float = Vector2(me_p.position.x - ball.position.x, me_p.position.z - ball.position.z).length()
 	# SPRINT held and still a few steps away: a slide tackle. Otherwise a standing tackle.
-	if h.sprint and (c == null or c.team == h.team or bd > 2.3):
+	if not standing and h.sprint and (c == null or c.team == h.team or bd > 2.3):
 		_slide_tackle(h)
 		return
 	# Standing tackle: a step and a foot in for the ball. Win it and he keeps it at his feet and plays on.
@@ -3407,8 +3449,10 @@ func _process(dt: float) -> void:
 		if humans.size() > me:
 			var hm = humans[me]
 			var ours: bool = ball_owner != null and ball_owner.team == hm.team
-			hud.lab_a = "SHOOT" if ours else "TACKLE"
-			hud.lab_b = "PASS" if ours else "SWITCH"
+			var mine2: bool = ball_owner != null and ball_owner == hm.ctrl
+			# the buttons are for what YOUR man can do: with a partner on the ball you can only switch player
+			hud.lab_a = "SHOOT" if mine2 else ("" if ours else "TACKLE")
+			hud.lab_b = "PASS" if mine2 else "SWITCH"
 			hud.charge = hm.charge
 			hud.stam = hm.stam
 			hud.ctrl_name = ("%d  %s  %d" % [hm.ctrl.num, hm.ctrl.pname.to_upper(), hm.ctrl.ovr]) if hm.ctrl != null else ""
