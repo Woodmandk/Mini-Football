@@ -124,6 +124,9 @@ class Human:
 	var skill_cool := 0.0
 	var auto_cool := 0.0
 	var lob_hold := -1.0
+	var def_hold := -1.0
+	var pull_n := 0
+	var pull_t := 0.0
 	var meter := 0.0
 	var tired := false
 
@@ -237,6 +240,8 @@ var real_t := 0.0
 var version := "dev"
 var shp := [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]
 var autotest_on := OS.get_cmdline_user_args().has("--autotest")
+var bot_slide := OS.get_cmdline_user_args().has("--slide")
+var bot_hold := OS.get_cmdline_user_args().has("--hold")
 var tst := [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}]
 var stats := {"shots": 0, "passes": 0, "tackles": 0, "outs": 0, "saves": 0, "goals": 0, "fouls": 0, "offsides": 0, "pens": 0, "cards": 0}
 
@@ -2211,7 +2216,9 @@ func _play(dt: float) -> void:
 					h.charge = 0.0
 				elif ball_owner == null or ball_owner.team != h.team:
 					_human_tackle(h)
+					h.def_hold = 0.0
 			elif e == "shoot_up":
+				h.def_hold = -1.0
 				if h.charging and ball_owner == h.ctrl:
 					_shoot(h.ctrl, h.charge, _human_aim(h, dir3), 0.8, 0.75 if h.charge < 0.72 else 0.2)
 				h.charging = false
@@ -2273,6 +2280,7 @@ func _play(dt: float) -> void:
 		h.meter = maxf(h.charge, maxf(h.pass_hold, h.lob_hold) / 0.6)
 		# Tackle help: run your man into the ball and he puts his foot in by himself.
 		h.auto_cool -= dt
+		h.pull_t -= dt
 		var oc = ball_owner
 		if oc != null and oc.team != h.team and oc.role != "GK" and h.auto_cool <= 0.0 and protect_t <= 0.0 and h.ctrl.stun <= 0.0 and h.stick.length() > 0.3 and set_piece == "":
 			var tb: Vector3 = ball.position - h.ctrl.position
@@ -2387,6 +2395,36 @@ func _play(dt: float) -> void:
 				if h.charging:
 					sp *= 0.6
 				want = Vector3(h.stick.x, 0, h.stick.y) * sp
+				var oc2 = ball_owner
+				if h.def_hold >= 0.0:
+					h.def_hold += dt
+					if oc2 == null or oc2.team == h.team or oc2.role == "GK" or set_piece != "":
+						if oc2 != null:
+							h.def_hold = -1.0
+					elif h.def_hold > 0.22:
+						# pressing like this costs legs
+						h.stam = clampf(h.stam - 0.05 * dt, 0.0, 1.0)
+						# TACKLE held: your man closes the runner down by himself, stays goal side at a
+						# step's distance facing him, and puts his foot in when the ball is there to be won.
+						var og2 := Vector3(-HL * side(h.team), 0, 0)
+						var gs3: Vector3 = (og2 - oc2.position).normalized()
+						var dd2: float = p.position.distance_to(oc2.position)
+						var spot2: Vector3 = oc2.position + oc2.vel * 0.3 + gs3 * 1.7
+						var goal_side2: bool = (p.position - oc2.position).dot(gs3) > 0.2 * dd2
+						if not goal_side2 or dd2 > 4.5:
+							spot2 = oc2.position + oc2.vel * 0.55 + gs3 * 2.6
+							want = _run_to(p, spot2, p.top_speed)
+						else:
+							want = _run_to(p, spot2, p.top_speed * 0.9)
+							p.jock = true
+						# the stick still lets you shade to one side
+						want += Vector3(h.stick.x, 0, h.stick.y) * p.top_speed * 0.35
+						var tb2: Vector3 = ball.position - p.position
+						tb2.y = 0.0
+						var rc2: float = 1.5 + (p.dfn - 60) * 0.006 - (oc2.phy - 60) * 0.004
+						if h.auto_cool <= 0.0 and protect_t <= 0.0 and p.stun <= 0.0 and tb2.length() < rc2 * 0.85 and oc2.fwd().dot((p.position - oc2.position).normalized()) > -0.3:
+							h.auto_cool = 0.9
+							_human_tackle(h, true)
 				if not (ball_owner == p and set_piece != ""):
 					h.dead_t = 0.0
 				if ball_owner == p and set_piece in ["corner", "throw", "gk", "fk", "kick"]:
@@ -2411,6 +2449,7 @@ func _play(dt: float) -> void:
 			want = _ai_offball(p, chaser, second, aim)
 		_move(p, want, dt)
 	_separate()
+	_slides()
 	# --- ball
 	if ball_owner != null:
 		var o = ball_owner
@@ -2536,6 +2575,13 @@ func _idle_players(dt: float) -> void:
 		_move(p, Vector3.ZERO, dt)
 
 func _move(p, want: Vector3, dt: float) -> void:
+	if p.tackle_t >= 0.0 and p.tackle_t < 0.42 and p.slide_live:
+		# sliding on the grass: he keeps going and only friction slows him
+		p.vel = p.vel.move_toward(Vector3.ZERO, 6.5 * dt)
+		p.position += p.vel * dt
+		p.position.x = clampf(p.position.x, -HL - 2.5, HL + 2.5)
+		p.position.z = clampf(p.position.z, -HW - 2.5, HW + 2.5)
+		return
 	var acc: float = (15.0 if want.length() > p.vel.length() else 22.0) * p.acc_k
 	var cur: float = p.vel.length()
 	if _hum_of(p) != null:
@@ -2917,20 +2963,28 @@ func _human_tackle(h, standing := false) -> void:
 		return
 	var to: Vector3 = ball.position - me_p.position
 	to.y = 0.0
-	if bd < 2.4 and bd > 0.05:
+	if bd < 3.0 and bd > 0.05:
+		# he lunges at the ball, so a tackle from a step away still gets there
 		me_p.yaw = atan2(-to.x, -to.z)
-		me_p.vel = to.normalized() * 6.0
+		me_p.vel = to.normalized() * 7.2
 	# reach: a better defender gets a longer leg in, a stronger carrier holds him off
-	var reach: float = 1.3 + (me_p.dfn - 60) * 0.006 - (c.phy - 60) * 0.004
+	var reach: float = 1.5 + (me_p.dfn - 60) * 0.006 - (c.phy - 60) * 0.004
 	if bd < reach and protect_t <= 0.0 and c.role != "GK":
 		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
 		var pd: float = me_p.position.distance_to(c.position)
 		if front < -0.5 and pd < bd and c.vel.length() > 2.0:
-			# straight through the back of a running man
-			if pd < 1.0:
-				_foul(me_p, c)
-			else:
-				me_p.stun = 0.35
+			# Chasing him from behind there is no ball to win: a tug on the shirt and a shoulder slow him down
+			# so you can get round him. Keep doing it and the referee gives a free kick.
+			if pd < 1.5:
+				h.pull_n = (h.pull_n + 1) if h.pull_t > 0.0 else 1
+				h.pull_t = 2.5
+				if h.pull_n >= 3:
+					h.pull_n = 0
+					_foul(me_p, c)
+				else:
+					c.vel *= 0.5
+					snd("touch")
+			me_p.stun = 0.15
 			return
 		c.stun = 0.35
 		c.vel *= 0.3
@@ -2939,36 +2993,60 @@ func _human_tackle(h, standing := false) -> void:
 		_give(me_p)
 		protect_t = 0.6
 		return
-	me_p.stun = 0.3
+	me_p.stun = 0.22
 
 func _slide_tackle(h) -> void:
+	# A real slide: he throws himself along the grass towards the ball and keeps sliding for a few metres.
+	# Whatever his leading foot meets on the way decides it: the ball is won, the man from behind is a foul.
 	var c = ball_owner
 	var me_p = h.ctrl
 	me_p.start_tackle()
-	if c == null or c.team == h.team:
-		me_p.vel = me_p.fwd() * 9.0
-		me_p.stun = 0.35
-		return
-	var to: Vector3 = c.position - me_p.position
-	var d := to.length()
-	if d < 3.4:
-		me_p.yaw = atan2(-to.x, -to.z)
-		me_p.vel = to.normalized() * 9.5
-	if d < 2.6 + me_p.dfn * 0.004 and protect_t <= 0.0 and c.role != "GK":
-		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
-		if front > -0.45:
-			c.stun = 0.6
-			c.start_fall(0.6)
-			stats["tackles"] += 1
-			snd("touch")
-			fx("shake", 0.25)
-			_give(me_p)
-			protect_t = 0.7
-			return
-		_foul(me_p, c)
-		return
-	# a slide that misses leaves him on the grass
-	me_p.stun = 0.9
+	var dirs: Vector3 = me_p.fwd()
+	var to: Vector3 = ball.position - me_p.position
+	to.y = 0.0
+	if to.length() < 5.0 and to.length() > 0.1 and (c == null or c.team != h.team):
+		var lead: Vector3 = to + (c.vel * 0.25 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.25)
+		dirs = lead.normalized()
+		me_p.yaw = atan2(-dirs.x, -dirs.z)
+	me_p.vel = dirs * maxf(me_p.vel.length() + 2.0, 9.5)
+	me_p.slide_live = true
+	me_p.stun = 0.8
+
+func _slides() -> void:
+	for p in players:
+		if not p.slide_live:
+			continue
+		if p.tackle_t < 0.0 or p.tackle_t > 0.46:
+			p.slide_live = false
+			continue
+		var c = ball_owner
+		var bd: float = Vector2(p.position.x - ball.position.x, p.position.z - ball.position.z).length()
+		if c == null:
+			if bd < 1.0 and ball.position.y < 0.8 and state == "play" and set_piece == "":
+				p.slide_live = false
+				p.stun = 0.3
+				snd("touch")
+				_give(p)
+		elif c.team != p.team and c.role != "GK" and protect_t <= 0.0 and set_piece == "":
+			var front: float = c.fwd().dot((p.position - c.position).normalized())
+			var pd: float = p.position.distance_to(c.position)
+			if bd < 1.15 + (p.dfn - 60) * 0.004:
+				p.slide_live = false
+				if front > -0.45:
+					c.stun = 0.6
+					c.start_fall(0.6)
+					stats["tackles"] += 1
+					snd("touch")
+					fx("shake", 0.25)
+					p.stun = 0.3
+					_give(p)
+					protect_t = 0.7
+				else:
+					_foul(p, c)
+			elif pd < 0.75:
+				# missed the ball and took the man
+				p.slide_live = false
+				_foul(p, c)
 
 func _tackles(dt: float) -> void:
 	var c = ball_owner
@@ -3051,7 +3129,7 @@ func _pickups() -> void:
 		if absf(b.x - gx) > 16.5 or absf(b.z) > 20.16:
 			continue
 		var gq: float = clampf((g.dfn - 60) / 30.0, 0.0, 1.0)
-		var reach := 0.8 + (lerpf(0.62, 0.8, gq) if g.dive_t >= 0.0 else 0.0)
+		var reach := 0.8 + (lerpf(0.66, 0.82, gq) if g.dive_t >= 0.0 else 0.0)
 		# high balls are harder to reach, so the top corners are open to a good shot
 		if shot_live:
 			reach -= maxf(b.y - 1.5, 0.0) * 0.45
@@ -3946,7 +4024,17 @@ func _bot_inputs(dt: float) -> void:
 			var to: Vector3 = ball.position - p.position
 			to.y = 0.0
 			h.stick = Vector2(to.x, to.z).normalized() if to.length() > 0.3 else Vector2.ZERO
-			if t <= 0.0:
+			if bot_slide:
+				if t <= 0.0 and ball_owner != null and to.length() < 4.2 and to.length() > 2.0 and p.stun <= 0.0:
+					_slide_tackle(h)
+					bstats["tackles"] += 1
+					t = 1.6
+			elif bot_hold:
+				# test of holding TACKLE: thumb off the stick, button kept down
+				h.stick = Vector2.ZERO
+				if ball_owner != null and h.def_hold < 0.0:
+					h.evs.append("shoot_down")
+			elif t <= 0.0:
 				if ball_owner != null and to.length() < 1.9:
 					h.evs.append("shoot_down")
 					h.evs.append("shoot_up")
