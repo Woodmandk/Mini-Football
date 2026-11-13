@@ -9,6 +9,7 @@ const World := preload("res://world.gd")
 const NetS := preload("res://net.gd")
 const Career := preload("res://career.gd")
 
+const DIVE_V := 4.9
 const HL := 52.5
 const HW := 34.0
 const GOAL_HW := 3.66
@@ -160,6 +161,7 @@ var aim_arrow: MeshInstance3D
 var aim_hold: Node3D
 var ball_net := Vector3.ZERO
 var ball_spin := 0.0
+var pass_from = null
 
 var score := [0, 0]
 var clock := 0.0
@@ -1563,6 +1565,9 @@ func _kickoff(team: int) -> void:
 
 func _goal(team: int) -> void:
 	score[team] += 1
+	if long_test:
+		var gk0 = teams[1 - team][0]
+		print("LONGDBG ball=", snappedf(ball.position.z, 0.01), ",", snappedf(ball.position.y, 0.01), " gk=", snappedf(gk0.position.x, 0.1), ",", snappedf(gk0.position.z, 0.01), " dive=", snappedf(gk0.dive_t, 0.01), " react=", snappedf(gk0.react_t, 0.01), " gkv=", snappedf(gk0.vel.z, 0.1), " bv=", snappedf(ball_vel.length(), 0.1), " stun=", snappedf(gk0.stun, 0.01))
 	stats["goals"] += 1
 	state = "goal"
 	state_t = 0.0
@@ -1969,7 +1974,13 @@ func _switch(h) -> void:
 	for p in teams[h.team]:
 		if p.role == "GK" or p.off or (_hum_of(p) != null and p != h.ctrl):
 			continue
-		c.append([p.position.distance_to(ball.position), p])
+		var dsw: float = p.position.distance_to(ball.position)
+		# when they attack, SWITCH gives you a man between the ball and your goal first
+		if ball_owner != null and ball_owner.team != h.team:
+			var ogs := Vector3(-HL * side(h.team), 0, 0)
+			if p.position.distance_to(ogs) > ball.position.distance_to(ogs) + 1.0:
+				dsw += 12.0
+		c.append([dsw, p])
 	c.sort_custom(func(a, b): return a[0] < b[0])
 	var n: int = mini(c.size(), 3)
 	if n > 0:
@@ -2221,6 +2232,11 @@ func _play(dt: float) -> void:
 		h.skill_cool -= dt
 		if h.ctrl == null:
 			continue
+		if h.ctrl.role == "GK" and ball_owner != h.ctrl:
+			# the keeper is only yours while he holds the ball
+			_assign_defenders(h.team, true)
+			if h.ctrl.role == "GK":
+				continue
 		var dir3 := Vector3(h.stick.x, 0, h.stick.y)
 		var mine: bool = ball_owner == h.ctrl
 		# a full meter plays the ball by itself
@@ -2331,7 +2347,7 @@ func _play(dt: float) -> void:
 		h.auto_cool -= dt
 		h.pull_t -= dt
 		var oc = ball_owner
-		if oc != null and oc.team != h.team and oc.role != "GK" and h.auto_cool <= 0.0 and protect_t <= 0.0 and h.ctrl.stun <= 0.0 and h.stick.length() > 0.3 and set_piece == "":
+		if oc != null and oc.team != h.team and not oc.hands() and h.auto_cool <= 0.0 and protect_t <= 0.0 and h.ctrl.stun <= 0.0 and h.stick.length() > 0.3 and set_piece == "":
 			var tb: Vector3 = ball.position - h.ctrl.position
 			tb.y = 0.0
 			var rc: float = 1.55 + (h.ctrl.dfn - 60) * 0.006 - (oc.phy - 60) * 0.004
@@ -2351,10 +2367,17 @@ func _play(dt: float) -> void:
 		off_line[t] = maxf(maxf(us[us.size() - 2] if us.size() > 1 else 0.0, ball.position.x * side(t)), 0.0)
 		var b1 := 1e9
 		var b2 := 1e9
+		var opp_has: bool = ball_owner != null and ball_owner.team != t
+		var og0 := Vector3(-HL * side(t), 0, 0)
+		var bg0: float = aim.distance_to(og0)
 		for p in teams[t]:
 			if p.role == "GK" or p.stun > 0.0:
 				continue
 			var d: float = p.position.distance_to(aim)
+			# against a man on the ball the job goes to someone between him and our goal:
+			# a player chasing from behind never gets there, and the door stays open
+			if opp_has and p.position.distance_to(og0) > bg0 + 1.0:
+				d += 9.0
 			if d < b1:
 				b2 = b1
 				second[t] = chaser[t]
@@ -2450,13 +2473,23 @@ func _play(dt: float) -> void:
 				var sp: float = p.top_speed * (1.0 if run else 0.88)
 				if ball_owner == p:
 					sp *= p.carry_k
+				if p.role == "GK" and ball_owner == p and set_piece == "":
+					if p.hands():
+						sp *= 0.3
+					# six seconds, then he plays it himself
+					p.hold_t += dt
+					if p.hold_t > 6.0:
+						var gm = _pass_target(p, Vector3.ZERO, true)
+						if gm == null:
+							gm = teams[p.team][1 + randi() % 4]
+						_pass(p, gm, p.position.distance_to(gm.position) > 22.0)
 				if h.charging:
 					sp *= 0.6
 				want = Vector3(h.stick.x, 0, h.stick.y) * sp
 				var oc2 = ball_owner
 				if h.def_hold >= 0.0:
 					h.def_hold += dt
-					if oc2 == null or oc2.team == h.team or oc2.role == "GK" or set_piece != "":
+					if oc2 == null or oc2.team == h.team or oc2.hands() or set_piece != "":
 						if oc2 != null:
 							h.def_hold = -1.0
 					elif h.def_hold > 0.22:
@@ -2533,7 +2566,7 @@ func _play(dt: float) -> void:
 			bob = minf(bob, 0.5)
 		o.ball_side = lerpf(o.ball_side, want_side, clampf(dt * 7.0, 0.0, 1.0))
 		var tgt: Vector3 = o.position + f * bob + rgt * o.ball_side + Vector3(0, BALL_R, 0)
-		if o.role == "GK":
+		if o.hands():
 			tgt = o.position + f * 0.35 + Vector3(0, 1.15, 0)
 		elif set_piece == "throw":
 			tgt = o.position - f * 0.12 + Vector3(0, 2.32, 0)
@@ -2908,6 +2941,7 @@ func _pass(p, m, lofted: bool, cross := false) -> void:
 		m.offside = true
 		off_spot = m.position
 	stats["passes"] += 1
+	pass_from = p
 	pass_pw = -1.0
 	snd("kick" if (lofted or d > 22.0) and not thrown else "touch")
 	if h != null and m.role != "GK" and _hum_of(m) == null:
@@ -2944,11 +2978,10 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	var dir := goal - from
 	dir.y = 0.0
 	dir = dir.normalized()
-	# from distance a full strike is hit harder and dips under the bar; close in, full power still tends to fly over
-	var lk: float = clampf((d - 12.0) / 6.0, 0.0, 1.0)
-	var sp := 19.0 + 13.0 * power + 4.0 * lk * clampf((power - 0.75) / 0.25, 0.0, 1.0)
+	var sp := 19.0 + 13.0 * power
 	var t := maxf(d / sp, 0.15)
-	var h := 0.35 + power * power * lerpf(2.1, 1.65, lk) + randf() * lerpf(0.6, 0.45, lk) * power * err_k
+	# full power rises: from close in and from the edge of the box it tends to fly over, as it should
+	var h := 0.35 + power * power * 2.1 + randf() * 0.6 * power * err_k
 	var vy := (h - 0.25) / t + 4.9 * t
 	# a curled shot starts wide of its target and bends back in
 	var spin := 0.0
@@ -2981,6 +3014,8 @@ func _give(p) -> void:
 	ball_owner = p
 	ball_last = p
 	shot_live = false
+	pass_from = null
+	p.feet = false
 	p.hold_t = 0.0
 	p.ai_cool = _cpu(p.team)["think"] * (0.8 + randf() * 0.6)
 	for q in players:
@@ -3000,7 +3035,8 @@ func _give(p) -> void:
 		h.charging = false
 		h.charge = 0.0
 		h.pass_hold = -1.0
-	if p.role != "GK" and _hum_of(p) == null:
+	if _hum_of(p) == null:
+		# the keeper too: he makes his saves by himself, but with the ball in his hands the throw or kick is yours
 		var h2 = _nearest_human(p.team, p.position)
 		if h2 != null:
 			h2.ctrl = p
@@ -3029,7 +3065,7 @@ func _human_tackle(h, standing := false) -> void:
 		me_p.vel = to.normalized() * 7.2
 	# reach: a better defender gets a longer leg in, a stronger carrier holds him off
 	var reach: float = 1.8 + (me_p.dfn - 60) * 0.006 - (c.phy - 60) * 0.004
-	if bd < reach and protect_t <= 0.0 and c.role != "GK":
+	if bd < reach and protect_t <= 0.0 and not c.hands():
 		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
 		var pd: float = me_p.position.distance_to(c.position)
 		if front < -0.5 and pd < bd and c.vel.length() > 2.0:
@@ -3087,7 +3123,7 @@ func _slides() -> void:
 				p.stun = 0.3
 				snd("touch")
 				_give(p)
-		elif c.team != p.team and c.role != "GK" and protect_t <= 0.0 and set_piece == "":
+		elif c.team != p.team and not c.hands() and protect_t <= 0.0 and set_piece == "":
 			var front: float = c.fwd().dot((p.position - c.position).normalized())
 			var pd: float = p.position.distance_to(c.position)
 			if bd < 1.15 + (p.dfn - 60) * 0.004:
@@ -3110,7 +3146,7 @@ func _slides() -> void:
 
 func _tackles(dt: float) -> void:
 	var c = ball_owner
-	if c == null or c.role == "GK" or protect_t > 0.0:
+	if c == null or c.hands() or protect_t > 0.0:
 		return
 	# a sharp turn wrong-foots anyone who was about to step in
 	var cv: Vector3 = c.vel
@@ -3166,7 +3202,7 @@ func _tackles(dt: float) -> void:
 			o.press_t += dt
 			var need: float = _cpu(o.team)["need"]
 			if _team_human(o.team):
-				need = 0.8
+				need = 0.6
 			elif not stepping:
 				need *= 1.4
 			need *= lerpf(1.15, 0.88, clampf((o.dfn - 40) / 45.0, 0.0, 1.0))
@@ -3215,7 +3251,11 @@ func _pickups() -> void:
 					tst[t]["saves"] += 1
 					snd("ooh")
 				snd("touch")
+				# Back pass rule: a ball a team mate played to him on purpose he may not pick up. He takes it
+				# with his feet, and then he can be closed down and tackled like anyone else.
+				var bp: bool = pass_from != null and pass_from.team == t and ball_last == pass_from and pass_from != g
 				_give(g)
+				g.feet = bp
 			return
 	if b.y > 1.7:
 		if b.y < 2.75 and hs < 27.0 and ball_vel.y < 3.0 and state == "play":
@@ -3303,7 +3343,7 @@ func _ai_carrier(p, dt: float) -> Vector3:
 	var cpu := _cpu(p.team)
 	if p.role == "GK":
 		p.hold_t += dt
-		if p.hold_t > 1.1:
+		if p.hold_t > (0.45 if p.feet else 1.1):
 			var m = _pass_target(p, Vector3.ZERO, true)
 			if m == null:
 				m = teams[p.team][1 + randi() % 4]
@@ -3388,7 +3428,7 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 				for hm in humans:
 					if hm.team == t and hm.ctrl != null:
 						hd = minf(hd, hm.ctrl.position.distance_to(c.position))
-				if hd > 7.0 or c.position.distance_to(own_goal) < 26.0:
+				if hd > 4.5 or c.position.distance_to(own_goal) < 30.0:
 					return _run_to(p, c.position + c.vel * 0.25 + goal_side * 0.5, p.top_speed * 0.95)
 				return _run_to(p, c.position + goal_side * 2.6, p.top_speed * 0.95)
 			# Defending like a real defender: get goal side, hold him up at arm's length and follow,
@@ -3414,7 +3454,9 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 			p.jock = true
 			return _run_to(p, c.position + c.vel * 0.35 + goal_side * 2.5, p.top_speed * 0.82 * cpu["spd"])
 		if p == second[t]:
-			return _run_to(p, c.position + goal_side * 6.0, p.top_speed * 0.9)
+			# the cover man shuts the road to goal behind the first defender
+			var cvd: float = clampf(c.position.distance_to(own_goal) * 0.22, 3.5, 6.5)
+			return _run_to(p, c.position + c.vel * 0.3 + goal_side * cvd, p.top_speed * 0.97)
 	var bu: float = ball.position.x * s
 	var att: bool = att_team == t
 	var u: float = -45.0 + p.home.x * 62.0 + bu * 0.6
@@ -3560,14 +3602,26 @@ func _ai_keeper(p, dt: float) -> Vector3:
 				var tk: float = (p.position.x - b.x) / ball_vel.x
 				if tk > 0.0 and absf(p.position.x - gx) > 1.2:
 					t = tk
-					target = Vector3(p.position.x, 0, b.z + ball_vel.z * tk)
+					var zk: float = b.z + ball_vel.z * tk
+					if ball_spin != 0.0:
+						# he reads the bend out here too
+						var bent2 := ball_vel.rotated(Vector3.UP, ball_spin * tk * 0.45)
+						if absf(bent2.x) > 1.0:
+							zk = b.z + bent2.z * ((p.position.x - b.x) / bent2.x)
+					target = Vector3(p.position.x, 0, zk)
 				var dz: float = target.z - p.position.z
+				if long_test and long_n < 4:
+					print("KDBG n=", long_n, " t=", snappedf(t, 0.01), " zc=", snappedf(zc, 0.01), " tz=", snappedf(target.z, 0.01), " pz=", snappedf(p.position.z, 0.01), " px=", snappedf(p.position.x, 0.1), " dive=", snappedf(p.dive_t, 0.01), " by=", snappedf(b.y, 0.01), " spin=", snappedf(ball_spin, 0.01))
 				if absf(dz) > 1.0 and t < 0.6 and p.dive_t < 0.0:
 					var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 					p.start_dive(signf(Vector3(0, 0, dz).dot(right)))
-					p.vel = Vector3(0, 0, signf(dz) * 4.2)
-				var sp := 4.2 if p.dive_t >= 0.0 else 3.5
-				return _run_to(p, target, sp)
+					p.vel = Vector3(0, 0, signf(dz) * DIVE_V)
+				if p.dive_t >= 0.0:
+					# in the air he keeps his speed all the way to the ball
+					var dv: Vector3 = target - p.position
+					dv.y = 0.0
+					return dv.normalized() * DIVE_V if dv.length() > 0.25 else Vector3.ZERO
+				return _run_to(p, target, 4.2)
 	p.react_t = 0.0
 	if ball_owner == null and absf(b.x - gx) < 15.0 and absf(b.z) < 18.0 and ball_vel.length() < 12.0:
 		var mine: float = p.position.distance_to(b)
@@ -3585,7 +3639,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 	d.y = 0.0
 	var dist := d.length()
 	var c = ball_owner
-	if c != null and c.team != p.team and set_piece == "" and dist < 21.0 and absf(b.z) < 20.0:
+	if c != null and c.team != p.team and set_piece == "" and dist < 17.0 and absf(b.z) < 18.0:
 		# one on one: if no defender is between the runner and the goal, come out and make yourself big
 		var cover := false
 		var dn: Vector3 = d / maxf(dist, 0.1)
@@ -3600,7 +3654,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 			if p.position.distance_to(b) < 3.0 and absf(b.x - gx) < 16.0:
 				# down at his feet
 				return _run_to(p, Vector3(b.x, 0, b.z), p.top_speed)
-			var o1 := clampf(dist * 0.3, 1.5, 6.0)
+			var o1 := clampf(dist * 0.28, 1.5, 4.5)
 			return _run_to(p, goal + dn * o1, 6.2)
 	# stands higher the further away the ball is, to sweep up behind a high back line
 	var out := clampf(dist * 0.11, 1.0, 4.5) + clampf((dist - 45.0) * 0.14, 0.0, 4.5)
@@ -3982,7 +4036,7 @@ func _camera(dt: float) -> void:
 		var fx2 := clampf(f.x, -HL + 8.0, HL - 8.0)
 		# on the near side the camera comes with the ball, so the touchline under the buttons stays in view
 		var nz: float = f.z * view_flip
-		var foc := Vector3(fx2, 0, maxf(nz * 0.6, nz - 4.0) * view_flip)
+		var foc := Vector3(fx2, 0, maxf(nz * 0.6, nz - 0.5) * view_flip)
 		want_fov = 27.0
 		if cam_mode == 1:
 			off = Vector3(0, 38.0, 5.0)
@@ -4043,10 +4097,13 @@ func _auto_quality(dt: float) -> void:
 # Test only: a scripted "thumb" that plays through the same inputs as a person, to exercise the human code paths.
 func _bot_inputs(dt: float) -> void:
 	if long_test:
+		for hz in humans:
+			hz.stick = Vector2.ZERO
+			hz.sprint = false
 		# long shot test: again and again a full power shot from 24-30 m aimed at a corner
 		long_t -= dt
 		if state == "play" and set_piece == "" and long_t <= 0.0 and humans.size() > 0:
-			long_t = 3.0
+			long_t = 4.0
 			var lp = humans[0].ctrl
 			if lp != null and lp.role != "GK":
 				var ls := side(lp.team)
@@ -4056,8 +4113,8 @@ func _bot_inputs(dt: float) -> void:
 				protect_t = 0.0
 				_give(lp)
 				ball.position = lp.position + Vector3(0.5 * ls, BALL_R, 0)
-				protect_t = 1.6
-				long_arm = 1.3
+				protect_t = 2.8
+				long_arm = 2.4
 		if long_arm > 0.0:
 			long_arm -= dt
 			var lq = humans[0].ctrl
