@@ -198,7 +198,7 @@ var rp_to := 0
 var anim_rate := 1.0
 
 var cam: Camera3D
-var cam_mode := 0
+var cam_mode := 1
 var cam_pos := Vector3(0, 40, 70)
 var cam_look := Vector3.ZERO
 var cam_fov := 38.0
@@ -4039,9 +4039,10 @@ func _camera(dt: float) -> void:
 		var foc := Vector3(fx2, 0, maxf(nz * 0.6, nz - 0.5) * view_flip)
 		want_fov = 27.0
 		if cam_mode == 1:
-			off = Vector3(0, 38.0, 5.0)
-			foc = Vector3(clampf(f.x, -HL + 14.0, HL - 14.0), 0, clampf(f.z, -20.0, 20.0))
-			want_fov = 30.0
+			# from above, like the old 2D game: a wide slice of the pitch, tilted just enough to read the players
+			off = Vector3(0, 60.0, 6.0)
+			foc = Vector3(clampf(f.x, -HL + 25.0, HL - 25.0), 0, clampf(f.z * view_flip, -21.0, 24.0) * view_flip)
+			want_fov = 28.0
 		elif cam_mode == 2:
 			off = Vector3(0, 9.0, 14.5)
 			foc = Vector3(f.x, 0.5, f.z)
