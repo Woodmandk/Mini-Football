@@ -149,99 +149,105 @@ static func _box(v: Vector3) -> BoxMesh:
 func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, boots: Color) -> void:
 	body = Node3D.new()
 	add_child(body)
+	var NS := GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var trim := shorts if shorts.to_html() != shirt.to_html() else socks
+	var skin_m := mat(skin, 0.62)
 	# hips / shorts
-	_part(body, _cyl(0.185, 0.225, 0.30), mat(shorts), Vector3(0, 0.93, 0), Vector3(1.0, 1.0, 0.66))
-	# torso
+	_part(body, _cyl(0.178, 0.212, 0.26), mat(shorts), Vector3(0, 0.95, 0), Vector3(1.0, 1.0, 0.64))
+	# torso: narrow waist, wide chest, real shoulders
 	torso = Node3D.new()
 	torso.position = Vector3(0, 1.05, 0)
 	body.add_child(torso)
-	_part(torso, _capsule(0.215, 0.72), mat(shirt), Vector3(0, 0.33, 0), Vector3(1.0, 1.0, 0.68))
-	# kit trim: collar, side panels, hem
-	var trim := shorts if shorts.to_html() != shirt.to_html() else socks
-	_part(torso, _cyl(0.085, 0.10, 0.05), mat(trim), Vector3(0, 0.655, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_part(torso, _box(Vector3(0.435, 0.34, 0.07)), mat(trim), Vector3(0, 0.27, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_part(torso, _sphere(0.095), mat(shirt), Vector3(-0.235, 0.575, 0))
-	_part(torso, _sphere(0.095), mat(shirt), Vector3(0.235, 0.575, 0))
+	_part(torso, _cyl(0.215, 0.165, 0.54), mat(shirt), Vector3(0, 0.29, 0), Vector3(1.0, 1.0, 0.62))
+	_part(torso, _capsule(0.098, 0.56), mat(shirt), Vector3(0, 0.535, 0), Vector3(1.0, 1.0, 1.2)).rotation.z = PI * 0.5
+	_part(torso, _cyl(0.07, 0.085, 0.04), mat(trim), Vector3(0, 0.645, 0)).cast_shadow = NS
 	# shirt number on the back
 	if num > 0:
 		var nl := Label3D.new()
 		nl.text = str(num)
 		nl.font = load("res://fonts/ChakraPetch-Bold.ttf")
 		nl.font_size = 64
-		nl.pixel_size = 0.0042
+		nl.pixel_size = 0.0036
 		nl.outline_size = 0
 		nl.double_sided = false
 		nl.modulate = Color(0.08, 0.08, 0.08) if shirt.get_luminance() > 0.6 else Color(1, 1, 1)
-		nl.position = Vector3(0, 0.40, 0.152)
-		nl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		nl.position = Vector3(0, 0.36, 0.134)
+		nl.cast_shadow = NS
 		torso.add_child(nl)
 		num_label = nl
-	# head
+	# head: smaller, longer than wide, with a jaw
 	head = Node3D.new()
 	head.position = Vector3(0, 0.72, 0)
 	torso.add_child(head)
-	_part(head, _capsule(0.06, 0.16), mat(skin), Vector3(0, -0.02, 0))
-	_part(head, _sphere(0.135), mat(skin), Vector3(0, 0.13, 0))
+	_part(head, _cyl(0.05, 0.058, 0.14), skin_m, Vector3(0, -0.035, 0.005))
+	_part(head, _sphere(0.112), skin_m, Vector3(0, 0.125, 0), Vector3(0.86, 1.08, 0.98))
+	_part(head, _sphere(0.09), skin_m, Vector3(0, 0.075, -0.012), Vector3(0.86, 0.95, 0.96))
 	# hair: a few styles so the players do not all look the same
 	var hs := (num * 7 + idx * 3) % 6
+	var hm := mat(hair, 0.95)
 	if hs == 0:
-		_part(head, _sphere(0.138), mat(hair), Vector3(0, 0.15, 0.012), Vector3(1.0, 0.86, 1.0)) # shaved
+		_part(head, _sphere(0.114), hm, Vector3(0, 0.162, 0.024), Vector3(0.87, 1.0, 0.99)) # shaved
 	elif hs == 1:
-		_part(head, _sphere(0.142), mat(hair), Vector3(0, 0.165, 0.025), Vector3(1.0, 0.8, 1.0))
-		_part(head, _box(Vector3(0.19, 0.07, 0.16)), mat(hair), Vector3(0, 0.275, -0.03)) # quiff
+		_part(head, _sphere(0.118), hm, Vector3(0, 0.177, 0.032), Vector3(0.9, 0.95, 1.0))
+		_part(head, _sphere(0.07), hm, Vector3(0, 0.257, -0.026), Vector3(1.2, 0.55, 1.1)) # swept up at the front
 	elif hs == 2:
-		_part(head, _sphere(0.175), mat(hair), Vector3(0, 0.19, 0.03), Vector3(1.0, 0.9, 1.0)) # big curls
+		_part(head, _sphere(0.138), hm, Vector3(0, 0.197, 0.034), Vector3(0.95, 0.9, 1.0)) # curls
 	elif hs == 3:
-		_part(head, _sphere(0.142), mat(hair), Vector3(0, 0.165, 0.025), Vector3(1.0, 0.8, 1.0))
-		_part(head, _sphere(0.062), mat(hair), Vector3(0, 0.25, 0.12)) # bun
+		_part(head, _sphere(0.118), hm, Vector3(0, 0.177, 0.032), Vector3(0.9, 0.95, 1.0))
+		_part(head, _sphere(0.048), hm, Vector3(0, 0.247, 0.114)) # bun
 	elif hs == 4:
-		_part(head, _sphere(0.146), mat(hair), Vector3(0, 0.15, 0.04), Vector3(1.0, 1.0, 1.0)) # longer at the back
-		_part(head, _capsule(0.03, 0.14), mat(trim), Vector3(0, 0.185, -0.105), Vector3(4.2, 0.25, 1.0)) # head band
+		_part(head, _sphere(0.12), hm, Vector3(0, 0.162, 0.044), Vector3(0.92, 1.05, 1.02)) # longer at the back
 	else:
-		_part(head, _sphere(0.142), mat(hair), Vector3(0, 0.165, 0.025), Vector3(1.0, 0.8, 1.0))
-	# face
-	var dark := mat(Color(0.08, 0.06, 0.05))
-	_part(head, _sphere(0.014), dark, Vector3(-0.048, 0.14, -0.121), Vector3(1.0, 1.2, 0.5)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_part(head, _sphere(0.014), dark, Vector3(0.048, 0.14, -0.121), Vector3(1.0, 1.2, 0.5)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# arms
+		_part(head, _sphere(0.118), hm, Vector3(0, 0.177, 0.032), Vector3(0.9, 0.95, 1.0))
+	# face: small eyes under a brow, nose, ears
+	var dark := mat(Color(0.1, 0.07, 0.06))
+	_part(head, _sphere(0.009), dark, Vector3(-0.036, 0.128, -0.1), Vector3(1.3, 0.8, 0.5)).cast_shadow = NS
+	_part(head, _sphere(0.009), dark, Vector3(0.036, 0.128, -0.1), Vector3(1.3, 0.8, 0.5)).cast_shadow = NS
+	_part(head, _sphere(0.016), mat(skin.darkened(0.04), 0.62), Vector3(0, 0.098, -0.108), Vector3(0.8, 1.5, 1.0)).cast_shadow = NS
+	_part(head, _sphere(0.022), mat(skin.darkened(0.05), 0.62), Vector3(-0.094, 0.115, 0.005), Vector3(0.5, 1.2, 0.9)).cast_shadow = NS
+	_part(head, _sphere(0.022), mat(skin.darkened(0.05), 0.62), Vector3(0.094, 0.115, 0.005), Vector3(0.5, 1.2, 0.9)).cast_shadow = NS
+	# arms: short sleeve, upper arm, tapered forearm, hand
 	arm_l = Node3D.new()
-	arm_l.position = Vector3(-0.27, 0.58, 0)
+	arm_l.position = Vector3(-0.262, 0.55, 0)
 	torso.add_child(arm_l)
 	arm_r = Node3D.new()
-	arm_r.position = Vector3(0.27, 0.58, 0)
+	arm_r.position = Vector3(0.262, 0.55, 0)
 	torso.add_child(arm_r)
 	fore_l = Node3D.new()
 	fore_r = Node3D.new()
 	var k := 0
 	for a in [arm_l, arm_r]:
-		_part(a, _capsule(0.075, 0.36), mat(shirt), Vector3(0, -0.13, 0))
-		_part(a, _cyl(0.079, 0.079, 0.035), mat(trim), Vector3(0, -0.275, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_part(a, _cyl(0.076, 0.08, 0.17), mat(shirt), Vector3(0, -0.07, 0))
+		_part(a, _cyl(0.081, 0.081, 0.025), mat(trim), Vector3(0, -0.16, 0)).cast_shadow = NS
+		_part(a, _cyl(0.062, 0.05, 0.3), skin_m, Vector3(0, -0.15, 0))
 		var f: Node3D = fore_l if k == 0 else fore_r
 		f.position = Vector3(0, -0.29, 0)
 		a.add_child(f)
-		_part(f, _capsule(0.055, 0.34), mat(skin), Vector3(0, -0.14, 0))
-		_part(f, _sphere(0.062), mat(skin), Vector3(0, -0.31, 0), Vector3(0.8, 1.15, 1.0))
+		_part(f, _sphere(0.051), skin_m, Vector3.ZERO).cast_shadow = NS
+		_part(f, _cyl(0.05, 0.037, 0.28), skin_m, Vector3(0, -0.14, 0))
+		_part(f, _sphere(0.045), skin_m, Vector3(0, -0.315, 0), Vector3(0.6, 1.25, 0.95))
 		k += 1
-	# legs
+	# legs: strong thigh, knee, calf muscle, slim ankle, boot
 	leg_l = Node3D.new()
-	leg_l.position = Vector3(-0.115, 0.92, 0)
+	leg_l.position = Vector3(-0.1, 0.92, 0)
 	body.add_child(leg_l)
 	leg_r = Node3D.new()
-	leg_r.position = Vector3(0.115, 0.92, 0)
+	leg_r.position = Vector3(0.1, 0.92, 0)
 	body.add_child(leg_r)
 	shin_l = Node3D.new()
 	shin_r = Node3D.new()
 	k = 0
 	for l in [leg_l, leg_r]:
-		_part(l, _cyl(0.1, 0.122, 0.27), mat(shorts), Vector3(0, -0.1, 0))
-		_part(l, _capsule(0.088, 0.46), mat(skin), Vector3(0, -0.23, 0))
+		_part(l, _cyl(0.106, 0.12, 0.25), mat(shorts), Vector3(0, -0.095, 0))
+		_part(l, _cyl(0.1, 0.068, 0.45), skin_m, Vector3(0, -0.225, 0))
 		var s: Node3D = shin_l if k == 0 else shin_r
 		s.position = Vector3(0, -0.45, 0)
 		l.add_child(s)
-		_part(s, _capsule(0.076, 0.46), mat(socks), Vector3(0, -0.2, 0))
-		_part(s, _cyl(0.08, 0.08, 0.04), mat(trim), Vector3(0, -0.03, 0)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_part(s, _capsule(0.062, 0.3), mat(boots, 0.4), Vector3(0, -0.415, -0.065), Vector3(1.05, 1.0, 0.8)).rotation.x = PI * 0.5
-		_part(s, _box(Vector3(0.115, 0.022, 0.27)), mat(Color(0.1, 0.1, 0.12)), Vector3(0, -0.468, -0.065)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_part(s, _sphere(0.068), skin_m, Vector3.ZERO)
+		_part(s, _cyl(0.064, 0.077, 0.16), mat(socks), Vector3(0, -0.1, 0.008))
+		_part(s, _cyl(0.077, 0.047, 0.26), mat(socks), Vector3(0, -0.31, 0.004))
+		_part(s, _cyl(0.068, 0.068, 0.03), mat(trim), Vector3(0, -0.035, 0)).cast_shadow = NS
+		_part(s, _capsule(0.05, 0.27), mat(boots, 0.4), Vector3(0, -0.428, -0.07), Vector3(1.0, 1.0, 0.72)).rotation.x = PI * 0.5
 		k += 1
 	# ring under the player you control
 	ring = MeshInstance3D.new()
