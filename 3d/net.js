@@ -1,3 +1,15 @@
+// The game data must never be a stale copy: always ask the server whether index.pck has changed.
+(function () {
+	var f = window.fetch;
+	window.fetch = function (u, o) {
+		try {
+			if (typeof u === 'string' && /\.pck(\?|$)/.test(u)) {
+				o = Object.assign({}, o || {}, { cache: 'no-cache' });
+			}
+		} catch (e) {}
+		return f.call(this, u, o);
+	};
+})();
 // Tiny PeerJS glue for the Godot build: one host, one guest, JSON strings both ways.
 window.bbNet = (function () {
   var peer = null, conn = null, q = [], PRE = 'banebold3d-';
