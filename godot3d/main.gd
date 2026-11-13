@@ -105,6 +105,9 @@ var kits := [[], []]
 var teams_from := "main"
 var car
 var career_on := false
+var cup_on := false
+var opt_cup := false
+var golden := false
 var car_goals := []
 var car_lines := []
 var car_sel := -1
@@ -375,6 +378,9 @@ func _ready() -> void:
 				car.new_career(opt_club, CLUBS.size(), SURNAMES)
 			career_on = true
 			_set_clubs(int(car.d["club"]), car.next_match()[0], true)
+			if OS.get_cmdline_user_args().has("--cup"):
+				cup_on = true
+				_set_clubs(int(car.d["club"]), car.cup_opp(), true)
 		_begin_match(demo and OS.get_cmdline_user_args().has("--intro"))
 		if car_test and menu_arg in ["subs", "pause"]:
 			for p in players:
@@ -488,6 +494,17 @@ func _ready() -> void:
 				pack_res = {"n": "NORDIN", "pos": "FW", "age": 21, "pot": 84, "ovr": 77, "st": [80, 79, 66, 41]}
 			if menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad"):
 				_action("career")
+			if menu_arg in ["cup", "cup2", "cuptest"]:
+				_action("career")
+				if menu_arg != "cup":
+					car.cup_new()
+					print("CUPTEST ", car.cup_round_name(), " v ", car.cup_opp(), " ", car.cup_finish(2, 1))
+					print("CUPTEST ", car.cup_round_name(), " v ", car.cup_opp(), " ", car.cup_finish(3, 0))
+				if menu_arg == "cuptest":
+					print("CUPTEST ", car.cup_round_name(), " v ", car.cup_opp(), " ", car.cup_finish(1, 0), " over=", car.cup_over(), " cups=", car.stats().get("cups", 0))
+					car.cup_new()
+					print("CUPTEST ", car.cup_round_name(), " v ", car.cup_opp(), " ", car.cup_finish(0, 1), " over=", car.cup_over(), " opp=", car.cup_opp())
+				menu_arg = "cup"
 			if menu_arg == "seasontest":
 				_action("career")
 				print("SEASONTEST fac_up=", car.fac_up("stadium"), " coins=", car.d["coins"])
@@ -977,7 +994,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
+		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -1084,8 +1101,27 @@ func _car_info() -> Dictionary:
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
 		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [],
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
+		"div": car.div(), "cup": _cup_info(),
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 	}
+
+func _cup_info() -> Dictionary:
+	var cp: Dictionary = car.cup()
+	var me_c: int = int(car.d["club"])
+	var rounds := []
+	for res in cp["log"]:
+		var rr := []
+		for x in res:
+			rr.append([CLUBS[int(x[0])]["n"], CLUBS[int(x[1])]["n"], int(x[2]), int(x[3]), int(x[0]) == me_c or int(x[1]) == me_c])
+		rounds.append(rr)
+	var now := []
+	if not car.cup_over():
+		var t: Array = cp["teams"]
+		for i in range(0, t.size(), 2):
+			now.append([CLUBS[int(t[i])]["n"], CLUBS[int(t[i + 1])]["n"], -1, -1, int(t[i]) == me_c or int(t[i + 1]) == me_c])
+	var opp: int = car.cup_opp()
+	return {"r": int(cp["r"]), "name": car.cup_round_name(), "out": bool(cp["out"]), "won": bool(cp["won"]), "rounds": rounds, "now": now,
+		"opp": CLUBS[opp]["n"] if opp >= 0 else "", "names": Career.CUP_ROUNDS, "cups": int(car.stats().get("cups", 0))}
 
 func _stat_rows() -> Array:
 	var tot: int = maxi(tst[0]["poss"] + tst[1]["poss"], 1)
@@ -1109,6 +1145,7 @@ func _result() -> String:
 func _to_menu() -> void:
 	net.stop()
 	career_on = false
+	cup_on = false
 	Engine.time_scale = 1.0
 	paused = false
 	screen = "menu"
@@ -1228,9 +1265,26 @@ func _action(act: String, arg = null) -> void:
 			else:
 				car_msg = str(pr.get("err", ""))
 				hud.refresh(_menu_info())
+		"cup":
+			hud.show_menu("cup", _menu_info())
+		"cup_new":
+			car.cup_new()
+			hud.show_menu("cup", _menu_info())
+		"cup_play":
+			if car.cup_opp() >= 0:
+				career_on = true
+				cup_on = true
+				humans = [Human.new()]
+				me = 0
+				view_flip = 1.0
+				_set_clubs(int(car.d["club"]), car.cup_opp(), true)
+				screen = "match"
+				hud.show_menu("", {})
+				_begin_match(true)
 		"c_play":
 			if not car.season_over():
 				career_on = true
+				cup_on = false
 				humans = [Human.new()]
 				me = 0
 				view_flip = 1.0
@@ -1408,10 +1462,14 @@ func _action(act: String, arg = null) -> void:
 			net.join(room)
 			hud.show_menu("lobby", _menu_info())
 		"mode":
-			if opt_mode == "coop" and not opt_car and car.has_save():
+			if opt_mode == "coop" and not opt_car and not opt_cup and car.has_save():
 				opt_car = true
+			elif opt_mode == "coop" and opt_car:
+				opt_car = false
+				opt_cup = true
 			elif opt_mode == "coop":
 				opt_car = false
+				opt_cup = false
 				opt_mode = "versus"
 			else:
 				opt_mode = "coop"
@@ -1496,6 +1554,10 @@ func _send_lobby() -> void:
 
 # One line both phones see in the lobby when the next match is a career match played together.
 func _co_text() -> String:
+	if opt_cup and opt_mode == "coop" and car.has_save():
+		if car.cup_over():
+			return "CUP  ·  %s  ·  A NEW CUP STARTS" % CLUBS[int(car.d["club"])]["n"]
+		return "CUP %s  ·  %s v %s" % [car.cup_round_name(), CLUBS[int(car.d["club"])]["n"], CLUBS[car.cup_opp()]["n"]]
 	if not (opt_car and opt_mode == "coop" and car.has_save()):
 		return ""
 	if car.season_over():
@@ -1512,7 +1574,14 @@ func _host_start() -> void:
 	view_flip = 1.0
 	var sq := []
 	career_on = _co_text() != ""
-	if career_on:
+	cup_on = career_on and opt_cup
+	if cup_on:
+		if car.cup_over():
+			car.cup_new()
+		_set_clubs(int(car.d["club"]), car.cup_opp(), true)
+		for p in teams[0]:
+			sq.append([p.pname, p.num])
+	elif career_on:
 		if car.season_over():
 			car.next_season()
 		_set_clubs(int(car.d["club"]), car.next_match()[0], true)
@@ -1636,6 +1705,7 @@ func _net_poll() -> void:
 # ---------------------------------------------------------------- match flow
 
 func _begin_match(with_intro: bool) -> void:
+	golden = false
 	subs_left = 3
 	sub_sel = -1
 	sub_off = []
@@ -2914,7 +2984,13 @@ func _play(dt: float) -> void:
 		hud.show_controls = false
 		snd("whistle_long")
 		_banner("HALF TIME", Color(1, 1, 1), 2.2, "%d - %d" % [score[0], score[1]])
-	elif half == 2 and clock >= 5400.0 and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 5550.0):
+	elif half == 2 and clock >= 5400.0 and cup_on and score[0] == score[1] and not (autotest and clock > 9000.0):
+		# a cup tie needs a winner: play goes on, and the next goal wins it
+		if not golden:
+			golden = true
+			_banner("GOLDEN GOAL", Color(1.0, 0.86, 0.2), 1.6, "THE NEXT GOAL WINS", 72)
+			snd("whistle")
+	elif half == 2 and clock >= 5400.0 and (ball_owner != null or clock > 5490.0 or autotest or golden) and (absf(ball.position.x) < 32.0 or autotest or golden or clock > 5550.0):
 		_full_time()
 
 func _full_time() -> void:
@@ -2938,7 +3014,10 @@ func _full_time() -> void:
 	fx("say", "Full time! %s %d, %s %d." % [TEAM_NAMES[0].capitalize(), score[0], TEAM_NAMES[1].capitalize(), score[1]])
 	if score[0] != score[1]:
 		fx("excite", 0.6)
-	if career_on:
+	if career_on and cup_on:
+		car_lines = car.cup_finish(score[0], score[1])
+		co_pay = [car.last_coins, score[0] > score[1], [car_lines[1]] if car_lines.size() > 1 else []]
+	elif career_on:
 		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1]] + ([str(car.d["note"])] if car.season_over() else [])]

@@ -593,7 +593,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var t0 := _label(str(c.get("name", "")), 40, Color.WHITE)
 			t0.position = Vector2(160, 10)
 			menu.add_child(t0)
-			var sub0 := _label("SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 16, Color(1, 1, 1, 0.8), font2)
+			var sub0 := _label("DIVISION %d   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("div", 4)), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 16, Color(1, 1, 1, 0.8), font2)
 			sub0.position = Vector2(162, 58)
 			menu.add_child(sub0)
 			var co := _label("COINS  %d" % int(c.get("coins", 0)), 24, GOLD)
@@ -702,7 +702,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var bk0 := _btn("<  BACK", "back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk0)
 		"table":
-			_title("LEAGUE TABLE", "")
+			_title("DIVISION %d" % int((info.get("car", {}) as Dictionary).get("div", 4)), "")
 			var c2: Dictionary = info.get("car", {})
 			var rows2: Array = c2.get("table", [])
 			var tw2 := minf(w - 120.0, 860.0)
@@ -735,6 +735,58 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					rp.add_child(vl)
 			var bk2 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk2)
+		"cup":
+			var c8: Dictionary = (info.get("car", {}) as Dictionary).get("cup", {})
+			_title("THE CUP", "Knockout: lose and you are out. A draw goes to golden goal.")
+			var cols8: Array = (c8.get("rounds", []) as Array).duplicate()
+			if not (c8.get("now", []) as Array).is_empty():
+				cols8.append(c8.get("now", []))
+			var names8: Array = c8.get("names", [])
+			var cw8 := (w - 80.0) / 3.0
+			for ci8 in 3:
+				var hl8 := _label(str(names8[ci8]) if ci8 < names8.size() else "", 16, GOLD if ci8 == cols8.size() - 1 else Color(1, 1, 1, 0.65), font2)
+				hl8.position = Vector2(40 + ci8 * cw8 + 8, 84)
+				menu.add_child(hl8)
+				if ci8 >= cols8.size():
+					continue
+				var ties: Array = cols8[ci8]
+				var th8 := minf(64.0, (h - 220.0) / maxf(ties.size(), 1.0))
+				for ti8 in ties.size():
+					var tt: Array = ties[ti8]
+					var mine8: bool = bool(tt[4])
+					var rp8 := Panel.new()
+					rp8.add_theme_stylebox_override("panel", _box(Color(0.16, 0.2, 0.12, 0.95) if mine8 else Color(DARK.r, DARK.g, DARK.b, 0.82), 10, GOLD if mine8 else Color(0, 0, 0, 0)))
+					rp8.position = Vector2(40 + ci8 * cw8, 112 + ti8 * (th8 + 6.0) + ci8 * 18.0)
+					rp8.size = Vector2(cw8 - 14.0, th8)
+					rp8.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					menu.add_child(rp8)
+					items.append([rp8, Vector2(0, 30), 0.03 * ti8 + 0.08 * ci8])
+					for k8 in 2:
+						var sc8: int = int(tt[2 + k8])
+						var win8: bool = sc8 >= 0 and sc8 > int(tt[3 - k8])
+						var nl8 := _label(str(tt[k8]), 16, Color.WHITE if (sc8 < 0 or win8) else Color(1, 1, 1, 0.45), font)
+						nl8.position = Vector2(12, 4 + k8 * (th8 * 0.5 - 2))
+						rp8.add_child(nl8)
+						if sc8 >= 0:
+							var sl8 := _label(str(sc8), 16, GOLD if win8 else Color(1, 1, 1, 0.45), font)
+							sl8.position = Vector2(cw8 - 44.0, 4 + k8 * (th8 * 0.5 - 2))
+							rp8.add_child(sl8)
+			var by8 := h - 96.0
+			if bool(c8.get("won", false)) or bool(c8.get("out", false)):
+				var rs8 := _label("YOU WON THE CUP!" if bool(c8.get("won", false)) else "YOU ARE OUT OF THIS CUP", 22, GOLD)
+				rs8.position = Vector2(40, by8 + 18)
+				menu.add_child(rs8)
+				var nb8 := _btn("START A NEW CUP", "cup_new", null, "primary", Vector2(w - 400.0, by8), Vector2(360, 76), 28)
+				menu.add_child(nb8)
+			else:
+				var ol8 := _label("%s   ·   AGAINST %s" % [str(c8.get("name", "")), str(c8.get("opp", "")).to_upper()], 20, Color.WHITE)
+				ol8.position = Vector2(40, by8 + 20)
+				menu.add_child(ol8)
+				var pb8 := _btn("PLAY CUP MATCH", "cup_play", null, "primary", Vector2(w - 400.0, by8), Vector2(360, 76), 30)
+				menu.add_child(pb8)
+				_pulse(pb8)
+			var bk8 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
+			menu.add_child(bk8)
 		"squad":
 			_title("THE TEAM", "")
 			var c3: Dictionary = info.get("car", {})
@@ -1189,7 +1241,7 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				menu.add_child(tb2)
 				var rx := w - col_w - 40.0
 				var cot := str(info.get("co_text", ""))
-				var md := _btn((("CAREER TOGETHER" if cot != "" else "SAME TEAM") if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER") + "  ›", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 22)
+				var md := _btn(((("CUP TOGETHER" if bool(info.get("co_cup", false)) else "CAREER TOGETHER") if cot != "" else "SAME TEAM") if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER") + "  ›", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 22)
 				var mt := _label("MODE  ·  TAP TO CHANGE", 14, Color(1, 1, 1, 0.7), font2)
 				mt.position = Vector2(rx + 4, 68)
 				menu.add_child(mt)
@@ -1223,7 +1275,7 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				if conn:
 					txt = "Waiting for the host to start.   Mode: " + ("SAME TEAM" if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER")
 					if str(info.get("co_text", "")) != "":
-						txt = "CAREER TOGETHER:   " + str(info.get("co_text", ""))
+						txt = ("" if str(info.get("co_text", "")).begins_with("CUP") else "CAREER TOGETHER:   ") + str(info.get("co_text", ""))
 				var s3 := _label(txt, 20, Color(1, 1, 1, 0.8), font2)
 				s3.position = Vector2(0, h * 0.5 + 10)
 				s3.size = Vector2(w, 30)
@@ -1469,7 +1521,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var nm := _label(str(c.get("name", "BANEBOLD")), 26, Color.WHITE)
 	nm.position = Vector2(72, 4)
 	menu.add_child(nm)
-	var sub := _label("SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 14, Color(1, 1, 1, 0.75), font2)
+	var sub := _label("DIVISION %d   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("div", 4)), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 14, Color(1, 1, 1, 0.75), font2)
 	sub.position = Vector2(73, 37)
 	menu.add_child(sub)
 	var co := _label("COINS  %d" % int(c.get("coins", 0)), 24, GOLD)
@@ -1571,10 +1623,15 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 					_pulse(pm)
 			var rx := w * 0.58
 			var rw := w - rx - 32.0
-			var th := (ch - 20.0) / 3.0
-			var t1 := _tile("QUICK MATCH", "A friendly against the computer", "quick", null, Vector2(rx, y0), Vector2(rw, th))
-			var t2 := _tile("PLAY WITH A FRIEND", "Two phones: same team or against each other", "friend", null, Vector2(rx, y0 + th + 10.0), Vector2(rw, th))
-			var t3 := _tile("LEAGUE TABLE", "You are %s. Last round: %s" % [_ord(int(c.get("rank", 1))), (str((c.get("last", []) as Array)[0]) if not (c.get("last", []) as Array).is_empty() else "no matches yet")], "c_table", null, Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th))
+			var th := (ch - 30.0) / 4.0
+			var cpi: Dictionary = c.get("cup", {})
+			var cps := "You won it! Tap to start a new cup" if bool(cpi.get("won", false)) else ("You are out. Tap to start a new cup" if bool(cpi.get("out", false)) else "%s against %s" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", ""))])
+			var t0 := _tile("THE CUP", cps, "cup", null, Vector2(rx, y0), Vector2(rw, th), GOLD, 22)
+			var t1 := _tile("QUICK MATCH", "A friendly against the computer", "quick", null, Vector2(rx, y0 + th + 10.0), Vector2(rw, th), Color.WHITE, 22)
+			var t2 := _tile("PLAY WITH A FRIEND", "Same team, career, cup or against each other", "friend", null, Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
+			var t3 := _tile("LEAGUE TABLE", "Division %d. You are %s. Top two go up." % [int(c.get("div", 4)), _ord(int(c.get("rank", 1)))], "c_table", null, Vector2(rx, y0 + 3 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
+			menu.add_child(t0)
+			items.append([t0, Vector2(80, 0), 0.0])
 			for t in [t1, t2, t3]:
 				menu.add_child(t)
 			items.append([t1, Vector2(80, 0), 0.04])
