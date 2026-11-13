@@ -461,6 +461,8 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var ver := _label(str(info.get("version", "")), 14, Color(1, 1, 1, 0.6), font2)
 			ver.position = Vector2(16, h - 28)
 			menu.add_child(ver)
+			menu.add_child(_btn("SOUND: " + str(info.get("snd", "")), "snd_opt", null, "ghost", Vector2(16, h - 84), Vector2(150, 46), 15))
+			menu.add_child(_btn("VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt", null, "ghost", Vector2(176, h - 84), Vector2(150, 46), 15))
 			var bx := w - 372.0
 			var by := h * 0.5 - 132.0
 			var play := _btn("PLAY", "play", null, "primary", Vector2(bx, by), Vector2(324, 92), 44)
@@ -1097,7 +1099,7 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				["SHOOT", "Hold to load power, let go to shoot. Short taps curl. At a corner kick: cross."],
 				["PASS", "A pass along the ground, to the man the stick points at."],
 				["LOB", "A high ball over the defenders, to the man the stick points at."],
-				["TACKLE", "Without the ball: win it back. Never from behind, that is a foul."],
+				["TACKLE", "Standing tackle: step in and take the ball. With SPRINT held from a few steps away: slide. Never from behind."],
 				["SWITCH", "Without the ball: change to the player nearest the ball."],
 				["SPRINT", "Hold to run faster. Tap twice with the ball to spin past a defender."],
 			]
@@ -1119,7 +1121,7 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var panel := Panel.new()
 			panel.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.94), 20, Color(1, 1, 1, 0.16)))
 			var can_sub := bool(info.get("can_sub", false))
-			var ph0 := 332.0 if can_sub else 260.0
+			var ph0 := 394.0 if can_sub else 322.0
 			panel.position = Vector2((w - pw) * 0.5, h * 0.5 - ph0 * 0.5)
 			panel.size = Vector2(pw, ph0)
 			menu.add_child(panel)
@@ -1131,7 +1133,10 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			panel.add_child(_btn("RESUME", "resume", null, "primary", Vector2(30, 76), Vector2(pw - 60, 72), 30))
 			if can_sub:
 				panel.add_child(_btn("SUBSTITUTIONS  (%d LEFT)" % int((info.get("subs", {}) as Dictionary).get("left", 0)), "subs", null, "alt", Vector2(30, 160), Vector2(pw - 60, 60), 19))
-			panel.add_child(_btn("LEAVE MATCH", "menu", null, "alt" if not can_sub else "ghost", Vector2(30, 236 if can_sub else 164), Vector2(pw - 60, 60), 22))
+			var sy := 236.0 if can_sub else 164.0
+			panel.add_child(_btn("SOUND: " + str(info.get("snd", "")), "snd_opt", null, "ghost", Vector2(30, sy), Vector2((pw - 72) * 0.5, 50), 15))
+			panel.add_child(_btn("VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt", null, "ghost", Vector2(30 + (pw - 72) * 0.5 + 12, sy), Vector2((pw - 72) * 0.5, 50), 15))
+			panel.add_child(_btn("LEAVE MATCH", "menu", null, "alt" if not can_sub else "ghost", Vector2(30, sy + 62), Vector2(pw - 60, 60), 22))
 			items.append([panel, Vector2(0, 60), 0.0])
 		"full":
 			var dim := ColorRect.new()
