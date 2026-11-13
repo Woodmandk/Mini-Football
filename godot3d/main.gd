@@ -18,10 +18,12 @@ const LENGTHS := [180.0, 300.0, 480.0] # real seconds for 90 minutes
 const LEN_NAMES := ["3 MIN", "5 MIN", "8 MIN"]
 const DIFF_NAMES := ["EASY", "NORMAL", "HARD"]
 const DIFF := [
-	{"need": 0.80, "spd": 0.91, "err": 1.8, "think": 0.55},
-	{"need": 0.60, "spd": 0.96, "err": 1.0, "think": 0.32},
-	{"need": 0.45, "spd": 1.0, "err": 0.6, "think": 0.22},
+	{"need": 0.70, "spd": 0.86, "err": 2.4, "think": 0.70, "wait": 3.2},
+	{"need": 0.50, "spd": 0.92, "err": 1.5, "think": 0.45, "wait": 2.2},
+	{"need": 0.38, "spd": 0.98, "err": 0.8, "think": 0.28, "wait": 1.4},
 ]
+# your own computer-run team mates
+const MATE := {"need": 0.45, "spd": 1.0, "err": 0.6, "think": 0.22, "wait": 1.4}
 # Formations: [role, along 0..1, across -1..1]. Slot 9 is always a central forward and slot 6 a central midfielder (they take the kick-off).
 const FORMS := {
 	"4-3-3": [
@@ -160,6 +162,10 @@ var opt_len := 1
 var opt_mode := "coop"
 var room := ""
 var tick_n := 0
+var net_acc := 0.0
+var rec_acc := 0.0
+var tdt := 1.0 / 60.0
+var car_dir := Vector3.ZERO
 var _keys := {}
 
 var rec := []
@@ -351,10 +357,10 @@ func _ready() -> void:
 					print("LOBTEST d=", dd2, " got=", players.find(ball_owner), " (want 9) t=", snappedf(t2, 0.01), " state=", state, " recv_dist_from_start=", snappedf(m2.position.distance_to(Vector3(-30 + dd2, 0, rep * 6 - 6)), 0.1))
 			get_tree().quit()
 			return
-		if autotest:
+		if autotest or demo:
 			if bot_mode != "":
 				humans = [Human.new()]
-				if bot_mode != "solo":
+				if bot_mode != "solo" and bot_mode != "dribble":
 					var h2 := Human.new()
 					h2.team = 0 if bot_mode == "coop" else 1
 					humans.append(h2)
@@ -1348,6 +1354,8 @@ func _formation(kicking: int, instant: bool) -> void:
 		p.fall_t = -1.0
 		p.tackle_t = -1.0
 		p.press_t = 0.0
+		p.step_t = 0.0
+		p.wait_t = 0.0
 		if p.off:
 			_send_off(p)
 
@@ -1838,6 +1846,10 @@ func _physics_process(dt: float) -> void:
 				get_tree().quit()
 				return
 		return
+
+# The match runs once per drawn frame, with that frame's own time step. A fixed 60 steps a second
+# stutters on any screen that does not draw exactly 60 pictures a second (90/120 Hz phones, slow phones).
+func _frame(dt: float) -> void:
 	_net_poll()
 	var evs: Array = hud.ev.duplicate()
 	hud.ev.clear()
@@ -1848,7 +1860,7 @@ func _physics_process(dt: float) -> void:
 	if evs.has("pause"):
 		_action("pause")
 	if screen == "menu":
-		_tick(dt)
+		_ticks(dt)
 		return
 	var st := _stick() * view_flip
 	var sprint: bool = hud.sprint_down or Input.is_physical_key_pressed(KEY_SHIFT)
@@ -1865,8 +1877,9 @@ func _physics_process(dt: float) -> void:
 			_sprint_t = real_t
 	_sprint_was = sprint
 	if net.role == "guest":
-		tick_n += 1
-		if tick_n % 2 == 0 or not acts.is_empty():
+		net_acc += dt
+		if net_acc >= 0.033 or not acts.is_empty():
+			net_acc = 0.0
 			net.send({"_": "i", "s": [snappedf(st.x, 0.01), snappedf(st.y, 0.01)], "sp": sprint, "e": acts})
 		return
 	if humans.size() > me:
@@ -1874,15 +1887,24 @@ func _physics_process(dt: float) -> void:
 		h.stick = st
 		h.sprint = sprint
 		h.evs.append_array(acts)
+	if demo and bot_mode != "":
+		_bot_inputs(dt)
 	if paused:
 		for h in humans:
 			h.evs.clear()
 		return
-	_tick(dt)
+	_ticks(dt)
 	if net.role == "host" and net.connected:
-		tick_n += 1
-		if tick_n % 2 == 0:
+		net_acc += dt
+		if net_acc >= 0.033:
+			net_acc = 0.0
 			_send_snap()
+
+func _ticks(dt: float) -> void:
+	# long frames are cut into steps of at most 1/50 s, so nothing tunnels on a slow phone
+	var n: int = maxi(int(ceil(dt * 50.0 - 0.001)), 1)
+	for i in n:
+		_tick(dt / n)
 
 func _dbg() -> void:
 	# for automated tests: ?dbg in the address publishes a little state to the page
@@ -1912,11 +1934,11 @@ func _tick(dt: float) -> void:
 				_kickoff(kick_team)
 		"play":
 			_play(dt)
-			_record()
+			_record(dt)
 		"goal":
 			_celebrate(dt)
 			if state_t < 1.2:
-				_record()
+				_record(dt)
 		"replay":
 			_replay(dt)
 		"dead":
@@ -1959,10 +1981,11 @@ func _cpu(t: int) -> Dictionary:
 	if humans.is_empty():
 		return DIFF[1]
 	if _team_human(t):
-		return DIFF[2]
+		return MATE
 	return DIFF[opt_diff]
 
 func _play(dt: float) -> void:
+	tdt = dt
 	var gdt: float = dt * 5400.0 / LENGTHS[opt_len]
 	clock += gdt
 	# match fitness: everyone tires, those who run the most tire the most, and tired legs are slower
@@ -2166,7 +2189,7 @@ func _play(dt: float) -> void:
 	# --- clock
 	if state != "play":
 		return
-	if half == 1 and clock >= 2700.0 and (ball_owner != null or clock > 2790.0) and absf(ball.position.x) < 32.0:
+	if half == 1 and clock >= 2700.0 and (ball_owner != null or clock > 2790.0) and (absf(ball.position.x) < 32.0 or clock > 2850.0):
 		half = 2
 		clock = 2700.0
 		for p in players:
@@ -2178,7 +2201,7 @@ func _play(dt: float) -> void:
 		hud.show_controls = false
 		snd("whistle_long")
 		_banner("HALF TIME", Color(1, 1, 1), 2.2, "%d - %d" % [score[0], score[1]])
-	elif half == 2 and clock >= 5400.0 and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest):
+	elif half == 2 and clock >= 5400.0 and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 5550.0):
 		_full_time()
 
 func _full_time() -> void:
@@ -2214,12 +2237,17 @@ func _idle_players(dt: float) -> void:
 
 func _move(p, want: Vector3, dt: float) -> void:
 	var acc := 15.0 if want.length() > p.vel.length() else 22.0
+	if _hum_of(p) != null:
+		# the man under your thumb answers the stick at once
+		acc = 20.0 if want.length() > p.vel.length() else 27.0
 	p.vel = p.vel.move_toward(want, acc * dt)
 	p.position += p.vel * dt
 	p.position.x = clampf(p.position.x, -HL - 2.5, HL + 2.5)
 	p.position.z = clampf(p.position.z, -HW - 2.5, HW + 2.5)
 	if p.role == "GK" and state == "play" and ball_owner != p:
 		p.face(ball.position - p.position, 10.0, dt)
+	elif p.jock and ball_owner != null:
+		p.face(ball_owner.position - p.position, 9.0, dt)
 	elif p.vel.length() > 0.6:
 		p.face(p.vel, 11.0, dt)
 
@@ -2492,6 +2520,11 @@ func _give(p) -> void:
 	for q in players:
 		q.recv = false
 		q.offside = false
+		q.step_t = 0.0
+		q.wait_t = 0.0
+	if _team_human(p.team) and prev != null and prev.team == p.team:
+		# a first touch in peace: nobody takes the ball off you the instant a pass arrives
+		protect_t = maxf(protect_t, 0.4)
 	for h in humans:
 		h.charging = false
 		h.charge = 0.0
@@ -2537,6 +2570,19 @@ func _tackles(dt: float) -> void:
 	var c = ball_owner
 	if c == null or c.role == "GK" or protect_t > 0.0:
 		return
+	# a sharp turn wrong-foots anyone who was about to step in
+	var cv: Vector3 = c.vel
+	if cv.length() > 3.0:
+		var cd: Vector3 = cv.normalized()
+		if car_dir.dot(cd) < 0.45 and car_dir.length() > 0.5:
+			car_dir = cd
+			for o in teams[1 - c.team]:
+				if o.commit_t < 0.0:
+					o.press_t = 0.0
+					if o.step_t > 0.0:
+						o.step_t = 0.0
+						o.wait_t = 0.0
+		car_dir = car_dir.lerp(cd, clampf(dt * 4.0, 0.0, 1.0)).normalized()
 	for o in teams[1 - c.team]:
 		if o.stun > 0.0 or _hum_of(o) != null or o.role == "GK":
 			continue
@@ -2547,9 +2593,11 @@ func _tackles(dt: float) -> void:
 			o.commit_t -= dt
 			if o.commit_t <= 0.0:
 				o.commit_t = -1.0
-				if d > 1.6:
-					o.stun = 0.5
-				elif front > -0.35:
+				o.step_t = 0.0
+				if d > 1.35:
+					# missed: he is beaten and you are away
+					o.stun = 0.8
+				elif front > -0.35 or c.vel.length() < 2.0:
 					c.stun = 0.55
 					c.start_fall(0.55)
 					stats["tackles"] += 1
@@ -2561,18 +2609,25 @@ func _tackles(dt: float) -> void:
 					_foul(o, c)
 					return
 			continue
-		if d < 1.3 and front > -0.35:
+		# only the man who steps in makes a tackle; anyone else only if you run right into him
+		var stepping: bool = o.step_t > 0.0 or _team_human(o.team)
+		var reach := 1.25 if stepping else 0.95
+		# a man who stands still on the ball can be robbed from any side
+		var still: bool = c.vel.length() < 2.0
+		if d < reach and (still or front > (0.0 if stepping else 0.3)):
 			o.press_t += dt
 			var need: float = _cpu(o.team)["need"]
 			if _team_human(o.team):
 				need = 0.8
+			elif not stepping:
+				need *= 1.4
 			need *= lerpf(1.15, 0.88, clampf((o.dfn - 40) / 45.0, 0.0, 1.0))
 			if o.press_t > need - 0.15:
 				o.press_t = 0.0
 				o.commit_t = 0.15
 				o.start_tackle()
 		else:
-			o.press_t = maxf(o.press_t - dt, 0.0)
+			o.press_t = maxf(o.press_t - dt * 2.0, 0.0)
 
 func _pickups() -> void:
 	var b := ball.position
@@ -2763,6 +2818,7 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 	var cpu := _cpu(t)
 	var loose: bool = ball_owner == null
 	var ours: bool = not loose and ball_owner.team == t
+	p.jock = false
 	if p.recv and loose:
 		return _run_to(p, aim, p.top_speed)
 	if loose and p == chaser[t]:
@@ -2782,7 +2838,28 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 				if hd > 7.0 or c.position.distance_to(own_goal) < 26.0:
 					return _run_to(p, c.position + c.vel * 0.25 + goal_side * 0.5, p.top_speed * 0.95)
 				return _run_to(p, c.position + goal_side * 2.6, p.top_speed * 0.95)
-			return _run_to(p, c.position + c.vel * 0.25 + goal_side * 0.5, p.top_speed * 0.93 * cpu["spd"])
+			# Defending like a real defender: get goal side, hold him up at arm's length and follow,
+			# and only step in when he slows down, comes close to goal, or has been held up for a while.
+			var dd: float = p.position.distance_to(c.position)
+			var gs: bool = (p.position - c.position).dot(goal_side) > 0.25 * dd
+			var gd: float = c.position.distance_to(own_goal)
+			if p.step_t > 0.0:
+				p.step_t -= tdt
+				return _run_to(p, c.position + c.vel * 0.2 + goal_side * 0.4, p.top_speed * 0.93 * cpu["spd"])
+			if not gs or dd > 5.0:
+				p.wait_t = 0.0
+				return _run_to(p, c.position + c.vel * 0.6 + goal_side * 3.4, p.top_speed * 0.95 * cpu["spd"])
+			p.wait_t += tdt
+			var patience: float = cpu["wait"]
+			if c.vel.length() < c.top_speed * 0.5:
+				patience *= 0.45
+			if gd < 24.0:
+				patience *= 0.35
+			if p.wait_t > patience:
+				p.wait_t = 0.0
+				p.step_t = 0.9
+			p.jock = true
+			return _run_to(p, c.position + c.vel * 0.35 + goal_side * 2.5, p.top_speed * 0.82 * cpu["spd"])
 		if p == second[t]:
 			return _run_to(p, c.position + goal_side * 6.0, p.top_speed * 0.9)
 	var bu: float = ball.position.x * s
@@ -2882,17 +2959,19 @@ func _celebrate(dt: float) -> void:
 		else:
 			_kickoff(kick_team)
 
-func _record() -> void:
+func _record(dt: float) -> void:
 	if _quiet():
 		return
-	if Engine.get_physics_frames() % 2 == 0:
+	rec_acc += dt
+	if rec_acc >= 1.0 / 30.0:
+		rec_acc = minf(rec_acc - 1.0 / 30.0, 1.0 / 30.0)
 		rec.append(_pack())
 		if rec.size() > 360:
 			rec.pop_front()
 			goal_idx -= 1
 
-func _replay(_dt: float) -> void:
-	rp_pos += 0.275
+func _replay(dt: float) -> void:
+	rp_pos += 16.5 * dt
 	var skip := false
 	for h in humans:
 		if state_t > 0.6 and (h.evs.has("tap") or h.evs.has("shoot_down")):
@@ -3057,6 +3136,8 @@ func _process(dt: float) -> void:
 	real_t += dt
 	_auto_quality(dt)
 	var rdt := dt / maxf(Engine.time_scale, 0.05)
+	if not autotest:
+		_frame(minf(dt, 0.1))
 	if net.role == "guest" and screen == "match":
 		_guest_frame(dt)
 	if not paused:
@@ -3266,7 +3347,16 @@ func _bot_inputs(dt: float) -> void:
 				var nd := 99.0
 				for o in teams[1 - h.team]:
 					nd = minf(nd, o.position.distance_to(p.position))
-				if nd < 3.5 or set_piece != "":
+				var no: Vector3 = Vector3.ZERO
+				for o in teams[1 - h.team]:
+					if o.position.distance_to(p.position) <= nd + 0.01:
+						no = o.position
+				if bot_mode == "dribble" and nd < 4.0 and set_piece == "":
+					# a dribbler: steps away from the nearest man instead of passing
+					var aw: Vector3 = (p.position - no).normalized()
+					var lat := Vector2(-h.stick.y, h.stick.x)
+					h.stick = (h.stick + lat * signf(lat.dot(Vector2(aw.x, aw.z))) * 0.9).normalized()
+				if (nd < 3.5 and bot_mode != "dribble") or set_piece != "":
 					h.evs.append("pass_down")
 					h.evs.append("pass_up")
 					bstats["passes"] += 1
