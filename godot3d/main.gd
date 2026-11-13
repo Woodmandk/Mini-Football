@@ -34,7 +34,7 @@ const NAMES := [
 const NUMS := [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7]
 const TEAM_NAMES := ["RED BISON", "HARBOUR SHARKS"]
 const CAMS := ["TV", "TOP", "CLOSE"]
-const N_F := 10 # numbers per player in a packed frame
+const N_F := 11 # numbers per player in a packed frame
 
 class Human:
 	var team := 0
@@ -782,6 +782,7 @@ func _formation(kicking: int, instant: bool) -> void:
 		p.mood = 0
 		p.mood_t = 0.0
 		p.dive_t = -1.0
+		p.fall_t = -1.0
 		p.tackle_t = -1.0
 		p.press_t = 0.0
 		if p.off:
@@ -982,7 +983,7 @@ func _foul(by, on) -> void:
 	tst[by.team]["fouls"] += 1
 	var pos: Vector3 = on.position
 	on.stun = 1.2
-	on.start_tackle()
+	on.start_fall(1.2)
 	by.stun = 0.8
 	var gx := -HL * side(by.team)
 	var in_box := absf(pos.x - gx) < 16.5 and absf(pos.z) < 20.16
@@ -1526,7 +1527,7 @@ func _ball_meet_point() -> Vector3:
 func _release(p, v: Vector3) -> void:
 	var h := Vector3(v.x, 0, v.z).normalized()
 	p.yaw = atan2(-h.x, -h.z)
-	p.start_kick()
+	p.start_kick(clampf((v.length() - 9.0) / 20.0, 0.2, 1.0))
 	ball_owner = null
 	ball.position = p.position + h * 0.75 + Vector3(0, BALL_R + 0.05, 0)
 	ball_vel = v
@@ -1704,6 +1705,7 @@ func _human_tackle(h) -> void:
 		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
 		if front > -0.45:
 			c.stun = 0.6
+			c.start_fall(0.6)
 			stats["tackles"] += 1
 			snd("touch")
 			fx("shake", 0.25)
@@ -1733,6 +1735,7 @@ func _tackles(dt: float) -> void:
 					o.stun = 0.5
 				elif front > -0.35:
 					c.stun = 0.55
+					c.start_fall(0.55)
 					stats["tackles"] += 1
 					snd("touch")
 					_give(o)
@@ -2075,6 +2078,7 @@ func _pack() -> Array:
 		a[k + 7] = p.dive_n
 		a[k + 8] = p.dive_side
 		a[k + 9] = 9 if p.off else p.mood
+		a[k + 10] = p.fall_n * 2 + (1 if p.fall_dur > 0.9 else 0)
 		k += N_F
 	a[k] = snappedf(ball.position.x, 0.01)
 	a[k + 1] = snappedf(ball.position.y, 0.01)
@@ -2110,6 +2114,10 @@ func _anim_sync(p, a: Array, k: int) -> void:
 		p.dive_n = int(a[k + 7])
 		p.dive_t = 0.0
 		p.dive_side = a[k + 8]
+	if int(a[k + 10]) / 2 != p.fall_n:
+		p.fall_n = int(a[k + 10]) / 2
+		p.fall_t = 0.0
+		p.fall_dur = 1.2 if int(a[k + 10]) % 2 == 1 else 0.6
 	var md := int(a[k + 9])
 	p.visible = md != 9
 	if md != 9 and md != p.mood:
@@ -2217,6 +2225,11 @@ func _process(dt: float) -> void:
 				show_ring = true
 	land_ring.visible = show_ring
 	var show_rings := state == "play" and screen == "match"
+	for p in players:
+		p.windup = 0.0
+	for h in humans:
+		if h.ctrl != null and h.charging and ball_owner == h.ctrl:
+			h.ctrl.windup = h.charge
 	for p in players:
 		if not paused:
 			p.animate(dt * anim_rate)
