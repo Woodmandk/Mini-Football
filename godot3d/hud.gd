@@ -56,6 +56,8 @@ const GREEN := Color(0.2, 0.78, 0.38)
 const GOLD := Color(1.0, 0.84, 0.25)
 const DARK := Color(0.04, 0.08, 0.06)
 
+var _last_size := Vector2.ZERO
+
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1371,6 +1373,11 @@ func _set_btn(k: String, down: bool) -> void:
 
 func _process(dt: float) -> void:
 	_t += dt / maxf(Engine.time_scale, 0.05)
+	# the screen changed shape (the phone was turned, the browser bar went away): lay the menu out again
+	if size != _last_size:
+		_last_size = size
+		if menu_name != "":
+			_build_menu(menu_name, _info, false)
 	bug.visible = in_match and not replay_on and vs_t < 0.0
 	if vs_t >= 0.0:
 		vs_t += dt / maxf(Engine.time_scale, 0.05)
