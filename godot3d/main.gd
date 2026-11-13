@@ -246,6 +246,9 @@ var bot_slide := OS.get_cmdline_user_args().has("--slide")
 var long_test := OS.get_cmdline_user_args().has("--longtest")
 var long_t := 0.0
 var long_n := 0
+var long_d := 24.0
+var long_pw := 1.0
+var long_aim := 0.62
 var long_arm := 0.0
 var bot_hold := OS.get_cmdline_user_args().has("--hold")
 var tst := [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}]
@@ -259,6 +262,12 @@ func _ready() -> void:
 	var new_car := false
 	var car_test := false
 	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--longd="):
+			long_d = float(a.substr(8))
+		if a.begins_with("--longaim="):
+			long_aim = float(a.substr(10))
+		if a.begins_with("--longpw="):
+			long_pw = float(a.substr(9))
 		if a == "--autotest":
 			autotest = true
 		elif a == "--demo":
@@ -2254,7 +2263,7 @@ func _play(dt: float) -> void:
 			elif e == "shoot_up":
 				h.def_hold = -1.0
 				if h.charging and ball_owner == h.ctrl:
-					_shoot(h.ctrl, h.charge, _human_aim(h, dir3), 0.8, 0.75 if h.charge < 0.72 else 0.2)
+					_shoot(h.ctrl, h.charge, _human_aim(h, dir3), 0.8, lerpf(0.75, 0.2, clampf((h.charge - 0.55) / 0.4, 0.0, 1.0)))
 				h.charging = false
 				h.charge = 0.0
 			elif e == "skill":
@@ -2936,7 +2945,7 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	dir.y = 0.0
 	dir = dir.normalized()
 	# from distance a full strike is hit harder and dips under the bar; close in, full power still tends to fly over
-	var lk: float = clampf((d - 16.0) / 8.0, 0.0, 1.0)
+	var lk: float = clampf((d - 12.0) / 6.0, 0.0, 1.0)
 	var sp := 19.0 + 13.0 * power + 4.0 * lk * clampf((power - 0.75) / 0.25, 0.0, 1.0)
 	var t := maxf(d / sp, 0.15)
 	var h := 0.35 + power * power * lerpf(2.1, 1.65, lk) + randf() * lerpf(0.6, 0.45, lk) * power * err_k
@@ -4041,7 +4050,7 @@ func _bot_inputs(dt: float) -> void:
 			var lp = humans[0].ctrl
 			if lp != null and lp.role != "GK":
 				var ls := side(lp.team)
-				lp.position = Vector3((HL - 24.0 - randf() * 6.0) * ls, 0, randf_range(-10.0, 10.0))
+				lp.position = Vector3((HL - long_d - randf() * 5.0) * ls, 0, randf_range(-10.0, 10.0))
 				lp.vel = Vector3.ZERO
 				lp.stun = 0.0
 				protect_t = 0.0
@@ -4054,7 +4063,7 @@ func _bot_inputs(dt: float) -> void:
 			var lq = humans[0].ctrl
 			if long_arm <= 0.0 and ball_owner == lq and state == "play":
 				var before: int = stats["shots"]
-				_shoot(lq, 1.0, (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * 0.82, 0.8, 0.2)
+				_shoot(lq, long_pw, (-1.0 if teams[1 - lq.team][0].position.z > 0.0 else 1.0) * GOAL_HW * long_aim, 0.8, lerpf(0.75, 0.2, clampf((long_pw - 0.55) / 0.4, 0.0, 1.0)))
 				if stats["shots"] > before:
 					long_n += 1
 		if state == "full" and long_n > 0:
