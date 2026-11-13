@@ -177,7 +177,8 @@ var net_acc := 0.0
 var rec_acc := 0.0
 var tdt := 1.0 / 60.0
 var sup := [[], []]
-var runner := [null, null]
+var runner := [[], []]
+var att_team := -1
 var pass_pw := -1.0
 var test_meter := OS.get_cmdline_user_args().has("--meter")
 var car_dir := Vector3.ZERO
@@ -234,6 +235,8 @@ var _sprint_was := false
 var _sprint_t := -9.0
 var real_t := 0.0
 var version := "dev"
+var shp := [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0]]
+var autotest_on := OS.get_cmdline_user_args().has("--autotest")
 var tst := [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}]
 var stats := {"shots": 0, "passes": 0, "tackles": 0, "outs": 0, "saves": 0, "goals": 0, "fouls": 0, "offsides": 0, "pens": 0, "cards": 0}
 
@@ -2010,6 +2013,9 @@ func _physics_process(dt: float) -> void:
 			if state == "full":
 				print("AUTOTEST score=", score, " stats=", stats, " bot=", bstats)
 				print("AUTOTEST team=", tst)
+				for ti in 2:
+					var m: Array = shp[ti]
+					print("AUTOTEST shape t", ti, " n=", m[0], " ahead=", snappedf(float(m[1]) / maxf(m[0], 1), 0.01), " near18=", snappedf(float(m[2]) / maxf(m[0], 1), 0.01), " inbox=", snappedf(float(m[3]) / maxf(m[4], 1), 0.01))
 				var fits := []
 				for p in teams[0]:
 					fits.append(snappedf(p.fit, 0.01))
@@ -2309,7 +2315,15 @@ func _play(dt: float) -> void:
 					h.switch_cool = 0.8
 	# --- who offers for the ball and who runs in behind
 	sup = [[], []]
-	runner = [null, null]
+	runner = [[], []]
+	att_team = -1
+	if ball_owner != null:
+		att_team = ball_owner.team
+	elif ball_last != null:
+		# a pass on its way still counts as having the ball, so the team does not drop back mid-pass
+		for q in teams[ball_last.team]:
+			if q.recv:
+				att_team = ball_last.team
 	if ball_owner != null and set_piece == "":
 		var ot: int = ball_owner.team
 		var near_m := []
@@ -2325,9 +2339,15 @@ func _play(dt: float) -> void:
 			sup[ot].append(near_m[i][1])
 		if not fws.is_empty() and ball_owner.position.x * side(ot) > -22.0:
 			# the forwards take turns, a new run about every six seconds
-			var rn = fws[int(clock / 108.0) % fws.size()]
+			var k0 := int(clock / 108.0)
+			var rn = fws[k0 % fws.size()]
 			if not sup[ot].has(rn):
-				runner[ot] = rn
+				runner[ot].append(rn)
+			# in their half a second man goes too
+			if fws.size() > 1 and ball_owner.position.x * side(ot) > 0.0:
+				var rn2 = fws[(k0 + 1) % fws.size()]
+				if not sup[ot].has(rn2):
+					runner[ot].append(rn2)
 	# --- move everyone
 	for p in players:
 		var want := Vector3.ZERO
@@ -2424,7 +2444,37 @@ func _play(dt: float) -> void:
 		ball_vel = o.vel
 		ball_last = o
 		tst[o.team]["poss"] += 1
+		if autotest_on and set_piece == "" and o.role != "GK":
+			var su := side(o.team)
+			var bu0: float = o.position.x * su
+			if bu0 > 15.0:
+				var m: Array = shp[o.team]
+				m[0] += 1
+				for q in teams[o.team]:
+					if q == o or q.role == "GK":
+						continue
+					var qu: float = q.position.x * su
+					if qu > bu0 + 1.0:
+						m[1] += 1
+					if q.position.distance_to(o.position) < 18.0:
+						m[2] += 1
+					if bu0 > 30.0 and qu > 36.0 and absf(q.position.z) < 20.0:
+						m[3] += 1
+				if bu0 > 30.0:
+					m[4] += 1
 		_tackles(dt)
+		# keeper goes down at the feet of a runner who brings the ball too close to him
+		if set_piece == "" and protect_t <= 0.0 and ball_owner != null and ball_owner.role != "GK":
+			var kg = teams[1 - ball_owner.team][0]
+			var kx := -HL * side(kg.team)
+			if kg.stun <= 0.0 and absf(ball.position.x - kx) < 16.0 and absf(ball.position.z) < 20.0:
+				var kd := Vector2(ball.position.x - kg.position.x, ball.position.z - kg.position.z).length()
+				if kd < 0.95:
+					var lost = ball_owner
+					lost.stun = 0.4
+					snd("touch")
+					snd("ooh")
+					_give(kg)
 		if state == "play" and set_piece == "" and ball_owner != null and ball_owner.role != "GK":
 			# running the ball over the line is out, just like kicking it out
 			_check_lines()
@@ -3000,10 +3050,15 @@ func _pickups() -> void:
 		var gx := -HL * side(t)
 		if absf(b.x - gx) > 16.5 or absf(b.z) > 20.16:
 			continue
-		var reach := 0.85 + (0.75 if g.dive_t >= 0.0 else 0.0)
+		var gq: float = clampf((g.dfn - 60) / 30.0, 0.0, 1.0)
+		var reach := 0.8 + (lerpf(0.62, 0.8, gq) if g.dive_t >= 0.0 else 0.0)
+		# high balls are harder to reach, so the top corners are open to a good shot
+		if shot_live:
+			reach -= maxf(b.y - 1.5, 0.0) * 0.45
 		var dh := Vector2(b.x - g.position.x, b.z - g.position.z).length()
 		if dh < reach and b.y < 2.6:
-			if hs > 19.0 and dh > 0.7:
+			# good keepers hold harder shots, the rest push them away
+			if hs > lerpf(15.0, 21.0, gq) and dh > 0.55:
 				var sgn := signf(b.z - g.position.z)
 				ball_vel = Vector3(-ball_vel.x * 0.3, absf(ball_vel.y) * 0.4 + 2.5, ball_vel.z * 0.4 + sgn * 5.0)
 				ball_ignore = g
@@ -3223,16 +3278,46 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		if p == second[t]:
 			return _run_to(p, c.position + goal_side * 6.0, p.top_speed * 0.9)
 	var bu: float = ball.position.x * s
-	var u: float = -45.0 + p.home.x * 62.0 + bu * 0.6 + (9.0 if ours else 0.0)
-	if p.role == "FW" and ours:
-		u += 4.0 + 3.0 * sin(clock * 0.02 + p.idx * 2.0)
-	if p.role == "DF":
+	var att: bool = att_team == t
+	var u: float = -45.0 + p.home.x * 62.0 + bu * 0.6
+	var z: float = p.home.y * s * 21.0 + ball.position.z * 0.42
+	var hurry := false
+	if att:
+		# With the ball the whole team moves up with it, like a real side: the back line squeezes up,
+		# the midfield stays close around the ball, full backs overlap and the forwards stretch the line.
+		var wide: bool = absf(p.home.y) > 0.6
+		var same: bool = p.home.y * s * ball.position.z > 0.0
+		z = p.home.y * s * 29.0 + ball.position.z * 0.25
+		u = bu + (p.home.x - 0.40) * 50.0
+		if p.role == "DF":
+			if wide:
+				u = clampf(bu - (4.0 if same and bu > 0.0 else 14.0), -40.0, 40.0)
+			else:
+				u = clampf(bu - 24.0, -42.0, 8.0)
+		elif p.role == "MF":
+			if p.home.x <= 0.38:
+				u -= 5.0
+			u = clampf(u, -30.0, 40.0)
+		else:
+			u = clampf(u + 3.0 * sin(clock * 0.02 + p.idx * 2.0), -6.0, 47.0)
+		if bu > 26.0:
+			# around their box: men at both posts, midfielders on the edge for the cut back
+			if p.role == "FW":
+				if not wide:
+					u = 45.5
+					z = p.home.y * s * 18.0 + clampf(ball.position.z * 0.15, -3.0, 3.0)
+				elif not same:
+					u = 46.0
+					z = signf(p.home.y * s) * 6.5
+			elif p.role == "MF":
+				u = clampf(bu - 7.0, 31.0, 37.0)
+				z = p.home.y * s * 17.0 + ball.position.z * 0.2
+		u = minf(u, maxf(off_line[t] - 0.8, 0.0))
+		hurry = u - p.position.x * s > 5.0
+	elif p.role == "DF":
 		u = clampf(u, -46.0, 14.0)
 	else:
 		u = clampf(u, -40.0, 47.0)
-	if ours:
-		u = minf(u, maxf(off_line[t] - 0.8, 0.0))
-	var z: float = p.home.y * s * (29.0 if ours else 21.0) + ball.position.z * (0.25 if ours else 0.42)
 	z = clampf(z, -HW + 1.5, HW - 1.5)
 	var spot := Vector3(u * s, 0, z)
 	p.think_t -= tdt
@@ -3273,7 +3358,7 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 							bs = sc
 							p.think_at = q
 			return _run_to(p, p.think_at, p.top_speed * 0.95)
-		if runner[t] == p:
+		if runner[t].has(p):
 			# A run in behind: along the last line, into the widest gap between defenders, never offside.
 			if p.think_t <= 0.0:
 				p.think_t = 0.5
@@ -3312,7 +3397,7 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 			var mp: Vector3 = mk.position + gs2 * 1.9 + tb.normalized() * 0.7
 			spot = spot.lerp(mp, 0.7 if p.role != "DF" else 0.6)
 			return _run_to(p, spot, p.top_speed * 0.92)
-	return _run_to(p, spot, p.top_speed * 0.88)
+	return _run_to(p, spot, p.top_speed * (1.0 if hurry else 0.88))
 
 func _ai_keeper(p, dt: float) -> Vector3:
 	var s := side(p.team)
@@ -3330,9 +3415,14 @@ func _ai_keeper(p, dt: float) -> Vector3:
 					zc = b.z + bent.z * ((gx - b.x) / bent.x)
 			if absf(zc) < GOAL_HW + 1.2:
 				p.react_t += dt
-				if p.react_t < lerpf(0.27, 0.19, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
+				if p.react_t < lerpf(0.29, 0.2, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
+				# off his line he saves where he stands instead of running back to the goal line
+				var tk: float = (p.position.x - b.x) / ball_vel.x
+				if tk > 0.0 and absf(p.position.x - gx) > 1.2:
+					t = tk
+					target = Vector3(p.position.x, 0, b.z + ball_vel.z * tk)
 				var dz: float = target.z - p.position.z
 				if absf(dz) > 1.0 and t < 0.6 and p.dive_t < 0.0:
 					var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
@@ -3348,13 +3438,37 @@ func _ai_keeper(p, dt: float) -> Vector3:
 			theirs = minf(theirs, o.position.distance_to(b))
 		if mine < theirs + 1.0:
 			return _run_to(p, Vector3(b.x, 0, b.z), p.top_speed)
+	# a cross or high ball dropping in front of goal: come and claim it
+	if ball_owner == null and b.y > 2.0 and set_piece == "":
+		var lp := _ball_meet_point()
+		if absf(lp.x - gx) < 8.5 and absf(lp.z) < 10.0:
+			return _run_to(p, lp, p.top_speed)
 	var d := b - goal
 	d.y = 0.0
 	var dist := d.length()
-	var out := clampf(dist * 0.11, 1.0, 5.0)
+	var c = ball_owner
+	if c != null and c.team != p.team and set_piece == "" and dist < 21.0 and absf(b.z) < 20.0:
+		# one on one: if no defender is between the runner and the goal, come out and make yourself big
+		var cover := false
+		var dn: Vector3 = d / maxf(dist, 0.1)
+		for m in teams[p.team]:
+			if m == p or m.off or m.stun > 0.0:
+				continue
+			var am: Vector3 = m.position - goal
+			var tm: float = am.dot(dn)
+			if tm > 1.0 and tm < dist - 0.8 and (am - dn * tm).length() < 3.5:
+				cover = true
+		if not cover:
+			if p.position.distance_to(b) < 3.0 and absf(b.x - gx) < 16.0:
+				# down at his feet
+				return _run_to(p, Vector3(b.x, 0, b.z), p.top_speed)
+			var o1 := clampf(dist * 0.3, 1.5, 6.0)
+			return _run_to(p, goal + dn * o1, 6.2)
+	# stands higher the further away the ball is, to sweep up behind a high back line
+	var out := clampf(dist * 0.11, 1.0, 4.5) + clampf((dist - 45.0) * 0.14, 0.0, 4.5)
 	var target2 := goal + d.normalized() * out
 	target2.z = clampf(target2.z, -3.3, 3.3)
-	return _run_to(p, target2, 5.0)
+	return _run_to(p, target2, 5.8)
 
 # ---------------------------------------------------------------- goal celebration and replay
 
@@ -3602,6 +3716,14 @@ func _process(dt: float) -> void:
 	meter_bg.visible = mv > 0.02
 	meter_fg.visible = mv > 0.02
 	aim_arrow.visible = false
+	if humans.size() > me and humans[me].ctrl != null and state == "play" and screen == "match":
+		# the arrow on the grass always shows which way your man is heading (and where the ball will go)
+		var mp0: Vector3 = humans[me].ctrl.position
+		var st0 := _stick() * view_flip
+		var ad0: Vector3 = Vector3(st0.x, 0, st0.y).normalized() if st0.length() > 0.3 else humans[me].ctrl.fwd()
+		aim_arrow.visible = true
+		aim_hold.position = mp0 + ad0 * 1.7 + Vector3(0, 0.06, 0)
+		aim_hold.rotation.y = atan2(-ad0.x, -ad0.z)
 	if mv > 0.02:
 		var mp: Vector3 = humans[me].ctrl.position
 		var mw := 2.1
@@ -3609,12 +3731,6 @@ func _process(dt: float) -> void:
 		meter_bg.scale = Vector3(mw + 0.12, 1.0, 0.42)
 		meter_fg.position = Vector3(mp.x - (mw * 0.5 - mw * mv * 0.5) * view_flip, 0.07, mp.z + 1.35 * view_flip)
 		meter_fg.scale = Vector3(mw * mv, 1.0, 0.3)
-		# the arrow shows where the ball will go
-		var st3 := _stick() * view_flip
-		var ad: Vector3 = Vector3(st3.x, 0, st3.y).normalized() if st3.length() > 0.3 else humans[me].ctrl.fwd()
-		aim_arrow.visible = true
-		aim_hold.position = mp + ad * 1.7 + Vector3(0, 0.06, 0)
-		aim_hold.rotation.y = atan2(-ad.x, -ad.z)
 		meter_mat.albedo_color = Color(0.3, 0.95, 0.4).lerp(Color(1.0, 0.85, 0.2), clampf(mv * 2.0, 0.0, 1.0)).lerp(Color(1.0, 0.25, 0.15), clampf((mv - 0.6) / 0.4, 0.0, 1.0))
 	var show_rings := state == "play" and screen == "match"
 	for p in players:
