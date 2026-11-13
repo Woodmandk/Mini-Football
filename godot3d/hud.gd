@@ -741,6 +741,88 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var fb := _btn("FORMATION:  " + str(c3.get("fname", "4-3-3")), "c_form", null, "alt", Vector2(158, 14), Vector2(230, 48), 17)
 			menu.add_child(fb)
 			menu.add_child(bk3)
+		"subs":
+			var sb: Dictionary = info.get("subs", {})
+			var left := int(sb.get("left", 0))
+			_title("SUBSTITUTIONS", ("%d LEFT.  Tap a player on the pitch, then the man who comes on." % left) if left > 0 else "You have used all three.")
+			var dim6 := ColorRect.new()
+			dim6.color = Color(0.0, 0.03, 0.02, 0.72)
+			dim6.size = Vector2(w, h)
+			dim6.mouse_filter = Control.MOUSE_FILTER_STOP
+			menu.add_child(dim6)
+			menu.move_child(dim6, 0)
+			var pcol6 := {"GK": Color(0.95, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
+			var on6: Array = sb.get("on", [])
+			var sel6 := int(sb.get("sel", -1))
+			var lw6 := w * 0.6 - 50.0
+			var lh6 := _label("ON THE PITCH", 14, Color(1, 1, 1, 0.65), font2)
+			lh6.position = Vector2(40, 94)
+			menu.add_child(lh6)
+			var rh6 := minf(66.0, (h - 126.0) / 6.0)
+			for oi in on6.size():
+				var op: Dictionary = on6[oi]
+				var colx := 40 + (oi / 6) * (lw6 * 0.5 + 6)
+				var chosen6: bool = int(op["slot"]) == sel6
+				var ob := _btn("", "sub_pick", int(op["slot"]), "alt", Vector2(colx, 116 + (oi % 6) * rh6), Vector2(lw6 * 0.5 - 6, rh6 - 8), 15)
+				for st6 in ["normal", "hover", "focus", "pressed", "disabled"]:
+					ob.add_theme_stylebox_override(st6, _box(Color(0.20, 0.25, 0.22, 0.97) if chosen6 else Color(0.06, 0.10, 0.08, 0.94), 10, GOLD if chosen6 else Color(1, 1, 1, 0.2)))
+				ob.disabled = bool(op["off"]) or left <= 0
+				var ch6 := ColorRect.new()
+				ch6.color = pcol6.get(str(op["role"]), Color.WHITE)
+				ch6.position = Vector2(8, 8)
+				ch6.size = Vector2(6, rh6 - 24)
+				ch6.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				ob.add_child(ch6)
+				var on1 := _label("%d  %s" % [int(op["num"]), str(op["n"])], 17, Color.WHITE if not bool(op["off"]) else Color(1, 1, 1, 0.4))
+				on1.position = Vector2(22, 4)
+				ob.add_child(on1)
+				var on2 := _label("%s  %d" % [str(op["role"]), int(op["ovr"])], 13, Color(1, 1, 1, 0.7), font2)
+				on2.position = Vector2(22, rh6 - 36)
+				ob.add_child(on2)
+				# fitness bar: green when fresh, yellow, then red
+				var fit6 := clampf(float(op["fit"]), 0.0, 1.0)
+				var bwf := lw6 * 0.5 - 6 - 120.0
+				var fb0 := ColorRect.new()
+				fb0.color = Color(1, 1, 1, 0.14)
+				fb0.position = Vector2(100, rh6 - 28)
+				fb0.size = Vector2(bwf, 7)
+				fb0.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				ob.add_child(fb0)
+				var fb1 := ColorRect.new()
+				fb1.color = GREEN if fit6 > 0.75 else (Color(0.95, 0.8, 0.15) if fit6 > 0.55 else Color(0.95, 0.3, 0.25))
+				fb1.position = Vector2(100, rh6 - 28)
+				fb1.size = Vector2(bwf * fit6, 7)
+				fb1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				ob.add_child(fb1)
+				menu.add_child(ob)
+			var bx6 := w * 0.6 + 10.0
+			var bw6 := w - bx6 - 40.0
+			var bh6 := _label("BENCH", 14, Color(1, 1, 1, 0.65), font2)
+			bh6.position = Vector2(bx6, 94)
+			menu.add_child(bh6)
+			var bench6: Array = sb.get("bench", [])
+			var rb6 := minf(54.0, (h - 126.0) / maxf(ceilf(bench6.size() / 2.0), 1.0))
+			for bi6 in bench6.size():
+				var bp: Dictionary = bench6[bi6]
+				var bb6 := _btn("", "sub_in", int(bp["sq"]), "alt", Vector2(bx6 + (bi6 % 2) * (bw6 * 0.5), 116 + (bi6 / 2) * rb6), Vector2(bw6 * 0.5 - 6, rb6 - 6), 15)
+				for st7 in ["normal", "hover", "focus", "pressed", "disabled"]:
+					bb6.add_theme_stylebox_override(st7, _box(Color(0.10, 0.22, 0.14, 0.97) if sel6 >= 0 else Color(0.06, 0.10, 0.08, 0.94), 10, GREEN if sel6 >= 0 else Color(1, 1, 1, 0.2)))
+				bb6.disabled = sel6 < 0
+				var ch7 := ColorRect.new()
+				ch7.color = pcol6.get(str(bp["pos"]), Color.WHITE)
+				ch7.position = Vector2(8, 7)
+				ch7.size = Vector2(6, rb6 - 20)
+				ch7.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				bb6.add_child(ch7)
+				var bn1 := _label(str(bp["n"]).substr(0, 9), 15, Color.WHITE)
+				bn1.position = Vector2(22, 2)
+				bb6.add_child(bn1)
+				var bn2 := _label("%s  %d" % [str(bp["pos"]), int(bp["ovr"])], 12, Color(1, 1, 1, 0.7), font2)
+				bn2.position = Vector2(22, rb6 - 30)
+				bb6.add_child(bn2)
+				menu.add_child(bb6)
+			var bk6 := _btn("<  BACK", "pause", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
+			menu.add_child(bk6)
 		"market":
 			_title("TRANSFERS", "New players are offered after every match")
 			var c5: Dictionary = info.get("car", {})
@@ -954,8 +1036,10 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var pw := 340.0
 			var panel := Panel.new()
 			panel.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.94), 20, Color(1, 1, 1, 0.16)))
-			panel.position = Vector2((w - pw) * 0.5, h * 0.5 - 130)
-			panel.size = Vector2(pw, 260)
+			var can_sub := bool(info.get("can_sub", false))
+			var ph0 := 332.0 if can_sub else 260.0
+			panel.position = Vector2((w - pw) * 0.5, h * 0.5 - ph0 * 0.5)
+			panel.size = Vector2(pw, ph0)
 			menu.add_child(panel)
 			var pt := _label("PAUSED" if not bool(info.get("online", false)) else "MENU", 34, Color.WHITE)
 			pt.position = Vector2(0, 16)
@@ -963,7 +1047,9 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			panel.add_child(pt)
 			panel.add_child(_btn("RESUME", "resume", null, "primary", Vector2(30, 76), Vector2(pw - 60, 72), 30))
-			panel.add_child(_btn("LEAVE MATCH", "menu", null, "alt", Vector2(30, 164), Vector2(pw - 60, 60), 22))
+			if can_sub:
+				panel.add_child(_btn("SUBSTITUTIONS  (%d LEFT)" % int((info.get("subs", {}) as Dictionary).get("left", 0)), "subs", null, "alt", Vector2(30, 160), Vector2(pw - 60, 60), 19))
+			panel.add_child(_btn("LEAVE MATCH", "menu", null, "alt" if not can_sub else "ghost", Vector2(30, 236 if can_sub else 164), Vector2(pw - 60, 60), 22))
 			items.append([panel, Vector2(0, 60), 0.0])
 		"full":
 			var dim := ColorRect.new()

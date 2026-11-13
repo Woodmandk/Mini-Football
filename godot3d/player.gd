@@ -51,6 +51,9 @@ var pas := 65
 var dfn := 60
 var ovr := 70
 var star := false
+var fit := 1.0 # match fitness: drains as he runs, slows him when low
+var base_top := 7.0
+var num_label: Label3D = null
 var sq := -1
 var num := 0
 var net_pos := Vector3.ZERO
@@ -144,6 +147,7 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 		nl.position = Vector3(0, 0.40, 0.152)
 		nl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		torso.add_child(nl)
+		num_label = nl
 	# head
 	head = Node3D.new()
 	head.position = Vector3(0, 0.72, 0)
@@ -637,3 +641,8 @@ func animate(dt: float) -> void:
 	torso.rotation.x = lerpf(torso.rotation.x, bend, k)
 	head.rotation.x = lerpf(head.rotation.x, head_x, k)
 	head.rotation.y = lerpf(head.rotation.y, head_y, k)
+
+func set_num(n: int) -> void:
+	num = n
+	if num_label != null:
+		num_label.text = str(n)
