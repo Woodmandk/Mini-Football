@@ -53,6 +53,7 @@ var _c1: ColorRect
 var _c2: ColorRect
 
 const STICK_R := 62.0
+const SPRINT_R := 1.42
 const GREEN := Color(0.2, 0.78, 0.38)
 const GOLD := Color(1.0, 0.84, 0.25)
 const DARK := Color(0.04, 0.08, 0.06)
@@ -1099,9 +1100,9 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				["SHOOT", "Hold to load power, let go to shoot. Short taps curl. At a corner kick: cross."],
 				["PASS", "A pass along the ground, to the man the stick points at."],
 				["LOB", "A high ball over the defenders, to the man the stick points at."],
-				["TACKLE", "Standing tackle: step in and take the ball. With SPRINT held from a few steps away: slide. Never from behind."],
+				["TACKLE", "Standing tackle: step in and take the ball. At a sprint from a few steps away: slide. Never from behind."],
 				["SWITCH", "Without the ball: change to the player nearest the ball."],
-				["SPRINT", "Hold to run faster. Tap twice with the ball to spin past a defender."],
+				["SPRINT", "Pull your thumb further out, past the outer ring. The ring shows your breath."],
 			]
 			var ry := 62.0
 			var rh := minf(46.0, (h - 44.0 - 62.0 - 84.0) / rows.size())
@@ -1306,8 +1307,7 @@ func _btn_pos() -> Dictionary:
 	return {
 		"shoot": [Vector2(s.x - 92, s.y - 92), 56.0],
 		"pass": [Vector2(s.x - 218, s.y - 66), 46.0],
-		"sprint": [Vector2(s.x - 74, s.y - 218), 38.0],
-		"lob": [Vector2(s.x - 196, s.y - 172), 38.0],
+		"lob": [Vector2(s.x - 196, s.y - 176), 40.0],
 	}
 
 func _cam_rect() -> Rect2:
@@ -1353,6 +1353,7 @@ func _input(e: InputEvent) -> void:
 			if e.index == _stick_id:
 				_stick_id = -1
 				stick = Vector2.ZERO
+				sprint_down = false
 			elif _ids.has(e.index):
 				_set_btn(_ids[e.index], false)
 				_ids.erase(e.index)
@@ -1360,11 +1361,13 @@ func _input(e: InputEvent) -> void:
 		if e.index == _stick_id:
 			_stick_pos = e.position
 			var d := _stick_pos - _stick_base
-			if d.length() > STICK_R:
+			if d.length() > STICK_R * SPRINT_R + 26.0:
 				# the base follows the thumb so the stick never gets stuck at the edge
-				_stick_base = _stick_pos - d.normalized() * STICK_R
+				_stick_base = _stick_pos - d.normalized() * (STICK_R * SPRINT_R + 26.0)
 				d = _stick_pos - _stick_base
-			stick = d / STICK_R
+			stick = (d / STICK_R).limit_length(1.0)
+			# sprint: pull the thumb out past the outer ring
+			sprint_down = d.length() > STICK_R * SPRINT_R
 			if stick.length() < 0.16:
 				stick = Vector2.ZERO
 
@@ -1377,8 +1380,6 @@ func _set_btn(k: String, down: bool) -> void:
 		if pass_down != down:
 			ev.append("pass_down" if down else "pass_up")
 		pass_down = down
-	elif k == "sprint":
-		sprint_down = down
 	elif k == "lob":
 		if down and not lob_down:
 			ev.append("lob")
@@ -1434,12 +1435,11 @@ func _draw() -> void:
 		return
 	_minimap()
 	var b := _btn_pos()
-	_button(b["shoot"][0], b["shoot"][1], lab_a, shoot_down, Color(0.25, 0.85, 0.4))
+	if lab_a != "":
+		_button(b["shoot"][0], b["shoot"][1], lab_a, shoot_down, Color(0.25, 0.85, 0.4))
 	_button(b["pass"][0], b["pass"][1], lab_b, pass_down, Color(0.95, 0.95, 0.95))
-	_button(b["sprint"][0], b["sprint"][1], "SPRINT", sprint_down, GOLD if stam > 0.3 else Color(0.9, 0.35, 0.25))
 	if lab_a == "SHOOT":
 		_button(b["lob"][0], b["lob"][1], "LOB", lob_down, Color(0.55, 0.8, 1.0))
-	draw_arc(b["sprint"][0], b["sprint"][1] + 7.0, -PI * 0.5, -PI * 0.5 + TAU * stam, 40, Color(1.0, 0.84, 0.25, 0.85) if stam > 0.3 else Color(0.95, 0.3, 0.2, 0.9), 4.0, true)
 	if ctrl_name != "":
 		_text(ctrl_name, Vector2(size.x * 0.5, size.y - 138.0 * 68.0 / 105.0 - 20.0), 16, Color(1, 1, 1, 0.9))
 	if charge > 0.0:
@@ -1449,10 +1449,17 @@ func _draw() -> void:
 	if _stick_id != -1:
 		draw_circle(_stick_base, STICK_R + 8.0, Color(1, 1, 1, 0.10))
 		draw_arc(_stick_base, STICK_R + 8.0, 0, TAU, 48, Color(1, 1, 1, 0.35), 2.0, true)
-		draw_circle(_stick_base + stick * STICK_R, 30.0, Color(1, 1, 1, 0.55))
+		# outer ring = sprint. It also shows how much breath is left.
+		var sr := STICK_R * SPRINT_R + 12.0
+		var scol := (GOLD if stam > 0.3 else Color(0.95, 0.3, 0.2))
+		draw_arc(_stick_base, sr, 0, TAU, 56, Color(1, 1, 1, 0.14), 2.0, true)
+		draw_arc(_stick_base, sr, -PI * 0.5, -PI * 0.5 + TAU * stam, 56, Color(scol.r, scol.g, scol.b, 0.95 if sprint_down else 0.5), 5.0 if sprint_down else 3.0, true)
+		var knob := _stick_base + (_stick_pos - _stick_base).limit_length(STICK_R * SPRINT_R + 12.0) if sprint_down else _stick_base + stick * STICK_R
+		draw_circle(knob, 30.0, Color(1.0, 0.86, 0.3, 0.75) if sprint_down else Color(1, 1, 1, 0.55))
 	else:
 		var hint := Vector2(120, size.y - 110)
 		draw_arc(hint, STICK_R, 0, TAU, 48, Color(1, 1, 1, 0.16), 2.0, true)
+		draw_arc(hint, STICK_R * SPRINT_R + 12.0, -PI * 0.5, -PI * 0.5 + TAU * stam, 56, Color(1.0, 0.84, 0.25, 0.3), 3.0, true)
 		draw_circle(hint, 24.0, Color(1, 1, 1, 0.12))
 
 func _minimap() -> void:
