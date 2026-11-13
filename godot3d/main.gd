@@ -17,6 +17,7 @@ const BALL_R := 0.2
 const LENGTHS := [180.0, 300.0, 480.0] # real seconds for 90 minutes
 const LEN_NAMES := ["3 MIN", "5 MIN", "8 MIN"]
 const DIFF_NAMES := ["EASY", "NORMAL", "HARD"]
+const SND_NAMES := ["FULL", "LOW", "OFF"]
 const DIFF := [
 	{"need": 0.70, "spd": 0.86, "err": 3.0, "think": 0.70, "wait": 3.2},
 	{"need": 0.50, "spd": 0.92, "err": 1.9, "think": 0.45, "wait": 2.2},
@@ -158,6 +159,8 @@ var dead_info := {}
 var scorer = null
 var paused := false
 var opt_diff := 1
+var opt_snd := 0
+var opt_voice := true
 var opt_len := 1
 var opt_mode := "coop"
 var room := ""
@@ -276,6 +279,10 @@ func _ready() -> void:
 		if str(JavaScriptBridge.eval("location.search", true)).contains("low"):
 			quality = 0
 		seen_how = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-how')||''}catch(e){return ''}})()", true)) == "1"
+		var ss := str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-snd')||''}catch(e){return ''}})()", true))
+		if ss.length() == 2 and ss.is_valid_int():
+			opt_snd = clampi(int(ss.substr(0, 1)), 0, 2)
+			opt_voice = ss.substr(1, 1) == "1"
 		var sc := str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-club')||''}catch(e){return ''}})()", true))
 		if sc.is_valid_int():
 			opt_club = clampi(int(sc), 0, CLUBS.size() - 1)
@@ -299,6 +306,7 @@ func _ready() -> void:
 	hud.set_teams(TEAM_NAMES, [CLUBS[clubs[0]]["s"], CLUBS[clubs[1]]["s"]], [Color(kits[0][0]), Color(kits[1][0])])
 	_build_fx()
 	_build_audio()
+	_apply_sound(false)
 	if autotest or demo:
 		screen = "match"
 		if car_test:
@@ -643,7 +651,7 @@ func _build_teams() -> void:
 					p.pas += lv
 					p.dfn += lv
 					p.ovr += lv
-			p.base_top = 6.95 + (p.pac - 50) * 0.027
+			_derive(p)
 			p.top_speed = p.base_top
 			add_child(p)
 			players.append(p)
@@ -799,7 +807,8 @@ func _do_fx(kind: String, a) -> void:
 		"vib":
 			Input.vibrate_handheld(int(a))
 		"say":
-			net.say(a)
+			if opt_voice and opt_snd != 2:
+				net.say(a)
 		"toast":
 			hud.toast(a)
 		"vs":
@@ -824,7 +833,7 @@ func _banner(text: String, col: Color, hold: float, small := "", fs := 96) -> vo
 func _menu_info() -> Dictionary:
 	return {
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
-		"connected": net.connected, "role": net.role, "version": version, "web": net.web,
+		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
@@ -868,7 +877,7 @@ func _substitute(slot: int, sq_i: int) -> void:
 	p.pas = int(pl["pas"]) + off_pos
 	p.dfn = int(pl["dfn"]) + off_pos
 	p.ovr = Career.ovr_of(pl) + off_pos
-	p.base_top = 6.95 + (p.pac - 50) * 0.027
+	_derive(p)
 	p.fit = 1.0
 	subs_left -= 1
 	snd("whistle")
@@ -1180,8 +1189,34 @@ func _action(act: String, arg = null) -> void:
 		"resume":
 			paused = false
 			hud.show_menu("", {})
+		"snd_opt":
+			opt_snd = (opt_snd + 1) % 3
+			_apply_sound(true)
+			hud.refresh(_menu_info())
+		"voice_opt":
+			opt_voice = not opt_voice
+			_apply_sound(true)
+			hud.refresh(_menu_info())
 		"cam":
 			cam_mode = (cam_mode + 1) % CAMS.size()
+
+# What a player's numbers mean on the pitch, so that no two players feel the same:
+# pace = top speed and how fast he gets there, touch (passing + pace) = how tightly he turns and how
+# little the ball slows him, strength (defending, less for quick light players) = holding people off.
+func _derive(p) -> void:
+	p.base_top = 6.6 + (p.pac - 50) * 0.04
+	p.acc_k = clampf(0.82 + (p.pac - 50) * 0.009, 0.75, 1.22)
+	var dri: float = p.pas * 0.55 + p.pac * 0.45 - (8.0 if p.role in ["DF", "GK"] else 0.0)
+	var dk: float = clampf((dri - 50.0) / 40.0, 0.0, 1.0)
+	p.turn_k = lerpf(0.8, 1.25, dk)
+	p.carry_k = lerpf(0.895, 0.95, dk)
+	p.phy = clampf(p.dfn * 0.7 + (100 - p.pac) * 0.3 + (6.0 if p.role == "DF" else 0.0), 35.0, 99.0)
+
+func _apply_sound(save: bool) -> void:
+	AudioServer.set_bus_mute(0, opt_snd == 2)
+	AudioServer.set_bus_volume_db(0, -4.0 if opt_snd == 0 else -16.0)
+	if save and net.web:
+		JavaScriptBridge.eval("try{localStorage.setItem('bb3d-snd','%d%d')}catch(e){}" % [opt_snd, 1 if opt_voice else 0], true)
 
 func _send_lobby() -> void:
 	if net.role == "host" and net.connected:
@@ -2189,7 +2224,7 @@ func _play(dt: float) -> void:
 					h.tired = false
 				var sp: float = p.top_speed * (1.0 if run else 0.88)
 				if ball_owner == p:
-					sp *= 0.96
+					sp *= p.carry_k
 				if h.charging:
 					sp *= 0.6
 				want = Vector3(h.stick.x, 0, h.stick.y) * sp
@@ -2225,7 +2260,11 @@ func _play(dt: float) -> void:
 		# away from the nearest opponent, with the body in between.
 		var osp: float = o.vel.length()
 		var bob: float = 0.48 + 0.2 * absf(sin(o.phase * 0.5)) * clampf(osp / 6.0, 0.0, 1.0)
-		bob += 0.3 * clampf((osp / maxf(o.top_speed, 1.0) - 0.86) / 0.12, 0.0, 1.0)
+		# At a sprint he knocks the ball on and runs after it: a touch, the ball jumps ahead, he catches it up.
+		# A poorer dribbler knocks it further. The ball is easier to take while it is away from his feet.
+		var spk: float = clampf((osp / maxf(o.top_speed, 1.0) - 0.84) / 0.1, 0.0, 1.0)
+		o.touch_ph = fmod(o.touch_ph + dt * 1.7, 1.0)
+		bob += spk * (0.15 + 0.95 * (2.0 - o.turn_k) * (1.0 - o.touch_ph))
 		var rgt := Vector3(-f.z, 0, f.x)
 		var want_side := 0.0
 		var nd2 := 3.2
@@ -2308,11 +2347,11 @@ func _idle_players(dt: float) -> void:
 		_move(p, Vector3.ZERO, dt)
 
 func _move(p, want: Vector3, dt: float) -> void:
-	var acc := 15.0 if want.length() > p.vel.length() else 22.0
+	var acc: float = (15.0 if want.length() > p.vel.length() else 22.0) * p.acc_k
 	var cur: float = p.vel.length()
 	if _hum_of(p) != null:
 		# the man under your thumb answers the stick at once
-		acc = 20.0 if want.length() > p.vel.length() else 27.0
+		acc = (20.0 if want.length() > p.vel.length() else 27.0) * p.acc_k
 	if _hum_of(p) != null and cur > 1.6 and want.length() > 1.0 and p.stun <= 0.0:
 		# Running is steered like a body, not like a cursor: the run bends round towards the stick.
 		# Slow = tight turns, full sprint = wider arcs, a better player turns quicker, and the ball costs a little.
@@ -2324,7 +2363,7 @@ func _move(p, want: Vector3, dt: float) -> void:
 			p.vel = p.vel.move_toward(Vector3.ZERO, 34.0 * dt)
 		else:
 			var sr: float = clampf(cur / maxf(p.top_speed, 1.0), 0.0, 1.0)
-			var rate: float = lerpf(12.0, 6.2, sr) * lerpf(0.88, 1.15, clampf((p.ovr - 55) / 35.0, 0.0, 1.0))
+			var rate: float = lerpf(12.0, 6.2, sr) * p.turn_k
 			if ball_owner == p:
 				rate *= 0.85
 			vd = vd.rotated(Vector3.UP, clampf(ang, -rate * dt, rate * dt))
@@ -2681,6 +2720,45 @@ func _human_tackle(h) -> void:
 	var me_p = h.ctrl
 	if me_p.stun > 0.0 or me_p.tackle_t >= 0.0:
 		return
+	var bd: float = Vector2(me_p.position.x - ball.position.x, me_p.position.z - ball.position.z).length()
+	# SPRINT held and still a few steps away: a slide tackle. Otherwise a standing tackle.
+	if h.sprint and (c == null or c.team == h.team or bd > 2.3):
+		_slide_tackle(h)
+		return
+	# Standing tackle: a step and a foot in for the ball. Win it and he keeps it at his feet and plays on.
+	me_p.start_kick(0.25)
+	if c == null or c.team == h.team:
+		me_p.stun = 0.2
+		return
+	var to: Vector3 = ball.position - me_p.position
+	to.y = 0.0
+	if bd < 2.4 and bd > 0.05:
+		me_p.yaw = atan2(-to.x, -to.z)
+		me_p.vel = to.normalized() * 6.0
+	# reach: a better defender gets a longer leg in, a stronger carrier holds him off
+	var reach: float = 1.3 + (me_p.dfn - 60) * 0.006 - (c.phy - 60) * 0.004
+	if bd < reach and protect_t <= 0.0 and c.role != "GK":
+		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
+		var pd: float = me_p.position.distance_to(c.position)
+		if front < -0.5 and pd < bd and c.vel.length() > 2.0:
+			# straight through the back of a running man
+			if pd < 1.0:
+				_foul(me_p, c)
+			else:
+				me_p.stun = 0.35
+			return
+		c.stun = 0.35
+		c.vel *= 0.3
+		stats["tackles"] += 1
+		snd("touch")
+		_give(me_p)
+		protect_t = 0.6
+		return
+	me_p.stun = 0.3
+
+func _slide_tackle(h) -> void:
+	var c = ball_owner
+	var me_p = h.ctrl
 	me_p.start_tackle()
 	if c == null or c.team == h.team:
 		me_p.vel = me_p.fwd() * 9.0
@@ -2688,10 +2766,10 @@ func _human_tackle(h) -> void:
 		return
 	var to: Vector3 = c.position - me_p.position
 	var d := to.length()
-	if d < 2.6:
+	if d < 3.4:
 		me_p.yaw = atan2(-to.x, -to.z)
 		me_p.vel = to.normalized() * 9.5
-	if d < 1.75 + me_p.dfn * 0.004 and protect_t <= 0.0 and c.role != "GK":
+	if d < 2.6 + me_p.dfn * 0.004 and protect_t <= 0.0 and c.role != "GK":
 		var front: float = c.fwd().dot((me_p.position - c.position).normalized())
 		if front > -0.45:
 			c.stun = 0.6
@@ -2702,10 +2780,10 @@ func _human_tackle(h) -> void:
 			_give(me_p)
 			protect_t = 0.7
 			return
-		if d < 1.7:
-			_foul(me_p, c)
-			return
-	me_p.stun = 0.55
+		_foul(me_p, c)
+		return
+	# a slide that misses leaves him on the grass
+	me_p.stun = 0.9
 
 func _tackles(dt: float) -> void:
 	var c = ball_owner
@@ -2741,10 +2819,11 @@ func _tackles(dt: float) -> void:
 				o.step_t = 0.0
 				if d > 1.15:
 					# missed: he is beaten and you are away
-					o.stun = 0.8
+					o.stun = 0.7
 				elif front > -0.35 or c.vel.length() < 2.0:
-					c.stun = 0.55
-					c.start_fall(0.55)
+					# a standing tackle: he takes the ball and the carrier only stumbles
+					c.stun = 0.35
+					c.vel *= 0.3
 					stats["tackles"] += 1
 					snd("touch")
 					_give(o)
@@ -2757,6 +2836,7 @@ func _tackles(dt: float) -> void:
 		# only the man who steps in makes a tackle; anyone else only if you run right into him
 		var stepping: bool = o.step_t > 0.0 or _team_human(o.team)
 		var reach := 1.05 if stepping else 0.8
+		reach += (o.dfn - 60) * 0.004 - (c.phy - 60) * 0.004
 		# a man who stands still on the ball can be robbed from any side
 		var still: bool = c.vel.length() < 2.0
 		if d < reach and (still or front > (0.0 if stepping else 0.3)):
@@ -2770,7 +2850,7 @@ func _tackles(dt: float) -> void:
 			if o.press_t > need - 0.15:
 				o.press_t = 0.0
 				o.commit_t = 0.15
-				o.start_tackle()
+				o.start_kick(0.25)
 		else:
 			o.press_t = maxf(o.press_t - dt * 2.0, 0.0)
 
@@ -2955,7 +3035,7 @@ func _ai_carrier(p, dt: float) -> Vector3:
 		dir = (dir + side_step * (1.0 - nd / 5.0) * 1.3).normalized()
 	if absf(p.position.z) > HW - 3.0 and signf(dir.z) == signf(p.position.z):
 		dir.z *= -0.5
-	return dir.normalized() * p.top_speed * 0.94 * cpu["spd"]
+	return dir.normalized() * p.top_speed * p.carry_k * 0.99 * cpu["spd"]
 
 func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 	var t: int = p.team
