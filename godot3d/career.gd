@@ -237,6 +237,7 @@ func _book(a: int, b: int, ga: int, gb: int) -> void:
 # Returns lines for the full-time screen.
 func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) -> Array:
 	var me: int = int(d["club"])
+	var was_home: bool = next_match()[1]
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var last := []
@@ -265,10 +266,15 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	last_coins = coins
 	market_refresh()
 	lines.append("+%d COINS" % coins)
+	if was_home:
+		# the gate: a bigger stadium and a club near the top bring more people in
+		var gate := fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)
+		d["coins"] = int(d["coins"]) + gate
+		lines.append("+%d FROM THE GATE" % gate)
 	for i in (played if not played.is_empty() else d["xi"]):
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["apps"] = int(pl["apps"]) + 1
-		var xp := 22 + (10 if mine > theirs else 0)
+		var xp := int(round((22 + (10 if mine > theirs else 0)) * (1.0 + 0.15 * (fac("training") - 1))))
 		for s in scorers:
 			if int(s) == int(i):
 				xp += 14
@@ -281,6 +287,11 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			lines.append("%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[STAT_KEYS.find(k)]])
 		if int(pl["xp"]) > 100:
 			pl["xp"] = 100
+	# the youth academy sends a talent up twice a season
+	if int(d["round"]) == rounds_total() / 2 or season_over():
+		var yn := youth_arrives(rng)
+		if yn != "":
+			lines.append(yn)
 	if season_over():
 		var pos := rank_of(me)
 		var prize: int = [300, 200, 140, 100, 70, 50, 30, 20][clampi(pos - 1, 0, 7)]
@@ -436,8 +447,67 @@ func sell(i: int) -> String:
 	save()
 	return "%s SOLD FOR %d COINS" % [str(pl["n"]).to_upper(), got]
 
+# ---- the club: three things to build
+
+const FAC_KEYS := ["stadium", "training", "youth"]
+const FAC_COST := [150, 300, 500, 800]
+const FAC_MAX := 5
+
+func fac(k: String) -> int:
+	return clampi(int((d.get("fac", {}) as Dictionary).get(k, 1)), 1, FAC_MAX)
+
+func fac_cost(k: String) -> int:
+	return FAC_COST[fac(k) - 1] if fac(k) < FAC_MAX else 0
+
+func fac_up(k: String) -> String:
+	if fac(k) >= FAC_MAX:
+		return ""
+	var c := fac_cost(k)
+	if int(d["coins"]) < c:
+		return "You need %d more coins." % (c - int(d["coins"]))
+	if not d.has("fac"):
+		d["fac"] = {}
+	d["coins"] = int(d["coins"]) - c
+	d["fac"][k] = fac(k) + 1
+	save()
+	return "BUILT"
+
+func youth_arrives(rng: RandomNumberGenerator) -> String:
+	if (d["squad"] as Array).size() >= SQUAD_MAX:
+		return "YOUTH: NO ROOM IN THE SQUAD FOR A NEW TALENT"
+	var taken := []
+	for pl in d["squad"]:
+		taken.append(str(pl["n"]))
+	for pl in d.get("market", []):
+		taken.append(str(pl["n"]))
+	var pool := []
+	for n in names:
+		if not taken.has(str(n)):
+			pool.append(n)
+	if pool.is_empty():
+		return ""
+	var lv := fac("youth")
+	var role: String = ["GK", "DF", "DF", "MF", "MF", "FW", "FW"][rng.randi() % 7]
+	var base: Array = ROLE_BASE[role]
+	var q := -16 + lv * 2
+	var pl := {
+		"n": pool[rng.randi() % pool.size()], "num": 0, "pos": role, "age": rng.randi_range(16, 18), "xp": 0, "g": 0, "apps": 0,
+		"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
+		"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
+	}
+	pl["pot"] = clampi(66 + lv * 4 + rng.randi_range(-3, 5), ovr_of(pl) + 4, 95)
+	var used := []
+	for s in d["squad"]:
+		used.append(int(s["num"]))
+	for n in range(20, 99):
+		if not used.has(n):
+			pl["num"] = n
+			break
+	d["squad"].append(pl)
+	return "YOUTH: %s (%d, %s) JOINS, CAN REACH %d" % [str(pl["n"]).to_upper(), int(pl["age"]), role, int(pl["pot"])]
+
 func train_cost(pl: Dictionary) -> int:
-	return 40 + maxi(ovr_of(pl) - 60, 0) * 6
+	return int(round((40 + maxi(ovr_of(pl) - 60, 0) * 6) * (1.0 - 0.07 * (fac("training") - 1))))
 
 # Spend coins on one training session: +1 in a stat that suits the position.
 func train(i: int) -> String:

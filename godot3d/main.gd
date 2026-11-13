@@ -322,8 +322,18 @@ func _ready() -> void:
 			if menu_arg == "full":
 				tst[0]["g"] = ["STORM 12'", "BAK 40'"]
 				tst[1]["g"] = ["PIKE 77'"]
-			if menu_arg in ["career", "table", "cfull", "market"] or menu_arg.begins_with("squad"):
+			if menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad"):
 				_action("career")
+			if menu_arg == "seasontest":
+				_action("career")
+				print("SEASONTEST fac_up=", car.fac_up("stadium"), " coins=", car.d["coins"])
+				while not car.season_over():
+					var ln: Array = car.finish_match(2, 1, [9])
+					print("SEASONTEST r=", car.d["round"], " ", ln.slice(0, 2), " ", ln.filter(func(x): return str(x).begins_with("YOUTH")))
+				print("SEASONTEST note=", car.d["note"], " squad=", car.d["squad"].size(), " coins=", car.d["coins"])
+				car.next_season()
+				print("SEASONTEST next season=", car.d["season"], " round=", car.d["round"], " over=", car.season_over())
+				menu_arg = "career"
 			if menu_arg == "buytest":
 				_action("career")
 				car.d["coins"] = 3000
@@ -349,6 +359,7 @@ func _ready() -> void:
 				tst[0]["g"] = ["STORM 12'", "BAK 40'"]
 				tst[1]["g"] = ["PIKE 77'"]
 				car_lines = car.finish_match(2, 1, [9, 9])
+				car_lines.append_array(["YOUTH: HART (18, DF) JOINS, CAN REACH 74", "BLAKE  +1 DEFENDING", "NASH  +1 SHOOTING", "STORM  +1 PACE", "KROGH  +1 PASSING", "LUND  +1 PACE", "2ND IN THE TABLE"])
 				menu_arg = "full"
 			hud.show_menu(menu_arg, _menu_info())
 		else:
@@ -776,6 +787,30 @@ func _substitute(slot: int, sq_i: int) -> void:
 	fx("say", "Substitution. %s comes on for %s." % [p.pname, old_name])
 	hud.toast("%s ON  ·  %s OFF" % [p.pname.to_upper(), old_name.to_upper()])
 
+func _fac_info() -> Array:
+	var out := []
+	var txt := {
+		"stadium": ["STADIUM", "More people at your home matches.", "+%d coins from the gate at home"],
+		"training": ["TRAINING GROUND", "Players learn faster and training costs less.", "+%d%% XP from matches"],
+		"youth": ["YOUTH ACADEMY", "A young talent joins twice a season.", "Talents who can reach about %d"],
+	}
+	for k in Career.FAC_KEYS:
+		var lv: int = car.fac(k)
+		var now := ""
+		var nxt := ""
+		match k:
+			"stadium":
+				now = txt[k][2] % (lv * 9)
+				nxt = txt[k][2] % ((lv + 1) * 9)
+			"training":
+				now = (txt[k][2] % ((lv - 1) * 15)) if lv > 1 else "Normal XP from matches"
+				nxt = txt[k][2] % (lv * 15)
+			_:
+				now = txt[k][2] % (66 + lv * 4)
+				nxt = txt[k][2] % (70 + lv * 4)
+		out.append({"k": k, "n": txt[k][0], "what": txt[k][1], "lv": lv, "max": Career.FAC_MAX, "now": now, "next": nxt if lv < Career.FAC_MAX else "", "cost": car.fac_cost(k)})
+	return out
+
 # Everything the career screens show.
 func _car_info() -> Dictionary:
 	if not car.has_save():
@@ -807,7 +842,7 @@ func _car_info() -> Dictionary:
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
 		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [],
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
-		"market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
+		"fac": _fac_info(), "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 	}
 
 func _stat_rows() -> Array:
@@ -931,6 +966,15 @@ func _action(act: String, arg = null) -> void:
 				if r2 != "":
 					au["blip2"].play()
 				hud.refresh(_menu_info())
+		"c_club":
+			car_msg = ""
+			hud.show_menu("club", _menu_info())
+		"c_fac":
+			car_msg = car.fac_up(str(arg))
+			if car_msg == "BUILT":
+				car_msg = ""
+				au["blip2"].play()
+			hud.refresh(_menu_info())
 		"c_market":
 			car_msg = ""
 			hud.show_menu("market", _menu_info())
