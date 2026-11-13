@@ -2935,10 +2935,11 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	var dir := goal - from
 	dir.y = 0.0
 	dir = dir.normalized()
-	var sp := 19.0 + 13.0 * power + 4.0 * clampf((power - 0.75) / 0.25, 0.0, 1.0)
+	# from distance a full strike is hit harder and dips under the bar; close in, full power still tends to fly over
+	var lk: float = clampf((d - 16.0) / 8.0, 0.0, 1.0)
+	var sp := 19.0 + 13.0 * power + 4.0 * lk * clampf((power - 0.75) / 0.25, 0.0, 1.0)
 	var t := maxf(d / sp, 0.15)
-	# a full strike rises towards the top of the goal, not over it
-	var h := 0.35 + power * power * 1.65 + randf() * 0.45 * power * err_k
+	var h := 0.35 + power * power * lerpf(2.1, 1.65, lk) + randf() * lerpf(0.6, 0.45, lk) * power * err_k
 	var vy := (h - 0.25) / t + 4.9 * t
 	# a curled shot starts wide of its target and bends back in
 	var spin := 0.0
@@ -3179,7 +3180,7 @@ func _pickups() -> void:
 		if absf(b.x - gx) > 16.5 or absf(b.z) > 20.16:
 			continue
 		var gq: float = clampf((g.dfn - 60) / 30.0, 0.0, 1.0)
-		var reach := 0.8 + (lerpf(0.66, 0.82, gq) if g.dive_t >= 0.0 else 0.0)
+		var reach := 0.8 + (lerpf(0.72, 0.86, gq) if g.dive_t >= 0.0 else 0.0)
 		# high balls are harder to reach, so the top corners are open to a good shot
 		if shot_live:
 			reach -= maxf(b.y - 1.5, 0.0) * 0.45
@@ -3543,7 +3544,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 					zc = b.z + bent.z * ((gx - b.x) / bent.x)
 			if absf(zc) < GOAL_HW + 1.2:
 				p.react_t += dt
-				if p.react_t < lerpf(0.29, 0.2, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
+				if p.react_t < lerpf(0.27, 0.19, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
 				# off his line he saves where he stands instead of running back to the goal line
