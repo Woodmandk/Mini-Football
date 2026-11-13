@@ -1612,7 +1612,7 @@ func _net_poll() -> void:
 				var em: String = str(m.get("m", ""))
 				if net.role == "guest" and not net.connected:
 					_to_menu()
-					hud.toast("Could not find that room" if em == "peer-unavailable" else "Connection problem (%s)" % em)
+					hud.toast("Could not find that room" if em == "peer-unavailable" else ("Could not connect. Try again, or switch between wifi and mobile data" if em == "timeout" else "Connection problem (%s)" % em))
 				elif net.role == "host" and em == "unavailable-id":
 					_action("host")
 
