@@ -2124,8 +2124,14 @@ func _play(dt: float) -> void:
 					h.dead_t = 0.0
 					_shoot(p, 0.6, (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * 0.6, 1.0)
 		elif h != null:
-			if p.recv and ball_owner == null and h.stick.length() < 0.5:
-				want = _run_to(p, aim, p.top_speed)
+			if p.recv and ball_owner == null:
+				# Receiver lock: the man a pass is meant for goes to meet the ball by himself, whatever the stick says.
+				# The stick only shades his run a little, and picks the direction of his first touch.
+				var ma := _meet_for(p, aim)
+				want = _run_to(p, ma, p.top_speed)
+				if h.stick.length() > 0.3 and p.position.distance_to(ma) > 1.2:
+					want = (want + Vector3(h.stick.x, 0, h.stick.y) * p.top_speed * 0.22).limit_length(p.top_speed)
+				h.stam = clampf(h.stam + 0.16 * dt, 0.0, 1.0)
 			else:
 				var run: bool = h.sprint and not h.tired and h.stick.length() > 0.3
 				h.stam = clampf(h.stam + (-0.125 if run else 0.16) * dt, 0.0, 1.0)
@@ -2352,6 +2358,29 @@ func _ball_free(dt: float) -> void:
 			ball_vel.z *= -0.2
 		ball_vel *= 1.0 - 3.0 * dt
 
+# Where the man a pass is meant for can first get to the ball: he runs on to a ball played ahead of him
+# and comes to meet one played short, instead of always running at the ball.
+func _meet_for(p, aim: Vector3) -> Vector3:
+	if ball_owner != null or ball.position.y > 1.0 or ball_vel.y > 3.0:
+		return aim
+	var v := Vector3(ball_vel.x, 0, ball_vel.z)
+	var sp := v.length()
+	if sp < 2.0:
+		return aim
+	var dir := v / sp
+	var drag := 1.5 + 0.35 * sp
+	var t_stop := sp / drag
+	var b0 := Vector3(ball.position.x, 0, ball.position.z)
+	var out := b0
+	var t := 0.1
+	while t < 3.0:
+		var tt := minf(t, t_stop)
+		out = b0 + dir * (sp * tt - 0.5 * drag * tt * tt)
+		if p.position.distance_to(out) <= p.top_speed * 0.85 * t + 0.5:
+			break
+		t += 0.1
+	return out
+
 func _ball_meet_point() -> Vector3:
 	if ball_owner != null:
 		return ball_owner.position
@@ -2559,6 +2588,11 @@ func _give(p) -> void:
 		q.offside = false
 		q.step_t = 0.0
 		q.wait_t = 0.0
+	var hr = _hum_of(p)
+	if hr != null and hr.stick.length() > 0.3 and p.role != "GK" and set_piece == "" and state == "play":
+		# first touch goes the way the stick points
+		var sd := Vector3(hr.stick.x, 0, hr.stick.y).normalized()
+		p.vel = sd * clampf(p.vel.length(), 3.2, p.top_speed * 0.8)
 	if _team_human(p.team) and prev != null and prev.team == p.team:
 		# a first touch in peace: nobody takes the ball off you the instant a pass arrives
 		protect_t = maxf(protect_t, 0.4)
@@ -2861,7 +2895,7 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 	var ours: bool = not loose and ball_owner.team == t
 	p.jock = false
 	if p.recv and loose:
-		return _run_to(p, aim, p.top_speed)
+		return _run_to(p, _meet_for(p, aim), p.top_speed)
 	if loose and p == chaser[t]:
 		return _run_to(p, aim, p.top_speed * cpu["spd"])
 	if not loose and not ours and set_piece == "":
