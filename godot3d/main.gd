@@ -355,6 +355,45 @@ func _ready() -> void:
 						_tick(1.0 / 60.0)
 						t2 += 1.0 / 60.0
 					print("LOBTEST d=", dd2, " got=", players.find(ball_owner), " (want 9) t=", snappedf(t2, 0.01), " state=", state, " recv_dist_from_start=", snappedf(m2.position.distance_to(Vector3(-30 + dd2, 0, rep * 6 - 6)), 0.1))
+			# receiver lock: a human passes for real and then holds the stick in every direction
+			humans = [Human.new()]
+			for sd in [Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1), Vector2.ZERO]:
+				for dd3 in [8.0, 16.0, 26.0]:
+					_kickoff(0)
+					for q in players:
+						if q.team == 1:
+							q.position = Vector3(40, 0, q.position.z)
+					var p3 = teams[0][6]
+					var m3 = teams[0][9]
+					p3.position = Vector3(-30, 0, 0)
+					m3.position = Vector3(-30 + dd3, 0, 3)
+					p3.yaw = atan2(-1.0, 0.0)
+					ball_owner = p3
+					ball_last = p3
+					set_piece = ""
+					protect_t = 0.0
+					state = "play"
+					var h3 = humans[0]
+					h3.ctrl = p3
+					h3.stick = Vector2(1, 0.15)
+					_tick(1.0 / 60.0)
+					h3.evs.append("pass_down")
+					_tick(1.0 / 60.0)
+					h3.evs.append("pass_up")
+					var t3 := 0.0
+					var who := -2
+					var rc := false
+					while t3 < 5.0 and state == "play":
+						if t3 > 0.05:
+							h3.stick = sd
+						_tick(1.0 / 60.0)
+						t3 += 1.0 / 60.0
+						if t3 < 0.1:
+							who = players.find(h3.ctrl)
+							rc = h3.ctrl.recv
+						if ball_owner != null and t3 > 0.2:
+							break
+					print("LOCKTEST stick=", sd, " d=", dd3, " ctrl_after_pass=", who, " recv=", rc, " got=", players.find(ball_owner), " t=", snappedf(t3, 0.01), " state=", state)
 			get_tree().quit()
 			return
 		if autotest or demo:
@@ -2126,11 +2165,9 @@ func _play(dt: float) -> void:
 		elif h != null:
 			if p.recv and ball_owner == null:
 				# Receiver lock: the man a pass is meant for goes to meet the ball by himself, whatever the stick says.
-				# The stick only shades his run a little, and picks the direction of his first touch.
+				# The stick only picks the direction of his first touch.
 				var ma := _meet_for(p, aim)
 				want = _run_to(p, ma, p.top_speed)
-				if h.stick.length() > 0.3 and p.position.distance_to(ma) > 1.2:
-					want = (want + Vector3(h.stick.x, 0, h.stick.y) * p.top_speed * 0.22).limit_length(p.top_speed)
 				h.stam = clampf(h.stam + 0.16 * dt, 0.0, 1.0)
 			else:
 				var run: bool = h.sprint and not h.tired and h.stick.length() > 0.3
