@@ -2167,8 +2167,23 @@ func _play(dt: float) -> void:
 	if ball_owner != null:
 		var o = ball_owner
 		var f: Vector3 = o.fwd()
-		var bob: float = 0.5 + 0.22 * absf(sin(o.phase * 0.5)) * clampf(o.vel.length() / 6.0, 0.0, 1.0)
-		var tgt: Vector3 = o.position + f * bob + Vector3(0, BALL_R, 0)
+		# Dribbling: small touches at a jog, longer ones at a sprint, and the ball is kept on the foot
+		# away from the nearest opponent, with the body in between.
+		var osp: float = o.vel.length()
+		var bob: float = 0.48 + 0.2 * absf(sin(o.phase * 0.5)) * clampf(osp / 6.0, 0.0, 1.0)
+		bob += 0.3 * clampf((osp / maxf(o.top_speed, 1.0) - 0.86) / 0.12, 0.0, 1.0)
+		var rgt := Vector3(-f.z, 0, f.x)
+		var want_side := 0.0
+		var nd2 := 3.2
+		for q in teams[1 - o.team]:
+			var dq: float = q.position.distance_to(o.position)
+			if dq < nd2:
+				nd2 = dq
+				want_side = -signf((q.position - o.position).dot(rgt)) * 0.3 * clampf((3.2 - dq) / 1.6, 0.0, 1.0)
+		if nd2 < 1.8:
+			bob = minf(bob, 0.5)
+		o.ball_side = lerpf(o.ball_side, want_side, clampf(dt * 7.0, 0.0, 1.0))
+		var tgt: Vector3 = o.position + f * bob + rgt * o.ball_side + Vector3(0, BALL_R, 0)
 		if o.role == "GK":
 			tgt = o.position + f * 0.35 + Vector3(0, 1.15, 0)
 		elif set_piece == "throw":
@@ -2178,6 +2193,9 @@ func _play(dt: float) -> void:
 		ball_last = o
 		tst[o.team]["poss"] += 1
 		_tackles(dt)
+		if state == "play" and set_piece == "" and ball_owner != null and ball_owner.role != "GK":
+			# running the ball over the line is out, just like kicking it out
+			_check_lines()
 	else:
 		_ball_free(dt)
 		_pickups()
@@ -2237,10 +2255,29 @@ func _idle_players(dt: float) -> void:
 
 func _move(p, want: Vector3, dt: float) -> void:
 	var acc := 15.0 if want.length() > p.vel.length() else 22.0
+	var cur: float = p.vel.length()
 	if _hum_of(p) != null:
 		# the man under your thumb answers the stick at once
 		acc = 20.0 if want.length() > p.vel.length() else 27.0
-	p.vel = p.vel.move_toward(want, acc * dt)
+	if _hum_of(p) != null and cur > 1.6 and want.length() > 1.0 and p.stun <= 0.0:
+		# Running is steered like a body, not like a cursor: the run bends round towards the stick.
+		# Slow = tight turns, full sprint = wider arcs, a better player turns quicker, and the ball costs a little.
+		var vd: Vector3 = p.vel / cur
+		var wd: Vector3 = want.normalized()
+		var ang: float = vd.signed_angle_to(wd, Vector3.UP)
+		if absf(ang) > 2.3:
+			# turning right back: plant the foot, then go the other way
+			p.vel = p.vel.move_toward(Vector3.ZERO, 34.0 * dt)
+		else:
+			var sr: float = clampf(cur / maxf(p.top_speed, 1.0), 0.0, 1.0)
+			var rate: float = lerpf(12.0, 6.2, sr) * lerpf(0.88, 1.15, clampf((p.ovr - 55) / 35.0, 0.0, 1.0))
+			if ball_owner == p:
+				rate *= 0.85
+			vd = vd.rotated(Vector3.UP, clampf(ang, -rate * dt, rate * dt))
+			var tgt_sp: float = want.length() * (1.0 - 0.3 * clampf(absf(ang) / 1.6, 0.0, 1.0))
+			p.vel = vd * move_toward(cur, tgt_sp, acc * dt)
+	else:
+		p.vel = p.vel.move_toward(want, acc * dt)
 	p.position += p.vel * dt
 	p.position.x = clampf(p.position.x, -HL - 2.5, HL + 2.5)
 	p.position.z = clampf(p.position.z, -HW - 2.5, HW + 2.5)
@@ -2586,7 +2623,11 @@ func _tackles(dt: float) -> void:
 	for o in teams[1 - c.team]:
 		if o.stun > 0.0 or _hum_of(o) != null or o.role == "GK":
 			continue
-		var d: float = o.position.distance_to(c.position)
+		# a tackle has to reach the ball, not the man: a body between defender and ball shields it
+		var d: float = Vector2(o.position.x - ball.position.x, o.position.z - ball.position.z).length()
+		if c.vel.length() < 2.0:
+			# shielding only works on the move: a man who stands still gets robbed
+			d = minf(d, o.position.distance_to(c.position) - 0.1)
 		var front: float = c.fwd().dot((o.position - c.position).normalized())
 		if o.commit_t >= 0.0:
 			# the tackle is already on its way: it lands a moment later, wherever the carrier has turned by then
@@ -2594,7 +2635,7 @@ func _tackles(dt: float) -> void:
 			if o.commit_t <= 0.0:
 				o.commit_t = -1.0
 				o.step_t = 0.0
-				if d > 1.35:
+				if d > 1.15:
 					# missed: he is beaten and you are away
 					o.stun = 0.8
 				elif front > -0.35 or c.vel.length() < 2.0:
@@ -2611,7 +2652,7 @@ func _tackles(dt: float) -> void:
 			continue
 		# only the man who steps in makes a tackle; anyone else only if you run right into him
 		var stepping: bool = o.step_t > 0.0 or _team_human(o.team)
-		var reach := 1.25 if stepping else 0.95
+		var reach := 1.05 if stepping else 0.8
 		# a man who stands still on the ball can be robbed from any side
 		var still: bool = c.vel.length() < 2.0
 		if d < reach and (still or front > (0.0 if stepping else 0.3)):

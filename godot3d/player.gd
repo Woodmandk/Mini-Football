@@ -15,6 +15,7 @@ var press_t := 0.0
 var step_t := 0.0
 var wait_t := 0.0
 var jock := false
+var ball_side := 0.0
 var ai_cool := 0.0
 var hold_t := 0.0
 var react_t := 0.0
