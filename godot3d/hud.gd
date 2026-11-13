@@ -45,6 +45,11 @@ var vs_len := 0.0
 var vs_names := ["", ""]
 var vs_stars := ["", ""]
 var vs_swap := false
+var t_names := ["RED BISON", "HARBOUR SHARKS"]
+var t_short := ["BIS", "SHA"]
+var t_cols := [Color(0.86, 0.14, 0.14), Color(0.16, 0.38, 0.92)]
+var _c1: ColorRect
+var _c2: ColorRect
 
 const STICK_R := 62.0
 const GREEN := Color(0.2, 0.78, 0.38)
@@ -72,11 +77,13 @@ func _ready() -> void:
 	bug.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bug)
 	var c1 := ColorRect.new()
+	_c1 = c1
 	c1.color = Color(0.86, 0.16, 0.16)
 	c1.position = Vector2(10, 10)
 	c1.size = Vector2(6, 24)
 	bug.add_child(c1)
 	var c2 := ColorRect.new()
+	_c2 = c2
 	c2.color = Color(0.2, 0.42, 0.95)
 	c2.position = Vector2(206, 10)
 	c2.size = Vector2(6, 24)
@@ -180,6 +187,62 @@ func _btn(text: String, act: String, arg, kind: String, pos: Vector2, sz: Vector
 			on_action.call(act, arg))
 	return b
 
+# A button in a club's colours: the name, with a kit stripe on the left.
+func _club_btn(info: Dictionary, ci: int, act: String, arg, pos: Vector2, sz: Vector2, prefix: String) -> Button:
+	var cl: Array = info.get("clubs", [])
+	var c: Dictionary = cl[ci] if ci < cl.size() else {"n": "?", "k": ["888888", "888888", "888888"]}
+	var b := _btn(prefix + str(c["n"]), act, arg, "alt", pos, sz, 17 if sz.y < 80 else 20)
+	var shirt := Color(str(c["k"][0]))
+	var shorts := Color(str(c["k"][1]))
+	var big := sz.y >= 80
+	var chosen: bool = big and ci == int(info.get("club", -1))
+	if big:
+		for st in ["normal", "hover", "focus", "pressed", "disabled"]:
+			b.add_theme_stylebox_override(st, _box(Color(0.22, 0.27, 0.25, 0.96), 14, GOLD if chosen else Color(1, 1, 1, 0.18)))
+		b.vertical_icon_alignment = VERTICAL_ALIGNMENT_BOTTOM
+		b.alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.add_theme_constant_override("outline_size", 0)
+		# a little shirt drawn from boxes
+		var body := ColorRect.new()
+		body.color = shirt
+		body.size = Vector2(54, 58)
+		body.position = Vector2(sz.x * 0.5 - 27, 14)
+		body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(body)
+		for sx in [-1, 1]:
+			var sl := ColorRect.new()
+			sl.color = shirt
+			sl.size = Vector2(20, 26)
+			sl.position = Vector2(sz.x * 0.5 - 10 + sx * 36, 14)
+			sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b.add_child(sl)
+		var sr := ColorRect.new()
+		sr.color = shorts
+		sr.size = Vector2(54, 18)
+		sr.position = Vector2(sz.x * 0.5 - 27, 76)
+		sr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(sr)
+		b.text = ""
+		var nl := _label(str(c["n"]), 19, GOLD if chosen else Color.WHITE)
+		nl.position = Vector2(0, sz.y - 46)
+		nl.size = Vector2(sz.x, 30)
+		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.add_child(nl)
+	else:
+		var chip := ColorRect.new()
+		chip.color = shirt
+		chip.size = Vector2(10, sz.y - 20)
+		chip.position = Vector2(12, 10)
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(chip)
+		var chip2 := ColorRect.new()
+		chip2.color = shorts
+		chip2.size = Vector2(10, (sz.y - 20) * 0.35)
+		chip2.position = Vector2(12, 10 + (sz.y - 20) * 0.65)
+		chip2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(chip2)
+	return b
+
 func _slide_in(c: Control, from: Vector2, delay: float) -> void:
 	var to := c.position
 	c.position = to + from
@@ -197,8 +260,19 @@ func _pulse(c: Control) -> void:
 
 # ---------------------------------------------------------------- score, banners, toast
 
+func set_teams(names: Array, shorts: Array, cols: Array) -> void:
+	t_names = names
+	t_short = shorts
+	t_cols = cols
+	_c1.color = _seen(cols[0])
+	_c2.color = _seen(cols[1])
+
+# dark kit colours are lifted a little so they show on dark panels
+func _seen(c: Color) -> Color:
+	return c.lightened(0.38) if c.get_luminance() < 0.2 else c
+
 func set_score(a: int, b: int) -> void:
-	score_lbl.text = "BIS  %d - %d  SHA" % [a, b]
+	score_lbl.text = "%s  %d - %d  %s" % [t_short[0], a, b, t_short[1]]
 
 func set_clock(minute: int) -> void:
 	clock_lbl.text = "%d'" % minute
@@ -248,7 +322,7 @@ func _vs() -> void:
 	var w := size.x * 0.44
 	var hgt := 112.0
 	var y := size.y * 0.5 - hgt * 0.5 + 30.0
-	var cols := [Color(0.86, 0.14, 0.14), Color(0.16, 0.38, 0.92)]
+	var cols := t_cols
 	for i in 2:
 		var t := (1 - i) if vs_swap else i
 		var x := (-w + e * w) if i == 0 else (size.x - e * w)
@@ -366,10 +440,24 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var l := _btn("MATCH: " + str(info.get("len", "")), "len", null, "ghost", Vector2(bx + 168, by + 186), Vector2(156, 52), 17)
 			menu.add_child(l)
 			items.append([l, Vector2(120, 0), 0.3])
+			var tb := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(bx, by + 250), Vector2(324, 52), "TEAM:  ")
+			menu.add_child(tb)
+			items.append([tb, Vector2(120, 0), 0.34])
 			if anim:
 				play.ready.connect(func(): _pulse(play))
 			else:
 				_pulse(play)
+		"teams":
+			_title("PICK YOUR TEAM", "")
+			var cl: Array = info.get("clubs", [])
+			var gw := minf(250.0, (w - 100.0) / 4.0 - 12.0)
+			var gx := (w - (gw + 12.0) * 4.0 + 12.0) * 0.5
+			for ci in cl.size():
+				var cb := _club_btn(info, ci, "club", ci, Vector2(gx + (ci % 4) * (gw + 12.0), 96 + (ci / 4) * 172.0), Vector2(gw, 156), "")
+				menu.add_child(cb)
+				items.append([cb, Vector2(0, 50), 0.03 * ci])
+			var bk := _btn("<  BACK", "teams_back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
+			menu.add_child(bk)
 		"friend":
 			_title("PLAY WITH A FRIEND", "Two phones, one match. One of you creates a room, the other joins.")
 			var cw := minf(300.0, (w - 140.0) * 0.5)
@@ -429,11 +517,13 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				menu.add_child(stt)
 				var sh := _btn("SHARE INVITE LINK", "share", null, "ghost", Vector2(48, 256), Vector2(260, 50), 18)
 				menu.add_child(sh)
+				var tb2 := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(48, 318), Vector2(260, 50), "TEAM:  ")
+				menu.add_child(tb2)
 				var rx := w - col_w - 40.0
 				var md := _btn("SAME TEAM" if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 24)
 				menu.add_child(md)
 				items.append([md, Vector2(80, 0), 0.05])
-				var mh := _label("You two against the computer" if str(info.get("mode", "")) == "coop" else "You (red) against your friend (blue)", 16, Color(1, 1, 1, 0.75), font2)
+				var mh := _label("You two against the computer" if str(info.get("mode", "")) == "coop" else "Your team against your friend's: " + str(info["clubs"][int(info.get("gclub", 1))]["n"]), 16, Color(1, 1, 1, 0.75), font2)
 				mh.position = Vector2(rx + 4, 158)
 				menu.add_child(mh)
 				var d2 := _btn("LEVEL: " + str(info.get("diff", "")), "diff", null, "ghost", Vector2(rx, 190), Vector2(col_w * 0.5 - 6, 50), 17)
@@ -457,12 +547,15 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				items.append([s2, Vector2(0, 40), 0.0])
 				var txt := "Looking for the room"
 				if conn:
-					txt = "Waiting for the host to start.   Mode: " + ("SAME TEAM" if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER (you are blue)")
+					txt = "Waiting for the host to start.   Mode: " + ("SAME TEAM" if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER")
 				var s3 := _label(txt, 20, Color(1, 1, 1, 0.8), font2)
 				s3.position = Vector2(0, h * 0.5 + 10)
 				s3.size = Vector2(w, 30)
 				s3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(s3)
+				if conn:
+					var tb3 := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(w * 0.5 - 170, h * 0.5 + 60), Vector2(340, 56), "YOUR TEAM:  ")
+					menu.add_child(tb3)
 		"how":
 			var hw := minf(w - 80.0, 860.0)
 			var hp := Panel.new()
@@ -531,12 +624,12 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			sc.pivot_offset = Vector2(w * 0.5, 65)
 			menu.add_child(sc)
-			var tn := _label("RED BISON", 22, Color(1.0, 0.55, 0.5), font2)
+			var tn := _label(t_names[0], 22, t_cols[0].lightened(0.45), font2)
 			tn.position = Vector2(0, h * 0.5 - 142)
 			tn.size = Vector2(w * 0.5 - 190, 30)
 			tn.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			menu.add_child(tn)
-			var tn2 := _label("HARBOUR SHARKS", 22, Color(0.55, 0.75, 1.0), font2)
+			var tn2 := _label(t_names[1], 22, t_cols[1].lightened(0.45), font2)
 			tn2.position = Vector2(w * 0.5 + 190, h * 0.5 - 142)
 			menu.add_child(tn2)
 			for gi in 2:
@@ -792,7 +885,8 @@ func _minimap() -> void:
 		if p.z > 1.5:
 			draw_circle(q, 4.2, GOLD)
 		else:
-			draw_circle(q, 2.6, Color(0.95, 0.25, 0.25) if p.z < 0.5 else Color(0.35, 0.6, 1.0))
+			draw_circle(q, 3.4, Color(0, 0, 0, 0.55))
+			draw_circle(q, 2.6, _seen(t_cols[0]) if p.z < 0.5 else _seen(t_cols[1]))
 	draw_circle(o + Vector2((mm_ball.x + 52.5) / 105.0 * mw, (mm_ball.y + 34.0) / 68.0 * mh), 2.2, Color.WHITE)
 
 func _button(c: Vector2, rad: float, text: String, down: bool, col: Color) -> void:

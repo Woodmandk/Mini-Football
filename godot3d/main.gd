@@ -32,7 +32,23 @@ const NAMES := [
 	["Marsh", "Reed", "Cole", "Hale", "Frost", "Quinn", "Drake", "Nash", "Voss", "Pike", "Lowe"],
 ]
 const NUMS := [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7]
-const TEAM_NAMES := ["RED BISON", "HARBOUR SHARKS"]
+const CLUBS := [ # name, short, home kit [shirt, shorts, socks], away kit
+	{"n": "RED BISON", "s": "BIS", "k": ["dc2424", "f7f7f7", "dc2424"], "a": ["f7f7f7", "dc2424", "f7f7f7"]},
+	{"n": "HARBOUR SHARKS", "s": "SHA", "k": ["2961eb", "142466", "f7f7f7"], "a": ["f2f2f2", "142466", "2961eb"]},
+	{"n": "SKY ROVERS", "s": "ROV", "k": ["7fd0ff", "f7f7f7", "7fd0ff"], "a": ["16213a", "7fd0ff", "16213a"]},
+	{"n": "GOLDEN LIONS", "s": "LIO", "k": ["f5c518", "1a1a1a", "f5c518"], "a": ["1a1a1a", "f5c518", "1a1a1a"]},
+	{"n": "BLACK WOLVES", "s": "WOL", "k": ["1c1c20", "1c1c20", "e8e8e8"], "a": ["e8e8e8", "1c1c20", "1c1c20"]},
+	{"n": "WHITE STORKS", "s": "STO", "k": ["f4f4f4", "c62828", "f4f4f4"], "a": ["c62828", "f4f4f4", "c62828"]},
+	{"n": "PURPLE KINGS", "s": "KIN", "k": ["7b2fbf", "f7f7f7", "7b2fbf"], "a": ["f7d94a", "7b2fbf", "f7d94a"]},
+	{"n": "ORANGE FOXES", "s": "FOX", "k": ["f57c00", "1a1a1a", "f57c00"], "a": ["1a1a1a", "f57c00", "1a1a1a"]},
+]
+const SURNAMES := ["Holm", "Berg", "Lund", "Dahl", "Krogh", "Skov", "Winther", "Bak", "Friis", "Storm", "Juhl", "Marsh", "Reed", "Cole", "Hale", "Frost", "Quinn", "Drake", "Nash", "Voss", "Pike", "Lowe", "Brandt", "Falk", "Lind", "Mohr", "Ravn", "Stein", "Toft", "Vang", "Kaas", "Bro", "Gram", "Hede", "Kjaer", "Munk", "Noer", "Rask", "Sand", "Thorn", "Ward", "Blake", "Cross", "Dunn", "Ellis", "Ford", "Grant", "Hart", "Kane", "Moss", "Price", "Rhodes", "Shaw", "Tate", "Wolfe", "York", "Abel", "Bech", "Dam", "Eskild"]
+var TEAM_NAMES := ["RED BISON", "HARBOUR SHARKS"]
+var opt_club := 0
+var guest_club := 1
+var clubs := [0, 1]
+var kits := [[], []]
+var teams_from := "main"
 const CAMS := ["TV", "TOP", "CLOSE"]
 const N_F := 11 # numbers per player in a packed frame
 
@@ -164,6 +180,10 @@ func _ready() -> void:
 			menu_arg = a.substr(7)
 		elif a.begins_with("--bot="):
 			bot_mode = a.substr(6)
+		elif a.begins_with("--clubs="):
+			var cc := a.substr(8).split(",")
+			opt_club = int(cc[0])
+			clubs = [int(cc[0]), int(cc[1])]
 		elif a.begins_with("--scale="):
 			base_scale = float(a.substr(8))
 		elif a.begins_with("--diff="):
@@ -176,6 +196,10 @@ func _ready() -> void:
 		if str(JavaScriptBridge.eval("location.search", true)).contains("low"):
 			quality = 0
 		seen_how = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-how')||''}catch(e){return ''}})()", true)) == "1"
+		var sc := str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-club')||''}catch(e){return ''}})()", true))
+		if sc.is_valid_int():
+			opt_club = clampi(int(sc), 0, CLUBS.size() - 1)
+			clubs = [opt_club, 1 if opt_club != 1 else 0]
 	world = World.new()
 	add_child(world)
 	world.build()
@@ -192,6 +216,7 @@ func _ready() -> void:
 	hud = HudS.new()
 	hud.on_action = _action
 	layer.add_child(hud)
+	hud.set_teams(TEAM_NAMES, [CLUBS[clubs[0]]["s"], CLUBS[clubs[1]]["s"]], [Color(kits[0][0]), Color(kits[1][0])])
 	_build_fx()
 	_build_audio()
 	if autotest or demo:
@@ -290,32 +315,79 @@ func _build_ball() -> void:
 	land_ring.visible = false
 	add_child(land_ring)
 
+static func _cdist(a: Color, b: Color) -> float:
+	return Vector3(a.r - b.r, a.g - b.g, a.b - b.b).length()
+
+# Picks which clubs play (team 0 and team 1) and rebuilds the 22 players in their kits.
+func _set_clubs(a: int, b: int) -> void:
+	a = clampi(a, 0, CLUBS.size() - 1)
+	b = clampi(b, 0, CLUBS.size() - 1)
+	if not players.is_empty() and clubs[0] == a and clubs[1] == b:
+		return
+	clubs = [a, b]
+	for p in players:
+		p.queue_free()
+	players.clear()
+	teams = [[], []]
+	ball_owner = null
+	ball_last = null
+	ball_ignore = null
+	scorer = null
+	rec.clear()
+	for hm in humans:
+		hm.ctrl = null
+	_build_teams()
+
+func _other_club(mine: int) -> int:
+	var o := randi() % (CLUBS.size() - 1)
+	return o if o < mine else o + 1
+
 func _build_teams() -> void:
 	var skins := [Color(0.96, 0.80, 0.66), Color(0.87, 0.67, 0.50), Color(0.62, 0.43, 0.29), Color(0.42, 0.28, 0.19), Color(0.93, 0.76, 0.60)]
 	var hairs := [Color(0.1, 0.08, 0.06), Color(0.3, 0.19, 0.1), Color(0.75, 0.6, 0.3), Color(0.05, 0.05, 0.05), Color(0.5, 0.3, 0.15)]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
+	var kit0: Array = CLUBS[clubs[0]]["k"]
+	var kit1: Array = CLUBS[clubs[1]]["k"]
+	if clubs[0] == clubs[1] or _cdist(Color(kit0[0]), Color(kit1[0])) < 0.5:
+		kit1 = CLUBS[clubs[1]]["a"]
+	kits = [kit0, kit1]
+	TEAM_NAMES = [CLUBS[clubs[0]]["n"], CLUBS[clubs[1]]["n"]]
+	var gk_cols := [Color("f5d020"), Color("30d070"), Color("ff5fa2"), Color("9aa0a6"), Color("00c2c7")]
+	var gk_used := []
 	for t in 2:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = clubs[t] * 977 + 7
+		var names := SURNAMES.duplicate()
+		for n in range(names.size() - 1, 0, -1):
+			var sw := rng.randi_range(0, n)
+			var tmp = names[n]
+			names[n] = names[sw]
+			names[sw] = tmp
+		var gk_col: Color = gk_cols[0]
+		for c in gk_cols:
+			if _cdist(c, Color(kits[0][0])) > 0.5 and _cdist(c, Color(kits[1][0])) > 0.5 and not gk_used.has(c):
+				gk_col = c
+				break
+		gk_used.append(gk_col)
 		for i in FORM.size():
 			var p = PlayerS.new()
 			p.team = t
 			p.idx = i
 			p.role = FORM[i][0]
 			p.home = Vector2(FORM[i][1], FORM[i][2])
-			p.pname = NAMES[t][i]
+			p.pname = names[i]
 			p.num = NUMS[i]
-			var shirt := Color(0.86, 0.14, 0.14) if t == 0 else Color(0.16, 0.38, 0.92)
-			var shorts := Color(0.97, 0.97, 0.97) if t == 0 else Color(0.08, 0.14, 0.4)
-			var socks := Color(0.86, 0.14, 0.14) if t == 0 else Color(0.97, 0.97, 0.97)
+			var shirt := Color(kits[t][0])
+			var shorts := Color(kits[t][1])
+			var socks := Color(kits[t][2])
 			if p.role == "GK":
-				shirt = Color(0.98, 0.82, 0.12) if t == 0 else Color(0.2, 0.85, 0.45)
+				shirt = gk_col
 				shorts = Color(0.1, 0.1, 0.1)
 				socks = shirt
 			var boots: Color = [Color(0.08, 0.08, 0.08), Color(0.95, 0.95, 0.95), Color(1.0, 0.45, 0.1), Color(0.3, 0.9, 0.9)][rng.randi() % 4]
 			p.build(shirt, shorts, socks, skins[rng.randi() % skins.size()], hairs[rng.randi() % hairs.size()], boots)
 			var base: Array = {"GK": [52, 30, 62, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}[p.role]
 			var up := 0
-			p.star = i == 9 or (i == 6 and t == 1) or (i == 7 and t == 0)
+			p.star = i == 9 or i == (6 + clubs[t] % 2)
 			if p.star:
 				up = 8
 			p.pac = clampi(base[0] + up + rng.randi_range(-5, 5), 40, 96)
@@ -331,6 +403,9 @@ func _build_teams() -> void:
 			add_child(p)
 			players.append(p)
 			teams[t].append(p)
+	if hud != null:
+		hud.set_teams(TEAM_NAMES, [CLUBS[clubs[0]]["s"], CLUBS[clubs[1]]["s"]], [Color(kits[0][0]), Color(kits[1][0])])
+		hud.set_score(score[0], score[1])
 
 func _build_fx() -> void:
 	confetti = CPUParticles3D.new()
@@ -505,7 +580,7 @@ func _menu_info() -> Dictionary:
 	return {
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web,
-		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(),
+		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -571,11 +646,28 @@ func _action(act: String, arg = null) -> void:
 			humans = [Human.new()]
 			me = 0
 			view_flip = 1.0
+			_set_clubs(opt_club, _other_club(opt_club))
 			screen = "match"
 			hud.show_menu("", {})
 			_begin_match(true)
 		"friend":
 			hud.show_menu("friend", _menu_info())
+		"teams":
+			teams_from = "lobby" if net.role != "" else "main"
+			hud.show_menu("teams", _menu_info())
+		"teams_back":
+			hud.show_menu(teams_from, _menu_info())
+		"club":
+			opt_club = int(arg)
+			if net.web:
+				JavaScriptBridge.eval("try{localStorage.setItem('bb3d-club','%d')}catch(e){}" % opt_club, true)
+			if net.role == "guest":
+				net.send({"_": "club", "id": opt_club})
+			else:
+				# show the new kit on the pitch behind the menu
+				_set_clubs(opt_club, clubs[1] if clubs[1] != opt_club else _other_club(opt_club))
+				_kickoff(0)
+			hud.show_menu(teams_from, _menu_info())
 		"host":
 			room = "%04d" % (randi() % 9000 + 1000)
 			net.host(room)
@@ -638,9 +730,10 @@ func _host_start() -> void:
 	humans = [h0, h1]
 	me = 0
 	view_flip = 1.0
+	_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
 	screen = "match"
 	hud.show_menu("", {})
-	net.send({"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len})
+	net.send({"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs})
 	_begin_match(true)
 
 func _guest_start(m: Dictionary) -> void:
@@ -652,6 +745,8 @@ func _guest_start(m: Dictionary) -> void:
 	humans = [h0, h1]
 	me = 1
 	view_flip = 1.0 if h1.team == 0 else -1.0
+	var cl: Array = m.get("clubs", [0, 1])
+	_set_clubs(int(cl[0]), int(cl[1]))
 	screen = "match"
 	state = "intro"
 	state_t = 0.0
@@ -670,10 +765,16 @@ func _net_poll() -> void:
 		match k:
 			"ready":
 				hud.refresh(_menu_info())
+			"club":
+				if net.role == "host":
+					guest_club = clampi(int(m.get("id", 1)), 0, CLUBS.size() - 1)
+					hud.refresh(_menu_info())
 			"open":
 				net.connected = true
 				if net.role == "host":
 					_send_lobby()
+				else:
+					net.send({"_": "club", "id": opt_club})
 				if screen == "menu":
 					hud.show_menu("lobby", _menu_info())
 					au["blip2"].play()
@@ -1170,7 +1271,7 @@ func _dbg() -> void:
 	JavaScriptBridge.eval("window.bbDbg=%s" % JSON.stringify({
 		"screen": screen, "state": state, "room": room, "conn": net.connected, "role": net.role, "score": score,
 		"h": hs, "ball": [snappedf(ball.position.x, 0.1), snappedf(ball.position.z, 0.1)], "menu": hud.menu_name, "mode": opt_mode, "clock": int(clock),
-		"owner": players.find(ball_owner), "fps": Engine.get_frames_per_second(),
+		"owner": players.find(ball_owner), "fps": Engine.get_frames_per_second(), "clubs": clubs,
 	}), true)
 
 func _tick(dt: float) -> void:
