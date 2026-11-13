@@ -1788,7 +1788,7 @@ func _cam_rect() -> Rect2:
 	return Rect2(size.x - 128, 14, 110, 40)
 
 func _pause_rect() -> Rect2:
-	return Rect2(size.x - 182, 14, 44, 40)
+	return Rect2(size.x - 62, 14, 44, 40)
 
 func _release_all() -> void:
 	_stick_id = -1
@@ -1803,9 +1803,6 @@ func _input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch:
 		var p: Vector2 = e.position
 		if e.pressed:
-			if _cam_rect().grow(6).has_point(p):
-				ev.append("cam")
-				return
 			if _pause_rect().grow(6).has_point(p):
 				ev.append("pause")
 				return
@@ -1908,9 +1905,6 @@ func _draw() -> void:
 		_vs()
 		return
 	# camera + pause buttons
-	var r := _cam_rect()
-	draw_style_box(_box(Color(DARK.r, DARK.g, DARK.b, 0.7), 10), r)
-	_text("CAM: " + cam_name, r.position + Vector2(r.size.x * 0.5, 27), 16, Color(1, 1, 1, 0.9))
 	var pr := _pause_rect()
 	draw_style_box(_box(Color(DARK.r, DARK.g, DARK.b, 0.7), 10), pr)
 	draw_rect(Rect2(pr.position + Vector2(14, 11), Vector2(5, 18)), Color(1, 1, 1, 0.9))
