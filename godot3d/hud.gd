@@ -1098,8 +1098,8 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var rows := [
 				["MOVE", "Slide your left thumb anywhere on the left side."],
 				["SHOOT", "Hold to load power, let go to shoot. Short taps curl. At a corner kick: cross."],
-				["PASS", "A pass along the ground, to the man the stick points at."],
-				["LOB", "A high ball over the defenders, to the man the stick points at."],
+				["PASS", "A pass along the ground, the way the stick points. Hold longer for a harder pass to a man further away."],
+				["LOB", "A high ball over the defenders. Hold longer to reach a man further away."],
 				["TACKLE", "Standing tackle: step in and take the ball. At a sprint from a few steps away: slide. Never from behind."],
 				["SWITCH", "Without the ball: change to the player nearest the ball."],
 				["SPRINT", "Pull your thumb further out, past the outer ring. The ring shows your breath."],
@@ -1381,8 +1381,8 @@ func _set_btn(k: String, down: bool) -> void:
 			ev.append("pass_down" if down else "pass_up")
 		pass_down = down
 	elif k == "lob":
-		if down and not lob_down:
-			ev.append("lob")
+		if lob_down != down:
+			ev.append("lob_down" if down else "lob_up")
 		lob_down = down
 
 # ---------------------------------------------------------------- drawing
