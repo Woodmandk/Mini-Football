@@ -1788,7 +1788,7 @@ func _cam_rect() -> Rect2:
 	return Rect2(size.x - 128, 14, 110, 40)
 
 func _pause_rect() -> Rect2:
-	return Rect2(size.x - 62, 14, 44, 40)
+	return Rect2(size.x - 124, 14, 44, 40)
 
 func _release_all() -> void:
 	_stick_id = -1
@@ -1803,7 +1803,7 @@ func _input(e: InputEvent) -> void:
 	if e is InputEventScreenTouch:
 		var p: Vector2 = e.position
 		if e.pressed:
-			if _pause_rect().grow(6).has_point(p):
+			if _pause_rect().has_point(p):
 				ev.append("pause")
 				return
 			ev.append("tap")

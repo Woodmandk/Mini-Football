@@ -52,9 +52,8 @@ window.bbNet = (function () {
       keep(p);
       p.on('open', function () { note({ _: 'ready' }); });
       p.on('connection', function (c) {
-        // a call that never got through must not block the next one: only a live friend keeps the seat
-        if (conn && conn.open) { try { c.close(); } catch (e) {} return; }
-        if (conn) { var old = conn; conn = null; try { old.close(); } catch (e) {} }
+                // The newest call wins: a friend whose line dropped calls again before the old line is known to be dead.
+        if (conn) { var old = conn, live = old.open; conn = null; try { old.close(); } catch (e) {} if (live) note({ _: 'close' }); }
         wire(c);
       });
       p.on('error', function (e) { if (peer === p) note({ _: 'err', m: String(e && e.type || e) }); });
