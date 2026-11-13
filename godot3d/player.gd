@@ -87,6 +87,9 @@ var shin_r: Node3D
 var fore_l: Node3D
 var fore_r: Node3D
 var ring: MeshInstance3D
+var dot: Node3D
+var dot_num: Label3D
+var top_view := false
 
 static var _mats := {}
 
@@ -297,6 +300,51 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	marker.visible = false
 	add_child(marker)
+	# seen from above each man is a round disc in his shirt colour, with a nose that shows where he faces
+	dot = Node3D.new()
+	dot.visible = false
+	add_child(dot)
+	var NS2 := GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var light: bool = shirt.get_luminance() > 0.6
+	var defs := [[0.92, Color(0.03, 0.05, 0.04), 0.05], [0.78, shirt, 0.07]]
+	for df in defs:
+		var dm := CylinderMesh.new()
+		dm.top_radius = df[0]
+		dm.bottom_radius = df[0]
+		dm.height = 0.02
+		dm.radial_segments = 28
+		var mi := MeshInstance3D.new()
+		mi.mesh = dm
+		var um := StandardMaterial3D.new()
+		um.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		um.albedo_color = df[1]
+		mi.material_override = um
+		mi.position = Vector3(0, df[2], 0)
+		mi.cast_shadow = NS2
+		dot.add_child(mi)
+	var nose := MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(0.62, 0.5, 0.03)
+	nose.mesh = pm
+	var nm := StandardMaterial3D.new()
+	nm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	nm.albedo_color = shorts if shorts.to_html() != shirt.to_html() else (Color(0.1, 0.1, 0.1) if light else Color.WHITE)
+	nose.material_override = nm
+	nose.rotation = Vector3(-PI * 0.5, 0, 0)
+	nose.position = Vector3(0, 0.09, -0.74)
+	nose.cast_shadow = NS2
+	dot.add_child(nose)
+	dot_num = Label3D.new()
+	dot_num.text = str(num)
+	dot_num.font = load("res://fonts/ChakraPetch-Bold.ttf")
+	dot_num.font_size = 96
+	dot_num.pixel_size = 0.0095
+	dot_num.outline_size = 0
+	dot_num.modulate = Color(0.08, 0.08, 0.08) if light else Color.WHITE
+	dot_num.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	dot_num.no_depth_test = true
+	dot_num.position = Vector3(0, 0.3, 0)
+	dot.add_child(dot_num)
 	scale = Vector3.ONE * 1.22
 
 func hands() -> bool:
@@ -558,7 +606,7 @@ func animate(dt: float) -> void:
 	if tackle_t >= 0.0:
 		tackle_t += dt
 		var down := _ease(tackle_t / 0.12)
-		var up := _ease((tackle_t - 0.74) / 0.18)
+		var up := _ease((tackle_t - 0.52) / 0.16)
 		var s := down * (1.0 - up)
 		lean = lerpf(lean, 1.0, s)
 		by = lerpf(by, -0.36, s)
@@ -579,7 +627,7 @@ func animate(dt: float) -> void:
 		head_x = lerpf(head_x, -0.3, s)
 		tw = lerpf(tw, 0.0, s)
 		k = clampf(dt * 26.0, 0.0, 1.0)
-		if tackle_t > 0.92:
+		if tackle_t > 0.68:
 			tackle_t = -1.0
 	# keeper dive: push off, fly flat with both hands to the ball, land, get up
 	if dive_t >= 0.0:
@@ -714,3 +762,15 @@ func set_num(n: int) -> void:
 	num = n
 	if num_label != null:
 		num_label.text = str(n)
+	if dot_num != null:
+		dot_num.text = str(n)
+
+
+# The view from above: a disc instead of the figure.
+func set_top(on: bool) -> void:
+	if on == top_view or dot == null:
+		return
+	top_view = on
+	dot.visible = on
+	body.visible = not on
+	ring.scale = Vector3(1.55, 0.08, 1.55) if on else Vector3(1, 0.08, 1)

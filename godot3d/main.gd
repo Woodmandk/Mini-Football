@@ -11,6 +11,7 @@ const Career := preload("res://career.gd")
 
 const DIVE_V := 4.9
 const HL := 52.5
+const TEMPO := 1.15
 const HW := 34.0
 const GOAL_HW := 3.66
 const GOAL_H := 2.44
@@ -149,6 +150,7 @@ var view_flip := 1.0
 
 var ball: Node3D
 var ball_mesh: MeshInstance3D
+var ball_top: MeshInstance3D
 var ball_vel := Vector3.ZERO
 var ball_owner = null
 var ball_last = null
@@ -552,6 +554,21 @@ func _build_ball() -> void:
 	ball_mesh.material_override = m
 	ball.add_child(ball_mesh)
 	ball.position = Vector3(0, BALL_R, 0)
+	ball_top = MeshInstance3D.new()
+	var bt := CylinderMesh.new()
+	bt.top_radius = 0.56
+	bt.bottom_radius = 0.56
+	bt.height = 0.02
+	bt.radial_segments = 24
+	ball_top.mesh = bt
+	var btm := StandardMaterial3D.new()
+	btm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	btm.albedo_color = Color(0.02, 0.03, 0.02)
+	ball_top.material_override = btm
+	ball_top.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	ball_top.visible = false
+	ball_top.top_level = true
+	ball.add_child(ball_top)
 	trail = CPUParticles3D.new()
 	trail.emitting = false
 	trail.amount = 40
@@ -2287,6 +2304,9 @@ func _frame(dt: float) -> void:
 
 func _ticks(dt: float) -> void:
 	# long frames are cut into steps of at most 1/50 s, so nothing tunnels on a slow phone
+	if screen == "match":
+		# the whole match runs a little faster than real football, like the 2D game
+		dt *= TEMPO
 	var n: int = maxi(int(ceil(dt * 50.0 - 0.001)), 1)
 	for i in n:
 		_tick(dt / n)
@@ -2875,9 +2895,9 @@ func _idle_players(dt: float) -> void:
 		_move(p, Vector3.ZERO, dt)
 
 func _move(p, want: Vector3, dt: float) -> void:
-	if p.tackle_t >= 0.0 and p.tackle_t < 0.76 and p.slide_live:
+	if p.tackle_t >= 0.0 and p.tackle_t < 0.52 and p.slide_live:
 		# sliding on the grass: he keeps going and only friction slows him
-		p.vel = p.vel.move_toward(Vector3.ZERO, 7.0 * dt)
+		p.vel = p.vel.move_toward(Vector3.ZERO, 21.0 * dt)
 		p.position += p.vel * dt
 		p.position.x = clampf(p.position.x, -HL - 2.5, HL + 2.5)
 		p.position.z = clampf(p.position.z, -HW - 2.5, HW + 2.5)
@@ -3278,7 +3298,8 @@ func _human_tackle(h, standing := false) -> void:
 		return
 	var bd: float = Vector2(me_p.position.x - ball.position.x, me_p.position.z - ball.position.z).length()
 	# SPRINT held and still a few steps away: a slide tackle. Otherwise a standing tackle.
-	if not standing and h.sprint and (c == null or c.team == h.team or bd > 2.3):
+	# TACKLE is always a slide, as in the 2D game. Only the help (hold, or running into the ball) is a foot in.
+	if not standing:
 		_slide_tackle(h)
 		return
 	# Standing tackle: a step and a foot in for the ball. Win it and he keeps it at his feet and plays on.
@@ -3333,17 +3354,17 @@ func _slide_tackle(h) -> void:
 		var lead: Vector3 = to + (c.vel * 0.35 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.35)
 		dirs = lead.normalized()
 		me_p.yaw = atan2(-dirs.x, -dirs.z)
-	# a long glide over the grass, about seven metres
-	me_p.vel = dirs * maxf(me_p.vel.length() + 3.0, 11.5)
+	# like the 2D game: a fast burst along the grass, more than twice his running speed, about six metres
+	me_p.vel = dirs * 17.5
 	me_p.slide_live = true
-	me_p.stun = 1.05
+	me_p.stun = 0.72
 	fx("dust", [me_p.position.x, me_p.position.z])
 
 func _slides() -> void:
 	for p in players:
 		if not p.slide_live:
 			continue
-		if p.tackle_t < 0.0 or p.tackle_t > 0.8:
+		if p.tackle_t < 0.0 or p.tackle_t > 0.54:
 			p.slide_live = false
 			continue
 		var c = ball_owner
@@ -4136,14 +4157,16 @@ func _process(dt: float) -> void:
 	var top: bool = cam_mode == 1 and screen == "match" and state in ["play", "dead"]
 	var bs := 1.0
 	if top:
-		bs = 2.0 * (1.0 + clampf(ball.position.y - BALL_R, 0.0, 12.0) * 0.09)
+		bs = 3.4 * (1.0 + clampf(ball.position.y - BALL_R, 0.0, 12.0) * 0.07)
 	ball_mesh.scale = ball_mesh.scale.lerp(Vector3.ONE * bs, clampf(rdt * 10.0, 0.0, 1.0))
-	ball_mesh.position.y = BALL_R * ((2.0 if top else 1.0) - 1.0)
-	# from above a slim figure is only a head and two arms: there the men are drawn broad and chunky
-	var psc := Vector3(2.1, 1.4, 2.1) if top else Vector3.ONE * 1.22
+	ball_mesh.position.y = BALL_R * ((3.4 if top else 1.0) - 1.0) + (0.25 if top else 0.0)
+	ball_top.visible = top
+	if top:
+		# a dark rim on the grass under the ball, so the white ball stands out everywhere
+		ball_top.global_position = Vector3(ball.position.x, 0.12, ball.position.z)
+	# from above the men are round discs in their shirt colour (the play is the same)
 	for p in players:
-		if absf(p.scale.x - psc.x) > 0.005:
-			p.scale = psc
+		p.set_top(top)
 	trail.scale_amount_min = 2.6 if top else 1.0
 	trail.scale_amount_max = 2.6 if top else 1.0
 	trail.emitting = loose and ball_vel.length() > (12.0 if top else 17.0) and screen == "match"
