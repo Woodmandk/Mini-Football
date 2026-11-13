@@ -217,6 +217,13 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 	var n2 := _label("%s  %d" % [str(pl["pos"]), int(pl["ovr"])], 13, GOLD if chosen else Color(1, 1, 1, 0.75), font2)
 	n2.position = Vector2(18, 24)
 	b.add_child(n2)
+	if int(pl.get("tp", 0)) > 0:
+		var tpd := _label("TP", 11, Color(0.05, 0.08, 0.02))
+		tpd.add_theme_stylebox_override("normal", _box(GOLD, 6))
+		tpd.position = Vector2(sz.x - 26, sz.y - 20)
+		tpd.size = Vector2(22, 15)
+		tpd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.add_child(tpd)
 	if wrong:
 		var wr := ColorRect.new()
 		wr.color = Color(1.0, 0.85, 0.1)
@@ -447,6 +454,69 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 	match n:
 		"main":
 			_hub(info, w, h, items, anim)
+		"myclub":
+			var c9: Dictionary = info.get("car", {})
+			var isnew := bool(info.get("own_new", false))
+			_title("CREATE YOUR CLUB" if isnew else "YOUR CLUB", "")
+			var k9: Array = c9.get("kit", ["888888", "ffffff", "888888"])
+			var lw9 := minf(w * 0.34, 400.0)
+			var ph9 := h - 84.0 - 70.0
+			var kp := _panel(Vector2(32, 72), Vector2(lw9, ph9), 0.9)
+			var kd := Control.new()
+			kd.size = Vector2(lw9, ph9)
+			kd.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			kd.draw.connect(func():
+				var cx := lw9 * 0.5
+				var u := minf(ph9 / 9.2, lw9 / 6.0)
+				var c0 := Color(str(k9[0]))
+				var c1 := Color(str(k9[1]))
+				var c2 := Color(str(k9[2]))
+				var ol := Color(1, 1, 1, 0.5)
+				var ty := u * 0.6
+				# shirt with sleeves
+				var shirt := PackedVector2Array([Vector2(cx - u * 1.1, ty), Vector2(cx + u * 1.1, ty), Vector2(cx + u * 2.3, ty + u * 0.9), Vector2(cx + u * 1.8, ty + u * 1.7), Vector2(cx + u * 1.3, ty + u * 1.35), Vector2(cx + u * 1.3, ty + u * 3.9), Vector2(cx - u * 1.3, ty + u * 3.9), Vector2(cx - u * 1.3, ty + u * 1.35), Vector2(cx - u * 1.8, ty + u * 1.7), Vector2(cx - u * 2.3, ty + u * 0.9)])
+				kd.draw_colored_polygon(shirt, c0)
+				shirt.append(shirt[0])
+				kd.draw_polyline(shirt, ol, 2.0, true)
+				kd.draw_arc(Vector2(cx, ty), u * 0.5, 0, PI, 16, c1, 4.0, true)
+				# shorts
+				var sy9 := ty + u * 4.2
+				var sh9 := PackedVector2Array([Vector2(cx - u * 1.3, sy9), Vector2(cx + u * 1.3, sy9), Vector2(cx + u * 1.5, sy9 + u * 1.7), Vector2(cx + u * 0.2, sy9 + u * 1.7), Vector2(cx, sy9 + u * 0.8), Vector2(cx - u * 0.2, sy9 + u * 1.7), Vector2(cx - u * 1.5, sy9 + u * 1.7)])
+				kd.draw_colored_polygon(sh9, c1)
+				sh9.append(sh9[0])
+				kd.draw_polyline(sh9, ol, 2.0, true)
+				# socks
+				for sd9 in [-1.0, 1.0]:
+					var rr := Rect2(cx + sd9 * u * 0.85 - u * 0.4, sy9 + u * 2.1, u * 0.8, u * 2.0)
+					kd.draw_rect(rr, c2)
+					kd.draw_rect(rr, ol, false, 2.0)
+			)
+			kp.add_child(kd)
+			var nb9 := _btn("NAME:  " + str(c9.get("name", "")), "own_name", null, "alt", Vector2(32, 72 + ph9 + 10.0), Vector2(lw9, 56), 20)
+			menu.add_child(nb9)
+			var rx9 := 32.0 + lw9 + 24.0
+			var rw9 := w - rx9 - 32.0
+			var cols9: Array = info.get("own_cols", [])
+			var sw9 := minf(56.0, (rw9 - 11.0 * 8.0) / 12.0)
+			var rowh := (h - 84.0 - 74.0) / 3.0
+			var parts := ["SHIRT", "SHORTS", "SOCKS"]
+			for pi9 in 3:
+				var ry := 72.0 + pi9 * rowh
+				var pl9 := _label(parts[pi9], 16, GOLD, font2)
+				pl9.position = Vector2(rx9, ry)
+				menu.add_child(pl9)
+				var s9 := minf(sw9, rowh - 40.0)
+				for ci9 in cols9.size():
+					var on9: bool = str(k9[pi9]).to_lower() == str(cols9[ci9])
+					var cb9 := _btn("", "own_col", [pi9, cols9[ci9]], "alt", Vector2(rx9 + ci9 * (s9 + 8.0), ry + 28.0), Vector2(s9, s9), 12)
+					for st9 in ["normal", "hover", "focus", "pressed"]:
+						cb9.add_theme_stylebox_override(st9, _box(Color(str(cols9[ci9])), 10, GOLD if on9 else Color(1, 1, 1, 0.35)))
+					menu.add_child(cb9)
+			var ok9 := _btn("START" if isnew else "DONE", "own_ok", null, "primary", Vector2(w - 32.0 - 260.0, h - 70.0), Vector2(260, 56), 26)
+			menu.add_child(ok9)
+			var hn9 := _label("Tap the name to change it.", 14, Color(1, 1, 1, 0.65), font2)
+			hn9.position = Vector2(rx9, h - 52.0)
+			menu.add_child(hn9)
 		"quick":
 			_title("QUICK MATCH", "A friendly against the computer. Nothing is at stake.")
 			var qx := w * 0.5 - 190.0
@@ -664,50 +734,95 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var bk2 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk2)
 		"squad":
-			_title("SQUAD", "Tap two players to swap them")
+			_title("THE TEAM", "")
 			var c3: Dictionary = info.get("car", {})
 			var sqd: Array = c3.get("squad", [])
 			var xi: Array = c3.get("xi", [])
 			var sel: int = int(c3.get("sel", -1))
 			var form: Array = c3.get("form", [])
-			var pw := w * 0.58 - 50.0
-			var ph := h - 116.0
-			var pp := Panel.new()
-			pp.add_theme_stylebox_override("panel", _box(Color(0.10, 0.36, 0.17, 0.92), 16, Color(1, 1, 1, 0.35)))
-			pp.position = Vector2(30, 100)
-			pp.size = Vector2(pw, ph)
-			pp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			menu.add_child(pp)
-			var mid := ColorRect.new()
-			mid.color = Color(1, 1, 1, 0.25)
-			mid.position = Vector2(pw - 3, 0)
-			mid.size = Vector2(2, ph)
-			pp.add_child(mid)
+			# the pitch stands upright: your own goal at the bottom, the attack at the top
+			var ph := h - 84.0
+			var pw := minf(w * 0.44, ph * 1.12)
+			var px := 24.0
+			var py := 72.0
+			var pc := Control.new()
+			pc.position = Vector2(px, py)
+			pc.size = Vector2(pw, ph)
+			pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			pc.clip_contents = true
+			pc.draw.connect(func():
+				var ln := Color(1, 1, 1, 0.55)
+				var nb8 := 8
+				for i in nb8:
+					pc.draw_rect(Rect2(0, ph * i / nb8, pw, ph / nb8 + 1.0), Color(0.11, 0.42, 0.19, 0.97) if i % 2 == 0 else Color(0.09, 0.36, 0.16, 0.97))
+				var m := 10.0
+				pc.draw_rect(Rect2(m, m, pw - 2 * m, ph - 2 * m), ln, false, 2.0)
+				pc.draw_line(Vector2(m, ph * 0.5), Vector2(pw - m, ph * 0.5), ln, 2.0)
+				pc.draw_arc(Vector2(pw * 0.5, ph * 0.5), pw * 0.13, 0, TAU, 48, ln, 2.0, true)
+				pc.draw_circle(Vector2(pw * 0.5, ph * 0.5), 3.0, ln)
+				var bw0 := pw * 0.56
+				var bh0 := ph * 0.15
+				var gw0 := pw * 0.26
+				var gh0 := ph * 0.055
+				for sd in 2:
+					var yb := (ph - m - bh0) if sd == 0 else m
+					pc.draw_rect(Rect2(pw * 0.5 - bw0 * 0.5, yb, bw0, bh0), ln, false, 2.0)
+					pc.draw_rect(Rect2(pw * 0.5 - gw0 * 0.5, (ph - m - gh0) if sd == 0 else m, gw0, gh0), ln, false, 2.0)
+					var ay := (ph - m - bh0) if sd == 0 else (m + bh0)
+					pc.draw_arc(Vector2(pw * 0.5, ay), pw * 0.1, PI if sd == 0 else 0.0, TAU if sd == 0 else PI, 24, ln, 2.0, true)
+					pc.draw_circle(Vector2(pw * 0.5, (ph - m - bh0 * 0.68) if sd == 0 else (m + bh0 * 0.68)), 2.5, ln)
+					# the goal itself
+					pc.draw_rect(Rect2(pw * 0.5 - pw * 0.07, (ph - m) if sd == 0 else (m - 6.0), pw * 0.14, 6.0), Color(1, 1, 1, 0.8))
+			)
+			menu.add_child(pc)
 			var pcol := {"GK": Color(0.95, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
-			var bw := minf(114.0, pw / 4.4)
+			var bw := minf(90.0, (pw - 28.0) / 4.0 - 4.0)
+			var tp := []
+			for si2 in xi.size():
+				# depth in the formation runs up the screen, width runs across it
+				var up: float = 0.035 if si2 == 0 else clampf(0.17 + (float(form[si2][1]) - 0.15) / 0.59 * 0.72, 0.0, 1.0)
+				var ax: float = 0.5 + float(form[si2][2]) * 0.5
+				tp.append(Vector2(px + 14.0 + ax * (pw - 28.0 - bw), py + ph - 14.0 - 46.0 - up * (ph - 28.0 - 46.0)))
+			# no two name plates on top of each other: the higher one moves up, the lower one down
+			for pass_i in 8:
+				for i in range(0, tp.size()):
+					for j in range(i + 1, tp.size()):
+						var dv: Vector2 = tp[j] - tp[i]
+						if absf(dv.x) < bw + 3.0 and absf(dv.y) < 49.0:
+							var push := (49.0 - absf(dv.y)) * 0.5
+							var sgn := 1.0 if dv.y >= 0.0 else -1.0
+							if i == 0:
+								# the keeper stays on his line: the other man moves up
+								tp[j].y -= push * 2.0
+							else:
+								tp[j].y += push * sgn
+								tp[i].y -= push * sgn
+			for j in range(1, tp.size()):
+				if absf(tp[j].x - tp[0].x) < bw + 3.0 and tp[0].y - tp[j].y < 49.0:
+					tp[j].y = tp[0].y - 49.0
 			for si2 in xi.size():
 				var pl: Dictionary = sqd[int(xi[si2])]
-				var fx2: float = 0.0 if si2 == 0 else clampf(0.24 + (float(form[si2][1]) - 0.15) / 0.59 * 0.76, 0.0, 1.0)
-				var fy: float = 0.5 + float(form[si2][2]) * 0.44
-				var pb := _player_btn(pl, int(xi[si2]), Vector2(30 + fx2 * (pw - bw - 12) + 6, 100 + fy * (ph - 56) + 4), Vector2(bw, 48), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]))
+				tp[si2].y = clampf(tp[si2].y, py + 12.0, py + ph - 12.0 - 46.0)
+				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]))
 				menu.add_child(pb)
-			var bx3 := 30 + pw + 16.0
-			var bw3 := w - bx3 - 30.0
+			var bx3 := px + pw + 18.0
+			var bw3 := w - bx3 - 24.0
 			var bl := _label("BENCH", 15, Color(1, 1, 1, 0.7), font2)
-			bl.position = Vector2(bx3, 96)
+			bl.position = Vector2(bx3, 70)
 			menu.add_child(bl)
 			var bn := 0
-			var bcols := 3 if sqd.size() - 11 <= 6 else 4
+			var bcols := 4
 			for qi in sqd.size():
 				if xi.has(qi) or xi.has(float(qi)):
 					continue
-				var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), 118 + (bn / bcols) * 54), Vector2(bw3 / bcols - 6, 48), pcol, qi == sel, false)
+				var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), 94 + (bn / bcols) * 52), Vector2(bw3 / bcols - 6, 46), pcol, qi == sel, false)
 				menu.add_child(bb)
 				bn += 1
+			var dy := 94.0 + maxi((bn + bcols - 1) / bcols, 2) * 52.0 + 6.0
 			var dp := Panel.new()
 			dp.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.9), 14, Color(1, 1, 1, 0.14)))
-			dp.position = Vector2(bx3, 232)
-			dp.size = Vector2(bw3, h - 232 - 16)
+			dp.position = Vector2(bx3, dy)
+			dp.size = Vector2(bw3, h - dy - 12)
 			dp.mouse_filter = Control.MOUSE_FILTER_PASS
 			menu.add_child(dp)
 			if sel >= 0 and sel < sqd.size():
@@ -726,6 +841,10 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					var sv := _label(str(sp2["st"][sti]), 22, Color.WHITE)
 					sv.position = Vector2(16 + (sti % 2) * (bw3 * 0.5 - 8) + 104, 62 + (sti / 2) * 40)
 					dp.add_child(sv)
+					if int(sp2.get("tp", 0)) > 0:
+						# a training point to use: you pick what he gets better at
+						var plus := _btn("+1", "c_tp", sti, "primary", Vector2(bx3 + 16 + (sti % 2) * (bw3 * 0.5 - 8) + 150, dy + 60 + (sti / 2) * 40), Vector2(64, 34), 17)
+						menu.add_child(plus)
 				var xb := ColorRect.new()
 				xb.color = Color(1, 1, 1, 0.15)
 				xb.position = Vector2(16, 152)
@@ -736,17 +855,23 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				xf.position = Vector2(16, 152)
 				xf.size = Vector2((bw3 - 32) * clampf(float(sp2["xp"]) / 100.0, 0.0, 1.0), 8)
 				dp.add_child(xf)
-				var xl := _label("GROWS BY PLAYING MATCHES" if int(sp2["ovr"]) < int(sp2["pot"]) else "AT HIS BEST", 11, Color(1, 1, 1, 0.6), font2)
+				var tpn := int(sp2.get("tp", 0))
+				var tpl := _label("TP  %d" % tpn, 24, GOLD if tpn > 0 else Color(1, 1, 1, 0.45))
+				tpl.position = Vector2(bw3 - 136, 8)
+				tpl.size = Vector2(120, 32)
+				tpl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				dp.add_child(tpl)
+				var xl := _label(("YOU HAVE TRAINING POINTS: TAP +1 ON WHAT HE SHOULD LEARN" if tpn > 0 else "A FULL BAR GIVES 1 TRAINING POINT (TP). HE FILLS IT BY PLAYING.") if int(sp2["ovr"]) < int(sp2["pot"]) else "AT HIS BEST", 11, GOLD if tpn > 0 else Color(1, 1, 1, 0.6), font2)
 				xl.position = Vector2(16, 162)
 				dp.add_child(xl)
-				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) < int(sp2["pot"])
+				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) + int(sp2.get("tp", 0)) < int(sp2["pot"])
 				var on_bench: bool = not (xi.has(sel) or xi.has(float(sel)))
 				var tw3 := (bw3 - 32) * (0.6 if on_bench else 1.0)
-				var trb := _btn("TRAIN  +1   (%d COINS)" % int(sp2["cost"]), "c_train", null, "primary" if can else "off", Vector2(bx3 + 16, 232 + dp.size.y - 62), Vector2(tw3, 48), 17)
+				var trb := _btn("BUY 1 TP   (%d COINS)" % int(sp2["cost"]), "c_train", null, "primary" if can else "off", Vector2(bx3 + 16, dy + dp.size.y - 62), Vector2(tw3, 48), 17)
 				menu.add_child(trb)
 				if on_bench:
 					var sure2: bool = int(c3.get("sell_sure", -1)) == sel
-					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  (%d)" % int(sp2["sell"]), "c_sell", null, "ghost", Vector2(bx3 + 16 + tw3 + 8, 232 + dp.size.y - 62), Vector2(bw3 - 32 - tw3 - 8, 48), 14)
+					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  (%d)" % int(sp2["sell"]), "c_sell", null, "ghost", Vector2(bx3 + 16 + tw3 + 8, dy + dp.size.y - 62), Vector2(bw3 - 32 - tw3 - 8, 48), 14)
 					menu.add_child(slb)
 			else:
 				var hint2 := _label("Tap a player to see him.
@@ -758,7 +883,7 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				dp.add_child(hint2)
 			if str(c3.get("msg", "")) != "":
 				var ms := _label(str(c3.get("msg", "")), 15, GOLD, font2)
-				ms.position = Vector2(bx3 + 16, 232 + dp.size.y - 90)
+				ms.position = Vector2(bx3 + 16, dy + dp.size.y - 90)
 				menu.add_child(ms)
 			var co3 := _label("COINS  %d" % int(c3.get("coins", 0)), 22, GOLD)
 			co3.position = Vector2(w - 260, 20)
@@ -1350,6 +1475,12 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	co.size = Vector2(250, 34)
 	co.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	menu.add_child(co)
+	if bool(info.get("upd", false)):
+		var ub := _btn("UPDATE", "update", null, "primary", Vector2(w - 420, 10), Vector2(140, 44), 18)
+		for st in ["normal", "hover", "focus"]:
+			ub.add_theme_stylebox_override(st, _box(GOLD, 12))
+		menu.add_child(ub)
+		_pulse(ub)
 	# --- bottom bar: the five places
 	var nh := 62.0
 	var nb := ColorRect.new()
@@ -1451,15 +1582,18 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var lw2 := w * 0.5 - 40.0
 			var sq: Array = c.get("squad", [])
 			var xi: Array = c.get("xi", [])
-			var bt := _tile("THE TEAM", "Line-up, formation, training and selling. Tap two players to swap them.", "c_squad", null, Vector2(32, y0), Vector2(lw2, ch * 0.56), Color.WHITE, 34)
+			var bt := _tile("THE TEAM", ("%d training points to use.  " % int(c.get("tp", 0)) if int(c.get("tp", 0)) > 0 else "") + "Line-up, formation, training and selling.", "c_squad", null, Vector2(32, y0), Vector2(lw2, ch * 0.56), Color.WHITE, 34)
 			menu.add_child(bt)
 			items.append([bt, Vector2(-60, 0), 0.0])
 			var hw2 := (lw2 - 10.0) * 0.5
 			var p1 := _panel(Vector2(32, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0))
 			var p2 := _panel(Vector2(32 + hw2 + 10.0, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0))
-			var vals := [["TEAM RATING", str(int(c.get("str", 0)))], ["FORMATION", str(c.get("fname", ""))]]
-			var pp := [p1, p2]
-			for i in 2:
+			p2.queue_free()
+			var ot := _tile("NAME AND KIT", "Your club's name and colours", "own", null, Vector2(32 + hw2 + 10.0, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0), Color.WHITE, 22)
+			menu.add_child(ot)
+			var vals := [["TEAM RATING", str(int(c.get("str", 0)))]]
+			var pp := [p1]
+			for i in 1:
 				var a := _label(vals[i][0], 14, GOLD, font2)
 				a.position = Vector2(0, 12)
 				a.size = Vector2(hw2, 22)
@@ -1586,14 +1720,15 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var rx3 := w * 0.5 + 8.0
 			var rw3 := w - rx3 - 32.0
 			var bw := (rw3 - 10.0) * 0.5
-			var sbh := minf(62.0, (ch - 30.0) / 4.0)
+			var sbh := minf(62.0, (ch - 50.0) / 4.0 - 10.0)
 			var sl := _label("SETTINGS", 15, GOLD, font2)
 			sl.position = Vector2(rx3 + 4, y0 + 2)
 			menu.add_child(sl)
 			var sets := [
 				["SOUND: " + str(info.get("snd", "")), "snd_opt"], ["VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt"],
 				["LEVEL: " + str(info.get("diff", "")), "diff"], ["MATCH: " + str(info.get("len", "")), "len"],
-				["HOW TO PLAY", "how"], ["SURE? TAP AGAIN" if bool(c.get("sure", false)) else "START OVER", "c_new"],
+				["HOW TO PLAY", "how"], ["UPDATE THE GAME", "update"],
+				["INSTALLED" if bool(info.get("inst", false)) else "INSTALL THE GAME", "install"], ["SURE? TAP AGAIN" if bool(c.get("sure", false)) else "START OVER", "c_new"],
 			]
 			for i in sets.size():
 				var sb := _btn(sets[i][0], sets[i][1], null, "ghost" if sets[i][1] == "c_new" else "alt", Vector2(rx3 + (i % 2) * (bw + 10.0), y0 + 28.0 + (i / 2) * (sbh + 10.0)), Vector2(bw, sbh), 19)

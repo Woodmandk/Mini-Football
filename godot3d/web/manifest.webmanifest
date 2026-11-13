@@ -1,0 +1,25 @@
+{
+ "name": "Banebold 3D",
+ "short_name": "Banebold 3D",
+ "description": "Run your club and play the matches yourself.",
+ "start_url": "./index.html",
+ "scope": "./",
+ "display": "fullscreen",
+ "orientation": "landscape",
+ "background_color": "#0d1a14",
+ "theme_color": "#0d1a14",
+ "icons": [
+  {
+   "src": "../icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any maskable"
+  },
+  {
+   "src": "../icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}

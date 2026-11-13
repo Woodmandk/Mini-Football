@@ -60,3 +60,24 @@ window.bbNet = (function () {
     }
   };
 })();
+
+// Install and update: the game can be put on the home screen, and it knows when a newer version is out.
+window.bbApp = (function () {
+  var dp = null, latest = '';
+  addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); dp = e; });
+  try { if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {}); } catch (e) {}
+  function check() {
+    try {
+      fetch('version.txt?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (t) { latest = String(t || '').trim(); }).catch(function () {});
+    } catch (e) {}
+  }
+  check(); setInterval(check, 120000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) check(); });
+  return {
+    installed: function () { try { return (matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches && !document.fullscreenElement || navigator.standalone) ? 1 : 0; } catch (e) { return 0; } },
+    install: function () { if (dp) { dp.prompt(); dp = null; return 'asked'; } return 'manual'; },
+    latest: function () { return latest; },
+    update: function () { location.replace(location.pathname + '?u=' + Date.now()); }
+  };
+})();
