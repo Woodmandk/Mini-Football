@@ -11,6 +11,8 @@ const STAT_KEYS := ["pac", "sho", "pas", "dfn"]
 var d := {}
 var web := false
 
+var last_coins := 0
+
 func has_save() -> bool:
 	return not d.is_empty()
 
@@ -57,6 +59,61 @@ static func ovr_of(p: Dictionary) -> int:
 		"DF": return int(round(p["dfn"] * 0.55 + p["pac"] * 0.25 + p["pas"] * 0.2))
 		"MF": return int(round(p["pas"] * 0.45 + p["pac"] * 0.2 + p["sho"] * 0.2 + p["dfn"] * 0.15))
 	return int(round(p["sho"] * 0.5 + p["pac"] * 0.35 + p["pas"] * 0.15))
+
+func form() -> String:
+	return str(d.get("form", "4-3-3"))
+
+# New formation: pick the best eleven for the new places, best player first for each role.
+func set_form(name: String, roles: Array) -> void:
+	d["form"] = name
+	var used := []
+	var xi := []
+	xi.resize(roles.size())
+	for pass_n in 2:
+		for s in roles.size():
+			if xi[s] != null:
+				continue
+			var best := -1
+			for i in (d["squad"] as Array).size():
+				if used.has(i):
+					continue
+				if pass_n == 0 and str(d["squad"][i]["pos"]) != str(roles[s]):
+					continue
+				if pass_n == 1 and str(d["squad"][i]["pos"]) == "GK":
+					continue
+				if best < 0 or ovr_of(d["squad"][i]) > ovr_of(d["squad"][best]):
+					best = i
+			if best >= 0:
+				xi[s] = best
+				used.append(best)
+	for s in roles.size():
+		if xi[s] == null:
+			for i in (d["squad"] as Array).size():
+				if not used.has(i):
+					xi[s] = i
+					used.append(i)
+					break
+	d["xi"] = xi
+	save()
+
+# A career match played together on a friend's career: your own club gets the same coins and your starters grow too.
+func coop_reward(coins: int, won: bool) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	d["coins"] = int(d["coins"]) + coins
+	var lines := ["+%d COINS FOR YOUR OWN CLUB" % coins]
+	for i in d["xi"]:
+		var pl: Dictionary = d["squad"][int(i)]
+		pl["xp"] = int(pl["xp"]) + 22 + (10 if won else 0)
+		while int(pl["xp"]) >= 100 and ovr_of(pl) < int(pl["pot"]):
+			pl["xp"] = int(pl["xp"]) - 100
+			var k := _grow_key(pl, rng)
+			pl[k] = int(pl[k]) + 1
+			lines.append("%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[STAT_KEYS.find(k)]])
+		if int(pl["xp"]) > 100:
+			pl["xp"] = 100
+	save()
+	return lines
 
 func new_career(club: int, n_clubs: int, names: Array) -> void:
 	var rng := RandomNumberGenerator.new()
@@ -204,6 +261,7 @@ func finish_match(mine: int, theirs: int, scorers: Array) -> Array:
 	var lines := []
 	var coins := 15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))
 	d["coins"] = int(d["coins"]) + coins
+	last_coins = coins
 	lines.append("+%d COINS" % coins)
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
