@@ -186,7 +186,11 @@ func next_match() -> Array:
 
 # How strong a computer club is: a fixed spread, rising a little each season.
 func club_level(c: int) -> int:
-	return [0, 2, -3, 4, 1, -2, 3, -4][c % 8] + (int(d.get("season", 1)) - 1)
+	return [0, 2, -3, 4, 1, -2, 3, -4][c % 8] + (4 - div()) * 4
+
+# The career is a ladder of four divisions: you start in Division 4. The top two go up, the bottom two go down.
+func div() -> int:
+	return clampi(int(d.get("div", 4)), 1, 4)
 
 func my_strength() -> float:
 	var s := 0.0
@@ -300,11 +304,22 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			lines.append(yn)
 	if season_over():
 		var pos := rank_of(me)
-		var prize: int = [300, 200, 140, 100, 70, 50, 30, 20][clampi(pos - 1, 0, 7)]
+		var prize: int = int([300, 200, 140, 100, 70, 50, 30, 20][clampi(pos - 1, 0, 7)] * (1.0 + (4 - div()) * 0.5))
 		d["coins"] = int(d["coins"]) + prize
 		if pos == 1:
 			stt["titles"] = int(stt["titles"]) + 1
-		d["note"] = "SEASON %d OVER: YOU FINISHED %s.  +%d COINS" % [int(d["season"]), ordinal(pos), prize]
+		var mv := 0
+		var what := ""
+		if pos <= 2 and div() > 1:
+			mv = -1
+			what = "  PROMOTED TO DIVISION %d!" % (div() - 1)
+		elif pos >= 7 and div() < 4:
+			mv = 1
+			what = "  RELEGATED TO DIVISION %d." % (div() + 1)
+		elif pos == 1:
+			what = "  CHAMPIONS OF DIVISION 1!"
+		d["move"] = mv
+		d["note"] = "DIVISION %d, SEASON %d: YOU FINISHED %s.%s  +%d COINS" % [div(), int(d["season"]), ordinal(pos), what, prize]
 	save()
 	return lines
 
@@ -326,6 +341,8 @@ func _grow_key(pl: Dictionary, rng: RandomNumberGenerator) -> String:
 
 func next_season() -> void:
 	d["season"] = int(d["season"]) + 1
+	d["div"] = clampi(div() + int(d.get("move", 0)), 1, 4)
+	d["move"] = 0
 	d["note"] = ""
 	for pl in d["squad"]:
 		pl["age"] = int(pl["age"]) + 1
@@ -605,3 +622,106 @@ func spend_tp(i: int, si: int) -> String:
 	pl["tp"] = int(pl["tp"]) - 1
 	save()
 	return "%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[si]]
+
+# ---------------------------------------------------------------- the cup
+# A knockout cup for the eight clubs: quarter-final, semi-final, final. It runs beside the league and can be
+# started again as soon as you are out or have won it.
+const CUP_ROUNDS := ["QUARTER-FINAL", "SEMI-FINAL", "FINAL"]
+
+func cup() -> Dictionary:
+	if not d.has("cup"):
+		cup_new()
+	return d["cup"]
+
+func cup_new() -> void:
+	var ids := []
+	for i in int(d["n"]):
+		ids.append(i)
+	ids.shuffle()
+	d["cup"] = {"r": 0, "teams": ids, "out": false, "won": false, "log": [], "n": int(d.get("cup", {}).get("n", 0)) + 1}
+	save()
+
+func cup_over() -> bool:
+	var cp: Dictionary = cup()
+	return bool(cp["out"]) or bool(cp["won"])
+
+# The club you meet in this round, or -1 when your cup is over.
+func cup_opp() -> int:
+	var cp: Dictionary = cup()
+	if cup_over():
+		return -1
+	var t: Array = cp["teams"]
+	var i: int = t.find(float(int(d["club"])))
+	if i < 0:
+		i = t.find(int(d["club"]))
+	if i < 0:
+		return -1
+	return int(t[i + 1]) if i % 2 == 0 else int(t[i - 1])
+
+func cup_round_name() -> String:
+	return CUP_ROUNDS[clampi(int(cup()["r"]), 0, 2)]
+
+# Books your cup tie and plays the others. Returns lines for the full-time screen.
+func cup_finish(mine: int, theirs: int) -> Array:
+	var cp: Dictionary = cup()
+	var me: int = int(d["club"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var t: Array = cp["teams"]
+	var r: int = int(cp["r"])
+	var next := []
+	var res := []
+	var lines := []
+	var won: bool = mine > theirs
+	for i in range(0, t.size(), 2):
+		var a: int = int(t[i])
+		var b: int = int(t[i + 1])
+		var ga := 0
+		var gb := 0
+		if a == me or b == me:
+			ga = mine if a == me else theirs
+			gb = theirs if a == me else mine
+			next.append(me if won else (b if a == me else a))
+		else:
+			var diff := (_strength(a) - _strength(b)) / 14.0
+			ga = _poisson(rng, 1.35 * exp(diff))
+			gb = _poisson(rng, 1.35 * exp(-diff))
+			if ga == gb:
+				if rng.randf() < 0.5:
+					ga += 1
+				else:
+					gb += 1
+			next.append(a if ga > gb else b)
+		res.append([a, b, ga, gb])
+	(cp["log"] as Array).append(res)
+	var stt: Dictionary = stats()
+	var coins := 10 + mine * 5
+	if won:
+		coins += [60, 100, 250][clampi(r, 0, 2)]
+		if r >= 2:
+			cp["won"] = true
+			stt["cups"] = int(stt.get("cups", 0)) + 1
+			lines.append("YOU WON THE CUP!")
+		else:
+			cp["r"] = r + 1
+			cp["teams"] = next
+			lines.append("THROUGH TO THE %s" % CUP_ROUNDS[r + 1])
+	else:
+		cp["out"] = true
+		lines.append("OUT OF THE CUP IN THE %s" % CUP_ROUNDS[clampi(r, 0, 2)])
+	d["st"] = stt
+	d["coins"] = int(d["coins"]) + coins
+	last_coins = coins
+	lines.insert(0, "+%d COINS" % coins)
+	# the men who played learn from a cup tie too
+	for i in d["xi"]:
+		var pl: Dictionary = d["squad"][int(i)]
+		pl["xp"] = int(pl["xp"]) + (30 if won else 20)
+		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
+			pl["xp"] = int(pl["xp"]) - 100
+			pl["tp"] = int(pl.get("tp", 0)) + 1
+			lines.append("%s  +1 TP" % str(pl["n"]).to_upper())
+		if int(pl["xp"]) > 100:
+			pl["xp"] = 100
+	save()
+	return lines
