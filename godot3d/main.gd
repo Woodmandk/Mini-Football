@@ -1331,6 +1331,9 @@ func _formation(kicking: int, instant: bool) -> void:
 			pos = Vector3(-0.6 * s, 0, 0)
 		if p.idx == 6 and p.team == kicking:
 			pos = Vector3(-7.0 * s, 0, 1.5)
+		# the other team waits outside the centre circle
+		if p.team != kicking and Vector2(pos.x, pos.z).length() < 10.5:
+			pos.x = -sqrt(10.5 * 10.5 - pos.z * pos.z) * s
 		if instant:
 			p.position = pos
 			p.vel = Vector3.ZERO
@@ -2084,6 +2087,9 @@ func _play(dt: float) -> void:
 		var h = _hum_of(p)
 		if p.stun > 0.0:
 			p.stun -= dt
+		elif set_piece == "kick" and ball_owner != null and p.team != ball_owner.team:
+			# kick-off: the other team may not move in until the ball is played
+			want = Vector3.ZERO
 		elif pen_wait:
 			want = Vector3.ZERO
 			if p == ball_owner and h == null:
@@ -2099,14 +2105,14 @@ func _play(dt: float) -> void:
 				want = _run_to(p, aim, p.top_speed)
 			else:
 				var run: bool = h.sprint and not h.tired and h.stick.length() > 0.3
-				h.stam = clampf(h.stam + (-0.2 if run else 0.13) * dt, 0.0, 1.0)
+				h.stam = clampf(h.stam + (-0.125 if run else 0.16) * dt, 0.0, 1.0)
 				if h.stam <= 0.0:
 					h.tired = true
 				elif h.stam > 0.3:
 					h.tired = false
-				var sp: float = p.top_speed * (1.0 if run else 0.82)
+				var sp: float = p.top_speed * (1.0 if run else 0.88)
 				if ball_owner == p:
-					sp *= 0.93
+					sp *= 0.96
 				if h.charging:
 					sp *= 0.6
 				want = Vector3(h.stick.x, 0, h.stick.y) * sp
@@ -2265,7 +2271,7 @@ func _ball_free(dt: float) -> void:
 		var h := Vector2(ball_vel.x, ball_vel.z)
 		var sp := h.length()
 		if sp > 0.0:
-			var ns := maxf(sp - (1.5 + 0.35 * sp) * dt, 0.0)
+			var ns := maxf(sp - (1.3 + 0.28 * sp) * dt, 0.0)
 			ball_vel.x *= ns / sp
 			ball_vel.z *= ns / sp
 	# inside a net: the net catches the ball
@@ -2319,6 +2325,8 @@ func _release(p, v: Vector3, kind := 0) -> void:
 	ball_last = p
 	ball_ignore = p
 	ignore_t = 0.3
+	if set_piece == "kick":
+		protect_t = maxf(protect_t, 1.2)
 	set_piece = ""
 	pen_wait = false
 	p.hold_t = 0.0
@@ -2398,7 +2406,7 @@ func _pass(p, m, lofted: bool, cross := false) -> void:
 		tc = dir4.length() / vc
 		v = dir4.normalized() * vc + Vector3(0, (2.05 - 0.3) / tc + 4.9 * tc, 0)
 	elif not lofted:
-		var sp := clampf(5.2 + d * 0.66, 8.5, 24.0)
+		var sp := clampf(8.0 + d * 0.75, 12.0, 27.0)
 		var aim: Vector3 = m.position + m.vel * (d / sp) * 0.8
 		var dir: Vector3 = (aim - p.position)
 		dir.y = 0.0
@@ -2765,9 +2773,16 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		var goal_side: Vector3 = (own_goal - c.position).normalized()
 		if p == chaser[t]:
 			if _team_human(t):
-				# your team mate holds the runner up; you make the tackle
+				# your team mate holds the runner up; you make the tackle.
+				# But if you are far away, or the runner is close to your goal, he goes in himself.
+				var hd := 99.0
+				for hm in humans:
+					if hm.team == t and hm.ctrl != null:
+						hd = minf(hd, hm.ctrl.position.distance_to(c.position))
+				if hd > 7.0 or c.position.distance_to(own_goal) < 26.0:
+					return _run_to(p, c.position + c.vel * 0.25 + goal_side * 0.5, p.top_speed * 0.95)
 				return _run_to(p, c.position + goal_side * 2.6, p.top_speed * 0.95)
-			return _run_to(p, c.position + c.vel * 0.25 + goal_side * 0.5, p.top_speed * 0.97 * cpu["spd"])
+			return _run_to(p, c.position + c.vel * 0.25 + goal_side * 0.5, p.top_speed * 0.93 * cpu["spd"])
 		if p == second[t]:
 			return _run_to(p, c.position + goal_side * 6.0, p.top_speed * 0.9)
 	var bu: float = ball.position.x * s
