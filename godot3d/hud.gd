@@ -653,10 +653,10 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			mid.size = Vector2(2, ph)
 			pp.add_child(mid)
 			var pcol := {"GK": Color(0.95, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
-			var bw := minf(128.0, pw / 4.4)
+			var bw := minf(114.0, pw / 4.4)
 			for si2 in xi.size():
 				var pl: Dictionary = sqd[int(xi[si2])]
-				var fx2: float = 0.03 + float(form[si2][1]) * 1.18
+				var fx2: float = 0.0 if si2 == 0 else clampf(0.24 + (float(form[si2][1]) - 0.15) / 0.59 * 0.76, 0.0, 1.0)
 				var fy: float = 0.5 + float(form[si2][2]) * 0.44
 				var pb := _player_btn(pl, int(xi[si2]), Vector2(30 + fx2 * (pw - bw - 12) + 6, 100 + fy * (ph - 56) + 4), Vector2(bw, 48), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]))
 				menu.add_child(pb)
@@ -728,6 +728,8 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			co3.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			menu.add_child(co3)
 			var bk3 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
+			var fb := _btn("FORMATION:  " + str(c3.get("fname", "4-3-3")), "c_form", null, "alt", Vector2(158, 14), Vector2(230, 48), 17)
+			menu.add_child(fb)
 			menu.add_child(bk3)
 		"teams":
 			_title("PICK YOUR TEAM", "")
@@ -802,11 +804,14 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				var tb2 := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(48, 318), Vector2(260, 50), "TEAM:  ")
 				menu.add_child(tb2)
 				var rx := w - col_w - 40.0
-				var md := _btn("SAME TEAM" if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 24)
+				var cot := str(info.get("co_text", ""))
+				var md := _btn(("CAREER TOGETHER" if cot != "" else "SAME TEAM") if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 24)
 				menu.add_child(md)
 				items.append([md, Vector2(80, 0), 0.05])
-				var mh := _label("You two against the computer" if str(info.get("mode", "")) == "coop" else "Your team against your friend's: " + str(info["clubs"][int(info.get("gclub", 1))]["n"]), 16, Color(1, 1, 1, 0.75), font2)
+				var mh := _label((cot if cot != "" else "You two against the computer") if str(info.get("mode", "")) == "coop" else "Your team against your friend's: " + str(info["clubs"][int(info.get("gclub", 1))]["n"]), 16, Color(1, 1, 1, 0.75), font2)
 				mh.position = Vector2(rx + 4, 158)
+				mh.size = Vector2(col_w - 8, 24)
+				mh.clip_text = true
 				menu.add_child(mh)
 				var d2 := _btn("LEVEL: " + str(info.get("diff", "")), "diff", null, "ghost", Vector2(rx, 190), Vector2(col_w * 0.5 - 6, 50), 17)
 				var l2 := _btn("MATCH: " + str(info.get("len", "")), "len", null, "ghost", Vector2(rx + col_w * 0.5 + 6, 190), Vector2(col_w * 0.5 - 6, 50), 17)
@@ -830,6 +835,8 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				var txt := "Looking for the room"
 				if conn:
 					txt = "Waiting for the host to start.   Mode: " + ("SAME TEAM" if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER")
+					if str(info.get("co_text", "")) != "":
+						txt = "CAREER TOGETHER:   " + str(info.get("co_text", ""))
 				var s3 := _label(txt, 20, Color(1, 1, 1, 0.8), font2)
 				s3.position = Vector2(0, h * 0.5 + 10)
 				s3.size = Vector2(w, 30)
@@ -958,6 +965,8 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				tw.tween_property(sc, "modulate:a", 1.0, 0.2)
 			items.append([rs, Vector2(0, 40), 0.35])
 			var by2 := h - 84.0
+			var cls: Array = info.get("car_lines", [])
+			var co_car := bool(info.get("career", false)) and bool(info.get("online", false))
 			if str(info.get("role", "")) == "guest":
 				var wt := _label("Waiting for the host...", 20, Color(1, 1, 1, 0.8), font2)
 				wt.position = Vector2(w * 0.5 - 330, by2 + 22)
@@ -965,11 +974,18 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				var mb := _btn("MAIN MENU", "menu", null, "alt", Vector2(w * 0.5 + 20, by2), Vector2(300, 70), 24)
 				menu.add_child(mb)
 				items.append([mb, Vector2(0, 60), 0.5])
-			elif bool(info.get("career", false)):
+			elif bool(info.get("career", false)) and not co_car:
 				var cn := _btn("CONTINUE", "career", null, "primary", Vector2(w * 0.5 - 170, by2), Vector2(340, 70), 30)
 				menu.add_child(cn)
 				items.append([cn, Vector2(0, 60), 0.5])
-				var cls: Array = info.get("car_lines", [])
+			else:
+				var ag := _btn("NEXT MATCH" if co_car else "PLAY AGAIN", "again", null, "primary", Vector2(w * 0.5 - 320, by2), Vector2(300, 70), 30)
+				var mb2 := _btn("MAIN MENU", "menu", null, "alt", Vector2(w * 0.5 + 20, by2), Vector2(300, 70), 24)
+				menu.add_child(ag)
+				menu.add_child(mb2)
+				items.append([ag, Vector2(0, 60), 0.5])
+				items.append([mb2, Vector2(0, 60), 0.58])
+			if not cls.is_empty():
 				var shown := []
 				for ci4 in mini(cls.size(), 4):
 					shown.append(str(cls[ci4]))
@@ -980,13 +996,6 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 				cll.size = Vector2(w, 24)
 				cll.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(cll)
-			else:
-				var ag := _btn("PLAY AGAIN", "again", null, "primary", Vector2(w * 0.5 - 320, by2), Vector2(300, 70), 30)
-				var mb2 := _btn("MAIN MENU", "menu", null, "alt", Vector2(w * 0.5 + 20, by2), Vector2(300, 70), 24)
-				menu.add_child(ag)
-				menu.add_child(mb2)
-				items.append([ag, Vector2(0, 60), 0.5])
-				items.append([mb2, Vector2(0, 60), 0.58])
 	if n in ["friend", "join", "lobby"]:
 		var back := _btn("<  BACK", "back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 		menu.add_child(back)

@@ -22,12 +22,49 @@ const DIFF := [
 	{"need": 0.60, "spd": 0.96, "err": 1.0, "think": 0.32},
 	{"need": 0.45, "spd": 1.0, "err": 0.6, "think": 0.22},
 ]
-const FORM := [ # 4-3-3: [role, along 0..1, across -1..1]
-	["GK", 0.0, 0.0],
-	["DF", 0.22, -0.78], ["DF", 0.17, -0.27], ["DF", 0.17, 0.27], ["DF", 0.22, 0.78],
-	["MF", 0.42, -0.45], ["MF", 0.37, 0.0], ["MF", 0.42, 0.45],
-	["FW", 0.68, -0.72], ["FW", 0.72, 0.0], ["FW", 0.68, 0.72],
-]
+# Formations: [role, along 0..1, across -1..1]. Slot 9 is always a central forward and slot 6 a central midfielder (they take the kick-off).
+const FORMS := {
+	"4-3-3": [
+		["GK", 0.0, 0.0],
+		["DF", 0.22, -0.78], ["DF", 0.17, -0.27], ["DF", 0.17, 0.27], ["DF", 0.22, 0.78],
+		["MF", 0.42, -0.45], ["MF", 0.37, 0.0], ["MF", 0.42, 0.45],
+		["FW", 0.68, -0.72], ["FW", 0.72, 0.0], ["FW", 0.68, 0.72],
+	],
+	"4-4-2": [
+		["GK", 0.0, 0.0],
+		["DF", 0.22, -0.78], ["DF", 0.17, -0.27], ["DF", 0.17, 0.27], ["DF", 0.22, 0.78],
+		["MF", 0.44, -0.76], ["MF", 0.38, -0.24], ["MF", 0.38, 0.24], ["MF", 0.44, 0.76],
+		["FW", 0.70, -0.22], ["FW", 0.70, 0.22],
+	],
+	"3-5-2": [
+		["GK", 0.0, 0.0],
+		["DF", 0.18, -0.46], ["DF", 0.15, 0.0], ["DF", 0.18, 0.46],
+		["MF", 0.44, -0.82], ["MF", 0.38, -0.36], ["MF", 0.31, 0.0], ["MF", 0.38, 0.36], ["MF", 0.44, 0.82],
+		["FW", 0.70, -0.22], ["FW", 0.70, 0.22],
+	],
+	"5-3-2": [
+		["GK", 0.0, 0.0],
+		["DF", 0.27, -0.82], ["DF", 0.18, -0.42], ["DF", 0.15, 0.0], ["DF", 0.18, 0.42], ["DF", 0.27, 0.82],
+		["MF", 0.38, 0.0], ["MF", 0.42, -0.44], ["MF", 0.42, 0.44],
+		["FW", 0.70, -0.22], ["FW", 0.70, 0.22],
+	],
+	"4-2-3-1": [
+		["GK", 0.0, 0.0],
+		["DF", 0.22, -0.78], ["DF", 0.17, -0.27], ["DF", 0.17, 0.27], ["DF", 0.22, 0.78],
+		["MF", 0.34, -0.24], ["MF", 0.34, 0.24], ["MF", 0.54, 0.0],
+		["FW", 0.64, -0.72], ["FW", 0.74, 0.0], ["FW", 0.64, 0.72],
+	],
+}
+const FORM_NAMES := ["4-3-3", "4-4-2", "3-5-2", "5-3-2", "4-2-3-1"]
+var forms := ["4-3-3", "4-3-3"]
+var opt_car := false
+var sq_over := []
+var form_over := ""
+var co_got := false
+var test_ft := 0.0
+var test_t := 0.0
+var co_text := ""
+var co_pay := []
 const NAMES := [
 	["Holm", "Berg", "Lund", "Dahl", "Krogh", "Skov", "Winther", "Bak", "Friis", "Storm", "Juhl"],
 	["Marsh", "Reed", "Cole", "Hale", "Frost", "Quinn", "Drake", "Nash", "Voss", "Pike", "Lowe"],
@@ -217,6 +254,9 @@ func _ready() -> void:
 		car.wipe()
 	if net.web:
 		dbg = str(JavaScriptBridge.eval("location.search", true)).contains("dbg")
+		var qs := str(JavaScriptBridge.eval("location.search", true))
+		if qs.contains("ft="):
+			test_ft = float(qs.split("ft=")[1].split("&")[0])
 		if str(JavaScriptBridge.eval("location.search", true)).contains("low"):
 			quality = 0
 		seen_how = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-how')||''}catch(e){return ''}})()", true)) == "1"
@@ -265,9 +305,12 @@ func _ready() -> void:
 			if menu_arg == "full":
 				tst[0]["g"] = ["STORM 12'", "BAK 40'"]
 				tst[1]["g"] = ["PIKE 77'"]
-			if menu_arg in ["career", "squad", "table", "cfull"]:
+			if menu_arg in ["career", "table", "cfull"] or menu_arg.begins_with("squad"):
 				_action("career")
-			if menu_arg == "squad":
+			if menu_arg.begins_with("squad"):
+				for fi2 in int(menu_arg.substr(5)) if menu_arg.length() > 5 else 0:
+					_action("c_form")
+				menu_arg = "squad"
 				car_sel = 9
 			if menu_arg == "cfull":
 				career_on = true
@@ -366,6 +409,11 @@ func _set_clubs(a: int, b: int, force := false) -> void:
 	if not players.is_empty() and clubs[0] == a and clubs[1] == b and not force:
 		return
 	clubs = [a, b]
+	forms = [FORM_NAMES[a % 3], FORM_NAMES[(b * 2 + 1) % FORM_NAMES.size()]]
+	if career_on:
+		forms[0] = car.form()
+	elif form_over != "":
+		forms[0] = form_over
 	for p in players:
 		p.queue_free()
 	players.clear()
@@ -409,6 +457,7 @@ func _build_teams() -> void:
 				gk_col = c
 				break
 		gk_used.append(gk_col)
+		var FORM: Array = FORMS[forms[t]]
 		for i in FORM.size():
 			var p = PlayerS.new()
 			p.team = t
@@ -419,6 +468,9 @@ func _build_teams() -> void:
 			p.num = NUMS[i]
 			if career_on and t == 0:
 				p.num = int(car.d["squad"][int(car.d["xi"][i])]["num"])
+			elif t == 0 and sq_over.size() == 11:
+				p.pname = str(sq_over[i][0])
+				p.num = int(sq_over[i][1])
 			var shirt := Color(kits[t][0])
 			var shorts := Color(kits[t][1])
 			var socks := Color(kits[t][2])
@@ -644,7 +696,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "career": career_on, "car_lines": car_lines,
+		"car": _car_info(), "career": career_on, "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -670,13 +722,13 @@ func _car_info() -> Dictionary:
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
 			"xp": int(pl["xp"]), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl)})
 	var roles := []
-	for f in FORM:
+	for f in FORMS[car.form()]:
 		roles.append([f[0], f[1], f[2]])
 	return {
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
 		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [],
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
-		"form": roles, "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
+		"form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 	}
 
 func _stat_rows() -> Array:
@@ -798,6 +850,15 @@ func _action(act: String, arg = null) -> void:
 				if r2 != "":
 					au["blip2"].play()
 				hud.refresh(_menu_info())
+		"c_form":
+			var fi := (FORM_NAMES.find(car.form()) + 1) % FORM_NAMES.size()
+			var rl := []
+			for f in FORMS[FORM_NAMES[fi]]:
+				rl.append(f[0])
+			car.set_form(FORM_NAMES[fi], rl)
+			car_sel = -1
+			car_msg = ""
+			hud.refresh(_menu_info())
 		"c_new":
 			if car_sure:
 				car.wipe()
@@ -833,7 +894,13 @@ func _action(act: String, arg = null) -> void:
 			net.join(room)
 			hud.show_menu("lobby", _menu_info())
 		"mode":
-			opt_mode = "versus" if opt_mode == "coop" else "coop"
+			if opt_mode == "coop" and not opt_car and car.has_save():
+				opt_car = true
+			elif opt_mode == "coop":
+				opt_car = false
+				opt_mode = "versus"
+			else:
+				opt_mode = "coop"
 			_send_lobby()
 			hud.show_menu("lobby", _menu_info())
 		"diff":
@@ -874,7 +941,15 @@ func _action(act: String, arg = null) -> void:
 
 func _send_lobby() -> void:
 	if net.role == "host" and net.connected:
-		net.send({"_": "lobby", "mode": opt_mode, "diff": opt_diff, "len": opt_len})
+		net.send({"_": "lobby", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "car": _co_text()})
+
+# One line both phones see in the lobby when the next match is a career match played together.
+func _co_text() -> String:
+	if not (opt_car and opt_mode == "coop" and car.has_save()):
+		return ""
+	if car.season_over():
+		return "%s  ·  NEW SEASON" % CLUBS[int(car.d["club"])]["n"]
+	return "%s v %s  ·  ROUND %d OF %d  ·  %s IN THE TABLE" % [CLUBS[int(car.d["club"])]["n"], CLUBS[car.next_match()[0]]["n"], int(car.d["round"]) + 1, car.rounds_total(), Career.ordinal(car.rank_of(int(car.d["club"])))]
 
 func _host_start() -> void:
 	var h0 := Human.new()
@@ -884,10 +959,19 @@ func _host_start() -> void:
 	humans = [h0, h1]
 	me = 0
 	view_flip = 1.0
-	_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
+	var sq := []
+	career_on = _co_text() != ""
+	if career_on:
+		if car.season_over():
+			car.next_season()
+		_set_clubs(int(car.d["club"]), car.next_match()[0], true)
+		for p in teams[0]:
+			sq.append([p.pname, p.num])
+	else:
+		_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
 	screen = "match"
 	hud.show_menu("", {})
-	net.send({"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs})
+	net.send({"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs, "forms": forms, "sq": sq})
 	_begin_match(true)
 
 func _guest_start(m: Dictionary) -> void:
@@ -900,7 +984,16 @@ func _guest_start(m: Dictionary) -> void:
 	me = 1
 	view_flip = 1.0 if h1.team == 0 else -1.0
 	var cl: Array = m.get("clubs", [0, 1])
-	_set_clubs(int(cl[0]), int(cl[1]))
+	sq_over = m.get("sq", [])
+	co_got = false
+	car_lines = []
+	_set_clubs(int(cl[0]), int(cl[1]), true)
+	var fm: Array = m.get("forms", [])
+	if fm.size() == 2 and FORMS.has(str(fm[0])) and FORMS.has(str(fm[1])) and (forms[0] != str(fm[0]) or forms[1] != str(fm[1])):
+		form_over = str(fm[0])
+		_set_clubs(int(cl[0]), int(cl[1]), true)
+		form_over = ""
+	sq_over = []
 	screen = "match"
 	state = "intro"
 	state_t = 0.0
@@ -936,6 +1029,7 @@ func _net_poll() -> void:
 				opt_mode = m.get("mode", "coop")
 				opt_diff = int(m.get("diff", 1))
 				opt_len = int(m.get("len", 1))
+				co_text = str(m.get("car", ""))
 				if screen == "menu":
 					hud.show_menu("lobby", _menu_info())
 			"start":
@@ -977,7 +1071,9 @@ func _net_poll() -> void:
 # ---------------------------------------------------------------- match flow
 
 func _begin_match(with_intro: bool) -> void:
+	test_t = Time.get_ticks_msec() / 1000.0
 	car_goals = []
+	car_lines = []
 	score = [0, 0]
 	clock = 0.0
 	half = 1
@@ -1570,7 +1666,11 @@ func _dbg() -> void:
 		"screen": screen, "state": state, "room": room, "conn": net.connected, "role": net.role, "score": score,
 		"h": hs, "ball": [snappedf(ball.position.x, 0.1), snappedf(ball.position.z, 0.1)], "menu": hud.menu_name, "mode": opt_mode, "clock": int(clock),
 		"owner": players.find(ball_owner), "fps": Engine.get_frames_per_second(), "clubs": clubs,
+		"forms": forms, "career": career_on, "lines": car_lines, "coins": int(car.d.get("coins", -1)), "round": int(car.d.get("round", -1)), "n9": players[9].pname if players.size() > 9 else "",
 	}), true)
+	if test_ft > 0.0 and screen == "match" and state == "play" and net.role != "guest":
+		if Time.get_ticks_msec() / 1000.0 - test_t > test_ft:
+			_full_time()
 
 func _tick(dt: float) -> void:
 	state_t += dt
@@ -1845,6 +1945,8 @@ func _full_time() -> void:
 		fx("excite", 0.6)
 	if career_on:
 		car_lines = car.finish_match(score[0], score[1], car_goals)
+		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
+		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1]] + ([str(car.d["note"])] if car.season_over() else [])]
 	hud.show_menu("full", _menu_info())
 
 func _idle_players(dt: float) -> void:
@@ -2604,7 +2706,7 @@ func _send_snap() -> void:
 	net.send({
 		"_": "s", "st": state, "t": snappedf(state_t, 0.01), "sc": score, "ck": int(clock), "p": _pack(),
 		"h": hc, "c": ch, "e": out_ev, "sr": players.find(scorer), "rp": hud.replay_on,
-		"ts": tst if state == "full" else null, "sm": snappedf(humans[1].stam, 0.02) if humans.size() > 1 else 1.0,
+		"ts": tst if state == "full" else null, "co": co_pay if (state == "full" and career_on) else null, "sm": snappedf(humans[1].stam, 0.02) if humans.size() > 1 else 1.0,
 	})
 	out_ev = []
 
@@ -2637,6 +2739,16 @@ func _guest_frame(dt: float) -> void:
 			tst = snap["ts"]
 		if humans.size() > me:
 			humans[me].stam = float(snap.get("sm", 1.0))
+		if state == "full" and snap.get("co") != null and not co_got:
+			# a career match played together pays the guest's own club too
+			co_got = true
+			var cp: Array = snap["co"]
+			if not car.has_save():
+				car.new_career(opt_club, CLUBS.size(), SURNAMES)
+			car_lines = car.coop_reward(int(cp[0]), bool(cp[1]))
+			car_lines.append_array(cp[2])
+			if prev == "full":
+				hud.show_menu("full", _menu_info())
 		if state == "full" and prev != "full":
 			hud.show_menu("full", _menu_info())
 		elif state != "full" and prev == "full":
