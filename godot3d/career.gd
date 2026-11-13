@@ -106,11 +106,11 @@ func coop_reward(coins: int, won: bool) -> Array:
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["xp"] = int(pl["xp"]) + 22 + (10 if won else 0)
-		while int(pl["xp"]) >= 100 and ovr_of(pl) < int(pl["pot"]):
+		# a full bar gives a training point: you choose what he learns
+		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
 			pl["xp"] = int(pl["xp"]) - 100
-			var k := _grow_key(pl, rng)
-			pl[k] = int(pl[k]) + 1
-			lines.append("%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[STAT_KEYS.find(k)]])
+			pl["tp"] = int(pl.get("tp", 0)) + 1
+			lines.append("%s  +1 TP" % str(pl["n"]).to_upper())
 		if int(pl["xp"]) > 100:
 			pl["xp"] = 100
 	save()
@@ -286,11 +286,11 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 				xp += 14
 				pl["g"] = int(pl["g"]) + 1
 		pl["xp"] = int(pl["xp"]) + xp
-		while int(pl["xp"]) >= 100 and ovr_of(pl) < int(pl["pot"]):
+		# a full bar gives a training point: you choose what he learns
+		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
 			pl["xp"] = int(pl["xp"]) - 100
-			var k := _grow_key(pl, rng)
-			pl[k] = int(pl[k]) + 1
-			lines.append("%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[STAT_KEYS.find(k)]])
+			pl["tp"] = int(pl.get("tp", 0)) + 1
+			lines.append("%s  +1 TP" % str(pl["n"]).to_upper())
 		if int(pl["xp"]) > 100:
 			pl["xp"] = 100
 	# the youth academy sends a talent up twice a season
@@ -582,16 +582,26 @@ func youth_arrives(rng: RandomNumberGenerator) -> String:
 func train_cost(pl: Dictionary) -> int:
 	return int(round((40 + maxi(ovr_of(pl) - 60, 0) * 6) * (1.0 - 0.07 * (fac("training") - 1))))
 
-# Spend coins on one training session: +1 in a stat that suits the position.
+# Spend coins on one training session: one training point for this player.
 func train(i: int) -> String:
 	var pl: Dictionary = d["squad"][i]
 	var c := train_cost(pl)
-	if int(d["coins"]) < c or ovr_of(pl) >= int(pl["pot"]):
+	if int(d["coins"]) < c or ovr_of(pl) + int(pl.get("tp", 0)) >= int(pl["pot"]):
 		return ""
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	var k := _grow_key(pl, rng)
-	pl[k] = int(pl[k]) + 1
+	pl["tp"] = int(pl.get("tp", 0)) + 1
 	d["coins"] = int(d["coins"]) - c
 	save()
-	return "%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[STAT_KEYS.find(k)]]
+	return "%s  +1 TP" % str(pl["n"]).to_upper()
+
+# Use one training point on the stat you pick.
+func spend_tp(i: int, si: int) -> String:
+	var pl: Dictionary = d["squad"][i]
+	if int(pl.get("tp", 0)) <= 0 or si < 0 or si > 3:
+		return ""
+	var k: String = STAT_KEYS[si]
+	if int(pl[k]) >= 97:
+		return "He cannot get better at that."
+	pl[k] = int(pl[k]) + 1
+	pl["tp"] = int(pl["tp"]) - 1
+	save()
+	return "%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[si]]

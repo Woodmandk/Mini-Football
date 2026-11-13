@@ -77,7 +77,7 @@ const NAMES := [
 	["Marsh", "Reed", "Cole", "Hale", "Frost", "Quinn", "Drake", "Nash", "Voss", "Pike", "Lowe"],
 ]
 const NUMS := [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7]
-const CLUBS := [ # name, short, home kit [shirt, shorts, socks], away kit
+const CLUBS0 := [ # name, short, home kit [shirt, shorts, socks], away kit
 	{"n": "RED BISON", "s": "BIS", "k": ["dc2424", "f7f7f7", "dc2424"], "a": ["f7f7f7", "dc2424", "f7f7f7"]},
 	{"n": "HARBOUR SHARKS", "s": "SHA", "k": ["2961eb", "142466", "f7f7f7"], "a": ["f2f2f2", "142466", "2961eb"]},
 	{"n": "SKY ROVERS", "s": "ROV", "k": ["7fd0ff", "f7f7f7", "7fd0ff"], "a": ["16213a", "7fd0ff", "16213a"]},
@@ -88,6 +88,12 @@ const CLUBS := [ # name, short, home kit [shirt, shorts, socks], away kit
 	{"n": "ORANGE FOXES", "s": "FOX", "k": ["f57c00", "1a1a1a", "f57c00"], "a": ["1a1a1a", "f57c00", "1a1a1a"]},
 ]
 const SURNAMES := ["Holm", "Berg", "Lund", "Dahl", "Krogh", "Skov", "Winther", "Bak", "Friis", "Storm", "Juhl", "Marsh", "Reed", "Cole", "Hale", "Frost", "Quinn", "Drake", "Nash", "Voss", "Pike", "Lowe", "Brandt", "Falk", "Lind", "Mohr", "Ravn", "Stein", "Toft", "Vang", "Kaas", "Bro", "Gram", "Hede", "Kjaer", "Munk", "Noer", "Rask", "Sand", "Thorn", "Ward", "Blake", "Cross", "Dunn", "Ellis", "Ford", "Grant", "Hart", "Kane", "Moss", "Price", "Rhodes", "Shaw", "Tate", "Wolfe", "York", "Abel", "Bech", "Dam", "Eskild"]
+var CLUBS: Array = CLUBS0.duplicate(true) # the league as it is now: your own club sits in its place with your name and kit
+var own_new := false
+var upd_ready := false
+var upd_t := 3.0
+var app_inst := false
+const OWN_COLS := ["dc2424", "f57c00", "f5c518", "2e9e4f", "7fd0ff", "2961eb", "142466", "7b2fbf", "e85aa0", "f4f4f4", "8a8f98", "1c1c20"]
 var TEAM_NAMES := ["RED BISON", "HARBOUR SHARKS"]
 var opt_club := 0
 var guest_club := 1
@@ -316,6 +322,7 @@ func _ready() -> void:
 	car = Career.new()
 	car.names = SURNAMES
 	car.load_save(net.web)
+	_apply_own()
 	if new_car:
 		car.wipe()
 	if net.web:
@@ -468,6 +475,8 @@ func _ready() -> void:
 			if menu_arg.begins_with("hub_"):
 				hub_tab = menu_arg.substr(4)
 				menu_arg = "main"
+			if menu_arg == "myclub":
+				_own_start()
 			if menu_arg == "pack":
 				pack_res = {"n": "NORDIN", "pos": "FW", "age": 21, "pot": 84, "ovr": 77, "st": [80, 79, 66, 41]}
 			if menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad"):
@@ -499,6 +508,8 @@ func _ready() -> void:
 					_action("c_form")
 				if menu_arg != "squad9":
 					car_sel = 9
+					if menu_arg == "squad7":
+						car.d["squad"][9]["tp"] = 2
 				menu_arg = "squad"
 			if menu_arg == "cfull":
 				career_on = true
@@ -944,7 +955,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
+		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -1037,7 +1048,10 @@ func _car_info() -> Dictionary:
 	for i in (d["squad"] as Array).size():
 		var pl: Dictionary = d["squad"][i]
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
-			"xp": int(pl["xp"]), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl)})
+			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl)})
+	var tp_all := 0
+	for pl in d["squad"]:
+		tp_all += int(pl.get("tp", 0))
 	var mk := []
 	for pl in car.market():
 		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl)})
@@ -1048,7 +1062,7 @@ func _car_info() -> Dictionary:
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
 		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [],
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
-		"fac": _fac_info(), "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
+		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 	}
 
 func _stat_rows() -> Array:
@@ -1096,14 +1110,44 @@ func _to_menu() -> void:
 		crowd_au.play()
 	_show_hub()
 
-# The home screen. The club is always there: the first time, you pick one.
+# Your own club: its name and kit take the place of the club you started as.
+func _apply_own() -> void:
+	CLUBS = CLUBS0.duplicate(true)
+	if not car.has_save() or not car.d.has("own"):
+		return
+	var o: Dictionary = car.d["own"]
+	var k: Array = o["k"]
+	var light: bool = Color(str(k[0])).get_luminance() > 0.6
+	var alt := "1c1c20" if light else "f4f4f4"
+	CLUBS[int(car.d["club"])] = {"n": str(o["n"]), "s": str(o["s"]), "k": [str(k[0]), str(k[1]), str(k[2])], "a": [alt, str(k[0]), alt]}
+
+func _own_start() -> void:
+	if not car.d.has("own"):
+		var cc: Dictionary = CLUBS[int(car.d["club"])]
+		car.d["own"] = {"n": cc["n"], "s": cc["s"], "k": (cc["k"] as Array).duplicate()}
+
+func _own_changed() -> void:
+	car.save()
+	_apply_own()
+	if screen == "menu":
+		# show the new kit on the pitch behind the menu
+		var me_c := int(car.d["club"])
+		opt_club = me_c
+		_set_clubs(me_c, clubs[1] if clubs[1] != me_c else _other_club(me_c), true)
+		_kickoff(0)
+
+# The home screen. The club is always there: the first time, you make your own.
 func _show_hub(pick := true) -> void:
 	if not car.has_save() and pick and net.web:
-		teams_from = "new"
-		hud.show_menu("teams", _menu_info())
+		car.new_career(opt_club, CLUBS.size(), SURNAMES)
+		car.d["own"] = {"n": "MY CLUB", "s": "MYC", "k": (CLUBS0[opt_club]["k"] as Array).duplicate()}
+		own_new = true
+		_own_changed()
+		hud.show_menu("myclub", _menu_info())
 		return
 	if not car.has_save():
 		car.new_career(opt_club, CLUBS.size(), SURNAMES)
+		_apply_own()
 	car_sel = -1
 	car_sell = -1
 	hud.show_menu("main", _menu_info())
@@ -1204,6 +1248,59 @@ func _action(act: String, arg = null) -> void:
 				if r2 != "":
 					au["blip2"].play()
 				hud.refresh(_menu_info())
+		"update":
+			if net.web:
+				JavaScriptBridge.eval("if(window.bbApp)bbApp.update();else location.reload()", true)
+			else:
+				hud.toast("Updates come by themselves here")
+		"install":
+			if net.web:
+				var ir := str(JavaScriptBridge.eval("(window.bbApp?bbApp.install():'manual')", true))
+				if ir != "asked":
+					hud.toast("Open the browser menu and tap 'Add to Home screen' or 'Install app'")
+			else:
+				hud.toast("Already installed")
+		"own":
+			_own_start()
+			own_new = false
+			hud.show_menu("myclub", _menu_info())
+		"own_name":
+			_own_start()
+			var cur := str(car.d["own"]["n"])
+			var nn := ""
+			if net.web:
+				var res = JavaScriptBridge.eval("(function(){var r=prompt('Club name', %s);return r===null?'':String(r)})()" % JSON.stringify(cur), true)
+				nn = str(res) if res != null else ""
+			else:
+				nn = "FC TEST %d" % (randi() % 90 + 10)
+			var clean := ""
+			for ch in nn.to_upper().strip_edges():
+				if (ch >= "A" and ch <= "Z") or (ch >= "0" and ch <= "9") or ch == " " or ch in ["Æ", "Ø", "Å", "-"]:
+					clean += ch
+			clean = clean.strip_edges().substr(0, 16)
+			if clean.length() >= 2:
+				var sh := ""
+				for ch in clean:
+					if ch != " " and ch != "-" and sh.length() < 3:
+						sh += ch
+				car.d["own"]["n"] = clean
+				car.d["own"]["s"] = sh
+				_own_changed()
+			hud.refresh(_menu_info())
+		"own_col":
+			_own_start()
+			car.d["own"]["k"][int(arg[0])] = str(arg[1])
+			_own_changed()
+			hud.refresh(_menu_info())
+		"own_ok":
+			own_new = false
+			_show_hub(false)
+		"c_tp":
+			if car_sel >= 0:
+				car_msg = car.spend_tp(car_sel, int(arg))
+				if car_msg.contains("+1"):
+					au["blip2"].play()
+				hud.refresh(_menu_info())
 		"c_club":
 			car_msg = ""
 			hud.show_menu("club", _menu_info())
@@ -1243,12 +1340,15 @@ func _action(act: String, arg = null) -> void:
 			hud.refresh(_menu_info())
 		"c_new":
 			if car_sure:
-				# a new start: pick the club first
+				# a new start: make the club first
 				car.wipe()
 				car_sure = false
 				hub_tab = "play"
-				teams_from = "new"
-				hud.show_menu("teams", _menu_info())
+				car.new_career(opt_club, CLUBS.size(), SURNAMES)
+				car.d["own"] = {"n": "MY CLUB", "s": "MYC", "k": (CLUBS0[opt_club]["k"] as Array).duplicate()}
+				own_new = true
+				_own_changed()
+				hud.show_menu("myclub", _menu_info())
 			else:
 				car_sure = true
 				hud.refresh(_menu_info())
@@ -4010,6 +4110,19 @@ func _guest_frame(dt: float) -> void:
 
 func _process(dt: float) -> void:
 	real_t += dt
+	if net.web and screen == "menu":
+		# is a newer version out? The page asks the server now and then; here we only read its answer
+		upd_t -= dt
+		if upd_t <= 0.0:
+			upd_t = 5.0
+			var lv := str(JavaScriptBridge.eval("(window.bbApp?bbApp.latest():'')", true))
+			app_inst = str(JavaScriptBridge.eval("(window.bbApp?bbApp.installed():0)", true)) == "1"
+			var was := upd_ready
+			upd_ready = lv != "" and lv != "null" and lv != version and version != "dev"
+			if upd_ready and not was:
+				hud.toast("A new version is ready: tap UPDATE")
+				if hud.menu_name == "main":
+					hud.refresh(_menu_info())
 	_auto_quality(dt)
 	var rdt := dt / maxf(Engine.time_scale, 0.05)
 	if not autotest:
