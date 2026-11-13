@@ -165,3 +165,58 @@ static func whoosh() -> AudioStreamWAV:
 		var env := sin(clampf(t / 0.5, 0.0, 1.0) * PI)
 		s[i] = s[i] * 3.0 * env * env
 	return _wav(s)
+
+# the slide tackle's "sus": a band of noise that sweeps down, as in the 2D game
+static func slide() -> AudioStreamWAV:
+	var n := int(RATE * 0.34)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	var lo := 0.0
+	var bp := 0.0
+	for i in n:
+		var t := float(i) / RATE
+		var f := 1500.0 * pow(480.0 / 1500.0, t / 0.34)
+		var g := 2.0 * sin(PI * f / RATE)
+		var x := randf() * 2.0 - 1.0
+		lo += g * bp
+		var hi := x - lo - 1.3 * bp
+		bp += g * hi
+		var env := minf(t / 0.012, 1.0) * exp(-t * 7.5)
+		s[i] = bp * env * 1.5
+	return _wav(s)
+
+# the ball is won: a low thump and a short bright note
+static func win() -> AudioStreamWAV:
+	var n := int(RATE * 0.12)
+	var s := _noise(n, 0.12)
+	for i in n:
+		var t := float(i) / RATE
+		var f := lerpf(330.0, 490.0, t / 0.08)
+		s[i] = s[i] * 4.0 * exp(-t * 40.0) + sin(t * TAU * f) * exp(-t * 30.0) * 0.25
+	return _wav(s)
+
+# a body hits the grass
+static func thud() -> AudioStreamWAV:
+	var n := int(RATE * 0.16)
+	var s := _noise(n, 0.06)
+	for i in n:
+		var t := float(i) / RATE
+		s[i] = s[i] * 7.0 * exp(-t * 28.0) + sin(t * TAU * lerpf(75.0, 55.0, t / 0.14)) * exp(-t * 22.0) * 0.6
+	return _wav(s)
+
+# four rising notes after a goal
+static func jingle() -> AudioStreamWAV:
+	var notes := [523.0, 659.0, 784.0, 1047.0]
+	var n := int(RATE * 0.95)
+	var s := PackedFloat32Array()
+	s.resize(n)
+	for j in 4:
+		var st := int(RATE * (0.25 + j * 0.11))
+		for i in int(RATE * 0.25):
+			if st + i >= n:
+				break
+			var t := float(i) / RATE
+			var ph: float = fmod(t * notes[j], 1.0)
+			var tri: float = 4.0 * absf(ph - 0.5) - 1.0
+			s[st + i] += tri * minf(t / 0.01, 1.0) * exp(-t * 9.0) * 0.28
+	return _wav(s)

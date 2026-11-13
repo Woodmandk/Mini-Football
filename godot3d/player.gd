@@ -46,6 +46,8 @@ var _idle_t := 0.0
 var tackle_t := -1.0
 var feet := false # keeper only: he has the ball at his feet (back pass), not in his hands
 var slide_live := false
+var slide_dir := Vector3.ZERO
+var slide_fx := 0.0
 var dive_t := -1.0
 var dive_side := 0.0
 var mood := 0 # 0 normal, 1 scorer, 2 happy, 3 sad
@@ -606,7 +608,7 @@ func animate(dt: float) -> void:
 	if tackle_t >= 0.0:
 		tackle_t += dt
 		var down := _ease(tackle_t / 0.12)
-		var up := _ease((tackle_t - 0.52) / 0.16)
+		var up := _ease((tackle_t - 0.4) / 0.2)
 		var s := down * (1.0 - up)
 		lean = lerpf(lean, 1.0, s)
 		by = lerpf(by, -0.36, s)
@@ -627,7 +629,7 @@ func animate(dt: float) -> void:
 		head_x = lerpf(head_x, -0.3, s)
 		tw = lerpf(tw, 0.0, s)
 		k = clampf(dt * 26.0, 0.0, 1.0)
-		if tackle_t > 0.68:
+		if tackle_t > 0.64:
 			tackle_t = -1.0
 	# keeper dive: push off, fly flat with both hands to the ball, land, get up
 	if dive_t >= 0.0:
