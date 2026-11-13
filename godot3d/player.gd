@@ -44,6 +44,7 @@ var _yaw_prev := 0.0
 var _turn := 0.0
 var _idle_t := 0.0
 var tackle_t := -1.0
+var feet := false # keeper only: he has the ball at his feet (back pass), not in his hands
 var slide_live := false
 var dive_t := -1.0
 var dive_side := 0.0
@@ -297,6 +298,9 @@ func build(shirt: Color, shorts: Color, socks: Color, skin: Color, hair: Color, 
 	marker.visible = false
 	add_child(marker)
 	scale = Vector3.ONE * 1.22
+
+func hands() -> bool:
+	return role == "GK" and not feet
 
 func fwd() -> Vector3:
 	return Vector3(-sin(yaw), 0, -cos(yaw))
