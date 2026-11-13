@@ -230,6 +230,8 @@ var autotest := false
 var dbg := false
 var seen_how := false
 var how_next := ""
+var hub_tab := "play"
+var pack_res := {}
 var bot_mode := ""
 var bot_t := {}
 var bstats := {"have": 0, "shots": 0, "passes": 0, "tackles": 0, "switches": 0}
@@ -463,6 +465,11 @@ func _ready() -> void:
 			if menu_arg == "full":
 				tst[0]["g"] = ["STORM 12'", "BAK 40'"]
 				tst[1]["g"] = ["PIKE 77'"]
+			if menu_arg.begins_with("hub_"):
+				hub_tab = menu_arg.substr(4)
+				menu_arg = "main"
+			if menu_arg == "pack":
+				pack_res = {"n": "NORDIN", "pos": "FW", "age": 21, "pot": 84, "ovr": 77, "st": [80, 79, 66, 41]}
 			if menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad"):
 				_action("career")
 			if menu_arg == "seasontest":
@@ -937,7 +944,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
+		"car": _car_info(), "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "has_car": car.has_save(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -1087,13 +1094,25 @@ func _to_menu() -> void:
 	_kickoff(0)
 	if not crowd_au.playing:
 		crowd_au.play()
+	_show_hub()
+
+# The home screen. The club is always there: the first time, you pick one.
+func _show_hub(pick := true) -> void:
+	if not car.has_save() and pick and net.web:
+		teams_from = "new"
+		hud.show_menu("teams", _menu_info())
+		return
+	if not car.has_save():
+		car.new_career(opt_club, CLUBS.size(), SURNAMES)
+	car_sel = -1
+	car_sell = -1
 	hud.show_menu("main", _menu_info())
 
 func _action(act: String, arg = null) -> void:
 	au["blip2" if act in ["play", "start", "again"] else "blip"].play()
 	if act == "key":
 		return
-	if act in ["play", "friend"] and not seen_how:
+	if act in ["play", "friend", "c_play"] and not seen_how:
 		how_next = act
 		hud.show_menu("how", _menu_info())
 		return
@@ -1114,14 +1133,34 @@ func _action(act: String, arg = null) -> void:
 		"friend":
 			hud.show_menu("friend", _menu_info())
 		"career":
-			if screen == "match":
-				_to_menu()
-			if not car.has_save():
-				car.new_career(opt_club, CLUBS.size(), SURNAMES)
-			car_sel = -1
 			car_msg = ""
 			car_sure = false
-			hud.show_menu("career", _menu_info())
+			if screen == "match":
+				_to_menu()
+			else:
+				_show_hub()
+		"tab":
+			hub_tab = str(arg)
+			car_msg = ""
+			car_sure = false
+			hud.show_menu("main", _menu_info())
+		"quick":
+			hud.show_menu("quick", _menu_info())
+		"how":
+			how_next = "career"
+			hud.show_menu("how", _menu_info())
+		"pack":
+			var pr: Dictionary = car.open_pack(int(arg))
+			if pr.has("pl"):
+				var ppl: Dictionary = pr["pl"]
+				pack_res = {"n": str(ppl["n"]).to_upper(), "pos": str(ppl["pos"]), "age": int(ppl["age"]), "pot": int(ppl["pot"]), "ovr": Career.ovr_of(ppl), "st": [int(ppl["pac"]), int(ppl["sho"]), int(ppl["pas"]), int(ppl["dfn"])]}
+				car_msg = ""
+				au["cheer"].play()
+				fx("flash", 0.5)
+				hud.show_menu("pack", _menu_info())
+			else:
+				car_msg = str(pr.get("err", ""))
+				hud.refresh(_menu_info())
 		"c_play":
 			if not car.season_over():
 				career_on = true
@@ -1134,7 +1173,7 @@ func _action(act: String, arg = null) -> void:
 				_begin_match(true)
 		"c_next":
 			car.next_season()
-			hud.show_menu("career", _menu_info())
+			_show_hub()
 		"c_table":
 			hud.show_menu("table", _menu_info())
 		"c_squad":
@@ -1204,17 +1243,23 @@ func _action(act: String, arg = null) -> void:
 			hud.refresh(_menu_info())
 		"c_new":
 			if car_sure:
+				# a new start: pick the club first
 				car.wipe()
 				car_sure = false
-				_action("career")
+				hub_tab = "play"
+				teams_from = "new"
+				hud.show_menu("teams", _menu_info())
 			else:
 				car_sure = true
 				hud.refresh(_menu_info())
 		"teams":
-			teams_from = "lobby" if net.role != "" else "main"
+			teams_from = "lobby" if net.role != "" else "quick"
 			hud.show_menu("teams", _menu_info())
 		"teams_back":
-			hud.show_menu(teams_from, _menu_info())
+			if teams_from == "new":
+				_show_hub(false)
+			else:
+				hud.show_menu(teams_from, _menu_info())
 		"club":
 			opt_club = int(arg)
 			if net.web:
@@ -1225,7 +1270,10 @@ func _action(act: String, arg = null) -> void:
 				# show the new kit on the pitch behind the menu
 				_set_clubs(opt_club, clubs[1] if clubs[1] != opt_club else _other_club(opt_club))
 				_kickoff(0)
-			hud.show_menu(teams_from, _menu_info())
+			if teams_from == "new":
+				_show_hub(false)
+			else:
+				hud.show_menu(teams_from, _menu_info())
 		"host":
 			room = "%04d" % (randi() % 9000 + 1000)
 			net.host(room)

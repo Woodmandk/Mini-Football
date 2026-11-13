@@ -440,66 +440,82 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 	var h := size.y
 	var shade := ColorRect.new()
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	shade.color = Color(0.0, 0.03, 0.02, 0.45 if n in ["main", "full"] else 0.62)
+	shade.color = Color(0.0, 0.03, 0.02, 0.5 if n in ["main", "full"] else 0.62)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(shade)
 	var items := [] # [control, slide-from, delay]
 	match n:
 		"main":
-			var t1 := _label("BANEBOLD", 92, Color.WHITE)
-			t1.add_theme_constant_override("outline_size", 14)
-			t1.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.55))
-			t1.position = Vector2(48, h * 0.5 - 118)
-			menu.add_child(t1)
-			items.append([t1, Vector2(-80, 0), 0.0])
-			var t2 := _label("3D  PROTOTYPE", 30, GOLD)
-			t2.add_theme_constant_override("outline_size", 8)
-			t2.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.6))
-			t2.position = Vector2(54, h * 0.5 - 8)
-			menu.add_child(t2)
-			items.append([t2, Vector2(-80, 0), 0.08])
-			var t3 := _label("Play the match yourself", 20, Color(1, 1, 1, 0.8), font2)
-			t3.position = Vector2(54, h * 0.5 + 34)
-			menu.add_child(t3)
-			items.append([t3, Vector2(-80, 0), 0.14])
-			var ver := _label(str(info.get("version", "")), 14, Color(1, 1, 1, 0.6), font2)
-			ver.position = Vector2(16, h - 28)
-			menu.add_child(ver)
-			menu.add_child(_btn("SOUND: " + str(info.get("snd", "")), "snd_opt", null, "ghost", Vector2(16, h - 84), Vector2(150, 46), 15))
-			menu.add_child(_btn("VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt", null, "ghost", Vector2(176, h - 84), Vector2(150, 46), 15))
-			var bx := w - 372.0
-			var by := h * 0.5 - 132.0
-			var play := _btn("PLAY", "play", null, "primary", Vector2(bx, by), Vector2(324, 92), 44)
-			menu.add_child(play)
-			items.append([play, Vector2(120, 0), 0.1])
-			var fr := _btn("PLAY WITH A FRIEND", "friend", null, "alt", Vector2(bx, by + 106), Vector2(324, 66), 24)
-			menu.add_child(fr)
-			items.append([fr, Vector2(120, 0), 0.18])
-			var d := _btn("LEVEL: " + str(info.get("diff", "")), "diff", null, "ghost", Vector2(bx, by + 186), Vector2(156, 52), 17)
-			menu.add_child(d)
-			items.append([d, Vector2(120, 0), 0.26])
-			var l := _btn("MATCH: " + str(info.get("len", "")), "len", null, "ghost", Vector2(bx + 168, by + 186), Vector2(156, 52), 17)
-			menu.add_child(l)
-			items.append([l, Vector2(120, 0), 0.3])
-			by -= 46.0
-			play.position.y = by
-			play.size.y = 80
-			play.pivot_offset = play.size * 0.5
-			var cr := _btn("CAREER", "career", null, "alt", Vector2(bx, by + 92), Vector2(324, 70), 30)
-			cr.add_theme_color_override("font_color", GOLD)
-			menu.add_child(cr)
-			items.append([cr, Vector2(120, 0), 0.14])
-			fr.position.y = by + 174
-			fr.size.y = 60
-			d.position.y = by + 246
-			l.position.y = by + 246
-			var tb := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(bx, by + 310), Vector2(324, 52), "TEAM:  ")
+			_hub(info, w, h, items, anim)
+		"quick":
+			_title("QUICK MATCH", "A friendly against the computer. Nothing is at stake.")
+			var qx := w * 0.5 - 190.0
+			var qy := maxf(104.0, h * 0.5 - 150.0)
+			var tb := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(qx, qy), Vector2(380, 60), "TEAM:  ")
 			menu.add_child(tb)
-			items.append([tb, Vector2(120, 0), 0.34])
+			items.append([tb, Vector2(0, 40), 0.0])
+			var d := _btn("LEVEL: " + str(info.get("diff", "")), "diff", null, "alt", Vector2(qx, qy + 72), Vector2(185, 58), 19)
+			menu.add_child(d)
+			var l := _btn("MATCH: " + str(info.get("len", "")), "len", null, "alt", Vector2(qx + 195, qy + 72), Vector2(185, 58), 19)
+			menu.add_child(l)
+			var play := _btn("PLAY", "play", null, "primary", Vector2(qx, qy + 150), Vector2(380, 88), 42)
+			menu.add_child(play)
+			items.append([play, Vector2(0, 60), 0.08])
 			if anim:
 				play.ready.connect(func(): _pulse(play))
 			else:
 				_pulse(play)
+			menu.add_child(_btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"pack":
+			var pk: Dictionary = info.get("pack", {})
+			var pw := 460.0
+			var ph := minf(h - 60.0, 420.0)
+			var pp := Panel.new()
+			pp.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.96), 22, GOLD))
+			pp.position = Vector2(w * 0.5 - pw * 0.5, h * 0.5 - ph * 0.5)
+			pp.size = Vector2(pw, ph)
+			pp.pivot_offset = pp.size * 0.5
+			menu.add_child(pp)
+			var k1 := _label("NEW PLAYER", 18, GOLD, font2)
+			k1.position = Vector2(0, 18)
+			k1.size = Vector2(pw, 26)
+			k1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pp.add_child(k1)
+			var k2 := _label(str(pk.get("ovr", 0)), 84, Color.WHITE)
+			k2.position = Vector2(0, 44)
+			k2.size = Vector2(pw, 96)
+			k2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pp.add_child(k2)
+			var k3 := _label(str(pk.get("n", "")), 34, Color.WHITE)
+			k3.position = Vector2(0, 142)
+			k3.size = Vector2(pw, 42)
+			k3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pp.add_child(k3)
+			var k4 := _label("%s   ·   AGE %d   ·   CAN REACH %d" % [str(pk.get("pos", "")), int(pk.get("age", 0)), int(pk.get("pot", 0))], 16, Color(1, 1, 1, 0.8), font2)
+			k4.position = Vector2(0, 188)
+			k4.size = Vector2(pw, 24)
+			k4.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pp.add_child(k4)
+			var sn2 := ["PACE", "SHOOTING", "PASSING", "DEFENDING"]
+			var sv: Array = pk.get("st", [0, 0, 0, 0])
+			for si3 in 4:
+				var sx := 40.0 + (si3 % 2) * (pw * 0.5 - 20.0)
+				var sy := 226.0 + (si3 / 2) * 34.0
+				var s1 := _label(sn2[si3], 15, Color(1, 1, 1, 0.75), font2)
+				s1.position = Vector2(sx, sy + 4)
+				pp.add_child(s1)
+				var s2 := _label(str(int(sv[si3])), 24, Color.WHITE)
+				s2.position = Vector2(sx + 120, sy)
+				pp.add_child(s2)
+			menu.add_child(_btn("GREAT", "career", null, "primary", Vector2(w * 0.5 - 150, h * 0.5 + ph * 0.5 - 76), Vector2(300, 58), 26))
+			if anim:
+				# the card pops in
+				pp.scale = Vector2(0.2, 0.2)
+				pp.modulate.a = 0.0
+				var ptw := pp.create_tween()
+				ptw.set_parallel(true)
+				ptw.tween_property(pp, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				ptw.tween_property(pp, "modulate:a", 1.0, 0.2)
 		"career":
 			var c: Dictionary = info.get("car", {})
 			var t0 := _label(str(c.get("name", "")), 40, Color.WHITE)
@@ -970,7 +986,10 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var bk5 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk5)
 		"teams":
-			_title("PICK YOUR TEAM", "")
+			if str(info.get("from", "")) == "new":
+				_title("PICK YOUR CLUB", "This is the club you will run and play for.")
+			else:
+				_title("PICK YOUR TEAM", "")
 			var cl: Array = info.get("clubs", [])
 			var gw := minf(250.0, (w - 100.0) / 4.0 - 12.0)
 			var gx := (w - (gw + 12.0) * 4.0 + 12.0) * 0.5
@@ -1273,6 +1292,321 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 	if anim:
 		for it in items:
 			_slide_in(it[0], it[1], it[2])
+
+# ---------------------------------------------------------------- the hub: one home screen with five tabs
+
+# A big button with a title and a line of small text under it.
+func _tile(title: String, sub: String, act: String, arg, pos: Vector2, sz: Vector2, col := Color.WHITE, fs := 26) -> Button:
+	var b := _btn("", act, arg, "alt", pos, sz, fs)
+	var t := _label(title, fs, col)
+	t.position = Vector2(20, sz.y * 0.5 - (fs * 0.5 + (13 if sub != "" else 0)) - 4)
+	t.size = Vector2(sz.x - 40, fs + 10)
+	b.add_child(t)
+	if sub != "":
+		var s := _label(sub, 15, Color(1, 1, 1, 0.72), font2)
+		s.autowrap_mode = TextServer.AUTOWRAP_WORD
+		s.position = Vector2(20, sz.y * 0.5 + fs * 0.5 - 8)
+		s.size = Vector2(sz.x - 40, 40)
+		b.add_child(s)
+	var ar := _label(">", 24, Color(1, 1, 1, 0.45))
+	ar.position = Vector2(sz.x - 34, sz.y * 0.5 - 18)
+	b.add_child(ar)
+	return b
+
+func _panel(pos: Vector2, sz: Vector2, a := 0.86) -> Panel:
+	var p := Panel.new()
+	p.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, a), 18, Color(1, 1, 1, 0.14)))
+	p.position = pos
+	p.size = sz
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(p)
+	return p
+
+func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> void:
+	var c: Dictionary = info.get("car", {})
+	var tab := str(info.get("tab", "play"))
+	# --- top bar: your club, where the season stands, your coins
+	var bar := ColorRect.new()
+	bar.color = Color(0.02, 0.05, 0.04, 0.82)
+	bar.position = Vector2.ZERO
+	bar.size = Vector2(w, 64)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(bar)
+	var kit: Array = c.get("kit", ["888888", "ffffff"])
+	var badge := Panel.new()
+	badge.add_theme_stylebox_override("panel", _box(Color(str(kit[0])), 9, Color(1, 1, 1, 0.6)))
+	badge.position = Vector2(18, 11)
+	badge.size = Vector2(42, 42)
+	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(badge)
+	var nm := _label(str(c.get("name", "BANEBOLD")), 26, Color.WHITE)
+	nm.position = Vector2(72, 4)
+	menu.add_child(nm)
+	var sub := _label("SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 14, Color(1, 1, 1, 0.75), font2)
+	sub.position = Vector2(73, 37)
+	menu.add_child(sub)
+	var co := _label("COINS  %d" % int(c.get("coins", 0)), 24, GOLD)
+	co.position = Vector2(w - 270, 8)
+	co.size = Vector2(250, 34)
+	co.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	menu.add_child(co)
+	# --- bottom bar: the five places
+	var nh := 62.0
+	var nb := ColorRect.new()
+	nb.color = Color(0.02, 0.05, 0.04, 0.9)
+	nb.position = Vector2(0, h - nh - 8)
+	nb.size = Vector2(w, nh + 8)
+	nb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(nb)
+	var tabs := [["shop", "SHOP"], ["team", "TEAM"], ["play", "PLAY"], ["club", "CLUB"], ["profile", "PROFILE"]]
+	var tw := (w - 32.0 - 4 * 8.0) / 5.0
+	for i in tabs.size():
+		var on: bool = tabs[i][0] == tab
+		var tb := _btn(tabs[i][1], "tab", tabs[i][0], "ghost", Vector2(16 + i * (tw + 8.0), h - nh - 2), Vector2(tw, nh - 6), 24 if tabs[i][0] == "play" else 20)
+		if on:
+			# chalk white = where you are
+			for st in ["normal", "hover", "focus", "pressed"]:
+				tb.add_theme_stylebox_override(st, _box(Color(0.94, 0.95, 0.92), 14))
+			for cc in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+				tb.add_theme_color_override(cc, Color(0.03, 0.08, 0.05))
+		elif tabs[i][0] == "play":
+			for cc in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+				tb.add_theme_color_override(cc, GREEN.lightened(0.25))
+		menu.add_child(tb)
+	var y0 := 78.0
+	var ch := h - nh - 8.0 - y0 - 12.0
+	var msg := str(c.get("msg", ""))
+	match tab:
+		"play":
+			var lw := w * 0.58 - 48.0
+			var bh := minf(84.0, ch * 0.24)
+			var card := _panel(Vector2(32, y0), Vector2(lw, ch - bh - 10.0))
+			items.append([card, Vector2(-60, 0), 0.0])
+			var cy := card.size.y
+			if bool(c.get("over", false)):
+				var nt := _label(str(c.get("note", "SEASON OVER")), 24, GOLD)
+				nt.autowrap_mode = TextServer.AUTOWRAP_WORD
+				nt.position = Vector2(20, cy * 0.5 - 45)
+				nt.size = Vector2(lw - 40, 90)
+				nt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				card.add_child(nt)
+				var ns := _btn("NEXT SEASON", "c_next", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 38)
+				menu.add_child(ns)
+				items.append([ns, Vector2(0, 60), 0.1])
+			else:
+				var nx := _label("NEXT LEAGUE MATCH   ·   " + ("HOME" if bool(c.get("home", true)) else "AWAY"), 17, GOLD, font2)
+				nx.position = Vector2(0, 14)
+				nx.size = Vector2(lw, 26)
+				nx.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				card.add_child(nx)
+				var kits := [c.get("kit", ["888888"]), c.get("opp_kit", ["888888"])]
+				var nms := [str(c.get("name", "")), str(c.get("opp", ""))]
+				var rks := [int(c.get("rank", 1)), int(c.get("opp_rank", 1))]
+				var my := cy * 0.5 - 62.0 + 16.0
+				for si in 2:
+					var cx := lw * (0.25 if si == 0 else 0.75)
+					var sh2 := Panel.new()
+					sh2.add_theme_stylebox_override("panel", _box(Color(str(kits[si][0])), 10, Color(1, 1, 1, 0.55)))
+					sh2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					sh2.size = Vector2(60, 60)
+					sh2.position = Vector2(cx - 30, my)
+					card.add_child(sh2)
+					var fs2 := 26
+					while fs2 > 14 and font.get_string_size(nms[si], HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > lw * 0.5 - 30.0:
+						fs2 -= 2
+					var nl2 := _label(nms[si], fs2, Color.WHITE)
+					nl2.position = Vector2(cx - lw * 0.25, my + 68)
+					nl2.size = Vector2(lw * 0.5, 34)
+					nl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					card.add_child(nl2)
+					var rl := _label(_ord(rks[si]) + " IN THE TABLE", 14, Color(1, 1, 1, 0.7), font2)
+					rl.position = Vector2(cx - lw * 0.25, my + 102)
+					rl.size = Vector2(lw * 0.5, 24)
+					rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					card.add_child(rl)
+				var vv := _label("V", 32, GOLD)
+				vv.position = Vector2(0, my + 12)
+				vv.size = Vector2(lw, 40)
+				vv.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				card.add_child(vv)
+				var pm := _btn("PLAY MATCH", "c_play", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 38)
+				menu.add_child(pm)
+				items.append([pm, Vector2(0, 60), 0.1])
+				if anim:
+					pm.ready.connect(func(): _pulse(pm))
+				else:
+					_pulse(pm)
+			var rx := w * 0.58
+			var rw := w - rx - 32.0
+			var th := (ch - 20.0) / 3.0
+			var t1 := _tile("QUICK MATCH", "A friendly against the computer", "quick", null, Vector2(rx, y0), Vector2(rw, th))
+			var t2 := _tile("PLAY WITH A FRIEND", "Two phones: same team or against each other", "friend", null, Vector2(rx, y0 + th + 10.0), Vector2(rw, th))
+			var t3 := _tile("LEAGUE TABLE", "You are %s. Last round: %s" % [_ord(int(c.get("rank", 1))), (str((c.get("last", []) as Array)[0]) if not (c.get("last", []) as Array).is_empty() else "no matches yet")], "c_table", null, Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th))
+			for t in [t1, t2, t3]:
+				menu.add_child(t)
+			items.append([t1, Vector2(80, 0), 0.04])
+			items.append([t2, Vector2(80, 0), 0.08])
+			items.append([t3, Vector2(80, 0), 0.12])
+		"team":
+			var lw2 := w * 0.5 - 40.0
+			var sq: Array = c.get("squad", [])
+			var xi: Array = c.get("xi", [])
+			var bt := _tile("THE TEAM", "Line-up, formation, training and selling. Tap two players to swap them.", "c_squad", null, Vector2(32, y0), Vector2(lw2, ch * 0.56), Color.WHITE, 34)
+			menu.add_child(bt)
+			items.append([bt, Vector2(-60, 0), 0.0])
+			var hw2 := (lw2 - 10.0) * 0.5
+			var p1 := _panel(Vector2(32, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0))
+			var p2 := _panel(Vector2(32 + hw2 + 10.0, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0))
+			var vals := [["TEAM RATING", str(int(c.get("str", 0)))], ["FORMATION", str(c.get("fname", ""))]]
+			var pp := [p1, p2]
+			for i in 2:
+				var a := _label(vals[i][0], 14, GOLD, font2)
+				a.position = Vector2(0, 12)
+				a.size = Vector2(hw2, 22)
+				a.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				pp[i].add_child(a)
+				var b2 := _label(vals[i][1], 44, Color.WHITE)
+				b2.position = Vector2(0, (pp[i].size.y - 22.0) * 0.5 - 14.0)
+				b2.size = Vector2(hw2, 56)
+				b2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				pp[i].add_child(b2)
+			var rx2 := w * 0.5 + 8.0
+			var rw2 := w - rx2 - 32.0
+			var lp := _panel(Vector2(rx2, y0), Vector2(rw2, ch))
+			items.append([lp, Vector2(80, 0), 0.05])
+			var lh := _label("YOUR BEST PLAYERS", 15, GOLD, font2)
+			lh.position = Vector2(18, 12)
+			lp.add_child(lh)
+			var idx := []
+			for i in sq.size():
+				idx.append(i)
+			idx.sort_custom(func(a3, b3): return int(sq[a3]["ovr"]) > int(sq[b3]["ovr"]))
+			var rows := mini(idx.size(), int((ch - 48.0) / 38.0))
+			var pc := {"GK": Color(1.0, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
+			for r in rows:
+				var pl: Dictionary = sq[idx[r]]
+				var yy := 42.0 + r * 38.0
+				var st := ColorRect.new()
+				st.color = pc.get(str(pl["pos"]), Color.WHITE)
+				st.position = Vector2(18, yy + 4)
+				st.size = Vector2(5, 26)
+				lp.add_child(st)
+				var n1 := _label("%s   %s" % [str(pl["pos"]), str(pl["n"])], 20, Color.WHITE)
+				n1.position = Vector2(32, yy)
+				lp.add_child(n1)
+				var n2 := _label(("" if xi.has(idx[r]) else "BENCH    ") + str(int(pl["ovr"])), 20, Color.WHITE if xi.has(idx[r]) else Color(1, 1, 1, 0.6))
+				n2.position = Vector2(rw2 - 198, yy)
+				n2.size = Vector2(180, 30)
+				n2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				lp.add_child(n2)
+		"club":
+			var fcs: Array = c.get("fac", [])
+			var ft := ""
+			for f in fcs:
+				ft += ("" if ft == "" else "   ·   ") + "%s %d" % [str((f as Dictionary).get("n", "")).capitalize(), int((f as Dictionary).get("lv", 1))]
+			var cw := (w - 64.0 - 20.0) / 3.0
+			var defs := [
+				["FACILITIES", "Stadium, training ground and youth academy. Build them with your coins.", "c_club"],
+				["TRANSFERS", "%d players for sale. New ones after every match." % (c.get("market", []) as Array).size(), "c_market"],
+				["LEAGUE TABLE", "You are %s of 8 in season %d." % [_ord(int(c.get("rank", 1))), int(c.get("season", 1))], "c_table"],
+			]
+			for i in 3:
+				var t := _tile(defs[i][0], defs[i][1], defs[i][2], null, Vector2(32 + i * (cw + 10.0), y0), Vector2(cw, ch * 0.62), Color.WHITE, 28)
+				menu.add_child(t)
+				items.append([t, Vector2(0, 50), 0.04 * i])
+			var ip := _panel(Vector2(32, y0 + ch * 0.62 + 10.0), Vector2(w - 64.0, ch * 0.38 - 10.0))
+			var il := _label("YOUR CLUB NOW", 14, GOLD, font2)
+			il.position = Vector2(18, 10)
+			ip.add_child(il)
+			var it := _label(ft if ft != "" else "Nothing built yet", 22, Color.WHITE)
+			it.position = Vector2(18, 34)
+			it.size = Vector2(w - 100.0, 30)
+			ip.add_child(it)
+			var i2 := _label("A bigger stadium brings coins at home matches. A better training ground makes players grow faster.", 15, Color(1, 1, 1, 0.7), font2)
+			i2.autowrap_mode = TextServer.AUTOWRAP_WORD
+			i2.position = Vector2(18, 68)
+			i2.size = Vector2(w - 100.0, 44)
+			ip.add_child(i2)
+		"shop":
+			var packs: Array = info.get("packs", [])
+			var cw2 := (w - 64.0 - 20.0) / 3.0
+			var pcol := [Color(0.8, 0.52, 0.3), Color(0.82, 0.86, 0.9), GOLD]
+			for i in packs.size():
+				var pk: Dictionary = packs[i]
+				var pn := _panel(Vector2(32 + i * (cw2 + 10.0), y0), Vector2(cw2, ch - 30.0), 0.9)
+				items.append([pn, Vector2(0, 50), 0.05 * i])
+				var top := ColorRect.new()
+				top.color = pcol[i]
+				top.position = Vector2(18, 16)
+				top.size = Vector2(cw2 - 36.0, 6)
+				pn.add_child(top)
+				var pt := _label(str(pk["n"]), 30, pcol[i])
+				pt.position = Vector2(0, 30)
+				pt.size = Vector2(cw2, 40)
+				pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				pn.add_child(pt)
+				var pd := _label("One new player for your squad", 15, Color(1, 1, 1, 0.75), font2)
+				pd.position = Vector2(0, 74)
+				pd.size = Vector2(cw2, 22)
+				pd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				pn.add_child(pd)
+				var pr := _label("RATING  %d  TO  %d" % [int(pk["lo"]), int(pk["hi"])], 24, Color.WHITE)
+				pr.position = Vector2(0, (ch - 30.0) * 0.5 - 12.0)
+				pr.size = Vector2(cw2, 34)
+				pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				pn.add_child(pr)
+				var can: bool = int(c.get("coins", 0)) >= int(pk["cost"])
+				var bb := _btn("OPEN   %d COINS" % int(pk["cost"]), "pack", i, "primary" if can else "off", Vector2(32 + i * (cw2 + 10.0) + 18.0, y0 + ch - 30.0 - 70.0), Vector2(cw2 - 36.0, 54), 22)
+				menu.add_child(bb)
+				items.append([bb, Vector2(0, 50), 0.05 * i])
+			var sm := _label(msg if msg != "" else "You earn coins by playing league matches.", 15, GOLD if msg != "" else Color(1, 1, 1, 0.7), font2)
+			sm.position = Vector2(0, y0 + ch - 22.0)
+			sm.size = Vector2(w, 22)
+			sm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(sm)
+		"profile":
+			var ps: Dictionary = info.get("pstats", {})
+			var lw3 := w * 0.5 - 40.0
+			var sp := _panel(Vector2(32, y0), Vector2(lw3, ch))
+			items.append([sp, Vector2(-60, 0), 0.0])
+			var sh := _label("YOUR RECORD", 15, GOLD, font2)
+			sh.position = Vector2(18, 12)
+			sp.add_child(sh)
+			var rws := [["MATCHES", int(ps.get("p", 0))], ["WON", int(ps.get("w", 0))], ["DRAWN", int(ps.get("d", 0))], ["LOST", int(ps.get("l", 0))], ["GOALS SCORED", int(ps.get("gf", 0))], ["GOALS AGAINST", int(ps.get("ga", 0))], ["LEAGUE TITLES", int(ps.get("titles", 0))]]
+			var rh := minf(40.0, (ch - 50.0) / rws.size())
+			for i in rws.size():
+				var a2 := _label(rws[i][0], 18, Color(1, 1, 1, 0.8), font2)
+				a2.position = Vector2(20, 44 + i * rh)
+				sp.add_child(a2)
+				var b3 := _label(str(rws[i][1]), 22, Color.WHITE)
+				b3.position = Vector2(lw3 - 140, 42 + i * rh)
+				b3.size = Vector2(120, 30)
+				b3.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				sp.add_child(b3)
+			var rx3 := w * 0.5 + 8.0
+			var rw3 := w - rx3 - 32.0
+			var bw := (rw3 - 10.0) * 0.5
+			var sbh := minf(62.0, (ch - 30.0) / 4.0)
+			var sl := _label("SETTINGS", 15, GOLD, font2)
+			sl.position = Vector2(rx3 + 4, y0 + 2)
+			menu.add_child(sl)
+			var sets := [
+				["SOUND: " + str(info.get("snd", "")), "snd_opt"], ["VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt"],
+				["LEVEL: " + str(info.get("diff", "")), "diff"], ["MATCH: " + str(info.get("len", "")), "len"],
+				["HOW TO PLAY", "how"], ["SURE? TAP AGAIN" if bool(c.get("sure", false)) else "START OVER", "c_new"],
+			]
+			for i in sets.size():
+				var sb := _btn(sets[i][0], sets[i][1], null, "ghost" if sets[i][1] == "c_new" else "alt", Vector2(rx3 + (i % 2) * (bw + 10.0), y0 + 28.0 + (i / 2) * (sbh + 10.0)), Vector2(bw, sbh), 19)
+				menu.add_child(sb)
+				items.append([sb, Vector2(80, 0), 0.03 * i])
+			var ver := _label("VERSION  " + str(info.get("version", "")), 14, Color(1, 1, 1, 0.6), font2)
+			ver.position = Vector2(rx3 + 4, y0 + ch - 20.0)
+			menu.add_child(ver)
+	var ver2 := _label(str(info.get("version", "")), 12, Color(1, 1, 1, 0.55), font2)
+	ver2.position = Vector2(w - 270, 45)
+	ver2.size = Vector2(250, 16)
+	ver2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	menu.add_child(ver2)
 
 func _title(text: String, small: String) -> void:
 	var t := _label(text, 34, Color.WHITE)

@@ -260,6 +260,12 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		last.append([a, b, ga, gb])
 	d["last"] = last
 	d["round"] = int(d["round"]) + 1
+	var stt: Dictionary = stats()
+	stt["p"] = int(stt["p"]) + 1
+	stt["w" if mine > theirs else ("d" if mine == theirs else "l")] = int(stt["w" if mine > theirs else ("d" if mine == theirs else "l")]) + 1
+	stt["gf"] = int(stt["gf"]) + mine
+	stt["ga"] = int(stt["ga"]) + theirs
+	d["st"] = stt
 	var lines := []
 	var coins := 15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))
 	d["coins"] = int(d["coins"]) + coins
@@ -296,6 +302,8 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		var pos := rank_of(me)
 		var prize: int = [300, 200, 140, 100, 70, 50, 30, 20][clampi(pos - 1, 0, 7)]
 		d["coins"] = int(d["coins"]) + prize
+		if pos == 1:
+			stt["titles"] = int(stt["titles"]) + 1
 		d["note"] = "SEASON %d OVER: YOU FINISHED %s.  +%d COINS" % [int(d["season"]), ordinal(pos), prize]
 	save()
 	return lines
@@ -398,6 +406,71 @@ func market_refresh() -> void:
 	out.sort_custom(func(a, b): return ovr_of(a) > ovr_of(b))
 	d["market"] = out
 	save()
+
+const PACK_NAMES := ["BRONZE PACK", "SILVER PACK", "GOLD PACK"]
+const PACK_COST := [120, 300, 650]
+const PACK_Q := [[-7, 0], [0, 6], [6, 12]]
+
+# What the shop shows: name, price and the rating range you can pull, measured against your own team.
+func packs() -> Array:
+	var lv := int(round(my_strength()))
+	var out := []
+	for i in 3:
+		out.append({"n": PACK_NAMES[i], "cost": PACK_COST[i], "lo": clampi(lv + PACK_Q[i][0], 45, 92), "hi": clampi(lv + PACK_Q[i][1], 50, 94)})
+	return out
+
+# Open a pack: one random player joins the squad.
+func open_pack(tier: int) -> Dictionary:
+	if tier < 0 or tier > 2:
+		return {"err": ""}
+	if (d["squad"] as Array).size() >= SQUAD_MAX:
+		return {"err": "Your squad is full. Sell a player from the bench first."}
+	if int(d["coins"]) < PACK_COST[tier]:
+		return {"err": "You need %d more coins." % (PACK_COST[tier] - int(d["coins"]))}
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var taken := []
+	var used := []
+	for s in d["squad"]:
+		taken.append(str(s["n"]))
+		used.append(int(s["num"]))
+	var pool := []
+	for n in names:
+		if not taken.has(str(n)):
+			pool.append(n)
+	if pool.is_empty():
+		return {"err": "No players left to sign."}
+	var role: String = ["GK", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW"][rng.randi_range(0, 9)]
+	var base: Array = ROLE_BASE[role]
+	var want := clampi(int(round(my_strength())) + rng.randi_range(PACK_Q[tier][0], PACK_Q[tier][1]), 45, 94)
+	var pl := {
+		"n": pool[rng.randi_range(0, pool.size() - 1)], "num": 0, "pos": role, "age": rng.randi_range(17, 30), "xp": 0, "g": 0, "apps": 0,
+		"pac": clampi(base[0] - 8 + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] - 8 + rng.randi_range(-4, 4), 25, 95),
+		"pas": clampi(base[2] - 8 + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] - 8 + rng.randi_range(-4, 4), 25, 95),
+	}
+	# lift or lower all four numbers together until the rating is the one the pack rolled
+	for step in 60:
+		var o := ovr_of(pl)
+		if o == want:
+			break
+		for k in STAT_KEYS:
+			pl[k] = clampi(int(pl[k]) + (1 if o < want else -1), 25, 97)
+	pl["pot"] = clampi(ovr_of(pl) + rng.randi_range(2, 12) - maxi(int(pl["age"]) - 23, 0) * 2, ovr_of(pl), 96)
+	for n in range(2, 99):
+		if not used.has(n):
+			pl["num"] = n
+			break
+	d["coins"] = int(d["coins"]) - PACK_COST[tier]
+	d["squad"].append(pl)
+	save()
+	return {"pl": pl}
+
+func stats() -> Dictionary:
+	if d.has("st"):
+		return d["st"]
+	# an older save: start from this season's row in the table
+	var t: Dictionary = d["table"][int(d["club"])]
+	return {"p": int(t["p"]), "w": int(t["w"]), "d": int(t["d"]), "l": int(t["l"]), "gf": int(t["gf"]), "ga": int(t["ga"]), "titles": 0}
 
 func market() -> Array:
 	if not d.has("market"):
