@@ -20,6 +20,11 @@ var react_t := 0.0
 var phase := 0.0
 var kick_t := -1.0
 var kick_pw := 0.7
+var kick_kind := 0
+var head_t := -1.0
+var throw_t := -1.0
+var skill_t := -1.0
+var hold_up := false
 var fall_t := -1.0
 var fall_dur := 0.6
 var fall_n := 0
@@ -238,10 +243,18 @@ func face(dir: Vector3, rate: float, dt: float) -> void:
 	var want := atan2(-dir.x, -dir.z)
 	yaw = lerp_angle(yaw, want, clampf(rate * dt, 0.0, 1.0))
 
-func start_kick(pw := 0.7) -> void:
-	kick_t = 0.0
+func start_kick(pw := 0.7, kind := 0) -> void:
 	kick_pw = pw
 	kick_n += 1
+	if kind == 1:
+		head_t = 0.0
+	elif kind == 2:
+		throw_t = 0.0
+	elif kind == 3:
+		skill_t = 0.0
+	else:
+		kick_t = 0.0
+	kick_kind = kind
 
 func start_fall(dur := 0.6) -> void:
 	fall_t = 0.0
@@ -405,6 +418,69 @@ func animate(dt: float) -> void:
 		k = clampf(dt * (42.0 if t < 0.25 else 16.0), 0.0, 1.0)
 		if t >= 1.0:
 			kick_t = -1.0
+	# skill move: a full spin over the ball
+	var spin_y := 0.0
+	if skill_t >= 0.0:
+		skill_t += dt
+		var su := skill_t / 0.5
+		spin_y = TAU * _ease(su)
+		ab_l = -0.9
+		ab_r = 0.9
+		el_l = 0.5
+		el_r = 0.5
+		sh_l *= 0.3
+		sh_r *= 0.3
+		lean = -0.12
+		by -= 0.06 * sin(clampf(su, 0.0, 1.0) * PI)
+		tw = 0.0
+		if su >= 1.0:
+			skill_t = -1.0
+	# throw-in: ball held over the head, then both arms whip forward
+	if hold_up or throw_t >= 0.0:
+		var th := 0.0
+		if throw_t >= 0.0:
+			throw_t += dt
+			th = _ease(throw_t / 0.16)
+			if throw_t > 0.5:
+				throw_t = -1.0
+		sh_l = lerpf(3.35, 1.9, th)
+		sh_r = lerpf(3.35, 1.9, th)
+		ab_l = -0.10
+		ab_r = 0.10
+		el_l = lerpf(0.75, 0.1, th)
+		el_r = lerpf(0.75, 0.1, th)
+		lean = lerpf(0.22, -0.28, th)
+		bend = lerpf(0.12, -0.2, th)
+		tw = 0.0
+		hip_l = -0.25
+		hip_r = 0.25
+		knee_l = -0.15
+		knee_r = -0.25
+		k = clampf(dt * 26.0, 0.0, 1.0)
+	# header: jump, arch back, snap the head through the ball
+	if head_t >= 0.0:
+		head_t += dt
+		var u := head_t / 0.55
+		var air := sin(clampf(u, 0.0, 1.0) * PI)
+		var snap := _ease((u - 0.25) / 0.2)
+		by = 0.42 * air
+		lean = lerpf(0.25, -0.2, snap)
+		bend = lerpf(0.18, -0.35, snap)
+		head_x = lerpf(-0.35, 0.45, snap)
+		ab_l = -0.9
+		ab_r = 0.9
+		sh_l = lerpf(-0.5, 0.3, snap)
+		sh_r = lerpf(-0.5, 0.3, snap)
+		el_l = 0.7
+		el_r = 0.7
+		hip_l = 0.15 * air
+		hip_r = -0.1 * air
+		knee_l = -0.9 * air
+		knee_r = -0.5 * air
+		tw = 0.0
+		k = clampf(dt * 26.0, 0.0, 1.0)
+		if u >= 1.0:
+			head_t = -1.0
 	# slide tackle: down on one hip, leading leg stretched along the grass
 	if tackle_t >= 0.0:
 		tackle_t += dt
@@ -553,7 +629,7 @@ func animate(dt: float) -> void:
 	fore_r.rotation.x = lerpf(fore_r.rotation.x, el_r, k)
 	body.rotation.x = lerpf(body.rotation.x, lean, k)
 	body.rotation.z = lerpf(body.rotation.z, roll, k)
-	body.rotation.y = lerpf(body.rotation.y, turn, k)
+	body.rotation.y = spin_y if skill_t >= 0.0 else lerpf(wrapf(body.rotation.y, -PI, PI), turn, k)
 	body.position.y = lerpf(body.position.y, by, k)
 	body.position.z = lerpf(body.position.z, bz, k)
 	torso.rotation.y = lerpf(torso.rotation.y, tw, k)

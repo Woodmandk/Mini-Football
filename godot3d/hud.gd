@@ -570,11 +570,11 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			hp.add_child(ht)
 			var rows := [
 				["MOVE", "Slide your left thumb anywhere on the left side."],
-				["SHOOT", "Hold to load power, let go to shoot. Push the stick up or down to pick a corner."],
+				["SHOOT", "Hold to load power, let go to shoot. Short taps curl. At a corner kick: cross."],
 				["PASS", "Tap for a pass along the ground. Hold for a high ball."],
 				["TACKLE", "Without the ball: win it back. Never from behind, that is a foul."],
 				["SWITCH", "Without the ball: change to the player nearest the ball."],
-				["SPRINT", "Hold to run faster."],
+				["SPRINT", "Hold to run faster. Tap twice with the ball to spin past a defender."],
 			]
 			var ry := 62.0
 			var rh := minf(46.0, (h - 44.0 - 62.0 - 84.0) / rows.size())
