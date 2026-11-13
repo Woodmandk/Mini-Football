@@ -5,6 +5,7 @@ var stick := Vector2.ZERO
 var shoot_down := false
 var pass_down := false
 var sprint_down := false
+var lob_down := false
 var ev := [] # queued events: "shoot_down", "shoot_up", "pass_down", "pass_up", "cam", "pause", "tap"
 var charge := 0.0
 var stam := 1.0
@@ -1094,7 +1095,8 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			var rows := [
 				["MOVE", "Slide your left thumb anywhere on the left side."],
 				["SHOOT", "Hold to load power, let go to shoot. Short taps curl. At a corner kick: cross."],
-				["PASS", "Tap for a pass along the ground. Hold for a high ball."],
+				["PASS", "A pass along the ground, to the man the stick points at."],
+				["LOB", "A high ball over the defenders, to the man the stick points at."],
 				["TACKLE", "Without the ball: win it back. Never from behind, that is a foul."],
 				["SWITCH", "Without the ball: change to the player nearest the ball."],
 				["SPRINT", "Hold to run faster. Tap twice with the ball to spin past a defender."],
@@ -1300,6 +1302,7 @@ func _btn_pos() -> Dictionary:
 		"shoot": [Vector2(s.x - 92, s.y - 92), 56.0],
 		"pass": [Vector2(s.x - 218, s.y - 66), 46.0],
 		"sprint": [Vector2(s.x - 74, s.y - 218), 38.0],
+		"lob": [Vector2(s.x - 196, s.y - 172), 38.0],
 	}
 
 func _cam_rect() -> Rect2:
@@ -1371,6 +1374,10 @@ func _set_btn(k: String, down: bool) -> void:
 		pass_down = down
 	elif k == "sprint":
 		sprint_down = down
+	elif k == "lob":
+		if down and not lob_down:
+			ev.append("lob")
+		lob_down = down
 
 # ---------------------------------------------------------------- drawing
 
@@ -1425,6 +1432,8 @@ func _draw() -> void:
 	_button(b["shoot"][0], b["shoot"][1], lab_a, shoot_down, Color(0.25, 0.85, 0.4))
 	_button(b["pass"][0], b["pass"][1], lab_b, pass_down, Color(0.95, 0.95, 0.95))
 	_button(b["sprint"][0], b["sprint"][1], "SPRINT", sprint_down, GOLD if stam > 0.3 else Color(0.9, 0.35, 0.25))
+	if lab_a == "SHOOT":
+		_button(b["lob"][0], b["lob"][1], "LOB", lob_down, Color(0.55, 0.8, 1.0))
 	draw_arc(b["sprint"][0], b["sprint"][1] + 7.0, -PI * 0.5, -PI * 0.5 + TAU * stam, 40, Color(1.0, 0.84, 0.25, 0.85) if stam > 0.3 else Color(0.95, 0.3, 0.2, 0.9), 4.0, true)
 	if ctrl_name != "":
 		_text(ctrl_name, Vector2(size.x * 0.5, size.y - 138.0 * 68.0 / 105.0 - 20.0), 16, Color(1, 1, 1, 0.9))

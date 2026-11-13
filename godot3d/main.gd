@@ -18,9 +18,9 @@ const LENGTHS := [180.0, 300.0, 480.0] # real seconds for 90 minutes
 const LEN_NAMES := ["3 MIN", "5 MIN", "8 MIN"]
 const DIFF_NAMES := ["EASY", "NORMAL", "HARD"]
 const DIFF := [
-	{"need": 0.70, "spd": 0.86, "err": 2.4, "think": 0.70, "wait": 3.2},
-	{"need": 0.50, "spd": 0.92, "err": 1.5, "think": 0.45, "wait": 2.2},
-	{"need": 0.38, "spd": 0.98, "err": 0.8, "think": 0.28, "wait": 1.4},
+	{"need": 0.70, "spd": 0.86, "err": 3.0, "think": 0.70, "wait": 3.2},
+	{"need": 0.50, "spd": 0.92, "err": 1.9, "think": 0.45, "wait": 2.2},
+	{"need": 0.38, "spd": 0.98, "err": 1.0, "think": 0.28, "wait": 1.4},
 ]
 # your own computer-run team mates
 const MATE := {"need": 0.45, "spd": 1.0, "err": 0.6, "think": 0.22, "wait": 1.4}
@@ -1731,7 +1731,8 @@ func _foul(by, on) -> void:
 	var in_box := absf(pos.x - gx) < 16.5 and absf(pos.z) < 20.16
 	var closing: float = (by.vel - on.vel).length()
 	var card := ""
-	if closing > 5.0 or in_box:
+	# a booking is for a reckless challenge, not for every foul
+	if closing > (5.5 if in_box else 7.0):
 		by.yellow += 1
 		stats["cards"] += 1
 		card = "YELLOW CARD"
@@ -1875,6 +1876,7 @@ func _physics_process(dt: float) -> void:
 				return
 			if state == "full":
 				print("AUTOTEST score=", score, " stats=", stats, " bot=", bstats)
+				print("AUTOTEST team=", tst)
 				var fits := []
 				for p in teams[0]:
 					fits.append(snappedf(p.fit, 0.01))
@@ -1905,7 +1907,7 @@ func _frame(dt: float) -> void:
 	var sprint: bool = hud.sprint_down or Input.is_physical_key_pressed(KEY_SHIFT)
 	var acts := []
 	for e in evs:
-		if e in ["shoot_down", "shoot_up", "pass_down", "pass_up", "tap"]:
+		if e in ["shoot_down", "shoot_up", "pass_down", "pass_up", "tap", "lob"]:
 			acts.append(e)
 	if sprint and not _sprint_was:
 		# two quick taps on SPRINT: a skill move
@@ -1995,11 +1997,11 @@ func _tick(dt: float) -> void:
 		h.evs.clear()
 
 func _keys_to_events(evs: Array) -> void:
-	var map := {KEY_SPACE: "shoot", KEY_X: "pass", KEY_E: "pass", KEY_C: "cam", KEY_ESCAPE: "pause"}
+	var map := {KEY_SPACE: "shoot", KEY_X: "pass", KEY_E: "lob", KEY_C: "cam", KEY_ESCAPE: "pause"}
 	for k in map:
 		var d := Input.is_physical_key_pressed(k)
 		var was: bool = _keys.get(k, false)
-		var simple: bool = map[k] in ["cam", "pause"]
+		var simple: bool = map[k] in ["cam", "pause", "lob"]
 		if d and not was:
 			evs.append(map[k] if simple else map[k] + "_down")
 		elif was and not d and not simple:
@@ -2097,8 +2099,17 @@ func _play(dt: float) -> void:
 					if m == null and set_piece != "":
 						m = _pass_target(h.ctrl, Vector3.ZERO, false)
 					if m != null:
-						_pass(h.ctrl, m, h.pass_hold > 0.28)
+						_pass(h.ctrl, m, set_piece == "gk")
 				h.pass_hold = -1.0
+			elif e == "lob":
+				# the high ball has its own button
+				if mine and set_piece != "pen":
+					var ml = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false)
+					if ml == null and set_piece != "":
+						ml = _pass_target(h.ctrl, Vector3.ZERO, false)
+					if ml != null:
+						_pass(h.ctrl, ml, true, set_piece == "corner")
+					h.pass_hold = -1.0
 		if h.charging:
 			if ball_owner != h.ctrl:
 				h.charging = false
