@@ -2577,6 +2577,18 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	var s := side(p.team)
 	var from := ball.position
 	var d := Vector2(HL * s - from.x, aim_z - from.z).length()
+	if d > 42.0 and set_piece != "pen":
+		# Too far out to shoot: SHOOT is a clearance, a long ball the way the stick points (or the way he faces).
+		var hh = _hum_of(p)
+		var cd: Vector3 = p.fwd()
+		if hh != null and hh.stick.length() > 0.3:
+			cd = Vector3(hh.stick.x, 0, hh.stick.y).normalized()
+		var far := 24.0 + 22.0 * power
+		var tc := 1.4 + 1.0 * power
+		_release(p, cd * (far / tc) + Vector3(0, 4.9 * tc, 0))
+		snd("kick")
+		fx("dust", [from.x, from.z])
+		return
 	err_k *= lerpf(1.3, 0.72, clampf((p.sho - 40) / 50.0, 0.0, 1.0))
 	var err := (randf() - 0.5) * (0.4 + d * 0.035 + power * 0.8) * err_k
 	var goal := Vector3(HL * s, 0, aim_z + err)
