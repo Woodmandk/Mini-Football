@@ -67,6 +67,7 @@ var forms := ["4-3-3", "4-3-3"]
 var opt_car := false
 var sq_over := []
 var form_over := ""
+var lay_over := {}
 var co_got := false
 var test_ft := 0.0
 var wd_clock := -1.0
@@ -259,6 +260,7 @@ var intro_t0 := -99.0
 var q_applied := -1
 var demo := false
 var shot_path := ""
+var test_drag := []
 var shot_at := 0.0
 var force_goal := -1.0
 var force_kind := ""
@@ -302,6 +304,9 @@ func _ready() -> void:
 			shot_path = a.substr(7)
 		elif a.begins_with("--at="):
 			shot_at = float(a.substr(5))
+		elif a.begins_with("--drag="):
+			# test: a finger drag on the screen, x0,y0,x1,y1[,hold] (starts 1 s in, 0.5 s long)
+			test_drag = Array(a.substr(7).split_floats(","))
 		elif a.begins_with("--goal="):
 			force_goal = float(a.substr(7))
 		elif a == "--thru":
@@ -720,6 +725,20 @@ func _set_clubs(a: int, b: int, force := false) -> void:
 		hm.ctrl = null
 	_build_teams()
 
+# Your formation with the spots you dragged your men to: [[role, along, across], ...]
+func _my_form(fname: String, lay: Dictionary) -> Array:
+	var out := []
+	var base: Array = FORMS.get(fname, FORMS["4-3-3"])
+	for i in base.size():
+		var f: Array = base[i]
+		var k := str(i)
+		if i > 0 and lay.has(k) and lay[k] is Array and (lay[k] as Array).size() == 2:
+			var a := float(lay[k][0])
+			out.append([Career.role_at(a), a, float(lay[k][1])])
+		else:
+			out.append([f[0], f[1], f[2]])
+	return out
+
 func _other_club(mine: int) -> int:
 	var o := randi() % (CLUBS.size() - 1)
 	return o if o < mine else o + 1
@@ -751,6 +770,10 @@ func _build_teams() -> void:
 				break
 		gk_used.append(gk_col)
 		var FORM: Array = FORMS[forms[t]]
+		if t == 0 and career_on:
+			FORM = _my_form(forms[0], car.lay())
+		elif t == 0 and not lay_over.is_empty():
+			FORM = _my_form(forms[0], lay_over)
 		for i in FORM.size():
 			var p = PlayerS.new()
 			p.team = t
@@ -1094,15 +1117,13 @@ func _car_info() -> Dictionary:
 	var mk := []
 	for pl in car.market():
 		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl)})
-	var roles := []
-	for f in FORMS[car.form()]:
-		roles.append([f[0], f[1], f[2]])
+	var roles := _my_form(car.form(), car.lay())
 	return {
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
 		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [],
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
 		"div": car.div(), "cup": _cup_info(),
-		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
+		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 	}
 
 func _cup_info() -> Dictionary:
@@ -1406,6 +1427,27 @@ func _action(act: String, arg = null) -> void:
 				else:
 					car_sell = car_sel
 				hud.refresh(_menu_info())
+		"c_spot":
+			# a man dragged to a new spot on the team screen: [slot, along, across]
+			var sa: Array = arg
+			car.set_spot(int(sa[0]), float(sa[1]), float(sa[2]))
+			car_sel = -1
+			car_msg = ""
+			hud.refresh(_menu_info())
+		"c_swap":
+			# a man dropped onto another: they change places (the spots stay)
+			var ws: Array = arg
+			if int(ws[0]) != int(ws[1]):
+				car.swap(int(ws[0]), int(ws[1]))
+				au["blip2"].play()
+			car_sel = -1
+			car_msg = ""
+			hud.refresh(_menu_info())
+		"c_lay0":
+			car.clear_lay()
+			car_sel = -1
+			car_msg = ""
+			hud.refresh(_menu_info())
 		"c_form":
 			var fi := (FORM_NAMES.find(car.form()) + 1) % FORM_NAMES.size()
 			var rl := []
@@ -1591,7 +1633,7 @@ func _host_start() -> void:
 		_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
 	screen = "match"
 	hud.show_menu("", {})
-	start_msg = {"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs, "forms": forms, "sq": sq}
+	start_msg = {"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs, "forms": forms, "sq": sq, "lay": car.lay() if career_on else {}}
 	wait_friend = 0.0
 	net.send(start_msg)
 	_begin_match(true)
@@ -1611,10 +1653,13 @@ func _guest_start(m: Dictionary) -> void:
 	car_lines = []
 	_set_clubs(int(cl[0]), int(cl[1]), true)
 	var fm: Array = m.get("forms", [])
-	if fm.size() == 2 and FORMS.has(str(fm[0])) and FORMS.has(str(fm[1])) and (forms[0] != str(fm[0]) or forms[1] != str(fm[1])):
+	var lm = m.get("lay", {})
+	if fm.size() == 2 and FORMS.has(str(fm[0])) and FORMS.has(str(fm[1])) and (forms[0] != str(fm[0]) or forms[1] != str(fm[1]) or (lm is Dictionary and not lm.is_empty())):
 		form_over = str(fm[0])
+		lay_over = lm if lm is Dictionary else {}
 		_set_clubs(int(cl[0]), int(cl[1]), true)
 		form_over = ""
+		lay_over = {}
 	sq_over = []
 	screen = "match"
 	state = "intro"
@@ -4458,6 +4503,32 @@ func _process(dt: float) -> void:
 		_minimap()
 	crowd_au.volume_db = lerpf(crowd_au.volume_db, crowd_vol if screen == "match" else -26.0, clampf(rdt * 3.0, 0.0, 1.0))
 	_camera(rdt)
+	if test_drag.size() >= 4 and real_t >= 1.0:
+		var a0 := Vector2(test_drag[0], test_drag[1])
+		var a1 := Vector2(test_drag[2], test_drag[3])
+		var k := clampf((real_t - 1.0) / 0.5, 0.0, 1.0)
+		var hold := test_drag.size() > 4
+		if not has_meta("drag0"):
+			set_meta("drag0", true)
+			var e0 := InputEventMouseButton.new()
+			e0.button_index = MOUSE_BUTTON_LEFT
+			e0.pressed = true
+			e0.position = a0
+			e0.global_position = a0
+			Input.parse_input_event(e0)
+		var em := InputEventMouseMotion.new()
+		em.position = a0.lerp(a1, k)
+		em.global_position = em.position
+		em.button_mask = MOUSE_BUTTON_MASK_LEFT
+		Input.parse_input_event(em)
+		if k >= 1.0 and not hold:
+			var e1 := InputEventMouseButton.new()
+			e1.button_index = MOUSE_BUTTON_LEFT
+			e1.pressed = false
+			e1.position = a1
+			e1.global_position = a1
+			Input.parse_input_event(e1)
+			test_drag = []
 	if shot_path != "" and real_t >= shot_at:
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(shot_path)
