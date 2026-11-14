@@ -9,7 +9,7 @@ const World := preload("res://world.gd")
 const NetS := preload("res://net.gd")
 const Career := preload("res://career.gd")
 
-const DIVE_V := 4.9
+const DIVE_V := 4.6
 const HL := 52.5
 const TEMPO := 1.25
 const SLIDE_T := 0.38
@@ -3775,8 +3775,51 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	if _team_human(1 - p.team):
 		_switch_for_pass(1 - p.team, m)
 
+# A penalty like FIFA: it goes where it is aimed (only a hair of error), the power sets the height
+# (a full-power one can fly over), and the keeper guesses a side as it is struck instead of reading it.
+func _pen_kick(p, power: float, aim_z: float) -> void:
+	var s := side(p.team)
+	var from := ball.position
+	var err := (randf() - 0.5) * lerpf(0.5, 0.15, clampf((p.sho - 40) / 50.0, 0.0, 1.0))
+	var goal := Vector3(HL * s, 0, clampf(aim_z + err, -GOAL_HW - 0.6, GOAL_HW + 0.6))
+	var dir := goal - from
+	dir.y = 0.0
+	var d := dir.length()
+	dir = dir.normalized()
+	var sp := 15.0 + 13.0 * power
+	var t := maxf(d / sp, 0.15)
+	var hgt := 0.22 + power * power * 2.75 + randf() * 0.15
+	var vy := (hgt - 0.25) / t + 4.9 * t
+	pen_shot = true
+	shot_hard = 0.0
+	var gk = teams[1 - p.team][0]
+	var goes := signf(goal.z) if absf(goal.z) > 0.9 else 0.0
+	var right := 0.3 + clampf((gk.dfn - 60) / 30.0, 0.0, 1.0) * 0.08 + (0.14 if gk.has_ab("straf") else 0.0)
+	var r := randf()
+	if r < 0.12:
+		gk.pen_z = 0.0
+	elif goes == 0.0:
+		gk.pen_z = (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * 0.5
+	else:
+		gk.pen_z = goes * GOAL_HW * 0.5 * (1.0 if r < 0.12 + right else -1.0)
+	if autotest:
+		print("PENKICK aim=", snappedf(goal.z, 0.1), " guess=", snappedf(gk.pen_z, 0.1), " pw=", snappedf(power, 0.01), " h=", snappedf(hgt, 0.1), " gkz=", snappedf(gk.position.z, 0.1))
+	_release(p, dir * sp + Vector3(0, vy, 0))
+	ball_spin = 0.0
+	shot_live = true
+	stats["shots"] += 1
+	tst[p.team]["shots"] += 1
+	fx("shake", 0.2 + 0.4 * power)
+	fx("punch", 1.5 + 3.0 * power)
+	snd("kick")
+	fx("dust", [from.x, from.z])
+	fx("vib", 40)
+
 func _human_aim(h, dir3: Vector3) -> float:
 	var gk = teams[1 - h.team][0]
+	if set_piece == "pen":
+		# a penalty goes exactly where you aim: stick to the side = that far across the goal, centred = the middle
+		return clampf(dir3.z, -1.0, 1.0) * GOAL_HW * 0.84
 	if absf(dir3.z) > 0.3:
 		return clampf(dir3.z * 1.3, -1.0, 1.0) * GOAL_HW * 0.82
 	# no side picked: the far side from the keeper, well inside the post (0.62 was where he stands)
@@ -3797,6 +3840,9 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 		_release(p, cd * (far / tc) + Vector3(0, 4.9 * tc, 0))
 		snd("kick")
 		fx("dust", [from.x, from.z])
+		return
+	if set_piece == "pen":
+		_pen_kick(p, power, aim_z)
 		return
 	err_k *= lerpf(1.3, 0.72, clampf((p.sho - 40) / 50.0, 0.0, 1.0))
 	pen_shot = set_piece == "pen"
@@ -4149,7 +4195,7 @@ func _pickups() -> void:
 		if absf(b.x - gx) > 16.5 or absf(b.z) > 20.16:
 			continue
 		var gq: float = clampf((g.dfn - 60) / 30.0, 0.0, 1.0)
-		var reach := 0.8 + (lerpf(0.72, 0.86, gq) if g.dive_t >= 0.0 else 0.0)
+		var reach := 0.77 + (lerpf(0.64, 0.78, gq) if g.dive_t >= 0.0 else 0.0)
 		# skills: the cat reaches further, the penalty killer too from close in; a Cannon shot is harder to get to
 		var close_in: bool = pen_shot or Vector2(b.x - gx, b.z).length() < 12.0
 		if g.has_ab("kat") and g.dive_t >= 0.0:
@@ -4158,6 +4204,12 @@ func _pickups() -> void:
 			reach += 0.22
 		if shot_live:
 			reach -= shot_hard
+			if pen_shot:
+				# from a standing start on his line he does not get as far as in open play
+				reach -= 0.15
+			if pen_shot and absf(g.pen_z) > 0.1 and signf(g.pen_z) != signf(b.z) and absf(b.z) > 0.3:
+				# he went the wrong way on a penalty: only a trailing leg is left
+				reach *= 0.45
 		# high balls are harder to reach, so the top corners are open to a good shot
 		if shot_live:
 			reach -= maxf(b.y - 1.5, 0.0) * 0.45
@@ -4299,7 +4351,8 @@ func _ai_carrier(p, dt: float) -> Vector3:
 			near = o
 	if set_piece == "pen" or (set_piece == "fk" and dist < 27.0 and absf(p.position.z) < 16.0):
 		if p.ai_cool <= 0.0:
-			_shoot(p, 0.55 + randf() * 0.3, (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * (0.5 + randf() * 0.35), cpu["err"])
+			var paz: float = 0.0 if (set_piece == "pen" and randf() < 0.1) else (1.0 if randf() < 0.5 else -1.0) * GOAL_HW * (0.5 + randf() * 0.35)
+			_shoot(p, 0.45 + randf() * 0.4, paz, cpu["err"])
 		return Vector3.ZERO
 	if set_piece != "":
 		if p.ai_cool <= 0.0:
@@ -4530,9 +4583,12 @@ func _ai_keeper(p, dt: float) -> Vector3:
 				var bent := ball_vel.rotated(Vector3.UP, ball_spin * t * 0.45)
 				if absf(bent.x) > 1.0:
 					zc = b.z + bent.z * ((gx - b.x) / bent.x)
+			if pen_shot and shot_live:
+				# a penalty: he has picked his side as it was struck and goes there
+				zc = p.pen_z
 			if absf(zc) < GOAL_HW + 1.2:
 				p.react_t += dt
-				if p.react_t < lerpf(0.27, 0.19, clampf((p.dfn - 60) / 30.0, 0.0, 1.0)):
+				if p.react_t < (0.06 if (pen_shot and shot_live) else lerpf(0.30, 0.22, clampf((p.dfn - 60) / 30.0, 0.0, 1.0))):
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
 				# off his line he saves where he stands instead of running back to the goal line
@@ -4558,7 +4614,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 					var dv: Vector3 = target - p.position
 					dv.y = 0.0
 					return dv.normalized() * DIVE_V if dv.length() > 0.25 else Vector3.ZERO
-				return _run_to(p, target, 4.2)
+				return _run_to(p, target, 3.9)
 	p.react_t = 0.0
 	if ball_owner == null and absf(b.x - gx) < 15.0 and absf(b.z) < 18.0 and ball_vel.length() < 12.0:
 		var mine: float = p.position.distance_to(b)
@@ -5183,12 +5239,19 @@ func _bot_inputs(dt: float) -> void:
 			if set_piece == "pen" or (so_on and h.charging):
 				# a penalty: aim for a corner like a person would
 				if not bot_t.has(id + 1):
-					bot_t[id + 1] = 1.0 if randf() < 0.5 else -1.0
-				h.stick = Vector2(s * 0.45, bot_t[id + 1] * 0.9).normalized()
+					bot_t[id + 1] = randf_range(-1.0, 1.0)
+					for a in OS.get_cmdline_user_args():
+						if a.begins_with("--penaim="):
+							bot_t[id + 1] = float(a.substr(9)) * (1.0 if randf() < 0.5 else -1.0)
+				h.stick = Vector2(s * 0.3, bot_t[id + 1])
 			else:
 				bot_t.erase(id + 1)
+			var pth := 0.55
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--penpw=") and set_piece == "pen":
+					pth = float(a.substr(8))
 			if h.charging:
-				if h.charge > 0.55:
+				if h.charge > pth:
 					h.evs.append("shoot_up")
 					bstats["shots"] += 1
 			elif dist < 21.0 and t <= 0.0:
