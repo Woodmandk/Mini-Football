@@ -127,7 +127,7 @@ table.st td.l, table.st th.l { text-align: left; }
 .hubtop { display: flex; align-items: center; gap: 8px; }
 .hubtop .logo { font: 800 20px/1 var(--font); font-style: italic; text-transform: uppercase; white-space: nowrap; }
 .mfver { position: fixed; left: 5px; bottom: 2px; z-index: 50; font: 600 9px/1 var(--font); color: rgba(244,247,242,0.55); pointer-events: none; letter-spacing: 0.3px; } /* the build, so you can see you have the newest one (build.sh stamps it) */
-.hubtop .logo { display: flex; align-items: center; flex: none; } .hubtop .logo img { display: block; height: 30px; width: auto; } .hubtop .logo .lgcrest { display: none; height: 34px; }
+.hubtop .logo { display: flex; align-items: center; flex: none; } .hubtop .logo img { display: block; height: 26px; width: auto; } .hubtop .logo .lgcrest { display: none; height: 34px; }
 .hubtop .namein { flex: 0 1 130px; min-width: 70px; padding: 7px 9px; font-size: 14px; }
 .hubtop .prog { flex: 1 1 auto; min-width: 0; }
 .hubtop .chip { flex: 0 0 auto; padding: 7px 10px; border-radius: 999px; background: rgba(0,0,0,0.3); font-weight: 700; font-size: 13px; }
@@ -1088,8 +1088,8 @@ table.st tr.fr td { color: var(--gold); }
     <!-- forside: vælg hvad du vil spille -->
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
-        <div class="logo" aria-label="Banebold"><img class="lgfull" src="logo/logo-compact.svg" alt="Banebold"><img class="lgcrest" src="logo/crest.svg" alt=""></div>
-        <span class="mfver" id="mfVer">v14.11 16:35</span>
+        <div class="logo" aria-label="Banebold"><img class="lgfull" src="logo/logo-compact.svg" alt="Banebold"><img class="lgcrest" src="logo/icon-small.svg" alt=""></div>
+        <span class="mfver" id="mfVer">v14.11 22:05</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
