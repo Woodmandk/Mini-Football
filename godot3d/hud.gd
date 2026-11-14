@@ -829,7 +829,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			menu.add_child(bk2)
 		"cup":
 			var c8: Dictionary = (info.get("car", {}) as Dictionary).get("cup", {})
-			_title("THE CUP", "Knockout: lose and you are out. A draw goes to golden goal.")
+			_title("THE CUP", "Knockout: lose and you are out. A draw goes to extra time and penalties.")
 			var cols8: Array = (c8.get("rounds", []) as Array).duplicate()
 			if not (c8.get("now", []) as Array).is_empty():
 				cols8.append(c8.get("now", []))
@@ -1038,6 +1038,25 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				var xl := _label(("YOU HAVE TRAINING POINTS: TAP +1 ON WHAT HE SHOULD LEARN" if tpn > 0 else "A FULL BAR GIVES 1 TRAINING POINT (TP). HE FILLS IT BY PLAYING.") if int(sp2["ovr"]) < int(sp2["pot"]) else "AT HIS BEST", 11, GOLD if tpn > 0 else Color(1, 1, 1, 0.6), font2)
 				xl.position = Vector2(16, 162)
 				dp.add_child(xl)
+				# his skills: two places, the second opens at rating 70
+				var abl: Array = sp2.get("ab", [])
+				var abw := (bw3 - 40) * 0.5
+				for ai in 2:
+					var atx := ""
+					var akind := "alt"
+					if ai < abl.size():
+						atx = str(abl[ai][1])
+					elif ai == 1 and bool(sp2.get("ab_lock2", true)):
+						atx = "SKILL 2: AT RATING 70"
+						akind = "off"
+					else:
+						atx = "+ LEARN A SKILL  (%d)" % int(sp2["ab_cost"][ai])
+						akind = "primary" if ai == abl.size() else "off"
+					var abb := _btn(atx, "c_ab", ai, akind, Vector2(bx3 + 16 + ai * (abw + 8), dy + 182), Vector2(abw, 40), 14)
+					if ai < abl.size():
+						abb.add_theme_color_override("font_color", GOLD)
+						abb.tooltip_text = str(abl[ai][2])
+					menu.add_child(abb)
 				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) + int(sp2.get("tp", 0)) < int(sp2["pot"])
 				var on_bench: bool = not (xi.has(sel) or xi.has(float(sel)))
 				var tw3 := (bw3 - 32) * (0.6 if on_bench else 1.0)
@@ -1072,6 +1091,46 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				var rb := _btn("RESET SPOTS", "c_lay0", null, "ghost", Vector2(px + pw - 128.0, py + ph - 44.0), Vector2(120, 36), 13)
 				menu.add_child(rb)
 			menu.add_child(bk3)
+		"abil":
+			var c9: Dictionary = info.get("car", {})
+			var ap: Dictionary = c9.get("ab_pick", {})
+			var opts9: Array = ap.get("opts", [])
+			var head9 := "%s  ·  %s" % [str(ap.get("n", "")), str(ap.get("pos", ""))]
+			if bool(ap.get("swap", false)):
+				head9 += "  ·  SWAP %s FOR %d COINS" % [str(ap.get("cur", "")), int(ap.get("price", 0))]
+			else:
+				head9 += "  ·  %d COINS" % int(ap.get("price", 0))
+			_title("LEARN A SKILL", head9)
+			var cols9 := 2 if opts9.size() > 3 else 1
+			var gw9 := minf(w - 80.0, 980.0)
+			var gx9 := (w - gw9) * 0.5
+			var rows9 := int(ceil(opts9.size() / float(cols9)))
+			var rh9 := minf(74.0, (h - 190.0) / maxf(rows9, 1))
+			for oi9 in opts9.size():
+				var op9: Dictionary = opts9[oi9]
+				var cw9 := gw9 / cols9
+				var ob9 := _btn("", "c_abuy", str(op9["k"]), "off" if bool(op9["has"]) else "alt", Vector2(gx9 + (oi9 % cols9) * cw9, 104 + (oi9 / cols9) * rh9), Vector2(cw9 - 10, rh9 - 8), 15)
+				var on9 := _label(str(op9["n"]) + ("   (HAS IT)" if bool(op9["has"]) else ""), 19, GOLD if not bool(op9["has"]) else Color(1, 1, 1, 0.45))
+				on9.position = Vector2(16, 6)
+				on9.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				ob9.add_child(on9)
+				var od9 := _label(str(op9["d"]), 13, Color(1, 1, 1, 0.8), font2)
+				od9.position = Vector2(16, 34)
+				od9.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				ob9.add_child(od9)
+				menu.add_child(ob9)
+			if str(c9.get("msg", "")) != "":
+				var ms9 := _label(str(c9.get("msg", "")), 16, GOLD, font2)
+				ms9.position = Vector2(0, h - 84)
+				ms9.size = Vector2(w, 26)
+				ms9.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				menu.add_child(ms9)
+			var co9 := _label("COINS  %d" % int(c9.get("coins", 0)), 22, GOLD)
+			co9.position = Vector2(w - 260, 20)
+			co9.size = Vector2(230, 34)
+			co9.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			menu.add_child(co9)
+			menu.add_child(_btn("<  BACK", "c_abback", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
 		"subs":
 			var sb: Dictionary = info.get("subs", {})
 			var left := int(sb.get("left", 0))

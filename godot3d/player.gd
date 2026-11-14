@@ -66,6 +66,10 @@ var pas := 65
 var dfn := 60
 var ovr := 70
 var star := false
+var ab := [] # skills (evner): keys from Career.ABIL
+var ab_at := -99.0 # when his last skill sign went up (real seconds)
+var ab_lbl: Label3D = null
+var ab_t := 0.0
 var fit := 1.0 # match fitness: drains as he runs, slows him when low
 var base_top := 7.0
 var num_label: Label3D = null
@@ -422,6 +426,7 @@ static func _ease(t: float) -> float:
 	return t * t * (3.0 - 2.0 * t)
 
 func animate(dt: float) -> void:
+	_ab_tick(dt)
 	rotation.y = yaw
 	var sp := Vector2(vel.x, vel.z).length()
 	phase += dt * (2.5 + sp * 1.5)
@@ -759,6 +764,40 @@ func animate(dt: float) -> void:
 	torso.rotation.x = lerpf(torso.rotation.x, bend, k)
 	head.rotation.x = lerpf(head.rotation.x, head_x, k)
 	head.rotation.y = lerpf(head.rotation.y, head_y, k)
+
+func has_ab(k: String) -> bool:
+	return ab.has(k)
+
+# a skill just did its thing: its name rises over him for a moment
+func pop_ab(text: String) -> void:
+	if ab_lbl == null:
+		ab_lbl = Label3D.new()
+		ab_lbl.font = load("res://fonts/ChakraPetch-Bold.ttf")
+		ab_lbl.font_size = 64
+		ab_lbl.pixel_size = 0.03
+		ab_lbl.outline_size = 18
+		ab_lbl.outline_modulate = Color(0.02, 0.06, 0.04, 0.9)
+		ab_lbl.modulate = Color(1.0, 0.86, 0.2)
+		ab_lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		ab_lbl.no_depth_test = true
+		ab_lbl.top_level = true
+		ab_lbl.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(ab_lbl)
+	ab_lbl.text = text
+	ab_t = 1.6
+	ab_lbl.visible = true
+
+func _ab_tick(dt: float) -> void:
+	if ab_lbl == null or not ab_lbl.visible:
+		return
+	ab_t -= dt
+	if ab_t <= 0.0:
+		ab_lbl.visible = false
+		return
+	var a := 1.6 - ab_t
+	ab_lbl.global_position = global_position + Vector3(0, 3.0 + a * 0.6, -2.2 - a * 0.9)
+	ab_lbl.modulate.a = clampf(ab_t / 0.35, 0.0, 1.0)
+	ab_lbl.scale = Vector3.ONE * (0.7 + 0.3 * minf(a / 0.15, 1.0))
 
 func set_num(n: int) -> void:
 	num = n
