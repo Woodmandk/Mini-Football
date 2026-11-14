@@ -1718,8 +1718,8 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 		lg.texture = load("res://logo.png")
 		lg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		lg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		lg.size = Vector2(174, 48)
-		lg.position = Vector2(w - 270.0 - 160.0, 8)
+		lg.size = Vector2(185, 37)
+		lg.position = Vector2(w - 270.0 - 170.0, 13)
 		lg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		menu.add_child(lg)
 	if bool(info.get("upd", false)):
