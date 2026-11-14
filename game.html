@@ -123,7 +123,7 @@ table.st td.l, table.st th.l { text-align: left; }
 .hubtop { display: flex; align-items: center; gap: 8px; }
 .hubtop .logo { font: 800 20px/1 var(--font); font-style: italic; text-transform: uppercase; white-space: nowrap; }
 .mfver { position: fixed; left: 5px; bottom: 2px; z-index: 50; font: 600 9px/1 var(--font); color: rgba(244,247,242,0.55); pointer-events: none; letter-spacing: 0.3px; } /* the build, so you can see you have the newest one (build.sh stamps it) */
-.hubtop .logo .r { color: #e5483b; } .hubtop .logo .b { color: #2f7ff0; }
+.hubtop .logo { display: flex; align-items: center; flex: none; } .hubtop .logo img { display: block; height: 30px; width: auto; } .hubtop .logo .lgcrest { display: none; height: 34px; }
 .hubtop .namein { flex: 0 1 130px; min-width: 70px; padding: 7px 9px; font-size: 14px; }
 .hubtop .prog { flex: 1 1 auto; min-width: 0; }
 .hubtop .chip { flex: 0 0 auto; padding: 7px 10px; border-radius: 999px; background: rgba(0,0,0,0.3); font-weight: 700; font-size: 13px; }
@@ -175,7 +175,7 @@ button.packtile::after { content: ""; position: absolute; inset: -40% -60%; back
 .tabbar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; background: rgba(0,0,0,0.35); border-radius: 12px; padding: 4px; }
 .tabbar button { padding: 9px 2px; font-size: 13px; background: transparent; border-color: transparent; color: var(--muted); box-shadow: none; }
 .tabbar button[aria-pressed="true"] { background: var(--chalk); color: var(--night); }
-#wrap.n560 .tabp { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: 1fr 1fr; } #wrap.n560 .hubtop .logo, #wrap.n560 .hubtop .namein { display: none; } #wrap.w640 .hubtop .logo { display: none; }
+#wrap.n560 .tabp { grid-template-rows: none; grid-auto-flow: row; grid-template-columns: 1fr 1fr; } #wrap.n560 .hubtop .namein { display: none; } #wrap.n560 .hubtop .logo .lgfull, #wrap.w640 .hubtop .logo .lgfull { display: none; } #wrap.n560 .hubtop .logo .lgcrest, #wrap.w640 .hubtop .logo .lgcrest { display: block; }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: center; text-align: left; }
 .homeleft { gap: 14px; }
 .homeleft h1 { font-size: clamp(30px, 7vw, 44px); }
@@ -1084,7 +1084,7 @@ table.st tr.fr td { color: var(--gold); }
     <!-- forside: vælg hvad du vil spille -->
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
-        <div class="logo"><span class="r">Bane</span><span class="b">bold</span></div>
+        <div class="logo" aria-label="Banebold"><img class="lgfull" src="logo/logo-compact.svg" alt="Banebold"><img class="lgcrest" src="logo/crest.svg" alt=""></div>
         <span class="mfver" id="mfVer">v dev</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>

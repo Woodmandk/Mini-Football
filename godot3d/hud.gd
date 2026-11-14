@@ -1712,6 +1712,16 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	co.size = Vector2(250, 34)
 	co.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	menu.add_child(co)
+	# the game's logo, between the season line and the coins (left out when the UPDATE button needs the room)
+	if not bool(info.get("upd", false)) and w >= 900.0:
+		var lg := TextureRect.new()
+		lg.texture = load("res://logo.png")
+		lg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		lg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		lg.size = Vector2(174, 48)
+		lg.position = Vector2(w - 270.0 - 160.0, 8)
+		lg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		menu.add_child(lg)
 	if bool(info.get("upd", false)):
 		var ub := _btn("UPDATE", "update", null, "primary", Vector2(w - 420, 10), Vector2(140, 44), 18)
 		for st in ["normal", "hover", "focus"]:
