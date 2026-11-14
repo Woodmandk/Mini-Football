@@ -37,6 +37,9 @@ func load_save(is_web: bool) -> void:
 			for x in d["xi"]:
 				xi.append(int(x))
 			d["xi"] = xi
+			if not d.has("abv"):
+				_ab_start()
+				save()
 
 func save() -> void:
 	var txt := JSON.stringify(d)
@@ -135,6 +138,7 @@ func new_career(club: int, n_clubs: int, names: Array) -> void:
 		pl["pot"] = clampi(ovr_of(pl) + rng.randi_range(6, 16) - maxi(int(pl["age"]) - 24, 0), 60, 94)
 		squad.append(pl)
 	d = {"club": club, "season": 1, "round": 0, "coins": 100, "squad": squad, "xi": range(11), "n": n_clubs, "last": [], "note": ""}
+	_ab_start()
 	_new_season()
 	save()
 
@@ -419,6 +423,7 @@ func market_refresh() -> void:
 			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
 		}
 		pl["pot"] = clampi(ovr_of(pl) + rng.randi_range(2, 14) - maxi(int(pl["age"]) - 23, 0) * 2, ovr_of(pl), 95)
+		pl["ab"] = ab_roll(role, ovr_of(pl), rng)
 		out.append(pl)
 	out.sort_custom(func(a, b): return ovr_of(a) > ovr_of(b))
 	d["market"] = out
@@ -473,6 +478,8 @@ func open_pack(tier: int) -> Dictionary:
 		for k in STAT_KEYS:
 			pl[k] = clampi(int(pl[k]) + (1 if o < want else -1), 25, 97)
 	pl["pot"] = clampi(ovr_of(pl) + rng.randi_range(2, 12) - maxi(int(pl["age"]) - 23, 0) * 2, ovr_of(pl), 96)
+	# a gold pack always brings a skill
+	pl["ab"] = ab_roll(role, ovr_of(pl) + (8 if tier == 2 else 0), rng)
 	for n in range(2, 99):
 		if not used.has(n):
 			pl["num"] = n
@@ -586,6 +593,8 @@ func youth_arrives(rng: RandomNumberGenerator) -> String:
 		"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
 	}
 	pl["pot"] = clampi(66 + lv * 4 + rng.randi_range(-3, 5), ovr_of(pl) + 4, 95)
+	if rng.randf() < 0.2 + lv * 0.06:
+		pl["ab"] = ab_roll(role, 70, rng).slice(0, 1)
 	var used := []
 	for s in d["squad"]:
 		used.append(int(s["num"]))
@@ -662,7 +671,7 @@ func cup_round_name() -> String:
 	return CUP_ROUNDS[clampi(int(cup()["r"]), 0, 2)]
 
 # Books your cup tie and plays the others. Returns lines for the full-time screen.
-func cup_finish(mine: int, theirs: int) -> Array:
+func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var cp: Dictionary = cup()
 	var me: int = int(d["club"])
 	var rng := RandomNumberGenerator.new()
@@ -672,7 +681,8 @@ func cup_finish(mine: int, theirs: int) -> Array:
 	var next := []
 	var res := []
 	var lines := []
-	var won: bool = mine > theirs
+	# a level tie was settled by the shootout
+	var won: bool = mine > theirs or (mine == theirs and won_tie)
 	for i in range(0, t.size(), 2):
 		var a: int = int(t[i])
 		var b: int = int(t[i + 1])
@@ -725,3 +735,100 @@ func cup_finish(mine: int, theirs: int) -> Array:
 			pl["xp"] = 100
 	save()
 	return lines
+
+# ---------------------------------------------------------------- skills (evner, as in the 2D game)
+# What makes a player special beyond his numbers. Up to two; the second place opens at rating 70.
+# They come with players from packs, the market and the youth academy, or you teach him one for coins.
+const ABIL := {
+	"kanon": ["CANNON", "Shoots harder, and keepers reach fewer of his shots.", ["FW", "MF"]],
+	"skrue": ["CURLER", "Placed shots bend much more round the keeper.", ["FW", "MF"]],
+	"raket": ["ROCKET", "Faster top speed when he sprints.", ["FW", "MF", "DF"]],
+	"tryl": ["MAGICIAN", "Defenders find it harder to take the ball off him.", ["FW", "MF"]],
+	"luft": ["KING OF THE AIR", "Gets to more high balls and heads harder.", ["FW", "DF"]],
+	"dirigent": ["CONDUCTOR", "Pinpoint passes, long ones too.", ["MF", "DF"]],
+	"motor": ["MOTOR", "Tires more slowly.", ["MF", "DF", "FW"]],
+	"mur": ["THE WALL", "Longer reach in the tackle, wins more of them.", ["DF", "MF"]],
+	"laeser": ["READER", "Cuts out the other side's passes that go close by him.", ["DF", "MF"]],
+	"bamse": ["TANK", "Strong on the ball: hard to push off it.", ["DF", "MF", "FW"]],
+	"kat": ["THE CAT", "Lightning reflexes: reaches more shots.", ["GK"]],
+	"straf": ["PENALTY KILLER", "Saves more penalties and shots from close in.", ["GK"]],
+}
+const AB_SLOT2 := 70
+const AB_COST := [150, 400]
+const AB_SWAP := 100
+
+static func ab_for(pos: String) -> Array:
+	var out := []
+	for k in ABIL:
+		if (ABIL[k][2] as Array).has(pos):
+			out.append(k)
+	return out
+
+static func ab_of(pl: Dictionary) -> Array:
+	var out := []
+	for a in pl.get("ab", []):
+		if ABIL.has(str(a)) and out.size() < 2:
+			out.append(str(a))
+	return out
+
+# the skills a new player comes with: better players more often have one, the best two
+static func ab_roll(pos: String, o: int, rng: RandomNumberGenerator) -> Array:
+	var n := 0
+	var r := rng.randf()
+	if o >= 76:
+		n = 2 if r < 0.35 else 1
+	elif o >= 66:
+		n = 1 if r < 0.65 else 0
+	else:
+		n = 1 if r < 0.25 else 0
+	var pool := ab_for(pos)
+	pool.shuffle()
+	return pool.slice(0, mini(n, pool.size()))
+
+# old saves: your best keeper, defender, midfielder and forward each get a skill, and some of the good ones too
+func _ab_start() -> void:
+	d["abv"] = 1
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash(str(d.get("club", 0)) + "ab")
+	for pos in ["GK", "DF", "MF", "FW"]:
+		var best = null
+		for pl in d["squad"]:
+			if str(pl["pos"]) == pos and ab_of(pl).is_empty() and (best == null or ovr_of(pl) > ovr_of(best)):
+				best = pl
+		if best != null:
+			var pool := ab_for(pos)
+			best["ab"] = [pool[rng.randi() % pool.size()]]
+	for pl in d["squad"]:
+		if ab_of(pl).is_empty() and ovr_of(pl) >= 66 and rng.randf() < 0.4:
+			pl["ab"] = ab_roll(str(pl["pos"]), ovr_of(pl), rng).slice(0, 1)
+
+func ab_price(pl: Dictionary, slot: int) -> int:
+	var have := ab_of(pl)
+	if slot < have.size():
+		return AB_SWAP
+	return AB_COST[clampi(slot, 0, 1)]
+
+# teach him a skill in this place (or swap the one he has there)
+func learn_ab(i: int, slot: int, key: String) -> String:
+	if i < 0 or i >= (d["squad"] as Array).size() or not ABIL.has(key):
+		return ""
+	var pl: Dictionary = d["squad"][i]
+	var have := ab_of(pl)
+	if not (ABIL[key][2] as Array).has(str(pl["pos"])):
+		return "A %s cannot learn that." % str(pl["pos"])
+	if slot == 1 and ovr_of(pl) < AB_SLOT2:
+		return "The second skill opens at rating %d." % AB_SLOT2
+	if have.has(key):
+		return "He already has %s." % ABIL[key][0]
+	slot = mini(slot, have.size())
+	var c := ab_price(pl, slot)
+	if int(d["coins"]) < c:
+		return "You need %d more coins." % (c - int(d["coins"]))
+	if slot < have.size():
+		have[slot] = key
+	else:
+		have.append(key)
+	pl["ab"] = have
+	d["coins"] = int(d["coins"]) - c
+	save()
+	return "%s LEARNED %s" % [str(pl["n"]).to_upper(), ABIL[key][0]]
