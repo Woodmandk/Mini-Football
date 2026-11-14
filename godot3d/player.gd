@@ -66,6 +66,7 @@ var pas := 65
 var dfn := 60
 var ovr := 70
 var star := false
+var pen_z := 0.0 # where a keeper has guessed a penalty goes
 var ab := [] # skills (evner): keys from Career.ABIL
 var ab_at := -99.0 # when his last skill sign went up (real seconds)
 var ab_lbl: Label3D = null
