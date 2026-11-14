@@ -190,9 +190,101 @@ func _btn(text: String, act: String, arg, kind: String, pos: Vector2, sz: Vector
 		var tw := b.create_tween()
 		tw.tween_property(b, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
 	b.pressed.connect(func():
+		if b.has_meta("dragged"):
+			# the finger moved the button: that was a drag, not a tap
+			b.remove_meta("dragged")
+			return
 		if on_action.is_valid():
 			on_action.call(act, arg))
 	return b
+
+# Team screen: a player plate you can pick up and move. ctx holds the pitch rect and every plate.
+# Drop on the grass = his new spot (pitch plates only), drop on another plate = swap the two men.
+func _drag_plate(b: Button, sq_i: int, slot: int, ctx: Dictionary) -> void:
+	var st := {"on": false, "down": false, "from": Vector2.ZERO, "start": Vector2.ZERO, "tag": null}
+	b.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.button_index == MOUSE_BUTTON_LEFT:
+			if e.pressed:
+				st["down"] = true
+				st["on"] = false
+				st["from"] = b.get_global_transform() * e.position
+				st["start"] = b.position
+			elif st["down"]:
+				st["down"] = false
+				if not st["on"]:
+					return
+				b.set_meta("dragged", true)
+				b.z_index = 0
+				ctx["pc"].set_meta("drag", false)
+				ctx["pc"].queue_redraw()
+				var c: Vector2 = b.position + b.size * 0.5
+				# on top of a team mate (or a bench man)?
+				for pl in ctx["plates"]:
+					var ob: Button = pl[0]
+					if ob == b or not is_instance_valid(ob):
+						continue
+					if slot < 0 and int(pl[2]) < 0:
+						continue
+					if Rect2(ob.position, ob.size).grow(4.0).has_point(c):
+						on_action.call("c_swap", [sq_i, int(pl[1])])
+						return
+				var pr := Rect2(ctx["px"], ctx["py"], ctx["pw"], ctx["ph"])
+				if slot > 0 and pr.has_point(c):
+					var sp: Array = _plate_spot(b.position, ctx)
+					on_action.call("c_spot", [slot, sp[0], sp[1]])
+					return
+				# nowhere useful: back where he was
+				var tw := b.create_tween()
+				tw.tween_property(b, "position", st["start"], 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				if st["tag"] != null and is_instance_valid(st["tag"]):
+					st["tag"].queue_free()
+					st["tag"] = null
+		elif e is InputEventMouseMotion and st["down"]:
+			var mp: Vector2 = b.get_global_transform() * e.position
+			if not st["on"] and mp.distance_to(st["from"]) > 12.0:
+				st["on"] = true
+				b.z_index = 20
+				ctx["pc"].set_meta("drag", slot > 0)
+				ctx["pc"].queue_redraw()
+				if slot > 0:
+					var tg := _label("", 13, Color(0.03, 0.06, 0.03))
+					tg.position = Vector2(b.size.x * 0.5 - 22, -22)
+					tg.size = Vector2(44, 19)
+					tg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					tg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					b.add_child(tg)
+					st["tag"] = tg
+			if st["on"]:
+				var np: Vector2 = st["start"] + (mp - st["from"])
+				if slot > 0:
+					# a pitch man stays on the pitch
+					np.x = clampf(np.x, ctx["px"] + 4.0, ctx["px"] + ctx["pw"] - b.size.x - 4.0)
+					np.y = clampf(np.y, ctx["py"] + 4.0, ctx["py"] + ctx["ph"] - b.size.y - 4.0)
+				b.position = np
+				if st["tag"] != null and is_instance_valid(st["tag"]):
+					var role := _role_at(float(_plate_spot(np, ctx)[0]))
+					st["tag"].text = role
+					st["tag"].add_theme_stylebox_override("normal", _box(ctx["pcol"].get(role, Color.WHITE), 6))
+	)
+
+# Plate top-left on the upright pitch -> [along 0..1, across -1..1] (inverse of the squad layout).
+func _plate_spot(tl: Vector2, ctx: Dictionary) -> Array:
+	var px: float = ctx["px"]
+	var py: float = ctx["py"]
+	var pw: float = ctx["pw"]
+	var ph: float = ctx["ph"]
+	var bw: float = ctx["bw"]
+	var ax := clampf((tl.x - px - 14.0) / maxf(pw - 28.0 - bw, 1.0), 0.0, 1.0)
+	var up := (py + ph - 60.0 - tl.y) / maxf(ph - 74.0, 1.0)
+	var along := clampf(0.15 + (up - 0.17) / 0.72 * 0.59, 0.08, 0.80)
+	return [along, ax * 2.0 - 1.0]
+
+static func _role_at(along: float) -> String:
+	if along < 0.29:
+		return "DF"
+	if along < 0.60:
+		return "MF"
+	return "FW"
 
 func _ord(n: int) -> String:
 	return str(n) + (["TH", "ST", "ND", "RD"][n] if n < 4 else "TH")
@@ -804,6 +896,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			pc.size = Vector2(pw, ph)
 			pc.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			pc.clip_contents = true
+			var ctx := {"pc": pc, "px": px, "py": py, "pw": pw, "ph": ph, "plates": []}
 			pc.draw.connect(func():
 				var ln := Color(1, 1, 1, 0.55)
 				var nb8 := 8
@@ -827,10 +920,33 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					pc.draw_circle(Vector2(pw * 0.5, (ph - m - bh0 * 0.68) if sd == 0 else (m + bh0 * 0.68)), 2.5, ln)
 					# the goal itself
 					pc.draw_rect(Rect2(pw * 0.5 - pw * 0.07, (ph - m) if sd == 0 else (m - 6.0), pw * 0.14, 6.0), Color(1, 1, 1, 0.8))
+				if pc.get_meta("drag", false):
+					# while a man is carried: where defence, midfield and attack begin
+					var zl := ["DEFENCE", "MIDFIELD", "ATTACK"]
+					var ys := [ph + 10.0]
+					for a0 in [0.29, 0.60]:
+						var u0: float = 0.17 + (float(a0) - 0.15) / 0.59 * 0.72
+						ys.append(ph - 60.0 - u0 * (ph - 74.0) + 23.0)
+					ys.append(-10.0)
+					for zi in 3:
+						pc.draw_rect(Rect2(0, ys[zi + 1], pw, ys[zi] - ys[zi + 1]), Color(1, 1, 1, 0.05 if zi % 2 == 0 else 0.0))
+					for zi in [1, 2]:
+						# on each line: the zone above and the zone below, at the right edge
+						var yl: float = ys[zi]
+						pc.draw_string(font2, Vector2(pw - 120.0, yl - 6.0), zl[zi], HORIZONTAL_ALIGNMENT_RIGHT, 106, 13, Color(1, 1, 1, 0.7))
+						pc.draw_string(font2, Vector2(pw - 120.0, yl + 16.0), zl[zi - 1], HORIZONTAL_ALIGNMENT_RIGHT, 106, 13, Color(1, 1, 1, 0.7))
+					for zi in [1, 2]:
+						var yy: float = ys[zi]
+						var xx := 0.0
+						while xx < pw:
+							pc.draw_line(Vector2(xx, yy), Vector2(minf(xx + 12.0, pw), yy), Color(1, 1, 1, 0.6), 2.0)
+							xx += 22.0
 			)
 			menu.add_child(pc)
 			var pcol := {"GK": Color(0.95, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
 			var bw := minf(90.0, (pw - 28.0) / 4.0 - 4.0)
+			ctx["bw"] = bw
+			ctx["pcol"] = pcol
 			var tp := []
 			for si2 in xi.size():
 				# depth in the formation runs up the screen, width runs across it
@@ -859,6 +975,8 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				tp[si2].y = clampf(tp[si2].y, py + 12.0, py + ph - 12.0 - 46.0)
 				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]))
 				menu.add_child(pb)
+				ctx["plates"].append([pb, int(xi[si2]), si2])
+				_drag_plate(pb, int(xi[si2]), si2, ctx)
 			var bx3 := px + pw + 18.0
 			var bw3 := w - bx3 - 24.0
 			var bl := _label("BENCH", 15, Color(1, 1, 1, 0.7), font2)
@@ -871,6 +989,8 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					continue
 				var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), 94 + (bn / bcols) * 52), Vector2(bw3 / bcols - 6, 46), pcol, qi == sel, false)
 				menu.add_child(bb)
+				ctx["plates"].append([bb, qi, -1])
+				_drag_plate(bb, qi, -1, ctx)
 				bn += 1
 			var dy := 94.0 + maxi((bn + bcols - 1) / bcols, 2) * 52.0 + 6.0
 			var dp := Panel.new()
@@ -928,9 +1048,9 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  (%d)" % int(sp2["sell"]), "c_sell", null, "ghost", Vector2(bx3 + 16 + tw3 + 8, dy + dp.size.y - 62), Vector2(bw3 - 32 - tw3 - 8, 48), 14)
 					menu.add_child(slb)
 			else:
-				var hint2 := _label("Tap a player to see him.
-Tap another to swap the two.
-A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), font2)
+				var hint2 := _label("Drag a player on the pitch to put him where you want him.
+Drop him on a team mate, or drag a bench man onto him, to swap them.
+Tap a player to see him. A yellow mark means he is out of position.", 15, Color(1, 1, 1, 0.75), font2)
 				hint2.position = Vector2(16, 14)
 				hint2.size = Vector2(bw3 - 32, 120)
 				hint2.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -945,8 +1065,12 @@ A yellow mark means he is playing out of position.", 15, Color(1, 1, 1, 0.75), f
 			co3.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			menu.add_child(co3)
 			var bk3 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
-			var fb := _btn("FORMATION:  " + str(c3.get("fname", "4-3-3")), "c_form", null, "alt", Vector2(158, 14), Vector2(230, 48), 17)
+			var fb := _btn("FORMATION:  " + str(c3.get("fname", "4-3-3")) + ("*" if bool(c3.get("moved", false)) else ""), "c_form", null, "alt", Vector2(158, 14), Vector2(230, 48), 17)
 			menu.add_child(fb)
+			if bool(c3.get("moved", false)):
+				# your own spots: one tap puts the formation back as drawn
+				var rb := _btn("RESET SPOTS", "c_lay0", null, "ghost", Vector2(px + pw - 128.0, py + ph - 44.0), Vector2(120, 36), 13)
+				menu.add_child(rb)
 			menu.add_child(bk3)
 		"subs":
 			var sb: Dictionary = info.get("subs", {})

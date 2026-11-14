@@ -67,6 +67,8 @@ func form() -> String:
 # New formation: pick the best eleven for the new places, best player first for each role.
 func set_form(name: String, roles: Array) -> void:
 	d["form"] = name
+	# a new formation starts from its own spots again
+	d.erase("lay")
 	var used := []
 	var xi := []
 	xi.resize(roles.size())
@@ -96,6 +98,31 @@ func set_form(name: String, roles: Array) -> void:
 					break
 	d["xi"] = xi
 	save()
+
+# Your own spots on the pitch: slot -> [along 0..1, across -1..1]. Empty = the formation as drawn.
+func lay() -> Dictionary:
+	var l = d.get("lay", {})
+	return l if l is Dictionary else {}
+
+func set_spot(slot: int, along: float, across: float) -> void:
+	if slot <= 0 or slot > 10:
+		return
+	var l := lay()
+	l[str(slot)] = [snappedf(clampf(along, 0.08, 0.80), 0.005), snappedf(clampf(across, -0.92, 0.92), 0.005)]
+	d["lay"] = l
+	save()
+
+func clear_lay() -> void:
+	d.erase("lay")
+	save()
+
+# Where a moved man plays decides his role: deep = defender, middle = midfielder, high = forward.
+static func role_at(along: float) -> String:
+	if along < 0.29:
+		return "DF"
+	if along < 0.60:
+		return "MF"
+	return "FW"
 
 # A career match played together on a friend's career: your own club gets the same coins and your starters grow too.
 func coop_reward(coins: int, won: bool) -> Array:
