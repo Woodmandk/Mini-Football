@@ -3758,17 +3758,14 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	if lofted and not thrown:
 		fx("shake", 0.1)
 	if h != null and m.role != "GK" and _hum_of(m) == null:
-		# Co-op: the receiver goes to whichever of you is nearer him. Pass up to your partner's end of the
-		# pitch and HE gets the man on the ball, you keep the passer and can run on; otherwise you follow your pass.
+		# Co-op: a pass goes to your partner. When one of you passes, the other one gets the man on the ball
+		# (Daniel: "aflevere jeg skal min far modtage den og omvendt"); you keep the passer and can run on.
+		# Playing alone you follow your own pass.
 		var taker = h
-		var best_d: float = d
 		for q in humans:
-			if q == h or q.team != h.team or q.ctrl == null or q.ctrl.role == "GK" or q.ctrl.off:
-				continue
-			var qd: float = q.ctrl.position.distance_to(m.position)
-			if qd < best_d and qd < 20.0:
-				best_d = qd
+			if q != h and q.team == h.team and q.ctrl != null and not q.ctrl.off:
 				taker = q
+				break
 		taker.ctrl = m
 		taker.switch_cool = 0.5
 		if taker != h:
