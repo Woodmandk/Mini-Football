@@ -4,7 +4,7 @@ extends RefCounted
 const ClubDB := preload("res://clubdb.gd")
 const FIRST := 8 # world indices below this are the quick-match clubs
 
-const KEY := "bb3d-career"
+var key := "bb3d-career" # localStorage key (native: user://<key>.json); the cup mode keeps its own
 const ROLE_BASE := {"GK": [52, 30, 62, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}
 const SQUAD_ROLES := ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW", "GK", "DF", "MF", "MF", "FW"]
 const SQUAD_NUMS := [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7, 12, 14, 15, 16, 17]
@@ -25,9 +25,9 @@ func load_save(is_web: bool) -> void:
 	web = is_web
 	var txt := ""
 	if web:
-		txt = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('%s')||''}catch(e){return ''}})()" % KEY, true))
-	elif FileAccess.file_exists("user://career.json"):
-		txt = FileAccess.get_file_as_string("user://career.json")
+		txt = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('%s')||''}catch(e){return ''}})()" % key, true))
+	elif FileAccess.file_exists(_file()):
+		txt = FileAccess.get_file_as_string(_file())
 	if txt != "":
 		var v = JSON.parse_string(txt)
 		if v is Dictionary and v.has("squad") and v.has("fix"):
@@ -47,22 +47,106 @@ func load_save(is_web: bool) -> void:
 			if not d.has("leagues"):
 				_migrate()
 				save()
+			if not d.has("on"):
+				# a save from before the career was a choice: it is a running career
+				d["on"] = true
+
+# JSON turns whole numbers into floats: put the ones used as indices back
+func _ints() -> void:
+	var xi := []
+	for x in d["xi"]:
+		xi.append(int(x))
+	d["xi"] = xi
+	d["coins"] = int(d["coins"])
+
+func _file() -> String:
+	return "user://career.json" if key == "bb3d-career" else "user://%s.json" % key
+
+# ---- your club with or without a career
+# The club is always yours; a career (a league season with the board) is something you start.
+func on() -> bool:
+	return bool(d.get("on", true))
+
+# your own club (made by you), not a club you took over
+func is_mine() -> bool:
+	return d.has("own")
+
+const CLUB_KEYS := ["squad", "xi", "coins", "fac", "form", "lay", "own", "abv", "st", "market"]
+
+# The first start: your own club, not in a career yet. It waits in the place of England's weakest club.
+func new_club() -> void:
+	new_career(weakest(3), true)
+	d["on"] = false
+	d["mode"] = "simple"
+	save()
+
+# A career with your own club: it keeps its squad, coins and buildings and starts in the league you picked.
+func start_mine(li: int, slen: String, base: Dictionary) -> void:
+	var keep := {}
+	for k in CLUB_KEYS:
+		if base.has(k):
+			keep[k] = base[k]
+	new_career(weakest(li), true, slen)
+	for k in keep:
+		d[k] = keep[k]
+	_ints()
+	d["on"] = true
+	d.erase("mode")
+	d.erase("board")
+	board()
+	market_refresh()
+	save()
+
+# While you run a club you took over, your own club waits here.
+const STASH := "bb3d-myclub"
+
+func stash_put(dd: Dictionary = {}) -> void:
+	var txt := JSON.stringify(d if dd.is_empty() else dd)
+	if web:
+		JavaScriptBridge.eval("try{localStorage.setItem('%s',%s)}catch(e){}" % [STASH, JSON.stringify(txt)], true)
+	else:
+		var f := FileAccess.open("user://myclub.json", FileAccess.WRITE)
+		if f != null:
+			f.store_string(txt)
+
+func stash_get() -> Dictionary:
+	var txt := ""
+	if web:
+		txt = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('%s')||''}catch(e){return ''}})()" % STASH, true))
+	elif FileAccess.file_exists("user://myclub.json"):
+		txt = FileAccess.get_file_as_string("user://myclub.json")
+	if txt == "" or txt == "null":
+		return {}
+	var v = JSON.parse_string(txt)
+	return v if (v is Dictionary and v.has("squad")) else {}
+
+func stash_clear() -> void:
+	if web:
+		JavaScriptBridge.eval("try{localStorage.removeItem('%s')}catch(e){}" % STASH, true)
+	elif FileAccess.file_exists("user://myclub.json"):
+		DirAccess.remove_absolute("user://myclub.json")
+
+# your own club: the running one if it is yours, else the one waiting
+func my_club() -> Dictionary:
+	if is_mine():
+		return d
+	return stash_get()
 
 func save() -> void:
 	var txt := JSON.stringify(d)
 	if web:
-		JavaScriptBridge.eval("try{localStorage.setItem('%s',%s)}catch(e){}" % [KEY, JSON.stringify(txt)], true)
+		JavaScriptBridge.eval("try{localStorage.setItem('%s',%s)}catch(e){}" % [key, JSON.stringify(txt)], true)
 	else:
-		var f := FileAccess.open("user://career.json", FileAccess.WRITE)
+		var f := FileAccess.open(_file(), FileAccess.WRITE)
 		if f != null:
 			f.store_string(txt)
 
 func wipe() -> void:
 	d = {}
 	if web:
-		JavaScriptBridge.eval("try{localStorage.removeItem('%s')}catch(e){}" % KEY, true)
-	elif FileAccess.file_exists("user://career.json"):
-		DirAccess.remove_absolute("user://career.json")
+		JavaScriptBridge.eval("try{localStorage.removeItem('%s')}catch(e){}" % key, true)
+	elif FileAccess.file_exists(_file()):
+		DirAccess.remove_absolute(_file())
 
 static func ovr_of(p: Dictionary) -> int:
 	match str(p["pos"]):
@@ -415,7 +499,11 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	return lines
 
 static func ordinal(n: int) -> String:
-	return str(n) + (["TH", "ST", "ND", "RD"][n] if n < 4 else "TH")
+	# 1ST 2ND 3RD 4TH ... 11TH 12TH 13TH ... 21ST 22ND 23RD
+	var k := n % 10
+	if (n % 100) / 10 == 1 or k == 0 or k > 3:
+		return str(n) + "TH"
+	return str(n) + ["", "ST", "ND", "RD"][k]
 
 # The stat that grows: mostly the ones that matter for the player's position.
 func _grow_key(pl: Dictionary, rng: RandomNumberGenerator) -> String:
@@ -1457,6 +1545,8 @@ func _make_squad(q_xi: int, q_bench: int, rng: RandomNumberGenerator) -> Array:
 func cup_due() -> bool:
 	if cup_over():
 		return false
+	if bool(d.get("cupmode", false)):
+		return true
 	return int(d["round"]) >= cup_after() or season_over()
 
 # the league round after which this cup round is played: the rounds are spread evenly through the season

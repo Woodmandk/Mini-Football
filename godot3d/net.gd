@@ -20,6 +20,12 @@ func join(code: String) -> void:
 	connected = false
 	_js("bbNet.join('%s')" % code)
 
+# ranked: look for anyone else who is looking (the page decides who hosts, see bbNet.find)
+func find() -> void:
+	role = "find"
+	connected = false
+	_js("bbNet.find()")
+
 func stop() -> void:
 	role = ""
 	connected = false
