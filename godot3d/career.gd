@@ -1,5 +1,8 @@
 extends RefCounted
-# Career: your own club in a league of eight. Holds the save, the fixtures, the table and the squad.
+# Career: your club in the world of ClubDB (England's four leagues, Denmark's two). Holds the save, the leagues,
+# the fixtures, the table, your squad and the other clubs' squads.
+const ClubDB := preload("res://clubdb.gd")
+const FIRST := 8 # world indices below this are the quick-match clubs
 
 const KEY := "bb3d-career"
 const ROLE_BASE := {"GK": [52, 30, 62, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}
@@ -13,6 +16,7 @@ var web := false
 
 var last_coins := 0
 var names := []
+var W: Array = ClubDB.clubs([{}, {}, {}, {}, {}, {}, {}, {}]) # every club in the world, by index
 
 func has_save() -> bool:
 	return not d.is_empty()
@@ -39,6 +43,9 @@ func load_save(is_web: bool) -> void:
 			d["xi"] = xi
 			if not d.has("abv"):
 				_ab_start()
+				save()
+			if not d.has("leagues"):
+				_migrate()
 				save()
 
 func save() -> void:
@@ -146,36 +153,32 @@ func coop_reward(coins: int, won: bool) -> Array:
 	save()
 	return lines
 
-func new_career(club: int, n_clubs: int, names: Array) -> void:
+# A new career at club c (a world index). own = you made your own club: it takes c's place in c's league.
+func new_career(c: int, own := false, slen := "full") -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var pool := names.duplicate()
-	pool.shuffle()
-	var squad := []
-	for i in SQUAD_ROLES.size():
-		var role: String = SQUAD_ROLES[i]
-		var base: Array = ROLE_BASE[role]
-		# a young squad that starts a little under the league and grows
-		var q := -6 if i < 11 else -10
-		var pl := {
-			"n": pool[i], "num": SQUAD_NUMS[i], "pos": role, "age": rng.randi_range(18, 29), "xp": 0, "g": 0, "apps": 0,
-			"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
-			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
-		}
-		pl["pot"] = clampi(ovr_of(pl) + rng.randi_range(6, 16) - maxi(int(pl["age"]) - 24, 0), 60, 94)
-		squad.append(pl)
-	d = {"club": club, "season": 1, "round": 0, "coins": 100, "squad": squad, "xi": range(11), "n": n_clubs, "last": [], "note": ""}
+	if c < FIRST or c >= W.size():
+		c = weakest(3)
+	var r := rating(c)
+	# your own club starts a little under the league and grows; a club you take over is as good as it is
+	var q := r - 71 - (2 if own else 0)
+	var squad := _make_squad(q, q - 5, rng)
+	var lgs := ClubDB.start_leagues(FIRST)
+	d = {"club": c, "season": 1, "round": 0, "coins": start_coins(int(W[c]["lg"])), "squad": squad, "xi": range(11), "last": [], "note": "",
+		"leagues": lgs, "lg": int(W[c]["lg"]), "slen": slen, "cx": {}}
 	_ab_start()
 	_new_season()
+	cup_new()
 	board()
+	market_refresh()
 	save()
 
 func _new_season() -> void:
-	var n: int = int(d["n"])
-	# round robin by the circle method, then the same again with home and away swapped
-	var ids := []
-	for i in n:
-		ids.append(i)
+	var ids0: Array = ids()
+	var n: int = ids0.size()
+	# round robin by the circle method, then the same again with home and away swapped (a FULL season)
+	var ids := ids0.duplicate()
+	ids.shuffle()
 	var rounds := []
 	for r in n - 1:
 		var rd := []
@@ -191,10 +194,10 @@ func _new_season() -> void:
 		for m in rd:
 			rd2.append([m[1], m[0]])
 		back.append(rd2)
-	d["fix"] = rounds + back
-	var table := []
-	for i in n:
-		table.append({"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0})
+	d["fix"] = rounds + ([] if str(d.get("slen", "full")) == "short" else back)
+	var table := {}
+	for c in ids0:
+		table[str(c)] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
 	d["table"] = table
 	d["round"] = 0
 	d["last"] = []
@@ -217,12 +220,60 @@ func next_match() -> Array:
 	return [-1, true]
 
 # How strong a computer club is: a fixed spread, rising a little each season.
+# How strong a computer club is, against the 71 the player numbers are built around.
 func club_level(c: int) -> int:
-	return [0, 2, -3, 4, 1, -2, 3, -4][c % 8] + (4 - div()) * 4
+	return rating(c) - 71
+
+func rating(c: int) -> int:
+	if c < FIRST or c >= W.size():
+		return 71
+	return int(W[c]["r"]) + int((d.get("rb", {}) as Dictionary).get(str(c), 0))
+
+# ---- the leagues
+
+func lg() -> int:
+	return clampi(int(d.get("lg", 3)), 0, ClubDB.LEAGUES.size() - 1)
+
+func league(li := -1) -> Dictionary:
+	return ClubDB.LEAGUES[lg() if li < 0 else li]
+
+func league_name(li := -1) -> String:
+	return str(league(li)["n"])
+
+# the clubs in a league now (your league when li is left out)
+func ids(li := -1) -> Array:
+	var out := []
+	for x in (d["leagues"] as Array)[lg() if li < 0 else li]:
+		out.append(int(x))
+	return out
+
+func league_of(c: int) -> int:
+	var lgs: Array = d.get("leagues", [])
+	for li in lgs.size():
+		for x in lgs[li]:
+			if int(x) == c:
+				return li
+	return -1
+
+func weakest(li: int) -> int:
+	var src: Array = ids(li) if d.has("leagues") else ClubDB.start_leagues(FIRST)[li]
+	var best := -1
+	for c in src:
+		if best < 0 or int(W[int(c)]["r"]) < int(W[best]["r"]):
+			best = int(c)
+	return best
+
+static func start_coins(li: int) -> int:
+	return [2500, 1000, 450, 200, 700, 250][clampi(li, 0, 5)]
+
+# how much a league's matches pay, against the bottom league
+static func pay_k(li: int) -> float:
+	return [3.0, 2.0, 1.4, 1.0, 1.8, 1.1][clampi(li, 0, 5)]
 
 # The career is a ladder of four divisions: you start in Division 4. The top two go up, the bottom two go down.
+# the level inside the country: 1 = the top league
 func div() -> int:
-	return clampi(int(d.get("div", 4)), 1, 4)
+	return int(league()["t"])
 
 func my_strength() -> float:
 	var s := 0.0
@@ -233,7 +284,7 @@ func my_strength() -> float:
 func _strength(c: int) -> float:
 	if c == int(d["club"]):
 		return my_strength()
-	return 71.0 + club_level(c)
+	return float(rating(c))
 
 static func _poisson(rng: RandomNumberGenerator, lam: float) -> int:
 	var l := exp(-lam)
@@ -247,8 +298,8 @@ static func _poisson(rng: RandomNumberGenerator, lam: float) -> int:
 	return k
 
 func _book(a: int, b: int, ga: int, gb: int) -> void:
-	var ta: Dictionary = d["table"][a]
-	var tb: Dictionary = d["table"][b]
+	var ta: Dictionary = d["table"][str(a)]
+	var tb: Dictionary = d["table"][str(b)]
 	ta["p"] = int(ta["p"]) + 1
 	tb["p"] = int(tb["p"]) + 1
 	ta["gf"] = int(ta["gf"]) + ga
@@ -304,7 +355,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	stt["ga"] = int(stt["ga"]) + theirs
 	d["st"] = stt
 	var lines := []
-	var coins := 15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))
+	var coins := int(round((15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))) * pay_k(lg())))
 	coins += board_bonus(coins)
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
@@ -313,7 +364,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	lines.append(_board_match(mine, theirs, opp_c, was_home, played if not played.is_empty() else d["xi"]))
 	if was_home:
 		# the gate: a bigger stadium and a club near the top bring more people in
-		var gate := fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)
+		var gate := int(round((fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)) * pay_k(lg())))
 		d["coins"] = int(d["coins"]) + gate
 		lines.append("+%d FROM THE GATE" % gate)
 	for i in (played if not played.is_empty() else d["xi"]):
@@ -339,22 +390,25 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			lines.append(yn)
 	if season_over():
 		var pos := rank_of(me)
-		var prize: int = int([300, 200, 140, 100, 70, 50, 30, 20][clampi(pos - 1, 0, 7)] * (1.0 + (4 - div()) * 0.5))
+		var n := ids().size()
+		var prize: int = int(round((20.0 + 280.0 * pow(float(n - pos) / float(n - 1), 1.6)) * pay_k(lg())))
 		d["coins"] = int(d["coins"]) + prize
 		if pos == 1:
 			stt["titles"] = int(stt["titles"]) + 1
 		var mv := 0
 		var what := ""
-		if pos <= 2 and div() > 1:
+		var lgd := league()
+		if pos <= int(lgd["up"]):
 			mv = -1
-			what = "  PROMOTED TO DIVISION %d!" % (div() - 1)
-		elif pos >= 7 and div() < 4:
+			what = "  PROMOTED TO %s!" % league_name(lg() - 1)
+		elif int(lgd["down"]) > 0 and pos > n - int(lgd["down"]):
 			mv = 1
-			what = "  RELEGATED TO DIVISION %d." % (div() + 1)
-		elif pos == 1:
-			what = "  CHAMPIONS OF DIVISION 1!"
+			what = "  RELEGATED TO %s." % league_name(lg() + 1)
+		if pos == 1:
+			what = ("  CHAMPIONS OF %s!" % league_name()) + what
 		d["move"] = mv
-		d["note"] = "DIVISION %d, SEASON %d: YOU FINISHED %s.%s  +%d COINS" % [div(), int(d["season"]), ordinal(pos), what, prize]
+		d["note"] = "%s, SEASON %d: YOU FINISHED %s.%s  +%d COINS" % [league_name(), int(d["season"]), ordinal(pos), what, prize]
+		_sim_others()
 		_board_review()
 		lines.append("SEASON OVER: THE BOARD'S GRADE IS %s" % str(review().get("grade", "C")))
 	save()
@@ -378,13 +432,15 @@ func _grow_key(pl: Dictionary, rng: RandomNumberGenerator) -> String:
 
 func next_season() -> void:
 	d["season"] = int(d["season"]) + 1
-	d["div"] = clampi(div() + int(d.get("move", 0)), 1, 4)
+	_move_clubs()
+	d["lg"] = league_of(int(d["club"]))
 	d["move"] = 0
 	d["note"] = ""
 	for pl in d["squad"]:
 		pl["age"] = int(pl["age"]) + 1
 		pl["g"] = 0
 		pl["apps"] = 0
+	_age_world()
 	_new_season()
 	# a new cup every season, and new goals from the board
 	cup_new()
@@ -393,17 +449,92 @@ func next_season() -> void:
 	_board_season()
 	save()
 
+# The end of the season everywhere else: every other league plays its season in a blink.
+func _sim_others() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var fin := []
+	for li in ClubDB.LEAGUES.size():
+		if li == lg():
+			fin.append(order())
+			continue
+		var cl: Array = ids(li)
+		var pts := {}
+		for c in cl:
+			pts[c] = [0, 0, 0]
+		for i in cl.size():
+			for j in cl.size():
+				if i == j:
+					continue
+				var a: int = cl[i]
+				var b: int = cl[j]
+				var df := (float(rating(a)) - float(rating(b))) / 14.0
+				var ga := _poisson(rng, 1.35 * exp(df) + 0.15)
+				var gb := _poisson(rng, 1.35 * exp(-df))
+				pts[a][0] += 3 if ga > gb else (1 if ga == gb else 0)
+				pts[b][0] += 3 if gb > ga else (1 if ga == gb else 0)
+				pts[a][1] += ga - gb
+				pts[b][1] += gb - ga
+				pts[a][2] += ga
+				pts[b][2] += gb
+		var ord := cl.duplicate()
+		ord.sort_custom(func(x, y): return pts[x] > pts[y] if pts[x] != pts[y] else x < y)
+		fin.append(ord)
+	d["final"] = fin
+
+# Promotion and relegation in every country, by each league's own rules.
+func _move_clubs() -> void:
+	var fin: Array = d.get("final", [])
+	if fin.size() != ClubDB.LEAGUES.size():
+		return
+	var lgs := []
+	for li in fin.size():
+		lgs.append((fin[li] as Array).duplicate())
+	for li in ClubDB.LEAGUES.size() - 1:
+		var a: Dictionary = ClubDB.LEAGUES[li]
+		var b: Dictionary = ClubDB.LEAGUES[li + 1]
+		if str(a["c"]) != str(b["c"]):
+			continue
+		var dn := int(a["down"])
+		var up := int(b["up"])
+		var down_cl: Array = (fin[li] as Array).slice((fin[li] as Array).size() - dn)
+		var up_cl: Array = (fin[li + 1] as Array).slice(0, up)
+		for c in down_cl:
+			lgs[li].erase(c)
+			lgs[li + 1].append(c)
+		for c in up_cl:
+			lgs[li + 1].erase(c)
+			lgs[li].append(c)
+	d["leagues"] = lgs
+	d.erase("final")
+
+# A year on for the other clubs: their ratings drift a little, so the world does not stand still.
+func _age_world() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var rb: Dictionary = d.get("rb", {})
+	for c in range(FIRST, W.size()):
+		var k := str(c)
+		var v := int(rb.get(k, 0)) + rng.randi_range(-1, 1)
+		# a club promoted gets a little stronger, one relegated a little weaker, but never far from what it is
+		var li := league_of(c)
+		if li >= 0 and li != int(W[c]["lg"]):
+			v += 1 if li < int(W[c]["lg"]) else -1
+		rb[k] = clampi(v, -5, 5)
+	d["rb"] = rb
+
+# Clubs in table order (points, goal difference, goals for).
 # Clubs in table order (points, goal difference, goals for).
 func order() -> Array:
-	var ids := []
-	for i in int(d["n"]):
-		ids.append(i)
-	var t: Array = d["table"]
-	ids.sort_custom(func(a, b):
-		var ka := [int(t[a]["pts"]), int(t[a]["gf"]) - int(t[a]["ga"]), int(t[a]["gf"])]
-		var kb := [int(t[b]["pts"]), int(t[b]["gf"]) - int(t[b]["ga"]), int(t[b]["gf"])]
+	var ids0 := ids()
+	var t: Dictionary = d["table"]
+	ids0.sort_custom(func(a, b):
+		var ra: Dictionary = t[str(a)]
+		var rb2: Dictionary = t[str(b)]
+		var ka := [int(ra["pts"]), int(ra["gf"]) - int(ra["ga"]), int(ra["gf"])]
+		var kb := [int(rb2["pts"]), int(rb2["gf"]) - int(rb2["ga"]), int(rb2["gf"])]
 		return ka > kb if ka != kb else a < b)
-	return ids
+	return ids0
 
 func rank_of(c: int) -> int:
 	return order().find(c) + 1
@@ -531,7 +662,7 @@ func stats() -> Dictionary:
 	if d.has("st"):
 		return d["st"]
 	# an older save: start from this season's row in the table
-	var t: Dictionary = d["table"][int(d["club"])]
+	var t: Dictionary = d["table"][str(int(d["club"]))]
 	return {"p": int(t["p"]), "w": int(t["w"]), "d": int(t["d"]), "l": int(t["l"]), "gf": int(t["gf"]), "ga": int(t["ga"]), "titles": 0}
 
 func market() -> Array:
@@ -572,15 +703,30 @@ func sell(i: int) -> String:
 	if sq.size() <= SQUAD_MIN:
 		return "You need at least %d players." % SQUAD_MIN
 	var pl: Dictionary = sq[i]
-	var got := sell_value(pl)
+	# a club at his level in your country buys him and he plays for them from now on
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var buyer := _buyer_for(pl, rng)
+	var got := int(round(sell_value(pl) * rng.randf_range(1.0, 1.25) / 5.0)) * 5
 	d["coins"] = int(d["coins"]) + got
 	sq.remove_at(i)
+	if buyer >= 0:
+		var their: Array = cpu_squad(buyer)
+		var wk := -1
+		for k in their.size():
+			if str(their[k]["pos"]) == str(pl["pos"]) and (wk < 0 or ovr_of(their[k]) < ovr_of(their[wk])):
+				wk = k
+		pl["tp"] = 0
+		pl["xp"] = 0
+		if wk >= 0:
+			their[wk] = pl
+		_set_cpu_squad(buyer, their)
 	var xi := []
 	for x in d["xi"]:
 		xi.append(int(x) - 1 if int(x) > i else int(x))
 	d["xi"] = xi
 	save()
-	return "%s SOLD FOR %d COINS" % [str(pl["n"]).to_upper(), got]
+	return "%s SOLD TO %s FOR %d COINS" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", got]
 
 # ---- the club: three things to build
 
@@ -671,9 +817,9 @@ func spend_tp(i: int, si: int) -> String:
 	return "%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[si]]
 
 # ---------------------------------------------------------------- the cup
-# A knockout cup for the eight clubs: quarter-final, semi-final, final. It runs beside the league and can be
-# started again as soon as you are out or have won it.
-const CUP_ROUNDS := ["QUARTER-FINAL", "SEMI-FINAL", "FINAL"]
+# Each country's knockout cup with every club in it, one a season, its rounds spread through the league season.
+# The strongest clubs wait for the first round to be played (a bye) so the rest is a clean bracket.
+const CUP_NAMES := {"ENGLAND": "THE ENGLISH CUP", "DENMARK": "THE DANISH CUP"}
 
 func cup() -> Dictionary:
 	if not d.has("cup"):
@@ -681,59 +827,69 @@ func cup() -> Dictionary:
 	return d["cup"]
 
 func cup_new() -> void:
-	var ids := []
-	for i in int(d["n"]):
-		ids.append(i)
-	ids.shuffle()
-	d["cup"] = {"r": 0, "teams": ids, "out": false, "won": false, "log": [], "n": int(d.get("cup", {}).get("n", 0)) + 1}
+	var cn := str(league()["c"])
+	var all := []
+	for li in ClubDB.LEAGUES.size():
+		if str(ClubDB.LEAGUES[li]["c"]) == cn:
+			all.append_array(ids(li))
+	all.sort_custom(func(a, b): return _strength(a) > _strength(b))
+	var p := 1
+	while p < all.size():
+		p *= 2
+	var nb := p - all.size()
+	var byes: Array = all.slice(0, nb)
+	var first: Array = all.slice(nb)
+	first.shuffle()
+	var rn := 0
+	var q := p
+	while q > 1:
+		q /= 2
+		rn += 1
+	var nm := []
+	for i in rn:
+		var left := rn - i
+		nm.append(["FINAL", "SEMI-FINAL", "QUARTER-FINAL", "ROUND OF 16", "ROUND OF 32", "ROUND OF 64"][left - 1] if left <= 6 else "FIRST ROUND")
+	if nm.size() >= 7:
+		nm[0] = "FIRST ROUND"
+	d["cup"] = {"r": 0, "teams": first, "byes": byes, "names": nm, "out": false, "won": false, "log": [], "c": cn, "n": int(d.get("cup", {}).get("n", 0)) + 1}
+	# your club has a bye: the first round is played without you
+	if byes.has(int(d["club"])):
+		_cup_round(-1, -1, false)
+		d["cup"]["r0"] = 1
 	save()
 
-func cup_over() -> bool:
-	var cp: Dictionary = cup()
-	return bool(cp["out"]) or bool(cp["won"])
+func cup_name() -> String:
+	return str(CUP_NAMES.get(str(cup().get("c", league()["c"])), "THE CUP"))
 
-# The club you meet in this round, or -1 when your cup is over.
-func cup_opp() -> int:
-	var cp: Dictionary = cup()
-	if cup_over():
-		return -1
-	var t: Array = cp["teams"]
-	var i: int = t.find(float(int(d["club"])))
-	if i < 0:
-		i = t.find(int(d["club"]))
-	if i < 0:
-		return -1
-	return int(t[i + 1]) if i % 2 == 0 else int(t[i - 1])
+func cup_names() -> Array:
+	return cup().get("names", ["QUARTER-FINAL", "SEMI-FINAL", "FINAL"])
 
-func cup_round_name() -> String:
-	return CUP_ROUNDS[clampi(int(cup()["r"]), 0, 2)]
+func cup_rounds() -> int:
+	return cup_names().size()
 
-# Books your cup tie and plays the others. Returns lines for the full-time screen.
-func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
+# Plays one cup round: your tie with your score (mine/theirs, -1 = you are not in it), the others by strength.
+func _cup_round(mine: int, theirs: int, won_tie: bool) -> void:
 	var cp: Dictionary = cup()
 	var me: int = int(d["club"])
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var t: Array = cp["teams"]
-	var r: int = int(cp["r"])
 	var next := []
 	var res := []
-	var lines := []
-	# a level tie was settled by the shootout
 	var won: bool = mine > theirs or (mine == theirs and won_tie)
-	for i in range(0, t.size(), 2):
+	for i in range(0, t.size() - 1, 2):
 		var a: int = int(t[i])
 		var b: int = int(t[i + 1])
 		var ga := 0
 		var gb := 0
-		if a == me or b == me:
+		if mine >= 0 and (a == me or b == me):
 			ga = mine if a == me else theirs
 			gb = theirs if a == me else mine
 			next.append(me if won else (b if a == me else a))
 		else:
-			var diff := (_strength(a) - _strength(b)) / 14.0
-			ga = _poisson(rng, 1.35 * exp(diff))
-			gb = _poisson(rng, 1.35 * exp(-diff))
+			var df := (_strength(a) - _strength(b)) / 14.0
+			ga = _poisson(rng, 1.35 * exp(df))
+			gb = _poisson(rng, 1.35 * exp(-df))
 			if ga == gb:
 				if rng.randf() < 0.5:
 					ga += 1
@@ -742,21 +898,60 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 			next.append(a if ga > gb else b)
 		res.append([a, b, ga, gb])
 	(cp["log"] as Array).append(res)
+	if int(cp["r"]) == 0:
+		next.append_array(cp.get("byes", []))
+		cp["byes"] = []
+	next.shuffle()
+	cp["teams"] = next
+	cp["r"] = int(cp["r"]) + 1
+
+func cup_over() -> bool:
+	var cp: Dictionary = cup()
+	return bool(cp["out"]) or bool(cp["won"])
+
+# The club you meet in this round, or -1 when your cup is over.
+# The club you meet in this round, or -1 when your cup is over.
+func cup_opp() -> int:
+	var cp: Dictionary = cup()
+	if cup_over():
+		return -1
+	var t: Array = cp["teams"]
+	var i: int = -1
+	for k in t.size():
+		if int(t[k]) == int(d["club"]):
+			i = k
+	if i < 0 or i + (1 if i % 2 == 0 else -1) >= t.size():
+		return -1
+	return int(t[i + 1]) if i % 2 == 0 else int(t[i - 1])
+
+func cup_round_name() -> String:
+	var nm := cup_names()
+	return str(nm[clampi(int(cup()["r"]), 0, nm.size() - 1)])
+
+# Books your cup tie and plays the others. Returns lines for the full-time screen.
+# Books your cup tie and plays the others. Returns lines for the full-time screen.
+func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
+	var cp: Dictionary = cup()
+	var r: int = int(cp["r"])
+	var last_r := cup_rounds() - 1
+	var lines := []
+	# a level tie was settled by the shootout
+	var won: bool = mine > theirs or (mine == theirs and won_tie)
+	_cup_round(mine, theirs, won_tie)
 	var stt: Dictionary = stats()
-	var coins := 10 + mine * 5
+	var nm := cup_names()
+	var coins := int(round((10 + mine * 5) * pay_k(lg())))
 	if won:
-		coins += [60, 100, 250][clampi(r, 0, 2)]
-		if r >= 2:
+		coins += int(round([40, 60, 80, 120, 160, 250, 400][clampi(6 - (last_r - r), 0, 6)] * pay_k(lg())))
+		if r >= last_r:
 			cp["won"] = true
 			stt["cups"] = int(stt.get("cups", 0)) + 1
-			lines.append("YOU WON THE CUP!")
+			lines.append("YOU WON %s!" % cup_name())
 		else:
-			cp["r"] = r + 1
-			cp["teams"] = next
-			lines.append("THROUGH TO THE %s" % CUP_ROUNDS[r + 1])
+			lines.append("THROUGH TO THE %s" % nm[r + 1])
 	else:
 		cp["out"] = true
-		lines.append("OUT OF THE CUP IN THE %s" % CUP_ROUNDS[clampi(r, 0, 2)])
+		lines.append("OUT OF THE CUP IN THE %s" % nm[clampi(r, 0, last_r)])
 	d["st"] = stt
 	coins += board_bonus(coins)
 	d["coins"] = int(d["coins"]) + coins
@@ -878,7 +1073,6 @@ func learn_ab(i: int, slot: int, key: String) -> String:
 # goals, clean sheets, building the club, home form). Its confidence in you moves after every match: a win the
 # board did not expect lifts it a lot, a defeat against a weaker side costs. At the end of the season it gives
 # you a grade and a bonus. In a FULL career it can also sack you; in a SIMPLE career it only grumbles.
-const CUP_AT := [3, 7, 11] # league rounds played before each cup round is due: the cup is part of the season
 const MOODS := [[85, "DELIGHTED"], [68, "HAPPY"], [50, "SATISFIED"], [35, "UNEASY"], [20, "WORRIED"], [0, "FURIOUS"]]
 const GRADES := [[88, "A"], [72, "B"], [55, "C"], [38, "D"], [20, "E"], [0, "F"]]
 const GRADE_BONUS := {"A": 400, "B": 260, "C": 150, "D": 60, "E": 0, "F": 0}
@@ -915,7 +1109,7 @@ func expected_rank() -> int:
 	var me := int(d["club"])
 	var mine := my_strength()
 	var r := 1
-	for c in int(d["n"]):
+	for c in ids():
 		if c != me and _strength(c) > mine + 0.5:
 			r += 1
 	return r
@@ -931,22 +1125,43 @@ func _board_season() -> void:
 	var b: Dictionary = d["board"]
 	var ex := expected_rank()
 	var dv := div()
+	var n := ids().size()
+	var lgd := league()
+	var up := int(lgd["up"])
+	var dn := int(lgd["down"])
 	var lg := {}
 	if ex <= 1:
-		lg = {"k": "pos", "v": 1, "t": "WIN THE LEAGUE"} if dv == 1 else {"k": "pos", "v": 2, "t": "WIN PROMOTION: FINISH IN THE TOP 2"}
-	elif ex <= 3:
-		lg = {"k": "pos", "v": 3, "t": "FINISH IN THE TOP 3"} if dv == 1 else {"k": "pos", "v": 3, "t": "CHALLENGE FOR PROMOTION: TOP 3"}
-	elif ex <= 5:
-		lg = {"k": "pos", "v": 4, "t": "FINISH IN THE TOP HALF"}
+		lg = {"k": "pos", "v": 1, "t": "WIN THE LEAGUE"} if dv == 1 else {"k": "pos", "v": up, "t": "WIN PROMOTION: FINISH IN THE TOP %d" % up}
+	elif ex <= maxi(up + 2, 4):
+		lg = {"k": "pos", "v": 4, "t": "FINISH IN THE TOP 4"} if dv == 1 else {"k": "pos", "v": up + 3, "t": "CHALLENGE FOR PROMOTION: TOP %d" % (up + 3)}
+	elif ex <= n / 2 + 1:
+		lg = {"k": "pos", "v": n / 2, "t": "FINISH IN THE TOP HALF"}
+	elif dn > 0:
+		lg = {"k": "pos", "v": n - dn, "t": "AVOID RELEGATION"}
 	else:
-		lg = {"k": "pos", "v": 6, "t": "STAY OUT OF THE BOTTOM TWO"}
+		lg = {"k": "pos", "v": n - 3, "t": "STAY OUT OF THE BOTTOM THREE"}
+	# the cup: measured against every club in the country
+	var cr := cup_rounds()
+	var cp_r0 := int(cup().get("r0", 0))
+	var exc := 1
+	var mine := my_strength()
+	for li in ClubDB.LEAGUES.size():
+		if str(ClubDB.LEAGUES[li]["c"]) == str(lgd["c"]):
+			for c in ids(li):
+				if c != int(d["club"]) and _strength(c) > mine + 0.5:
+					exc += 1
+	var nm := cup_names()
 	var cp := {}
-	if ex <= 1 and dv <= 2:
-		cp = {"k": "cup", "v": 3, "t": "WIN THE CUP"}
-	elif ex <= 3:
-		cp = {"k": "cup", "v": 2, "t": "REACH THE CUP FINAL"}
+	if exc <= 2:
+		cp = {"k": "cup", "v": cr, "t": "WIN THE CUP"}
+	elif exc <= 4:
+		cp = {"k": "cup", "v": cr - 1, "t": "REACH THE CUP FINAL"}
+	elif exc <= 8:
+		cp = {"k": "cup", "v": cr - 2, "t": "REACH THE CUP SEMI-FINAL"}
+	elif exc <= 16:
+		cp = {"k": "cup", "v": cr - 3, "t": "REACH THE CUP QUARTER-FINAL"}
 	else:
-		cp = {"k": "cup", "v": 1, "t": "REACH THE CUP SEMI-FINAL"}
+		cp = {"k": "cup", "v": cp_r0 + 1, "t": "WIN A CUP TIE: REACH THE %s" % str(nm[clampi(cp_r0 + 1, 0, cr - 1)])}
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var young := 0
@@ -960,15 +1175,15 @@ func _board_season() -> void:
 	var ex3 := {}
 	match k:
 		"goals":
-			var g := 30 - ex * 2
+			var g := int(round(rounds_total() * clampf(2.2 - ex * 0.1, 0.9, 2.1)))
 			ex3 = {"k": "goals", "v": g, "t": "SCORE %d LEAGUE GOALS" % g}
 		"cs":
-			var c := 5 if ex <= 3 else (4 if ex <= 5 else 3)
+			var c := int(round(rounds_total() * (0.36 if ex <= 3 else (0.28 if ex <= n / 2 else 0.2))))
 			ex3 = {"k": "cs", "v": c, "t": "KEEP %d CLEAN SHEETS IN THE LEAGUE" % c}
 		"build":
 			ex3 = {"k": "build", "v": 1, "t": "BUILD ONE NEW LEVEL AT THE CLUB"}
 		"home":
-			var l := 1 if ex <= 3 else 2
+			var l := int(round(rounds_total() / 2.0 * (0.12 if ex <= 3 else 0.25)))
 			ex3 = {"k": "home", "v": l, "t": "LOSE NO MORE THAN %d HOME MATCHES" % l}
 		_:
 			# a little more than the young men in the eleven now would get anyway
@@ -997,7 +1212,7 @@ func obj_state(o: Dictionary) -> Array:
 		"cup":
 			var cp: Dictionary = cup()
 			var reached := int(cp["r"]) + (1 if bool(cp["won"]) else 0)
-			var names := ["QUARTER-FINAL", "SEMI-FINAL", "FINAL", "WON"]
+			var names: Array = cup_names() + ["WON"]
 			if reached >= v:
 				return ["WON THE CUP" if bool(cp["won"]) else "IN THE %s" % names[reached], "done"]
 			if bool(cp["out"]):
@@ -1161,15 +1376,22 @@ func review() -> Dictionary:
 
 func _job_offers() -> void:
 	var me := int(d["club"])
-	var ids := []
-	for c in int(d["n"]):
-		if c != me:
-			ids.append(c)
-	ids.shuffle()
-	var offers := []
 	var dv := div()
-	for i in 3:
-		offers.append([int(ids[i]), clampi(dv + (0 if i == 0 else 1), 1, 4)])
+	var cand := [[], []]
+	for li in ClubDB.LEAGUES.size():
+		var t := int(ClubDB.LEAGUES[li]["t"])
+		var same: bool = str(ClubDB.LEAGUES[li]["c"]) == str(league()["c"])
+		# a sacked manager gets offers from his own level or the one below, in either country
+		if t == dv or t == dv + 1 or (not same and t >= dv):
+			for c in ids(li):
+				if c != me:
+					cand[0 if t == dv and same else 1].append(c)
+	cand[0].shuffle()
+	cand[1].shuffle()
+	var pick: Array = cand[0].slice(0, 1) + cand[1].slice(0, 2)
+	var offers := []
+	for c in pick:
+		offers.append([int(c), league_of(int(c))])
 	d["offers"] = offers
 
 func offers() -> Array:
@@ -1185,7 +1407,6 @@ func take_job(i: int) -> void:
 	st["jobs"] = int(st.get("jobs", 1)) + 1
 	d["st"] = st
 	d["club"] = c
-	d["div"] = int(of[i][1])
 	d["move"] = 0
 	d.erase("own")
 	d.erase("lay")
@@ -1193,14 +1414,17 @@ func take_job(i: int) -> void:
 	d.erase("sacked")
 	d.erase("offers")
 	d["fac"] = {}
-	d["coins"] = 200
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var q := club_level(c) - 2
+	var q := club_level(c)
 	d["squad"] = _make_squad(q, q - 5, rng)
 	d["xi"] = range(11)
 	d["season"] = int(d["season"]) + 1
 	d["note"] = ""
+	_move_clubs()
+	d["lg"] = league_of(c)
+	d["coins"] = start_coins(lg())
+	_age_world()
 	_ab_start()
 	_new_season()
 	cup_new()
@@ -1229,11 +1453,188 @@ func _make_squad(q_xi: int, q_bench: int, rng: RandomNumberGenerator) -> Array:
 # ---- the cup inside the season
 
 # Your cup tie is the next match: its round is due once enough league rounds are played.
+# Your cup tie is the next match: its round is due once enough league rounds are played.
 func cup_due() -> bool:
 	if cup_over():
 		return false
-	var r := clampi(int(cup()["r"]), 0, 2)
-	return int(d["round"]) >= CUP_AT[r] or season_over()
+	return int(d["round"]) >= cup_after() or season_over()
 
+# the league round after which this cup round is played: the rounds are spread evenly through the season
 func cup_after() -> int:
-	return CUP_AT[clampi(int(cup()["r"]), 0, 2)]
+	var r := clampi(int(cup()["r"]), 0, cup_rounds() - 1)
+	return int(round(rounds_total() * (r + 1.0) / (cup_rounds() + 1.0)))
+
+# ---------------------------------------------------------------- old saves
+# A career from before the world of leagues: your club joins the English league of its old division, in the
+# place of that league's weakest club, and starts the season again with its squad, coins and buildings.
+func _migrate() -> void:
+	var old_div := clampi(int(d.get("div", 4)), 1, 4)
+	var li := old_div - 1
+	d["mig"] = int(d["club"])
+	d["leagues"] = ClubDB.start_leagues(FIRST)
+	var c := weakest(li)
+	d["club"] = c
+	d["lg"] = li
+	d["slen"] = "full"
+	d["cx"] = {}
+	d.erase("n")
+	d.erase("div")
+	d.erase("cup")
+	d.erase("board")
+	d.erase("sacked")
+	d.erase("offers")
+	d["move"] = 0
+	_new_season()
+	cup_new()
+	board()
+	market_refresh()
+	d["note"] = ""
+	(d["board"] as Dictionary)["msg"] = "YOUR CLUB HAS JOINED %s. A NEW SEASON STARTS." % league_name()
+
+# ---------------------------------------------------------------- the other clubs' squads
+# Every club has its own eighteen men, made from the club's number so they are the same every time,
+# until you buy one of them (or sell them one): then that club's squad is kept in the save.
+const CPU_ROLES := ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW", "GK", "DF", "DF", "MF", "MF", "FW", "FW"]
+
+func cpu_squad(c: int) -> Array:
+	var cx: Dictionary = d.get("cx", {})
+	if cx.has(str(c)):
+		return cx[str(c)]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = c * 7919 + 13
+	var pool := names.duplicate()
+	for n in range(pool.size() - 1, 0, -1):
+		var sw := rng.randi_range(0, n)
+		var tmp = pool[n]
+		pool[n] = pool[sw]
+		pool[sw] = tmp
+	var q := rating(c) - 72
+	var out := []
+	var stars := [9, 6 + c % 2]
+	for i in CPU_ROLES.size():
+		var role: String = CPU_ROLES[i]
+		var base: Array = ROLE_BASE[role]
+		var qq := q + (6 if stars.has(i) else 0) - (5 if i >= 11 else 0)
+		var pl := {
+			"n": pool[i % pool.size()], "num": [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7, 13, 15, 16, 14, 18, 19, 20][i], "pos": role, "age": rng.randi_range(18, 33), "xp": 0, "g": 0, "apps": 0,
+			"pac": clampi(base[0] + qq + rng.randi_range(-5, 5), 30, 97), "sho": clampi(base[1] + qq + rng.randi_range(-5, 5), 25, 97),
+			"pas": clampi(base[2] + qq + rng.randi_range(-5, 5), 30, 97), "dfn": clampi(base[3] + qq + rng.randi_range(-5, 5), 25, 97),
+		}
+		pl["pot"] = clampi(ovr_of(pl) + maxi(26 - int(pl["age"]), 0) * 2 + rng.randi_range(0, 4), ovr_of(pl), 96)
+		pl["ab"] = ab_roll(role, ovr_of(pl), rng)
+		out.append(pl)
+	return out
+
+func _set_cpu_squad(c: int, sq: Array) -> void:
+	if not d.has("cx"):
+		d["cx"] = {}
+	d["cx"][str(c)] = sq
+
+# The eleven a computer club puts out for these roles: the best man for each place.
+func cpu_xi(c: int, roles: Array) -> Array:
+	var sq := cpu_squad(c)
+	var used := []
+	var out := []
+	for r in roles:
+		var best := -1
+		for pass_n in 2:
+			for i in sq.size():
+				if used.has(i) or (pass_n == 0 and str(sq[i]["pos"]) != str(r)) or (pass_n == 1 and str(sq[i]["pos"]) == "GK"):
+					continue
+				if best < 0 or ovr_of(sq[i]) > ovr_of(sq[best]):
+					best = i
+			if best >= 0:
+				break
+		if best < 0:
+			best = 0
+		used.append(best)
+		out.append(sq[best])
+	return out
+
+# A club in your country at the player's level that would buy him.
+func _buyer_for(pl: Dictionary, rng: RandomNumberGenerator) -> int:
+	var o := ovr_of(pl)
+	var cand := []
+	for li in ClubDB.LEAGUES.size():
+		if str(ClubDB.LEAGUES[li]["c"]) != str(league()["c"]):
+			continue
+		for c in ids(li):
+			if c != int(d["club"]) and absi(rating(c) - o) <= 5:
+				cand.append(c)
+	if cand.is_empty():
+		return -1
+	return int(cand[rng.randi() % cand.size()])
+
+# What a club wants for one of its men: more for a starter, much more for its best, more again when a big club
+# would sell to a smaller one.
+func ask_price(c: int, i: int) -> int:
+	var sq := cpu_squad(c)
+	if i < 0 or i >= sq.size():
+		return 0
+	var pl: Dictionary = sq[i]
+	var ovs := []
+	for x in sq:
+		ovs.append(ovr_of(x))
+	ovs.sort()
+	ovs.reverse()
+	var k := 1.0
+	var o := ovr_of(pl)
+	if o >= int(ovs[min(2, ovs.size() - 1)]):
+		k = 1.6
+	elif o >= int(ovs[min(10, ovs.size() - 1)]):
+		k = 1.25
+	if rating(c) > my_strength() + 5.0:
+		k *= 1.2
+	return int(round(value(pl) * k / 5.0)) * 5
+
+# You bid for player i of club c. Returns {ok, msg, counter}.
+func bid(c: int, i: int, amount: int) -> Dictionary:
+	var sq := cpu_squad(c)
+	if i < 0 or i >= sq.size():
+		return {"ok": false, "msg": ""}
+	if (d["squad"] as Array).size() >= SQUAD_MAX:
+		return {"ok": false, "msg": "Your squad is full. Sell a player first."}
+	if int(d["coins"]) < amount:
+		return {"ok": false, "msg": "You need %d more coins." % (amount - int(d["coins"]))}
+	var ask := ask_price(c, i)
+	var neg: Dictionary = d.get("neg", {})
+	var key := "%d:%s" % [c, str(sq[i]["n"])]
+	var pl: Dictionary = sq[i]
+	if amount >= ask or (neg.has(key) and amount >= int(neg[key])):
+		neg.erase(key)
+		d["neg"] = neg
+		# he leaves: the club signs a younger, cheaper man for his place
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		var role := str(pl["pos"])
+		var base: Array = ROLE_BASE[role]
+		var q := rating(c) - 76
+		var nw := {"n": names[rng.randi() % names.size()], "num": int(pl["num"]), "pos": role, "age": rng.randi_range(18, 23), "xp": 0, "g": 0, "apps": 0,
+			"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
+			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "ab": []}
+		nw["pot"] = clampi(ovr_of(nw) + rng.randi_range(4, 12), ovr_of(nw), 94)
+		var their := sq.duplicate(true)
+		their[i] = nw
+		_set_cpu_squad(c, their)
+		var used := []
+		for x in d["squad"]:
+			used.append(int(x["num"]))
+		var me_pl: Dictionary = pl.duplicate(true)
+		for n in range(2, 99):
+			if not used.has(n):
+				me_pl["num"] = n
+				break
+		me_pl["xp"] = 0
+		me_pl["tp"] = 0
+		me_pl["g"] = 0
+		me_pl["apps"] = 0
+		d["coins"] = int(d["coins"]) - amount
+		d["squad"].append(me_pl)
+		save()
+		return {"ok": true, "msg": "%s SIGNED FROM %s FOR %d COINS" % [str(pl["n"]).to_upper(), str(W[c]["n"]), amount]}
+	if amount >= int(ask * 0.75):
+		neg[key] = ask
+		d["neg"] = neg
+		save()
+		return {"ok": false, "counter": ask, "msg": "%s SAY NO, BUT THEY WOULD TAKE %d COINS." % [str(W[c]["n"]), ask]}
+	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(W[c]["n"])}
