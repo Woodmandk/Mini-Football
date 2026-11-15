@@ -2,7 +2,7 @@
 <meta name="theme-color" content="#0d1a14"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png"><link rel="icon" href="logo/icon.svg" type="image/svg+xml"><link rel="icon" href="icon-192.png" sizes="192x192">
 <style>html,body{margin:0}</style><script src="peerjs.min.js"></script></head><body>
-<title>Banebold</title>
+<title>Pitch Boss</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&family=Chakra+Petch:wght@500;600;700&display=swap">
@@ -1088,8 +1088,8 @@ table.st tr.fr td { color: var(--gold); }
     <!-- forside: vælg hvad du vil spille -->
     <div class="card wide hub" id="pgHome">
       <div class="hubtop">
-        <div class="logo" aria-label="Banebold"><img class="lgfull" src="logo/logo-compact.svg" alt="Banebold"><img class="lgcrest" src="logo/icon-small.svg" alt=""></div>
-        <span class="mfver" id="mfVer">v14.11 22:05</span>
+        <div class="logo" aria-label="Pitch Boss"><img class="lgfull" src="logo/logo-compact.svg" alt="Pitch Boss"><img class="lgcrest" src="logo/icon-small.svg" alt=""></div>
+        <span class="mfver" id="mfVer">v15.11 08:11</span>
         <input id="name" class="namein" maxlength="12" placeholder="Your name" autocomplete="off" aria-label="Your name" hidden>
         <button id="homeClub" class="alt" aria-label="Your club"><span class="crestbox" id="hcCrest"></span><span><b id="hcName">My team</b><small id="hcSub"></small></span></button>
         <button id="homeRank" class="alt rkchip" aria-label="Your rank"><span id="hpRank"></span><span class="rkt"><b id="hpRankN">Bronze III</b><small id="hpRankP">0 RP</small></span></button>
@@ -1375,7 +1375,7 @@ table.st tr.fr td { color: var(--gold); }
 
   <div id="pkFx" hidden>
     <div class="fxrays"></div><div class="fxflash"></div>
-    <div class="fxpack" id="fxPack"><span class="fxlogo">BANEBOLD</span><b id="fxName">Pack</b><i class="fxshine"></i></div>
+    <div class="fxpack" id="fxPack"><span class="fxlogo">PITCH BOSS</span><b id="fxName">Pack</b><i class="fxshine"></i></div>
     <div class="fxclue" id="fxNat"></div><div class="fxclue" id="fxPos"></div><div class="fxclue fxovr" id="fxOvr"></div><div class="fxclue" id="fxAb"></div>
     <div class="fxconf" id="fxConf"></div>
     <p class="fxtap">Tap to skip</p>
@@ -5771,7 +5771,7 @@ table.st tr.fr td { color: var(--gold); }
       ctx.textAlign = 'center'; ctx.fillStyle = col.chalk; ctx.fillText('–', sw / 2, sh / 2);
       ctx.textAlign = 'left'; ctx.fillStyle = kc(1); ctx.fillText(b, sw / 2 + gap / 2, sh / 2);
       ctx.textAlign = 'center'; ctx.font = `600 ${small}px ${col.font}`; ctx.fillStyle = 'rgba(244,247,242,0.8)';
-      ctx.fillText(hlp.intro > 0 ? `${hlClips.length} ${hlClips.length === 1 ? 'goals' : 'goals'}` : 'Banebold', sw / 2, sh / 2 + big * 1.4);
+      ctx.fillText(hlp.intro > 0 ? `${hlClips.length} ${hlClips.length === 1 ? 'goals' : 'goals'}` : 'Pitch Boss', sw / 2, sh / 2 + big * 1.4);
       return;
     }
     const c = hlClips[hlp.i];
@@ -5782,7 +5782,7 @@ table.st tr.fr td { color: var(--gold); }
     ctx.fillText([c.n || tn(c.team), `${c.m}'`, GK_NAME[c.k]].filter(Boolean).join('  ·  '), sw / 2, big * 1.85);
     ctx.textBaseline = 'bottom'; ctx.font = `600 12px ${col.font}`; ctx.fillStyle = 'rgba(244,247,242,0.7)';
     ctx.textAlign = 'left'; ctx.fillText(`Goal ${hlp.i + 1} of ${hlClips.length}`, 14, sh - 12);
-    ctx.textAlign = 'right'; ctx.fillText(hlp.rec ? 'Banebold' : 'Tap for the next goal', sw - 14, sh - 12);
+    ctx.textAlign = 'right'; ctx.fillText(hlp.rec ? 'Pitch Boss' : 'Tap for the next goal', sw - 14, sh - 12);
   }
   function hlRecStart() {
     hlVideo = null; hlOutShow(false);
@@ -5809,7 +5809,7 @@ table.st tr.fr td { color: var(--gold); }
   $('hlBtn').onclick = () => hlStart(false);
   $('hlRec').onclick = () => hlStart(true);
   $('hlClose').onclick = () => hlEnd();
-  $('hlShare').onclick = () => { if (hlVideo && navigator.share) navigator.share({ files: [hlVideo], title: 'Banebold', text: 'Watch my goals in Banebold!' }).catch(() => {}); };
+  $('hlShare').onclick = () => { if (hlVideo && navigator.share) navigator.share({ files: [hlVideo], title: 'Pitch Boss', text: 'Watch my goals in Pitch Boss!' }).catch(() => {}); };
   $('hlSave').onclick = () => {
     if (!hlVideo) return;
     const a = document.createElement('a'), u = URL.createObjectURL(hlVideo);
@@ -7757,7 +7757,7 @@ table.st tr.fr td { color: var(--gold); }
       await new Promise(r => setTimeout(r, 300));
       const code = $('lobbyCode').textContent;
       if (mode === 'host' && state === 'lobby' && /^\d{4}$/.test(code)) {
-        try { await frCall('PUT', 'inv/' + id, { f: loadMe().id, n: frNm(cfg.name) || 'Coach', c: code, t: Date.now(), sz: size }); $('lobbyMsg').textContent = `Invite sent to ${nm}. The match appears on their phone when they open Banebold. You can also send the code ${code}.`; }
+        try { await frCall('PUT', 'inv/' + id, { f: loadMe().id, n: frNm(cfg.name) || 'Coach', c: code, t: Date.now(), sz: size }); $('lobbyMsg').textContent = `Invite sent to ${nm}. The match appears on their phone when they open Pitch Boss. You can also send the code ${code}.`; }
         catch (_) { $('lobbyMsg').textContent = `Could not send the invite. Send ${nm} the code ${code} instead.`; }
         return;
       }
@@ -7815,7 +7815,7 @@ table.st tr.fr td { color: var(--gold); }
   $('frIn').addEventListener('keydown', e => { if (e.key === 'Enter') frAddCode($('frIn').value); });
   $('frShare').onclick = async () => {
     const c = loadMe().fc; if (!c) return; const url = location.href.split('#')[0];
-    try { if (navigator.share) { await navigator.share({ title: 'Banebold', text: `Add me as a friend in Banebold. My friend code is ${c}`, url }); return; } } catch (_) { return; }
+    try { if (navigator.share) { await navigator.share({ title: 'Pitch Boss', text: `Add me as a friend in Pitch Boss. My friend code is ${c}`, url }); return; } } catch (_) { return; }
     try { await navigator.clipboard.writeText(c); frToast('Code copied'); } catch (_) { frToast('Your code is ' + c); }
   };
   async function showFriends() {
@@ -8383,7 +8383,7 @@ table.st tr.fr td { color: var(--gold); }
     if (fr.length) { const b = document.createElement('button'); b.className = 'packtile free'; b.style.setProperty('--pk', '#2f9d55'); b.innerHTML = `<i class="ic">🎁</i><b>Free pack</b><small>${fr.length} ready to open</small><span class="pr">Open</span>`; b.onclick = () => { $('shop').hidden = true; $('pvOpen').onclick(); }; PK.appendChild(b); }
     PACKS.forEach(([n, price, lo, hi], i) => { // player packs: a new card for your squad
       const b = document.createElement('button'); b.className = 'packtile'; b.style.setProperty('--pk', ['#8a5a35', '#9aa4ad', '#e3b23c'][i]);
-      const lg = document.createElement('i'); lg.className = 'ic'; lg.textContent = 'BANEBOLD';
+      const lg = document.createElement('i'); lg.className = 'ic'; lg.textContent = 'PITCH BOSS';
       const nm = document.createElement('b'); nm.textContent = n; const sm = document.createElement('small'); sm.textContent = `Player ${lo}-${hi}`;
       const pp = document.createElement('span'); pp.className = 'pr coins'; pp.textContent = String(price); b.append(lg, nm, sm, pp);
       b.onclick = () => {
@@ -9105,7 +9105,7 @@ table.st tr.fr td { color: var(--gold); }
   // invite link: the page opens with the code filled in
   $('share').onclick = async () => {
     const url = location.href.split('#')[0] + '#' + $('lobbyCode').textContent;
-    try { if (navigator.share) { await navigator.share({ title: 'Banebold', text: 'Play with me! Code ' + $('lobbyCode').textContent, url }); return; } } catch (_) { return; }
+    try { if (navigator.share) { await navigator.share({ title: 'Pitch Boss', text: 'Play with me! Code ' + $('lobbyCode').textContent, url }); return; } } catch (_) { return; }
     try { await navigator.clipboard.writeText(url); $('share').textContent = 'Link copied'; } catch (_) { $('lobbyMsg').textContent = url; }
   };
   { const m = /^#(\d{4})$/.exec(location.hash); if (m) { $('code').value = m[1]; netmsg.dataset.invite = '1'; page('pgOnline'); if (!$('join').disabled) netmsg.textContent = 'You are invited. Tap Join.'; } }
@@ -9395,7 +9395,7 @@ table.st tr.fr td { color: var(--gold); }
   setKit(cfg.kit);
 
   // ---------- the look of the ground: a grain texture for the grass and a stadium around the pitch ----------
-  const BOARDS = ['BANEBOLD', 'PLAY WITH FRIENDS', 'FAIR PLAY', 'GOOOAL!'];
+  const BOARDS = ['PITCH BOSS', 'PLAY WITH FRIENDS', 'FAIR PLAY', 'GOOOAL!'];
   function drawStadium() { // only seen around the edges: a darker apron, advertising boards and the crowd in the stands
     ctx.fillStyle = shade(col.b, -0.32); ctx.fillRect(-60, -60, WW + 120, WH + 120); // the grass outside the lines
     if (ox < 0 && oy < 0 && ox + WW * sc > sw && oy + WH * sc > sh) return; // zoomed in, the world fills the screen: the stands can't be seen
@@ -9501,7 +9501,7 @@ table.st tr.fr td { color: var(--gold); }
     seg(x0, y0, PR - PL + 2 * (o + T), T); seg(x0, y1, PR - PL + 2 * (o + T), T);
     for (const [x] of [[x0], [x1]]) { seg(x, y0, T, CY - MOUTH - y0); seg(x, CY + MOUTH, T, y1 + T - CY - MOUTH); }
     ctx.fillStyle = '#c0392b'; ctx.font = `800 12px ${col.font}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (let x = PL + 120; x < PR - 60; x += 240) { ctx.fillText('BANEBOLD', x, y0 + T / 2 + 2); ctx.fillText('BANEBOLD', x, y1 + T / 2 - 2); }
+    for (let x = PL + 120; x < PR - 60; x += 240) { ctx.fillText('PITCH BOSS', x, y0 + T / 2 + 2); ctx.fillText('PITCH BOSS', x, y1 + T / 2 - 2); }
   }
   const isMine = p => p.ctrl === 'L0' || p.ctrl === 'L1' || p.ctrl === 'ME';
   const myPlayers = () => P.filter(isMine);

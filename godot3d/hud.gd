@@ -1701,7 +1701,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	badge.size = Vector2(42, 42)
 	badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(badge)
-	var nm := _label(str(c.get("name", "BANEBOLD")), 26, Color.WHITE)
+	var nm := _label(str(c.get("name", "PITCH BOSS")), 26, Color.WHITE)
 	nm.position = Vector2(72, 4)
 	menu.add_child(nm)
 	var sub := _label("DIVISION %d   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("div", 4)), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 14, Color(1, 1, 1, 0.75), font2)
@@ -1718,8 +1718,8 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 		lg.texture = load("res://logo.png")
 		lg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		lg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		lg.size = Vector2(185, 37)
-		lg.position = Vector2(w - 270.0 - 170.0, 13)
+		lg.size = Vector2(193, 37)
+		lg.position = Vector2(w - 270.0 - 178.0, 13)
 		lg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		menu.add_child(lg)
 	if bool(info.get("upd", false)):
