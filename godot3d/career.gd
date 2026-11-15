@@ -167,6 +167,7 @@ func new_career(club: int, n_clubs: int, names: Array) -> void:
 	d = {"club": club, "season": 1, "round": 0, "coins": 100, "squad": squad, "xi": range(11), "n": n_clubs, "last": [], "note": ""}
 	_ab_start()
 	_new_season()
+	board()
 	save()
 
 func _new_season() -> void:
@@ -273,6 +274,7 @@ func _book(a: int, b: int, ga: int, gb: int) -> void:
 func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) -> Array:
 	var me: int = int(d["club"])
 	var was_home: bool = next_match()[1]
+	var opp_c: int = next_match()[0]
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var last := []
@@ -303,10 +305,12 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	d["st"] = stt
 	var lines := []
 	var coins := 15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))
+	coins += board_bonus(coins)
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
 	market_refresh()
 	lines.append("+%d COINS" % coins)
+	lines.append(_board_match(mine, theirs, opp_c, was_home, played if not played.is_empty() else d["xi"]))
 	if was_home:
 		# the gate: a bigger stadium and a club near the top bring more people in
 		var gate := fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)
@@ -351,6 +355,8 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			what = "  CHAMPIONS OF DIVISION 1!"
 		d["move"] = mv
 		d["note"] = "DIVISION %d, SEASON %d: YOU FINISHED %s.%s  +%d COINS" % [div(), int(d["season"]), ordinal(pos), what, prize]
+		_board_review()
+		lines.append("SEASON OVER: THE BOARD'S GRADE IS %s" % str(review().get("grade", "C")))
 	save()
 	return lines
 
@@ -380,6 +386,11 @@ func next_season() -> void:
 		pl["g"] = 0
 		pl["apps"] = 0
 	_new_season()
+	# a new cup every season, and new goals from the board
+	cup_new()
+	board()
+	(d["board"] as Dictionary).erase("review")
+	_board_season()
 	save()
 
 # Clubs in table order (points, goal difference, goals for).
@@ -747,9 +758,11 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		cp["out"] = true
 		lines.append("OUT OF THE CUP IN THE %s" % CUP_ROUNDS[clampi(r, 0, 2)])
 	d["st"] = stt
+	coins += board_bonus(coins)
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
 	lines.insert(0, "+%d COINS" % coins)
+	lines.insert(1, _board_cup(won, r))
 	# the men who played learn from a cup tie too
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
@@ -859,3 +872,368 @@ func learn_ab(i: int, slot: int, key: String) -> String:
 	d["coins"] = int(d["coins"]) - c
 	save()
 	return "%s LEARNED %s" % [str(pl["n"]).to_upper(), ABIL[key][0]]
+
+# ---------------------------------------------------------------- the board
+# Every season the board sets three goals: one for the league, one for the cup and one more (young players,
+# goals, clean sheets, building the club, home form). Its confidence in you moves after every match: a win the
+# board did not expect lifts it a lot, a defeat against a weaker side costs. At the end of the season it gives
+# you a grade and a bonus. In a FULL career it can also sack you; in a SIMPLE career it only grumbles.
+const CUP_AT := [3, 7, 11] # league rounds played before each cup round is due: the cup is part of the season
+const MOODS := [[85, "DELIGHTED"], [68, "HAPPY"], [50, "SATISFIED"], [35, "UNEASY"], [20, "WORRIED"], [0, "FURIOUS"]]
+const GRADES := [[88, "A"], [72, "B"], [55, "C"], [38, "D"], [20, "E"], [0, "F"]]
+const GRADE_BONUS := {"A": 400, "B": 260, "C": 150, "D": 60, "E": 0, "F": 0}
+const SACK_AT := 20 # a FULL career: at or under this when the season ends, you are out
+
+# "" = not chosen yet (an old save): the hub asks once
+func mode() -> String:
+	return str(d.get("mode", ""))
+
+func full() -> bool:
+	return mode() == "full"
+
+func set_mode(m: String) -> void:
+	d["mode"] = "full" if m == "full" else "simple"
+	save()
+
+func board() -> Dictionary:
+	if not d.has("board"):
+		d["board"] = {"conf": 55, "hist": [], "msg": "", "chg": 0}
+		_board_season()
+	return d["board"]
+
+func conf() -> int:
+	return clampi(int(board()["conf"]), 0, 100)
+
+static func mood_of(c: int) -> String:
+	for m in MOODS:
+		if c >= int(m[0]):
+			return str(m[1])
+	return "FURIOUS"
+
+# Where the board thinks you will finish: one place for every club with a stronger team than yours.
+func expected_rank() -> int:
+	var me := int(d["club"])
+	var mine := my_strength()
+	var r := 1
+	for c in int(d["n"]):
+		if c != me and _strength(c) > mine + 0.5:
+			r += 1
+	return r
+
+func _fac_sum() -> int:
+	var s := 0
+	for k in FAC_KEYS:
+		s += fac(k)
+	return s
+
+# The three goals for a new season, measured against how good your team is now.
+func _board_season() -> void:
+	var b: Dictionary = d["board"]
+	var ex := expected_rank()
+	var dv := div()
+	var lg := {}
+	if ex <= 1:
+		lg = {"k": "pos", "v": 1, "t": "WIN THE LEAGUE"} if dv == 1 else {"k": "pos", "v": 2, "t": "WIN PROMOTION: FINISH IN THE TOP 2"}
+	elif ex <= 3:
+		lg = {"k": "pos", "v": 3, "t": "FINISH IN THE TOP 3"} if dv == 1 else {"k": "pos", "v": 3, "t": "CHALLENGE FOR PROMOTION: TOP 3"}
+	elif ex <= 5:
+		lg = {"k": "pos", "v": 4, "t": "FINISH IN THE TOP HALF"}
+	else:
+		lg = {"k": "pos", "v": 6, "t": "STAY OUT OF THE BOTTOM TWO"}
+	var cp := {}
+	if ex <= 1 and dv <= 2:
+		cp = {"k": "cup", "v": 3, "t": "WIN THE CUP"}
+	elif ex <= 3:
+		cp = {"k": "cup", "v": 2, "t": "REACH THE CUP FINAL"}
+	else:
+		cp = {"k": "cup", "v": 1, "t": "REACH THE CUP SEMI-FINAL"}
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var young := 0
+	for i in d["xi"]:
+		if int(d["squad"][int(i)]["age"]) <= 21:
+			young += 1
+	var pool := ["goals", "cs", "build", "home"]
+	if young >= 1 or fac("youth") >= 2:
+		pool.append("young")
+	var k: String = pool[rng.randi() % pool.size()]
+	var ex3 := {}
+	match k:
+		"goals":
+			var g := 30 - ex * 2
+			ex3 = {"k": "goals", "v": g, "t": "SCORE %d LEAGUE GOALS" % g}
+		"cs":
+			var c := 5 if ex <= 3 else (4 if ex <= 5 else 3)
+			ex3 = {"k": "cs", "v": c, "t": "KEEP %d CLEAN SHEETS IN THE LEAGUE" % c}
+		"build":
+			ex3 = {"k": "build", "v": 1, "t": "BUILD ONE NEW LEVEL AT THE CLUB"}
+		"home":
+			var l := 1 if ex <= 3 else 2
+			ex3 = {"k": "home", "v": l, "t": "LOSE NO MORE THAN %d HOME MATCHES" % l}
+		_:
+			# a little more than the young men in the eleven now would get anyway
+			var yv := clampi(young * rounds_total() + 6, 8, 60)
+			ex3 = {"k": "young", "v": yv, "t": "GIVE %d LEAGUE STARTS TO PLAYERS AGED 21 OR UNDER" % yv}
+	b["obj"] = [lg, cp, ex3]
+	b["trk"] = {"goals": 0, "cs": 0, "home": 0, "young": 0, "fac0": _fac_sum()}
+	b["ex"] = ex
+	b["seen"] = false
+	b["msg"] = "A NEW SEASON. THE BOARD HAS SET YOUR GOALS: THE MAIN ONE IS TO %s." % str(lg["t"]).split(":")[0]
+
+# How far one goal has come: [text now, state] with state "done", "on", "behind" or "failed".
+func obj_state(o: Dictionary) -> Array:
+	var b := board()
+	var trk: Dictionary = b.get("trk", {})
+	var v := int(o["v"])
+	var half_way := int(d["round"]) >= rounds_total() / 2
+	var over := season_over() and not cup_due()
+	match str(o["k"]):
+		"pos":
+			var r := rank_of(int(d["club"]))
+			var now := "%s NOW" % ordinal(r) if int(d["round"]) > 0 else "SEASON NOT STARTED"
+			if over:
+				return ["FINISHED %s" % ordinal(r), "done" if r <= v else "failed"]
+			return [now, "on" if r <= v or int(d["round"]) == 0 else "behind"]
+		"cup":
+			var cp: Dictionary = cup()
+			var reached := int(cp["r"]) + (1 if bool(cp["won"]) else 0)
+			var names := ["QUARTER-FINAL", "SEMI-FINAL", "FINAL", "WON"]
+			if reached >= v:
+				return ["WON THE CUP" if bool(cp["won"]) else "IN THE %s" % names[reached], "done"]
+			if bool(cp["out"]):
+				return ["OUT IN THE %s" % names[reached], "failed"]
+			return ["%s NEXT" % names[reached], "on"]
+		"goals", "cs", "young":
+			var n := int(trk.get(str(o["k"]), 0))
+			var left := rounds_total() - int(d["round"])
+			var need := v - n
+			if n >= v:
+				return ["%d OF %d" % [n, v], "done"]
+			if over:
+				return ["%d OF %d" % [n, v], "failed"]
+			var pace := float(n) / maxf(float(d["round"]), 1.0) * rounds_total()
+			return ["%d OF %d" % [n, v], "on" if (int(d["round"]) < 3 or pace >= v * 0.9) and need <= left * (11 if str(o["k"]) == "young" else 3) else "behind"]
+		"build":
+			var built := _fac_sum() - int(trk.get("fac0", _fac_sum()))
+			if built >= v:
+				return ["DONE", "done"]
+			return ["NOT YET" if not over else "NOTHING BUILT", "failed" if over else ("behind" if half_way else "on")]
+		"home":
+			var l := int(trk.get("home", 0))
+			if l > v:
+				return ["%d HOME DEFEATS" % l, "failed"]
+			return ["%d HOME DEFEAT%s" % [l, "" if l == 1 else "S"], "done" if over else "on"]
+	return ["", "on"]
+
+func _conf_add(n: int) -> void:
+	var b := board()
+	b["conf"] = clampi(int(b["conf"]) + n, 0, 100)
+
+# After a league match: the result against what the board expected, and whether the season is on course.
+func _board_match(mine: int, theirs: int, opp: int, was_home: bool, starters: Array) -> String:
+	var b := board()
+	var trk: Dictionary = b["trk"]
+	trk["goals"] = int(trk.get("goals", 0)) + mine
+	if theirs == 0:
+		trk["cs"] = int(trk.get("cs", 0)) + 1
+	if was_home and mine < theirs:
+		trk["home"] = int(trk.get("home", 0)) + 1
+	for i in starters:
+		if int(i) < (d["squad"] as Array).size() and int(d["squad"][int(i)]["age"]) <= 21:
+			trk["young"] = int(trk.get("young", 0)) + 1
+	var before := conf()
+	var diff := clampf((my_strength() - _strength(opp)) / 6.0, -1.0, 1.0)
+	var exp_pts := 1.35 + diff
+	var pts := 3 if mine > theirs else (1 if mine == theirs else 0)
+	var ch := int(round((pts - exp_pts) * 2.4))
+	if mine - theirs >= 3:
+		ch += 1
+	elif theirs - mine >= 3:
+		ch -= 2
+	var lg: Dictionary = b["obj"][0]
+	var r := rank_of(int(d["club"]))
+	if int(d["round"]) >= 4:
+		if r <= int(lg["v"]):
+			ch += 1
+		elif r > int(lg["v"]) + 2:
+			ch -= 1
+	_conf_add(ch)
+	b["chg"] = conf() - before
+	return _board_line(before)
+
+func _board_cup(won: bool, r: int) -> String:
+	var b := board()
+	var before := conf()
+	var goal := int(b["obj"][1]["v"])
+	if won:
+		_conf_add(3 + r)
+	elif r < goal:
+		_conf_add(-4 - (goal - r) * 2)
+	b["chg"] = conf() - before
+	return _board_line(before)
+
+# The full-time line, and the board's word when it is getting worried.
+func _board_line(before: int) -> String:
+	var b := board()
+	var c := conf()
+	var ch := c - before
+	if before >= 35 and c < 35:
+		b["msg"] = "THE BOARD IS UNEASY. RESULTS MUST IMPROVE."
+	elif before >= SACK_AT + 5 and c < SACK_AT + 5:
+		b["msg"] = "FINAL WARNING: THE BOARD WILL SACK YOU IF THIS GOES ON." if full() else "THE BOARD IS VERY UNHAPPY WITH THE RESULTS."
+	elif before < 68 and c >= 68:
+		b["msg"] = "THE BOARD IS HAPPY WITH HOW THE SEASON IS GOING."
+	elif before < 85 and c >= 85:
+		b["msg"] = "THE BOARD IS DELIGHTED. KEEP IT UP!"
+	return "THE BOARD %s%d  ·  %s" % ["+" if ch >= 0 else "", ch, mood_of(c)]
+
+# The match bonus a happy board pays: +20% on coins from matches at confidence 80 or more.
+func board_bonus(coins: int) -> int:
+	return int(round(coins * 0.2)) if conf() >= 80 else 0
+
+# The end of the season: how each goal went, a grade, the bonus, and in a FULL career maybe the sack.
+func _board_review() -> void:
+	var b := board()
+	var before := conf()
+	var rows := []
+	var score := 0.0
+	var wts := [50.0, 25.0, 25.0]
+	var ch := 0
+	for i in 3:
+		var o: Dictionary = b["obj"][i]
+		var st := obj_state(o)
+		var ok: bool = st[1] == "done" or (st[1] == "on" and str(o["k"]) == "home")
+		var part := 1.0 if ok else 0.0
+		if not ok and str(o["k"]) == "pos":
+			# close counts for something: one place off is half
+			var miss := rank_of(int(d["club"])) - int(o["v"])
+			part = clampf(1.0 - miss * 0.5, 0.0, 1.0)
+			if rank_of(int(d["club"])) <= int(b.get("ex", 8)) - 2:
+				part = maxf(part, 0.5)
+		elif not ok and str(o["k"]) in ["goals", "cs", "young"]:
+			part = clampf(float(int(b["trk"].get(str(o["k"]), 0))) / maxf(float(int(o["v"])), 1.0) - 0.2, 0.0, 0.8)
+		score += wts[i] * part
+		if i == 0:
+			ch += 12 if ok else int(round(-18.0 * (1.0 - part)))
+		else:
+			ch += 5 if ok else -4
+		rows.append([str(o["t"]), str(st[0]), ok])
+	# beating the expectation by a lot is worth more than the goal itself
+	var r := rank_of(int(d["club"]))
+	if r < int(b.get("ex", 8)) - 1:
+		score += 10.0
+		ch += 5
+	var grade := "F"
+	for g in GRADES:
+		if score >= float(g[0]):
+			grade = str(g[1])
+			break
+	_conf_add(ch)
+	var bonus := int(GRADE_BONUS[grade] * (1.0 + (4 - div()) * 0.5))
+	d["coins"] = int(d["coins"]) + bonus
+	var sacked := full() and conf() <= SACK_AT
+	var c := conf()
+	var words := ""
+	if sacked:
+		words = "THE BOARD HAS LOST ALL FAITH IN YOU. YOU ARE SACKED."
+	elif grade in ["A", "B"]:
+		words = "A SUPERB SEASON. THE BOARD IS BEHIND YOU ALL THE WAY." if grade == "A" else "A GOOD SEASON. THE BOARD IS PLEASED."
+	elif grade == "C":
+		words = "AN OK SEASON. THE BOARD WANTS MORE NEXT YEAR."
+	elif c <= SACK_AT + 10:
+		words = "A POOR SEASON. ONE MORE LIKE THIS AND YOU ARE OUT." if full() else "A POOR SEASON. THE BOARD IS VERY DISAPPOINTED."
+	else:
+		words = "A DISAPPOINTING SEASON. THE BOARD EXPECTS BETTER."
+	var hist: Array = b["hist"]
+	hist.append({"s": int(d["season"]), "div": div(), "pos": r, "g": grade})
+	if hist.size() > 12:
+		hist.pop_front()
+	b["review"] = {"rows": rows, "grade": grade, "score": int(score), "ch": c - before, "conf": c, "bonus": bonus, "words": words, "sacked": sacked, "pos": r, "season": int(d["season"]), "div": div()}
+	b["msg"] = words
+	if sacked:
+		d["sacked"] = true
+		_job_offers()
+
+func review() -> Dictionary:
+	return board().get("review", {})
+
+# ---- the sack (FULL career only): three clubs want you, in your division or one lower
+
+func _job_offers() -> void:
+	var me := int(d["club"])
+	var ids := []
+	for c in int(d["n"]):
+		if c != me:
+			ids.append(c)
+	ids.shuffle()
+	var offers := []
+	var dv := div()
+	for i in 3:
+		offers.append([int(ids[i]), clampi(dv + (0 if i == 0 else 1), 1, 4)])
+	d["offers"] = offers
+
+func offers() -> Array:
+	return d.get("offers", [])
+
+# Take the job: a new club with its own squad. Your record as a manager comes with you; the club's things do not.
+func take_job(i: int) -> void:
+	var of: Array = offers()
+	if i < 0 or i >= of.size():
+		return
+	var c := int(of[i][0])
+	var st: Dictionary = stats()
+	st["jobs"] = int(st.get("jobs", 1)) + 1
+	d["st"] = st
+	d["club"] = c
+	d["div"] = int(of[i][1])
+	d["move"] = 0
+	d.erase("own")
+	d.erase("lay")
+	d.erase("form")
+	d.erase("sacked")
+	d.erase("offers")
+	d["fac"] = {}
+	d["coins"] = 200
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var q := club_level(c) - 2
+	d["squad"] = _make_squad(q, q - 5, rng)
+	d["xi"] = range(11)
+	d["season"] = int(d["season"]) + 1
+	d["note"] = ""
+	_ab_start()
+	_new_season()
+	cup_new()
+	market_refresh()
+	d["board"] = {"conf": 50, "hist": [], "msg": "", "chg": 0}
+	_board_season()
+	save()
+
+func _make_squad(q_xi: int, q_bench: int, rng: RandomNumberGenerator) -> Array:
+	var pool := names.duplicate()
+	pool.shuffle()
+	var squad := []
+	for i in SQUAD_ROLES.size():
+		var role: String = SQUAD_ROLES[i]
+		var base: Array = ROLE_BASE[role]
+		var q := q_xi if i < 11 else q_bench
+		var pl := {
+			"n": pool[i % pool.size()], "num": SQUAD_NUMS[i], "pos": role, "age": rng.randi_range(18, 31), "xp": 0, "g": 0, "apps": 0,
+			"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
+			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
+		}
+		pl["pot"] = clampi(ovr_of(pl) + rng.randi_range(3, 12) - maxi(int(pl["age"]) - 24, 0), ovr_of(pl), 94)
+		squad.append(pl)
+	return squad
+
+# ---- the cup inside the season
+
+# Your cup tie is the next match: its round is due once enough league rounds are played.
+func cup_due() -> bool:
+	if cup_over():
+		return false
+	var r := clampi(int(cup()["r"]), 0, 2)
+	return int(d["round"]) >= CUP_AT[r] or season_over()
+
+func cup_after() -> int:
+	return CUP_AT[clampi(int(cup()["r"]), 0, 2)]
