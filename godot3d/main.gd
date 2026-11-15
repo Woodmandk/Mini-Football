@@ -9,6 +9,8 @@ const World := preload("res://world.gd")
 const NetS := preload("res://net.gd")
 const Career := preload("res://career.gd")
 const ClubDB := preload("res://clubdb.gd")
+const RankS := preload("res://rank.gd")
+const FB := "https://banebold-default-rtdb.europe-west1.firebasedatabase.app/"
 
 const DIVE_V := 4.6
 const HL := 52.5
@@ -107,12 +109,31 @@ var clubs := [0, 1]
 var kits := [[], []]
 var teams_from := "main"
 var start_li := 3 # the league picked on the new-career screen
+var cup_ctry := "ENGLAND" # the cup mode's country
 var opt_slen := "full" # a new career's season: "full" (home and away) or "short" (each club once)
 var scout_li := -1 # the league shown on the other clubs' screen
 var scout_c := -1 # the club whose squad you are looking at
 var scout_i := -1 # the man you are looking at
 var scout_res := {} # the answer to your last bid
 var car
+var car_main # your club and career; while you play the cup mode, car points to the cup's own save
+var cupc # the cup mode: a cup of its own, with your club or any club
+var cup_mode := false
+var start_kind := "" # how a new career (or cup) starts: "mine", "new", "club", "cup"
+var new_sure := false
+var rk # ranked online: your rank, points and season
+var rk_looking := false # searching for an opponent
+var rk_on := false # this match is ranked
+var rk_me := {} # your team as the other phone sees it
+var rk_opp := {} # the other side's team
+var rk_res := {} # the last ranked result
+var rk_t := 0.0
+var rk_msg := ""
+var rk_walk := false
+var tov := [{}, {}] # ranked: each side's own team (name, kit, formation, eleven)
+var RKI := 0 # the two places in CLUBS that the ranked teams use
+var lb := [] # the leaderboard
+var lb_state := ""
 var career_on := false
 var cup_on := false
 var opt_cup := false
@@ -363,9 +384,18 @@ func _ready() -> void:
 	car = Career.new()
 	car.names = SURNAMES
 	car.load_save(net.web)
+	car_main = car
+	cupc = Career.new()
+	cupc.key = "bb3d-cupmode"
+	cupc.names = SURNAMES
+	cupc.load_save(net.web)
+	rk = RankS.new()
+	rk.load_save(net.web)
 	_apply_own()
 	if new_car:
 		car.wipe()
+		car.stash_clear()
+		cupc.wipe()
 	if net.web:
 		dbg = str(JavaScriptBridge.eval("location.search", true)).contains("dbg")
 		var qs := str(JavaScriptBridge.eval("location.search", true))
@@ -402,6 +432,11 @@ func _ready() -> void:
 	_build_fx()
 	_build_audio()
 	_apply_sound(false)
+	var rs: Array = rk.season()
+	if int(rs[1]) > 0 and car.has_save():
+		car.d["coins"] = int(car.d["coins"]) + int(rs[1])
+		car.save()
+		hud.toast(str(rs[0]))
 	if autotest or demo:
 		screen = "match"
 		if car_test:
@@ -631,6 +666,12 @@ func _ready() -> void:
 			if menu_arg.begins_with("hub_"):
 				hub_tab = menu_arg.substr(4)
 				menu_arg = "main"
+				if hub_tab == "career" or hub_tab == "play_on":
+					car.new_career(car.weakest(1), false)
+					car.set_mode("simple")
+					_apply_own()
+				if hub_tab == "play_on":
+					hub_tab = "play"
 			if menu_arg == "myclub":
 				_own_start()
 			if menu_arg == "pack":
@@ -639,6 +680,59 @@ func _ready() -> void:
 				_action("career")
 			if menu_arg == "start_club":
 				start_li = 0
+			if menu_arg in ["car_start", "start_new", "start_mine"]:
+				car_main.d["own"] = {"n": "WOODMAN FC", "s": "WFC", "k": ["2961eb", "f4f4f4", "2961eb"]}
+				_apply_own()
+				if menu_arg == "start_new":
+					start_kind = "new"
+					menu_arg = "start_lg"
+				elif menu_arg == "start_mine":
+					start_kind = "mine"
+					menu_arg = "start_lg"
+			if menu_arg == "cmclub":
+				start_kind = "cup"
+				cup_ctry = "DENMARK"
+				menu_arg = "start_lg"
+			if menu_arg in ["cupmode", "cupmine"]:
+				if menu_arg == "cupmode":
+					_cup_start(ClubDB.start_leagues(Career.FIRST)[0][3])
+				else:
+					_cup_start_mine("DENMARK")
+				for k3 in 2:
+					print("CUPMODE ", car.cup_round_name(), " v ", car.cup_opp(), " due=", car.cup_due(), " ", car.cup_finish(3, 1, true), " main coins=", car_main.d["coins"])
+				menu_arg = "cup"
+			if menu_arg == "minetest":
+				# own club: off -> career with my club -> take over another (my club waits) -> back to my club
+				print("MINE start on=", car.on(), " mine=", car.is_mine(), " club=", car.d["club"], " coins=", car.d["coins"], " lg=", car.league_name())
+				car.d["coins"] = 4321
+				car.d["squad"][0]["n"] = "KEEPME"
+				start_li = 1
+				_start_mine()
+				print("MINE career on=", car.on(), " lg=", car.league_name(), " coins=", car.d["coins"], " gk=", car.d["squad"][0]["n"], " mode=", car.mode(), " name=", CLUBS[int(car.d["club"])]["n"])
+				start_kind = "club"
+				_action("st_club", ClubDB.start_leagues(Career.FIRST)[0][0])
+				print("MINE took over ", CLUBS[int(car.d["club"])]["n"], " mine=", car.is_mine(), " stash=", _my_info())
+				start_kind = "mine"
+				start_li = 2
+				_start_mine()
+				print("MINE back lg=", car.league_name(), " coins=", car.d["coins"], " gk=", car.d["squad"][0]["n"], " name=", CLUBS[int(car.d["club"])]["n"], " xi=", car.d["xi"].slice(0, 3), " stash=", car.stash_get().is_empty())
+				get_tree().quit()
+				return
+			if menu_arg in ["rkfull", "rktest"]:
+				if menu_arg == "rktest":
+					var seq := [1.0, 1.0, 1.0, 0.0, 1.0, 0.5, 0.0, 0.0, 1.0]
+					for i3 in 40:
+						var r3: Dictionary = rk.match_result(rk.rp() + 30, seq[i3 % seq.size()], 1, 2)
+						print("RKTEST ", i3, " ", r3["k0"]["n"], " -> ", r3["k1"]["n"], " d=", r3["delta"], " rp=", rk.rp(), " sh=", r3["sh"], " road=", r3["road"], " coins=", r3["coins"])
+					rk.d["sm"] = "2000-01"
+					print("RKTEST season ", rk.season(), " rp=", rk.rp())
+					get_tree().quit()
+					return
+				rk_on = true
+				rk_opp = {"n": "FC NORDSTAR", "rp": 340}
+				score = [2, 1]
+				_rk_finish()
+				menu_arg = "full"
 			if menu_arg == "strtest":
 				for li in 6:
 					car.new_career(car.ids(li)[0] if li < 0 else ClubDB.start_leagues(Career.FIRST)[li][0], false)
@@ -918,7 +1012,12 @@ func _set_clubs(a: int, b: int, force := false) -> void:
 	# a career club plays its own formation
 	if CLUBS[b].has("f"):
 		forms[1] = FORM_NAMES[clampi(int(CLUBS[b]["f"]), 0, FORM_NAMES.size() - 1)]
-	if career_on:
+	if rk_on:
+		for t in 2:
+			var fn := str((tov[t] as Dictionary).get("f", ""))
+			if FORMS.has(fn):
+				forms[t] = fn
+	elif career_on:
 		forms[0] = car.form()
 	elif form_over != "":
 		forms[0] = form_over
@@ -950,7 +1049,9 @@ func _my_form(fname: String, lay: Dictionary) -> Array:
 	return out
 
 func _other_club(mine: int) -> int:
-	var o := randi() % (CLUBS.size() - 1)
+	if mine >= Career.FIRST:
+		return randi() % Career.FIRST
+	var o := randi() % (Career.FIRST - 1)
 	return o if o < mine else o + 1
 
 func _build_teams() -> void:
@@ -986,7 +1087,10 @@ func _build_teams() -> void:
 			for f in FORM:
 				rl.append(str(f[0]))
 			cpu_xi = car.cpu_xi(clubs[1], rl)
-		if t == 0 and career_on:
+		if rk_on:
+			var tl = (tov[t] as Dictionary).get("lay", {})
+			FORM = _my_form(forms[t], tl if tl is Dictionary else {})
+		elif t == 0 and career_on:
 			FORM = _my_form(forms[0], car.lay())
 		elif t == 0 and not lay_over.is_empty():
 			FORM = _my_form(forms[0], lay_over)
@@ -1031,7 +1135,26 @@ func _build_teams() -> void:
 			if p.star or (p.role == "GK" and rng.randf() < 0.35):
 				var pool0 := Career.ab_for(p.role)
 				p.ab = [pool0[rng.randi() % pool0.size()]]
-			if career_on:
+			var rxi: Array = (tov[t] as Dictionary).get("xi", []) if rk_on else []
+			if rxi.size() == 11 and rxi[i] is Dictionary:
+				# ranked: each side plays with its own club's eleven
+				var rp: Dictionary = rxi[i]
+				var off3 := -6 if str(rp.get("pos", "")) != p.role else 0
+				p.pname = str(rp.get("n", p.pname))
+				p.num = int(rp.get("num", p.num))
+				p.pac = clampi(int(rp.get("pac", 60)), 20, 99) + off3
+				p.sho = clampi(int(rp.get("sho", 60)), 20, 99) + off3
+				p.pas = clampi(int(rp.get("pas", 60)), 20, 99) + off3
+				p.dfn = clampi(int(rp.get("dfn", 60)), 20, 99) + off3
+				p.ovr = Career.ovr_of({"pos": str(rp.get("pos", "MF")), "pac": p.pac, "sho": p.sho, "pas": p.pas, "dfn": p.dfn})
+				p.star = false
+				var rab = rp.get("ab", [])
+				p.ab = []
+				if rab is Array:
+					for k in rab:
+						if Career.ABIL.has(str(k)) and p.ab.size() < 2:
+							p.ab.append(str(k))
+			elif career_on:
 				if t == 0:
 					# your own squad: the eleven you picked, with their own numbers
 					var pl: Dictionary = car.d["squad"][int(car.d["xi"][i])]
@@ -1260,8 +1383,27 @@ func _menu_info() -> Dictionary:
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": car.has_save() and car.on(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
+
+# the cup mode's state for its tile on the Play tab
+func _cupc_info() -> Dictionary:
+	if not cupc.has_save():
+		return {}
+	var o: int = cupc.cup_opp()
+	var cc := CLUBS if cup_mode else ClubDB.clubs(CLUBS0)
+	var me_c := int(cupc.d["club"])
+	var nm := str(cupc.d["own"]["n"]) if cupc.is_mine() else str(cc[me_c]["n"])
+	return {"club": nm, "cname": cupc.cup_name(), "round": cupc.cup_round_name(), "opp": str(cc[o]["n"]) if o >= 0 else "", "won": bool(cupc.cup()["won"]), "out": bool(cupc.cup()["out"])}
+
+# your own club, also while it waits
+func _my_info() -> Dictionary:
+	var mc := _my_club()
+	if mc.is_empty():
+		return {}
+	var o: Dictionary = mc.get("own", {})
+	return {"n": str(o.get("n", "MY CLUB")), "k": o.get("k", ["888888", "f4f4f4", "888888"]), "r": _avg_ovr(mc), "coins": int(mc.get("coins", 0)), "running": car_main.is_mine() and car_main.on()}
 
 func _ab_rows(keys: Array) -> Array:
 	var out := []
@@ -1387,7 +1529,7 @@ func _car_info() -> Dictionary:
 		"div": car.div(), "lgname": car.league_name(), "n": car.ids().size(), "up": int(car.league()["up"]), "down": int(car.league()["down"]), "slen": str(d.get("slen", "full")), "cup": _cup_info(),
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 		"ab_pick": _ab_pick_info(), "board": _board_info(), "cup_due": car.cup_due(), "cup_after": car.cup_after(), "mode": car.mode(),
-		"sacked": car.d.has("sacked"),
+		"sacked": car.d.has("sacked"), "on": car.on(),
 	}
 
 func _board_info() -> Dictionary:
@@ -1409,12 +1551,14 @@ func _board_info() -> Dictionary:
 
 # Every league and its clubs, strongest first: for the new-career screens and the scout.
 func _world_info() -> Array:
-	var lgs: Array = car.d["leagues"] if car.has_save() and car.d.has("leagues") else ClubDB.start_leagues(Career.FIRST)
+	# a new start begins from the leagues as they are at the start of the game
+	var lgs: Array = car.d["leagues"] if car.has_save() and car.d.has("leagues") and start_kind == "" else ClubDB.start_leagues(Career.FIRST)
+	var cc0: Array = CLUBS if start_kind == "" else ClubDB.clubs(CLUBS0)
 	var out := []
 	for li in ClubDB.LEAGUES.size():
 		var cl := []
 		for c in lgs[li]:
-			cl.append({"i": int(c), "n": CLUBS[int(c)]["n"], "k": CLUBS[int(c)]["k"], "r": car.rating(int(c)), "me": car.has_save() and int(c) == int(car.d.get("club", -1))})
+			cl.append({"i": int(c), "n": cc0[int(c)]["n"], "k": cc0[int(c)]["k"], "r": car.rating(int(c)), "me": car.has_save() and int(c) == int(car.d.get("club", -1))})
 		cl.sort_custom(func(a, b): return int(a["r"]) > int(b["r"]))
 		var L: Dictionary = ClubDB.LEAGUES[li]
 		out.append({"n": L["n"], "c": L["c"], "t": int(L["t"]), "clubs": cl, "up": int(L["up"]), "down": int(L["down"])})
@@ -1471,9 +1615,9 @@ func _stat_rows() -> Array:
 	var p0 := int(round(100.0 * tst[0]["poss"] / tot))
 	return [
 		["POSSESSION", "%d%%" % p0, "%d%%" % (100 - p0)],
-		["SHOTS", str(tst[0]["shots"]), str(tst[1]["shots"])],
-		["SAVES", str(tst[0]["saves"]), str(tst[1]["saves"])],
-		["FOULS", str(tst[0]["fouls"]), str(tst[1]["fouls"])],
+		["SHOTS", str(int(tst[0]["shots"])), str(int(tst[1]["shots"]))],
+		["SAVES", str(int(tst[0]["saves"])), str(int(tst[1]["saves"]))],
+		["FOULS", str(int(tst[0]["fouls"])), str(int(tst[1]["fouls"]))],
 	]
 
 func _result() -> String:
@@ -1488,6 +1632,14 @@ func _result() -> String:
 	return "YOU LOSE" + pens
 
 func _to_menu() -> void:
+	if rk_on and screen == "match" and state != "full" and rk_res.is_empty():
+		rk.match_result(int(rk_opp.get("rp", 0)), 0.0, -3, 0)
+		hud.toast("You left a ranked match: it counts as a loss")
+	rk_looking = false
+	if rk_on:
+		rk_on = false
+		tov = [{}, {}]
+		_apply_own()
 	net.stop()
 	career_on = false
 	cup_on = false
@@ -1518,6 +1670,10 @@ func _to_menu() -> void:
 # Your own club: its name and kit take the place of the club you started as.
 func _apply_own() -> void:
 	CLUBS = ClubDB.clubs(CLUBS0)
+	# two more places at the end for the ranked teams
+	RKI = CLUBS.size()
+	for t in 2:
+		CLUBS.append(_rk_club(tov[t]) if not (tov[t] as Dictionary).is_empty() else (CLUBS[t] as Dictionary).duplicate(true))
 	if car.has_save() and car.d.has("mig"):
 		# an old save: the club it played as comes with it into the new world
 		if not car.d.has("own"):
@@ -1532,6 +1688,95 @@ func _apply_own() -> void:
 	var light: bool = Color(str(k[0])).get_luminance() > 0.6
 	var alt := "1c1c20" if light else "f4f4f4"
 	CLUBS[int(car.d["club"])] = {"n": str(o["n"]), "s": str(o["s"]), "k": [str(k[0]), str(k[1]), str(k[2])], "a": [alt, str(k[0]), alt]}
+
+# Your own club, wherever it is: the club you run now, or the one waiting while you run another.
+func _my_club() -> Dictionary:
+	return car_main.my_club()
+
+func _avg_ovr(dd: Dictionary) -> int:
+	if dd.is_empty():
+		return 0
+	var t := 0
+	var n := 0
+	for x in dd["xi"]:
+		t += Career.ovr_of(dd["squad"][int(x)])
+		n += 1
+	return int(round(float(t) / maxf(n, 1)))
+
+# A career with your own club: it keeps its squad, coins and buildings and starts in the league you picked.
+func _start_mine() -> void:
+	var base := _my_club()
+	if base.is_empty():
+		start_kind = "new"
+		_action("st_club", -1)
+		return
+	car.start_mine(start_li, opt_slen, base)
+	car.stash_clear()
+	start_kind = ""
+	hub_tab = "career"
+	_own_changed()
+	hud.show_menu("cmode", _menu_info())
+
+# ---- the cup mode: a cup on its own, with any club in England or Denmark, or your own
+func _cup_start(c: int) -> void:
+	cupc.new_career(c, false)
+	cupc.d["cupmode"] = true
+	cupc.d["mode"] = "simple"
+	cupc.save()
+	_cm_enter()
+
+func _cup_start_mine(ctry: String) -> void:
+	var mc := _my_club()
+	if mc.is_empty():
+		return
+	var li := 3 if ctry == "ENGLAND" else 5
+	cupc.new_career(cupc.weakest(li), true)
+	cupc.d["own"] = (mc["own"] as Dictionary).duplicate(true) if mc.has("own") else {"n": "MY CLUB", "s": "MYC", "k": ["dc2424", "f4f4f4", "dc2424"]}
+	cupc.d["cupmode"] = true
+	cupc.d["mode"] = "simple"
+	cupc.save()
+	_cm_enter()
+
+# Into the cup mode: your own club brings its squad as it is now.
+func _cm_enter() -> void:
+	start_kind = ""
+	cup_mode = true
+	car = cupc
+	if car.is_mine():
+		var mc := _my_club()
+		for k in ["squad", "xi", "form", "lay"]:
+			if mc.has(k):
+				car.d[k] = mc[k].duplicate(true) if (mc[k] is Array or mc[k] is Dictionary) else mc[k]
+			else:
+				car.d.erase(k)
+		car._ints()
+		car.save()
+	_apply_own()
+	hud.show_menu("cup", _menu_info())
+
+# Out of the cup mode: what your own players learned there goes home with them.
+func _cm_leave() -> void:
+	if not cup_mode:
+		return
+	_cm_sync()
+	car = car_main
+	cup_mode = false
+	_apply_own()
+
+func _cm_sync() -> void:
+	if not cupc.has_save() or not cupc.is_mine():
+		return
+	var mc := _my_club()
+	if mc.is_empty():
+		return
+	for k in ["squad", "xi", "form", "lay"]:
+		if cupc.d.has(k):
+			mc[k] = cupc.d[k].duplicate(true) if (cupc.d[k] is Array or cupc.d[k] is Dictionary) else cupc.d[k]
+	if car_main.is_mine():
+		car_main._ints()
+		car_main.save()
+	else:
+		car_main.stash_put(mc)
 
 func _own_start() -> void:
 	if not car.d.has("own"):
@@ -1550,16 +1795,24 @@ func _own_changed() -> void:
 
 # The home screen. The club is always there: the first time, you make your own.
 func _show_hub(pick := true) -> void:
-	if not car.has_save() and pick and net.web:
-		# the first time: pick where you start
-		hud.show_menu("start_lg", _menu_info())
+	if cup_mode:
+		hud.show_menu("cup", _menu_info())
 		return
 	if not car.has_save():
-		car.new_career(-1)
-		_apply_own()
+		# the first time: your own club, no career yet. Give it a name and colours
+		car.new_club()
+		car.d["own"] = {"n": "MY CLUB", "s": "MYC", "k": (CLUBS[int(car.d["club"])]["k"] as Array).duplicate()}
+		car.save()
+		_own_changed()
+		if pick and net.web:
+			own_new = true
+			hud.show_menu("myclub", _menu_info())
+			return
 	car_sel = -1
 	car_sell = -1
-	if car.mode() == "":
+	if hub_tab == "career" and not car.on():
+		hub_tab = "play"
+	if car.on() and car.mode() == "":
 		# an old save, or a career made before the choice existed: ask once
 		hud.show_menu("cmode", _menu_info())
 		return
@@ -1653,6 +1906,8 @@ func _action(act: String, arg = null) -> void:
 		"c_review":
 			hud.show_menu("review", _menu_info())
 		"c_job":
+			if car.is_mine():
+				car.stash_put()
 			car.take_job(int(arg))
 			_apply_own()
 			opt_club = int(car.d["club"])
@@ -1662,20 +1917,69 @@ func _action(act: String, arg = null) -> void:
 			_show_hub()
 		"c_board":
 			hud.show_menu("board", _menu_info())
+		"c_home":
+			hub_tab = "career"
+			car_msg = ""
+			car_sure = false
+			hud.show_menu("main", _menu_info())
+		"c_start":
+			start_kind = ""
+			new_sure = false
+			hud.show_menu("car_start", _menu_info())
+		"cs_mine":
+			start_kind = "mine"
+			if _my_club().is_empty():
+				start_kind = "new"
+			hud.show_menu("start_lg", _menu_info())
+		"cs_new":
+			if hud.menu_name != "car_start":
+				# from the Play tab: the start screen, asking before your club is replaced
+				new_sure = not _my_club().is_empty()
+				start_kind = ""
+				if new_sure:
+					hud.show_menu("car_start", _menu_info())
+					return
+				start_kind = "new"
+				hud.show_menu("start_lg", _menu_info())
+			elif not new_sure and not _my_club().is_empty():
+				# your own club would be replaced: ask once
+				new_sure = true
+				hud.refresh(_menu_info())
+			else:
+				start_kind = "new"
+				hud.show_menu("start_lg", _menu_info())
+		"cs_club":
+			start_kind = "club"
+			hud.show_menu("start_lg", _menu_info())
 		"st_lg":
 			start_li = int(arg)
-			hud.show_menu("start_club", _menu_info())
+			if start_kind == "mine":
+				_start_mine()
+			elif start_kind == "new":
+				_action("st_club", -1)
+			else:
+				hud.show_menu("start_club", _menu_info())
 		"st_len":
 			opt_slen = "short" if opt_slen == "full" else "full"
 			hud.refresh(_menu_info())
 		"st_back":
 			hud.show_menu("start_lg", _menu_info())
 		"st_club":
+			if start_kind == "cup":
+				_cup_start(int(arg))
+				return
 			# arg: a club to take over, or -1 = your own new club in the place of the league's weakest
 			var own := int(arg) < 0
 			var sc: int = car.weakest(start_li) if own else int(arg)
+			if own:
+				# a new club of your own takes the place of the old one
+				car.stash_clear()
+			elif car.is_mine():
+				# your own club waits while you run another one
+				car.stash_put()
 			car.new_career(sc, own, opt_slen)
-			hub_tab = "play"
+			start_kind = ""
+			hub_tab = "career"
 			if own:
 				car.d["own"] = {"n": "MY CLUB", "s": "MYC", "k": (CLUBS[sc]["k"] as Array).duplicate()}
 				own_new = true
@@ -1795,7 +2099,7 @@ func _action(act: String, arg = null) -> void:
 			hud.refresh(_menu_info())
 		"own_ok":
 			own_new = false
-			if car.mode() == "":
+			if car.on() and car.mode() == "":
 				hud.show_menu("cmode", _menu_info())
 			else:
 				_show_hub(false)
@@ -1881,16 +2185,48 @@ func _action(act: String, arg = null) -> void:
 			car_msg = ""
 			hud.refresh(_menu_info())
 		"c_new":
-			if car_sure:
-				# a new start: make the club first
-				car.wipe()
-				_apply_own()
-				car_sure = false
-				hub_tab = "play"
-				hud.show_menu("start_lg", _menu_info())
+			_action("c_start")
+		"online":
+			if cup_mode:
+				_cm_leave()
+			hud.show_menu("online", _menu_info())
+		"rk_find":
+			_rk_find()
+		"rk_stop":
+			_rk_stop()
+			hud.show_menu("online", _menu_info())
+		"rk_next":
+			_to_menu()
+			_rk_find()
+		"rk_lb":
+			_lb_fetch()
+			hud.show_menu("rk_lb", _menu_info())
+		"rk_road":
+			hud.show_menu("rk_road", _menu_info())
+		"cupm":
+			if cupc.has_save():
+				_cm_enter()
 			else:
-				car_sure = true
-				hud.refresh(_menu_info())
+				hud.show_menu("cm_pick", _menu_info())
+		"cm_mine":
+			_cup_start_mine(str(arg))
+		"cm_club":
+			start_kind = "cup"
+			cup_ctry = str(arg)
+			hud.show_menu("start_lg", _menu_info())
+		"cm_back":
+			_cm_leave()
+			hub_tab = "play"
+			_show_hub()
+		"cm_new":
+			_cm_leave()
+			cupc.wipe()
+			hud.show_menu("cm_pick", _menu_info())
+		"cm_team":
+			car_sell = -1
+			car_sel = -1
+			car_msg = ""
+			hud.show_menu("squad", _menu_info())
 		"teams":
 			teams_from = "lobby" if net.role != "" else "quick"
 			hud.show_menu("teams", _menu_info())
@@ -1925,7 +2261,7 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("lobby", _menu_info())
 		"mode":
 			opt_cup = false
-			if opt_mode == "coop" and not opt_car and car.has_save():
+			if opt_mode == "coop" and not opt_car and car.has_save() and car.on():
 				opt_car = true
 			elif opt_mode == "coop":
 				opt_car = false
@@ -2033,6 +2369,161 @@ func _co_text() -> String:
 		return "%s  ·  NEW SEASON" % CLUBS[int(car.d["club"])]["n"]
 	return "%s v %s  ·  ROUND %d OF %d  ·  %s IN THE TABLE  ·  BOARD: %s" % [CLUBS[int(car.d["club"])]["n"], CLUBS[car.next_match()[0]]["n"], int(car.d["round"]) + 1, car.rounds_total(), Career.ordinal(car.rank_of(int(car.d["club"]))), Career.mood_of(car.conf())]
 
+# ---------------------------------------------------------------- ranked online
+# Your team as the other phone needs it: the club's name and kit, its formation and your eleven with their numbers.
+func _rk_team() -> Dictionary:
+	var me_c := int(car.d["club"])
+	var cl: Dictionary = CLUBS[me_c]
+	var xi := []
+	for x in car.d["xi"]:
+		var pl: Dictionary = car.d["squad"][int(x)]
+		xi.append({"n": str(pl["n"]), "num": int(pl["num"]), "pos": str(pl["pos"]), "pac": int(pl["pac"]), "sho": int(pl["sho"]), "pas": int(pl["pas"]), "dfn": int(pl["dfn"]), "ab": Career.ab_of(pl)})
+	return {"n": str(cl["n"]), "s": str(cl["s"]), "k": (cl["k"] as Array).duplicate(), "a": (cl.get("a", cl["k"]) as Array).duplicate(), "f": car.form(), "lay": car.lay(),
+		"xi": xi, "rp": rk.rp(), "rn": str(rk.now()["n"]), "ov": int(round(car.my_strength()))}
+
+# a ranked team as a club entry: name, short name and both kits, with care for what came over the wire
+func _rk_club(t: Dictionary) -> Dictionary:
+	var hx := func(v, dflt: String) -> String:
+		var x := str(v)
+		return x if (x.length() == 6 and x.is_valid_hex_number()) else dflt
+	var k: Array = t.get("k", []) if t.get("k", []) is Array else []
+	var a: Array = t.get("a", []) if t.get("a", []) is Array else []
+	var kk := []
+	var aa := []
+	for i in 3:
+		kk.append(hx.call(k[i] if i < k.size() else "", "888888"))
+		aa.append(hx.call(a[i] if i < a.size() else "", "f4f4f4"))
+	return {"n": str(t.get("n", "OPPONENT")).substr(0, 18), "s": str(t.get("s", "OPP")).substr(0, 3), "k": kk, "a": aa}
+
+func _rk_find() -> void:
+	if not net.web:
+		hud.toast("Ranked works in the game's own link")
+		return
+	if not car.has_save():
+		return
+	if cup_mode:
+		_cm_leave()
+	net.stop()
+	rk_looking = true
+	rk_on = false
+	rk_res = {}
+	rk_opp = {}
+	rk_walk = false
+	rk_t = 0.0
+	rk_msg = "LOOKING FOR AN OPPONENT"
+	rk_me = _rk_team()
+	net.find()
+	hud.show_menu("rk_find", _menu_info())
+
+func _rk_stop() -> void:
+	rk_looking = false
+	net.stop()
+
+# the host puts both teams on the pitch and starts the match on both phones
+func _rk_host_start() -> void:
+	rk_looking = false
+	rk_on = true
+	tov = [rk_me, rk_opp]
+	_apply_own()
+	opt_mode = "versus"
+	opt_len = 1
+	opt_diff = 1
+	career_on = false
+	cup_on = false
+	var h0 := Human.new()
+	var h1 := Human.new()
+	h1.local = false
+	h1.team = 1
+	humans = [h0, h1]
+	me = 0
+	view_flip = 1.0
+	_set_clubs(RKI, RKI + 1, true)
+	screen = "match"
+	hud.show_menu("", {})
+	start_msg = {"_": "start", "mode": "versus", "diff": 1, "len": 1, "clubs": [RKI, RKI + 1], "forms": forms, "sq": [], "sq1": [], "lay": {}, "rk": 1, "ta": rk_me, "tb": rk_opp}
+	wait_friend = 0.0
+	net.send(start_msg)
+	_begin_match(true)
+
+# Full time in a ranked match (on both phones): rank points, coins and XP for your eleven.
+func _rk_finish() -> void:
+	if not rk_res.is_empty():
+		return
+	var mt := 1 if net.role == "guest" else 0
+	var w := _winner()
+	var res := 0.5 if w < 0 else (1.0 if w == mt else 0.0)
+	if rk_walk:
+		res = 1.0
+	var gf: int = score[mt]
+	var ga: int = score[1 - mt]
+	rk_res = rk.match_result(int(rk_opp.get("rp", 0)), res, maxi(gf - ga, 1) if rk_walk else gf - ga, gf)
+	var k1: Dictionary = rk_res["k1"]
+	var dl := int(rk_res["delta"])
+	car_lines = ["%s%d RANK POINTS  ·  %s" % ["+" if dl >= 0 else "", dl, str(k1["n"])]]
+	if rk_walk:
+		car_lines.append("YOUR OPPONENT LEFT: YOU WIN")
+	if bool(rk_res["up"]):
+		car_lines.append("PROMOTED TO %s!" % str(k1["n"]))
+	elif bool(rk_res["down"]):
+		car_lines.append("DOWN TO %s" % str(k1["n"]))
+	if bool(rk_res["shield"]):
+		car_lines.append("A SHIELD KEPT YOU IN THE RANK (%d LEFT)" % int(rk_res["sh"]))
+	car_lines.append_array(rk_res["road"])
+	car_lines.append_array(car.coop_reward(int(rk_res["coins"]), res >= 1.0))
+	car.save()
+	_lb_publish()
+
+# the other player left in the middle: you win
+func _rk_walkover() -> void:
+	rk_walk = true
+	hud.toast("Your opponent left the match")
+	if state != "full":
+		_full_time()
+
+# ---- the leaderboard: everybody's card on the shared database (only the web build talks to it)
+func _lb_publish() -> void:
+	if not net.web or not car.has_save():
+		return
+	var nm := str(CLUBS[int(car.d["club"])]["n"]).substr(0, 14)
+	var body := {"n": nm, "rp": 0, "rp11": rk.rp(), "w": int(rk.d["w"]), "d": int(rk.d["dr"]), "l": int(rk.d["l"]), "g": int(rk.d["g"]), "ov": clampi(int(round(car.my_strength())), 0, 99), "t": int(Time.get_unix_time_from_system() * 1000.0)}
+	var hr := HTTPRequest.new()
+	add_child(hr)
+	hr.request_completed.connect(func(_r, _c, _h, _b): hr.queue_free())
+	hr.request(FB + "pl/%s.json" % str(rk.d["id"]), PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_PUT, JSON.stringify(body))
+
+func _lb_fetch() -> void:
+	if not net.web:
+		lb_state = "off"
+		return
+	lb_state = "loading"
+	var hr := HTTPRequest.new()
+	add_child(hr)
+	hr.request_completed.connect(func(_r, code, _h, body: PackedByteArray):
+		hr.queue_free()
+		if code == 200:
+			var v = JSON.parse_string(body.get_string_from_utf8())
+			lb = []
+			if v is Dictionary:
+				for id in v:
+					var c = v[id]
+					if c is Dictionary and int(c.get("rp11", 0)) > 0:
+						lb.append({"n": str(c.get("n", "?")), "rp": int(c.get("rp11", 0)), "w": int(c.get("w", 0)), "d": int(c.get("d", 0)), "l": int(c.get("l", 0)), "me": str(id) == str(rk.d["id"])})
+			lb.sort_custom(func(a, b): return int(a["rp"]) > int(b["rp"]))
+			lb_state = "ok"
+		else:
+			lb_state = "off" if code in [401, 403] else "err"
+		if hud.menu_name == "rk_lb":
+			hud.refresh(_menu_info()))
+	if hr.request(FB + "pl.json?orderBy=%22rp11%22&limitToLast=100") != OK:
+		lb_state = "err"
+
+func _rk_info() -> Dictionary:
+	var k: Dictionary = rk.now()
+	return {"n": k["n"], "c": k["c"], "c2": k["c2"], "rp": k["rp"], "p": k["p"], "in": k["in"], "need": k["need"], "nn": k["nn"], "t": k["t"], "dv": k["dv"],
+		"sh": int(rk.d["sh"]), "ws": int(rk.d["ws"]), "w": int(rk.d["w"]), "dr": int(rk.d["dr"]), "l": int(rk.d["l"]), "days": RankS.days_left(),
+		"msg": rk_msg, "t_s": int(rk_t), "res": rk_res, "opp": str(rk_opp.get("n", "")), "opp_rn": str(rk_opp.get("rn", "")), "lb": lb, "lb_state": lb_state,
+		"tiers": RankS.TIERS}
+
 func _host_start() -> void:
 	var h0 := Human.new()
 	var h1 := Human.new()
@@ -2068,6 +2559,15 @@ func _host_start() -> void:
 
 func _guest_start(m: Dictionary) -> void:
 	opt_mode = m.get("mode", "coop")
+	if m.has("rk") and m.get("ta") is Dictionary and m.get("tb") is Dictionary:
+		rk_looking = false
+		rk_on = true
+		rk_opp = m["ta"]
+		tov = [m["ta"], m["tb"]]
+		_apply_own()
+		m["clubs"] = [RKI, RKI + 1]
+		career_on = false
+		cup_on = false
 	var h0 := Human.new()
 	h0.local = false
 	var h1 := Human.new()
@@ -2107,6 +2607,22 @@ func _net_poll() -> void:
 			continue
 		var k: String = str(m.get("_", ""))
 		match k:
+			"role":
+				net.role = "host" if str(m.get("r", "")) == "host" else "guest"
+			"wait":
+				rk_msg = "WAITING FOR AN OPPONENT"
+				if hud.menu_name == "rk_find":
+					hud.refresh(_menu_info())
+			"rkt":
+				# the other side's team for a ranked match
+				var tt = m.get("t", {})
+				if rk_looking and tt is Dictionary and tt.get("xi", []) is Array and (tt["xi"] as Array).size() == 11:
+					rk_opp = tt
+					rk_msg = "OPPONENT FOUND: %s" % str(tt.get("n", ""))
+					if net.role == "host":
+						_rk_host_start()
+					elif hud.menu_name == "rk_find":
+						hud.refresh(_menu_info())
 			"ready":
 				hud.refresh(_menu_info())
 			"club":
@@ -2115,6 +2631,11 @@ func _net_poll() -> void:
 					hud.refresh(_menu_info())
 			"open":
 				net.connected = true
+				if rk_looking:
+					# ranked: tell the other phone who you are, the host starts when both teams are known
+					net.send({"_": "rkt", "t": rk_me})
+					au["blip2"].play()
+					continue
 				if net.role == "host" and screen == "match" and wait_friend > 0.0 and start_msg != null:
 					# the friend is back after a lost connection: straight into the running match again
 					wait_friend = 0.0
@@ -2153,6 +2674,14 @@ func _net_poll() -> void:
 						h.evs.append(str(e))
 			"close":
 				net.connected = false
+				if rk_looking:
+					# the other one went away before the start: look again
+					_rk_find()
+					continue
+				if rk_on:
+					if screen == "match" and state != "full":
+						_rk_walkover()
+					continue
 				if net.role == "guest" and screen == "match" and room.length() == 4:
 					# the connection dropped in the middle of a match: call the room again instead of giving up
 					hud.toast("Connection lost. Joining again...")
@@ -2171,6 +2700,13 @@ func _net_poll() -> void:
 					hud.show_menu("lobby", _menu_info())
 			"err":
 				var em: String = str(m.get("m", ""))
+				if rk_looking:
+					rk_msg = "THE MATCH SERVER CANNOT BE REACHED. TRY AGAIN IN A MOMENT" if em != "full" else "EVERY WAITING PLACE IS TAKEN. TRY AGAIN IN A MOMENT"
+					rk_looking = false
+					net.stop()
+					if hud.menu_name == "rk_find":
+						hud.refresh(_menu_info())
+					continue
 				if net.role == "guest" and not net.connected:
 					_to_menu()
 					hud.toast("Could not find that room" if em == "peer-unavailable" else ("Could not connect. Try again, or switch between wifi and mobile data" if em == "timeout" else "Connection problem (%s)" % em))
@@ -3520,6 +4056,9 @@ func _play(dt: float) -> void:
 
 # a cup tie, or a single match where you play against each other, cannot end level
 func _needs_winner() -> bool:
+	if rk_on:
+		# ranked is like a league match: a draw is a draw
+		return false
 	if cup_on:
 		return true
 	if career_on:
@@ -3693,9 +4232,18 @@ func _full_time() -> void:
 	fx("say", "Full time! %s %d, %s %d." % [TEAM_NAMES[0].capitalize(), score[0], TEAM_NAMES[1].capitalize(), score[1]])
 	if score[0] != score[1]:
 		fx("excite", 0.6)
-	if career_on and cup_on:
+	if rk_on:
+		_rk_finish()
+	elif career_on and cup_on:
 		car_lines = car.cup_finish(score[0], score[1], _winner() == 0)
-		co_pay = [car.last_coins, _winner() == 0, ([car_lines[2]] if car_lines.size() > 2 else []) + [car_lines[1]]]
+		if cup_mode:
+			# no board in the cup mode
+			car_lines = car_lines.filter(func(x): return not str(x).begins_with("THE BOARD"))
+			# the cup mode pays your club at home
+			car_main.d["coins"] = int(car_main.d["coins"]) + car.last_coins
+			car_main.save()
+			_cm_sync()
+		co_pay = [car.last_coins, _winner() == 0, ([car_lines[2]] if car_lines.size() > 2 else []) + ([car_lines[1]] if car_lines.size() > 1 else [])]
 	elif career_on:
 		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
@@ -5386,6 +5934,8 @@ func _guest_frame(dt: float) -> void:
 			if prev == "full":
 				hud.show_menu("full", _menu_info())
 		if state == "full" and prev != "full":
+			if rk_on:
+				_rk_finish()
 			hud.show_menu("full", _menu_info())
 		elif state != "full" and prev == "full":
 			hud.show_menu("", {})
@@ -5422,6 +5972,11 @@ func _guest_frame(dt: float) -> void:
 
 func _process(dt: float) -> void:
 	real_t += dt
+	if rk_looking and hud.menu_name == "rk_find":
+		var was_s := int(rk_t)
+		rk_t += dt
+		if int(rk_t) != was_s:
+			hud.refresh(_menu_info())
 	if wait_friend > 0.0:
 		wait_friend -= dt
 		if wait_friend <= 0.0 or screen != "match":
