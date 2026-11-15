@@ -3780,7 +3780,11 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 func _pen_kick(p, power: float, aim_z: float) -> void:
 	var s := side(p.team)
 	var from := ball.position
-	var err := (randf() - 0.5) * lerpf(0.5, 0.15, clampf((p.sho - 40) / 50.0, 0.0, 1.0))
+	# Like FIFA: it never lands exactly where you aimed. How far off depends on his shooting and on how hard
+	# he hits it (a soft one is placed, a full-power one sprays). Most land close to the aim, a few well off.
+	var sn: float = clampf((p.sho - 40) / 50.0, 0.0, 1.0)
+	var spread: float = lerpf(0.8, 0.25, sn) * (0.65 + 0.7 * power)
+	var err: float = (randf() + randf() - 1.0) * spread
 	var goal := Vector3(HL * s, 0, clampf(aim_z + err, -GOAL_HW - 0.6, GOAL_HW + 0.6))
 	var dir := goal - from
 	dir.y = 0.0
@@ -3788,7 +3792,7 @@ func _pen_kick(p, power: float, aim_z: float) -> void:
 	dir = dir.normalized()
 	var sp := 15.0 + 13.0 * power
 	var t := maxf(d / sp, 0.15)
-	var hgt := 0.22 + power * power * 2.75 + randf() * 0.15
+	var hgt := maxf(0.22 + power * power * 2.75 + (randf() + randf() - 1.0) * spread * 0.45, 0.15)
 	var vy := (hgt - 0.25) / t + 4.9 * t
 	pen_shot = true
 	shot_hard = 0.0
@@ -3803,7 +3807,7 @@ func _pen_kick(p, power: float, aim_z: float) -> void:
 	else:
 		gk.pen_z = goes * GOAL_HW * 0.5 * (1.0 if r < 0.12 + right else -1.0)
 	if autotest:
-		print("PENKICK aim=", snappedf(goal.z, 0.1), " guess=", snappedf(gk.pen_z, 0.1), " pw=", snappedf(power, 0.01), " h=", snappedf(hgt, 0.1), " gkz=", snappedf(gk.position.z, 0.1))
+		print("PENKICK sho=", p.sho, " want=", snappedf(aim_z, 0.1), " aim=", snappedf(goal.z, 0.1), " guess=", snappedf(gk.pen_z, 0.1), " pw=", snappedf(power, 0.01), " h=", snappedf(hgt, 0.1), " gkz=", snappedf(gk.position.z, 0.1))
 	_release(p, dir * sp + Vector3(0, vy, 0))
 	ball_spin = 0.0
 	shot_live = true
@@ -3844,12 +3848,22 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	if set_piece == "pen":
 		_pen_kick(p, power, aim_z)
 		return
-	err_k *= lerpf(1.3, 0.72, clampf((p.sho - 40) / 50.0, 0.0, 1.0))
+	# Like FIFA: a shot never goes exactly where you aimed. His shooting decides how close it gets (a top
+	# finisher lands it near the spot, a defender sprays it), and so do power, distance, a man in his face
+	# and shooting on the run. Most shots land near the aim, now and then one is well off.
+	var skill_k: float = lerpf(1.3, 0.5, clampf((p.sho - 40) / 50.0, 0.0, 1.0))
+	var nd_o := 99.0
+	for o in teams[1 - p.team]:
+		if not o.off and o.role != "GK":
+			nd_o = minf(nd_o, o.position.distance_to(p.position))
+	var press_k: float = 1.0 + 0.45 * clampf((3.0 - nd_o) / 2.0, 0.0, 1.0)
+	var run_k: float = 1.0 + 0.25 * clampf((p.vel.length() / maxf(p.top_speed, 1.0) - 0.6) / 0.4, 0.0, 1.0)
+	err_k *= skill_k * press_k * run_k
 	pen_shot = set_piece == "pen"
 	var cannon: bool = p.has_ab("kanon") and power > 0.45 and set_piece != "pen"
 	if cannon:
 		err_k *= 0.85
-	var err := (randf() - 0.5) * (0.4 + d * 0.035 + power * 0.8) * err_k
+	var err := (randf() + randf() - 1.0) * (0.35 + d * 0.03 + power * 0.75) * err_k
 	var goal := Vector3(HL * s, 0, aim_z + err)
 	var dir := goal - from
 	dir.y = 0.0
@@ -5201,6 +5215,9 @@ func _bot_inputs(dt: float) -> void:
 		if state == "play" and set_piece == "" and long_t <= 0.0 and humans.size() > 0:
 			long_t = 4.0
 			var lp = humans[0].ctrl
+			for a in OS.get_cmdline_user_args():
+				if a.begins_with("--longsho=") and lp != null:
+					lp.sho = int(a.substr(10))
 			if lp != null and lp.role != "GK":
 				var ls := side(lp.team)
 				lp.position = Vector3((HL - long_d - randf() * 5.0) * ls, 0, randf_range(-10.0, 10.0))
