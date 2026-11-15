@@ -582,6 +582,32 @@ func _ready() -> void:
 				pack_res = {"n": "NORDIN", "pos": "FW", "age": 21, "pot": 84, "ovr": 77, "st": [80, 79, 66, 41]}
 			if menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad"):
 				_action("career")
+			if menu_arg in ["board", "review", "reviewsack", "boardtest", "cmode"]:
+				# test screens for the board: play a season by script (win most, or lose most for the sack)
+				_action("career")
+				if menu_arg != "cmode":
+					car.set_mode("full")
+				if menu_arg in ["review", "reviewsack", "boardtest"]:
+					var lose := menu_arg == "reviewsack"
+					var k := 0
+					while not car.season_over():
+						if car.cup_due():
+							print("BOARDTEST cup ", car.cup_round_name(), " ", car.cup_finish(0 if lose else 2, 1, false))
+						var ln: Array = car.finish_match(0 if lose else (2 if k % 3 != 2 else 1), 1, [9])
+						k += 1
+						print("BOARDTEST r=", car.d["round"], " ", ln[1], " rank=", car.rank_of(int(car.d["club"])), " objs=", car.board()["obj"].map(func(o): return car.obj_state(o)))
+					print("BOARDTEST review=", car.review(), " offers=", car.offers(), " coins=", car.d["coins"])
+					if menu_arg == "boardtest":
+						car.next_season()
+						print("BOARDTEST next: season=", car.d["season"], " div=", car.div(), " cup=", car.cup()["r"], " objs=", car.board()["obj"])
+						get_tree().quit()
+						return
+					menu_arg = "review"
+				elif menu_arg == "board":
+					for k2 in 5:
+						if car.cup_due():
+							car.cup_finish(2, 0, true)
+						car.finish_match(k2 % 3, 1, [9])
 			if menu_arg in ["cup", "cup2", "cuptest"]:
 				_action("career")
 				if menu_arg != "cup":
@@ -1253,8 +1279,26 @@ func _car_info() -> Dictionary:
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
 		"div": car.div(), "cup": _cup_info(),
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
-		"ab_pick": _ab_pick_info(),
+		"ab_pick": _ab_pick_info(), "board": _board_info(), "cup_due": car.cup_due(), "cup_after": car.cup_after(), "mode": car.mode(),
+		"sacked": car.d.has("sacked"),
 	}
+
+func _board_info() -> Dictionary:
+	var b: Dictionary = car.board()
+	var objs := []
+	for o in b["obj"]:
+		var st: Array = car.obj_state(o)
+		objs.append({"t": str(o["t"]), "now": str(st[0]), "st": str(st[1])})
+	var rv: Dictionary = car.review()
+	var offers := []
+	for of in car.offers():
+		var oc := int(of[0])
+		offers.append({"n": CLUBS0[oc]["n"], "k": CLUBS0[oc]["k"], "div": int(of[1]), "lv": 71 + [0, 2, -3, 4, 1, -2, 3, -4][oc % 8] + (4 - int(of[1])) * 4})
+	var hist := []
+	for hh in b.get("hist", []):
+		hist.append({"s": int(hh["s"]), "div": int(hh["div"]), "pos": int(hh["pos"]), "g": str(hh["g"])})
+	return {"conf": car.conf(), "mood": Career.mood_of(car.conf()), "chg": int(b.get("chg", 0)), "msg": str(b.get("msg", "")), "obj": objs, "ex": int(b.get("ex", 0)),
+		"review": rv, "offers": offers, "hist": hist, "bonus": car.conf() >= 80, "full": car.full(), "sack_at": Career.SACK_AT}
 
 func _cup_info() -> Dictionary:
 	var cp: Dictionary = car.cup()
@@ -1272,7 +1316,7 @@ func _cup_info() -> Dictionary:
 			now.append([CLUBS[int(t[i])]["n"], CLUBS[int(t[i + 1])]["n"], -1, -1, int(t[i]) == me_c or int(t[i + 1]) == me_c])
 	var opp: int = car.cup_opp()
 	return {"r": int(cp["r"]), "name": car.cup_round_name(), "out": bool(cp["out"]), "won": bool(cp["won"]), "rounds": rounds, "now": now,
-		"opp": CLUBS[opp]["n"] if opp >= 0 else "", "names": Career.CUP_ROUNDS, "cups": int(car.stats().get("cups", 0))}
+		"opp": CLUBS[opp]["n"] if opp >= 0 else "", "opp_kit": CLUBS[opp]["k"] if opp >= 0 else [], "opp_rank": car.rank_of(opp) if opp >= 0 else 0, "names": Career.CUP_ROUNDS, "cups": int(car.stats().get("cups", 0))}
 
 func _stat_rows() -> Array:
 	var tot: int = maxi(tst[0]["poss"] + tst[1]["poss"], 1)
@@ -1363,6 +1407,10 @@ func _show_hub(pick := true) -> void:
 		_apply_own()
 	car_sel = -1
 	car_sell = -1
+	if car.mode() == "":
+		# an old save, or a career made before the choice existed: ask once
+		hud.show_menu("cmode", _menu_info())
+		return
 	hud.show_menu("main", _menu_info())
 
 func _action(act: String, arg = null) -> void:
@@ -1420,11 +1468,8 @@ func _action(act: String, arg = null) -> void:
 				hud.refresh(_menu_info())
 		"cup":
 			hud.show_menu("cup", _menu_info())
-		"cup_new":
-			car.cup_new()
-			hud.show_menu("cup", _menu_info())
 		"cup_play":
-			if car.cup_opp() >= 0:
+			if car.cup_due() and car.cup_opp() >= 0:
 				career_on = true
 				cup_on = true
 				humans = [Human.new()]
@@ -1435,7 +1480,11 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_play":
-			if not car.season_over():
+			if car.cup_due():
+				_action("cup_play")
+			elif car.d.has("sacked"):
+				hud.show_menu("review", _menu_info())
+			elif not car.season_over():
 				career_on = true
 				cup_on = false
 				humans = [Human.new()]
@@ -1446,7 +1495,25 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_next":
-			car.next_season()
+			if not car.d.has("sacked"):
+				car.next_season()
+			_show_hub()
+		"c_review":
+			hud.show_menu("review", _menu_info())
+		"c_job":
+			car.take_job(int(arg))
+			_apply_own()
+			opt_club = int(car.d["club"])
+			_set_clubs(opt_club, car.next_match()[0], true)
+			_kickoff(0)
+			hub_tab = "play"
+			_show_hub()
+		"c_board":
+			hud.show_menu("board", _menu_info())
+		"cmode":
+			hud.show_menu("cmode", _menu_info())
+		"cmode_set":
+			car.set_mode(str(arg))
 			_show_hub()
 		"c_table":
 			hud.show_menu("table", _menu_info())
@@ -1524,7 +1591,10 @@ func _action(act: String, arg = null) -> void:
 			hud.refresh(_menu_info())
 		"own_ok":
 			own_new = false
-			_show_hub(false)
+			if car.mode() == "":
+				hud.show_menu("cmode", _menu_info())
+			else:
+				_show_hub(false)
 		"c_ab":
 			# open the skill picker for this place
 			if car_sel >= 0:
@@ -1653,11 +1723,9 @@ func _action(act: String, arg = null) -> void:
 			net.join(room)
 			hud.show_menu("lobby", _menu_info())
 		"mode":
-			if opt_mode == "coop" and not opt_car and not opt_cup and car.has_save():
+			opt_cup = false
+			if opt_mode == "coop" and not opt_car and car.has_save():
 				opt_car = true
-			elif opt_mode == "coop" and opt_car:
-				opt_car = false
-				opt_cup = true
 			elif opt_mode == "coop":
 				opt_car = false
 				opt_cup = false
@@ -1756,9 +1824,13 @@ func _co_text() -> String:
 		return "CUP %s  ·  %s v %s" % [car.cup_round_name(), CLUBS[int(car.d["club"])]["n"], CLUBS[car.cup_opp()]["n"]]
 	if not (opt_car and opt_mode == "coop" and car.has_save()):
 		return ""
+	if car.d.has("sacked"):
+		return ""
+	if car.cup_due():
+		return "CUP %s  ·  %s v %s  ·  BOARD: %s" % [car.cup_round_name(), CLUBS[int(car.d["club"])]["n"], CLUBS[car.cup_opp()]["n"], Career.mood_of(car.conf())]
 	if car.season_over():
 		return "%s  ·  NEW SEASON" % CLUBS[int(car.d["club"])]["n"]
-	return "%s v %s  ·  ROUND %d OF %d  ·  %s IN THE TABLE" % [CLUBS[int(car.d["club"])]["n"], CLUBS[car.next_match()[0]]["n"], int(car.d["round"]) + 1, car.rounds_total(), Career.ordinal(car.rank_of(int(car.d["club"])))]
+	return "%s v %s  ·  ROUND %d OF %d  ·  %s IN THE TABLE  ·  BOARD: %s" % [CLUBS[int(car.d["club"])]["n"], CLUBS[car.next_match()[0]]["n"], int(car.d["round"]) + 1, car.rounds_total(), Career.ordinal(car.rank_of(int(car.d["club"]))), Career.mood_of(car.conf())]
 
 func _host_start() -> void:
 	var h0 := Human.new()
@@ -1770,10 +1842,8 @@ func _host_start() -> void:
 	view_flip = 1.0
 	var sq := []
 	career_on = _co_text() != ""
-	cup_on = career_on and opt_cup
+	cup_on = career_on and car.cup_due()
 	if cup_on:
-		if car.cup_over():
-			car.cup_new()
 		_set_clubs(int(car.d["club"]), car.cup_opp(), true)
 		for p in teams[0]:
 			sq.append([p.pname, p.num])
@@ -3418,11 +3488,11 @@ func _full_time() -> void:
 		fx("excite", 0.6)
 	if career_on and cup_on:
 		car_lines = car.cup_finish(score[0], score[1], _winner() == 0)
-		co_pay = [car.last_coins, _winner() == 0, [car_lines[1]] if car_lines.size() > 1 else []]
+		co_pay = [car.last_coins, _winner() == 0, ([car_lines[2]] if car_lines.size() > 2 else []) + [car_lines[1]]]
 	elif career_on:
 		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
-		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1]] + ([str(car.d["note"])] if car.season_over() else [])]
+		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1], car_lines[1]] + ([str(car.d["note"])] if car.season_over() else [])]
 	hud.show_menu("full", _menu_info())
 
 func _idle_players(dt: float) -> void:
