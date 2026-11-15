@@ -100,12 +100,15 @@ def l2(icon=False):
     p,w2 = text('PLAY THE MATCH', 336, 262, 40, 10, 0)
     b += f'<path d="{p}" fill="{GO}"/>'
     return svg(W,H,b)
+# The game's name, on two lines, and the initials for the app icon (Daniel picked Pitch Boss, 2026-11-15)
+W1, W2, INI = 'PITCH', 'BOSS', 'PB'
+
 # ---------- 3: STAK (stacked block wordmark, ball in flight) ----------
 def l3(icon=False):
     if icon:
         b = f'<rect width="512" height="512" rx="112" fill="{BG}"/>'
-        p,w = text('BB', 0,0, 300, -6, 10)
-        p,w = text('BB', 256-w/2-10, 360, 300, -6, 10)
+        p,w = text(INI, 0,0, 300, -6, 10)
+        p,w = text(INI, 256-w/2-10, 360, 300, -6, 10)
         b += f'<path d="{p}" fill="{CH}"/>'
         b += f'<rect x="0" y="392" width="512" height="120" fill="{G}" clip-path="url(#ic3)"/>'
         b += f'<clipPath id="ic3"><rect width="512" height="512" rx="112"/></clipPath>'
@@ -116,12 +119,13 @@ def l3(icon=False):
         return svg(512,512,b)
     W,H=1200,360
     b=''
-    p,w = text('BANE', 0,0, 150, 4, 10)
+    p,w = text(W1, 0,0, 150, 4, 10)
+    w = max(w, text(W2, 0,0, 150, 4, 10)[1])
     x0 = (W-w)/2+60
-    p,_ = text('BANE', x0, 160, 150, 4, 10)
+    p,_ = text(W1, x0, 160, 150, 4, 10)
     b += f'<path d="{p}" fill="{CH}"/>'
     b += f'<path d="M{x0-40} 184 L{x0+w+50} 184 L{x0+w+28} 330 L{x0-62} 330 Z" fill="{G}"/>'
-    p,_ = text('BOLD', x0-36, 310, 150, 4, 10)
+    p,_ = text(W2, x0-36, 310, 150, 4, 10)
     b += f'<path d="{p}" fill="{BG}"/>'
     bx = x0-150
     b += f'<path d="M{bx-230} 60 L{bx-90} 60 M{bx-180} 100 L{bx-80} 100 M{bx-250} 140 L{bx-100} 140" stroke="{G}" stroke-width="12" stroke-linecap="round"/>'
@@ -136,13 +140,14 @@ for k,f in [('1-kridt',l1),('2-skjold',l2),('3-stak',l3)]:
 def stack(x0, top, size):
     """BANE over a green slab with BOLD, ball flying in from the left. x0 = left of BANE, top = top of BANE."""
     k = size/150
-    p,w = text('BANE', 0,0, size, 4*k, 10)
+    p,w = text(W1, 0,0, size, 4*k, 10)
+    w = text(W2, 0,0, size, 4*k, 10)[1]  # the slab fits the bottom word
     b = ''
-    p,_ = text('BANE', x0, top+110*k, size, 4*k, 10)
+    p,_ = text(W1, x0, top+110*k, size, 4*k, 10)
     b += f'<path d="{p}" fill="{CH}"/>'
     y1 = top+134*k; y2 = top+280*k
     b += f'<path d="M{x0-40*k} {y1} L{x0+w+50*k} {y1} L{x0+w+28*k} {y2} L{x0-62*k} {y2} Z" fill="{G}"/>'
-    p,_ = text('BOLD', x0-36*k, top+260*k, size, 4*k, 10)
+    p,_ = text(W2, x0-36*k, top+260*k, size, 4*k, 10)
     b += f'<path d="{p}" fill="{BG}"/>'
     bx = x0-150*k; by = top+50*k
     b += f'<path d="M{bx-230*k} {by-40*k} L{bx-90*k} {by-40*k} M{bx-180*k} {by} L{bx-80*k} {by} M{bx-250*k} {by+40*k} L{bx-100*k} {by+40*k}" stroke="{G}" stroke-width="{12*k}" stroke-linecap="round"/>'
@@ -153,17 +158,17 @@ def inline(x, cy, size):
     k = size/150
     b = ball(x+62*k, cy, 62*k)
     x1 = x+150*k
-    p,w1 = text('BANE', x1, cy+52*k, size, 4*k, 10)
+    p,w1 = text(W1, x1, cy+52*k, size, 4*k, 10)
     b += f'<path d="{p}" fill="{CH}"/>'
-    _,w2 = text('BOLD', 0, 0, size, 4*k, 10)
+    _,w2 = text(W2, 0, 0, size, 4*k, 10)
     x2 = x1+w1+42*k
     b += f'<path d="M{x2-14*k} {cy-72*k} L{x2+w2+44*k} {cy-72*k} L{x2+w2+24*k} {cy+74*k} L{x2-34*k} {cy+74*k} Z" fill="{G}"/>'
-    p,_ = text('BOLD', x2+4*k, cy+52*k, size, 4*k, 10)
+    p,_ = text(W2, x2+4*k, cy+52*k, size, 4*k, 10)
     b += f'<path d="{p}" fill="{BG}"/>'
     return b, x2+w2+50*k
 def bb(cx, base, size, col=CH):
-    _,w = text('BB', 0,0, size, -0.02*size, 10)
-    p,_ = text('BB', cx-w/2-0.03*size, base, size, -0.02*size, 10)
+    _,w = text(INI, 0,0, size, -0.02*size, 10)
+    p,_ = text(INI, cx-w/2-0.03*size, base, size, -0.02*size, 10)
     return f'<path d="{p}" fill="{col}"/>'
 def icon_body(s=1.0):
     # BB in chalk, green slab with the ball rolling along it

@@ -83,7 +83,7 @@ window.bbNet = (function () {
     },
     share: function (code) {
       var u = location.origin + location.pathname + '?join=' + code;
-      if (navigator.share) { navigator.share({ title: 'Banebold 3D', text: 'Join my match! Room code ' + code, url: u }).catch(function () {}); return 'shared'; }
+      if (navigator.share) { navigator.share({ title: 'Pitch Boss', text: 'Join my match! Room code ' + code, url: u }).catch(function () {}); return 'shared'; }
       if (navigator.clipboard) { navigator.clipboard.writeText(u).catch(function () {}); return 'copied'; }
       return '';
     },

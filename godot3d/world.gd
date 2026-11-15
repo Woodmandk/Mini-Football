@@ -331,7 +331,7 @@ func _stands() -> void:
 	add_child(mmi)
 
 func _boards() -> void:
-	var texts := ["BANEBOLD", "RED BISON", "HARBOUR SHARKS", "BANEBOLD 3D", "PLAY THE MATCH"]
+	var texts := ["PITCH BOSS", "RED BISON", "HARBOUR SHARKS", "PITCH BOSS", "PLAY THE MATCH"]
 	var bg := [Color(0.05, 0.08, 0.07), Color(0.75, 0.1, 0.1), Color(0.1, 0.25, 0.7), Color(0.95, 0.8, 0.15), Color(0.05, 0.08, 0.07)]
 	var fg := [Color(0.3, 0.95, 0.5), Color(1, 1, 1), Color(1, 1, 1), Color(0.05, 0.08, 0.07), Color(1, 1, 1)]
 	var n := 10
@@ -361,7 +361,7 @@ func _boards() -> void:
 			m2.albedo_color = bg[0]
 			_box(Vector3(0.25, 1.0, 18.0), Vector3(sx * (HL + 4.2), 0.5, z), m2)
 			var l2 := Label3D.new()
-			l2.text = "BANEBOLD"
+			l2.text = "PITCH BOSS"
 			l2.font_size = 96
 			l2.pixel_size = 0.0075
 			l2.modulate = fg[0]
