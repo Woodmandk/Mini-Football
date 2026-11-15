@@ -195,6 +195,10 @@ var aim_arrow: MeshInstance3D
 var aim_hold: Node3D
 var ball_net := Vector3.ZERO
 var ball_spin := 0.0
+# backspin (+) / topspin (-): how fast the Magnus force turns the flight up (or down), rad/s
+var ball_bs := 0.0
+# how the ball is spinning, only for drawing it (rad/s about each axis)
+var ball_wv := Vector3.ZERO
 var pass_from = null
 
 var score := [0, 0]
@@ -475,6 +479,49 @@ func _ready() -> void:
 							t4 += 1.0 / 60.0
 							gap = maxf(gap, (ball.position.x - tm.position.x))
 						print("THRUTEST hi=", hi, " d=", dd, " hold=", hold, " got=", players.find(ball_owner), " (want 9) t=", snappedf(t4, 0.01), " state=", state, " ran=", snappedf(tm.position.distance_to(start), 0.1), " max_ball_ahead=", snappedf(gap, 0.1), " ball_x=", snappedf(ball.position.x, 0.1))
+			get_tree().quit()
+			return
+		if OS.get_cmdline_user_args().has("--balltest"):
+			# shots: where they cross the goal line against where they were aimed, time and pace on arrival
+			for pw in [0.2, 0.5, 0.8, 1.0]:
+				for cu in [0.0, 0.6]:
+					var pp = teams[0][9]
+					pp.position = Vector3(HL - 20.0, 0, 3.0)
+					ball.position = pp.position + Vector3(0.6, BALL_R, 0)
+					ball_owner = pp
+					set_piece = ""
+					seed(7)
+					_shoot(pp, pw, 1.8, 0.0, cu)
+					var v0 := ball_vel.length()
+					var tt := 0.0
+					var apex := 0.0
+					while ball.position.x < HL and tt < 4.0:
+						_ball_free(1.0 / 60.0)
+						tt += 1.0 / 60.0
+						apex = maxf(apex, ball.position.y)
+						print("TRAJ shot", pw, "_", cu, " ", snappedf(ball.position.x - HL + 20.0, 0.01), " ", snappedf(ball.position.y, 0.01), " ", snappedf(ball.position.z, 0.01))
+					print("BALLTEST pw=", pw, " curl=", cu, " v0=", snappedf(v0 * 3.6, 1), "kmh at_goal=", snappedf(ball_vel.length() * 3.6, 1), "kmh t=", snappedf(tt, 0.01), " z=", snappedf(ball.position.z, 0.01), " y=", snappedf(ball.position.y, 0.01), " apex=", snappedf(apex, 0.01), " bs=", snappedf(ball_bs, 0.01))
+			for dd in [15.0, 30.0, 45.0]:
+				var pp = teams[0][9]
+				var mm = teams[0][6]
+				pp.position = Vector3(-30, 0, 0)
+				mm.position = Vector3(-30 + dd, 0, 0)
+				mm.vel = Vector3.ZERO
+				ball_owner = pp
+				set_piece = ""
+				_pass(pp, mm, true)
+				var tt := 0.0
+				var bounces := []
+				var prev := ball_vel.y
+				while tt < 6.0 and Vector2(ball_vel.x, ball_vel.z).length() > 0.3:
+					_ball_free(1.0 / 60.0)
+					tt += 1.0 / 60.0
+					if int(tt * 60.0) % 3 == 0:
+						print("TRAJ lob", dd, " ", snappedf(ball.position.x + 30.0, 0.01), " ", snappedf(ball.position.y, 0.01))
+					if prev < 0.0 and ball_vel.y > 0.0:
+						bounces.append(snappedf(ball.position.x + 30.0, 0.1))
+					prev = ball_vel.y
+				print("LOBROLL d=", dd, " bounces_at=", bounces, " stops_at=", snappedf(ball.position.x + 30.0, 0.1), " t=", snappedf(tt, 0.1))
 			get_tree().quit()
 			return
 		if OS.get_cmdline_user_args().has("--passtest"):
@@ -2389,6 +2436,7 @@ func _header(p) -> void:
 		ball_vel = p.vel * 0.6 + p.fwd() * 1.5 + Vector3(0, -1.5, 0)
 		shot_live = false
 	ball_spin = 0.0
+	ball_bs = 0.0
 	ball_last = p
 	ball_ignore = p
 	ignore_t = 0.45
@@ -3564,31 +3612,135 @@ func _separate() -> void:
 func _spin_ball(v: Vector3, dt: float) -> void:
 	var h := Vector3(v.x, 0, v.z)
 	var sp := h.length()
-	if sp > 0.2:
-		var axis := Vector3(h.z, 0, -h.x).normalized()
-		ball_mesh.rotate(axis, sp / BALL_R * dt * 0.6)
+	if ball.position.y < BALL_R + 0.03 or ball_owner != null:
+		# on the grass (or at his feet) it rolls: it turns exactly as fast as it travels, so it never seems to slide
+		var roll := Vector3.ZERO
+		if sp > 0.05:
+			roll = Vector3(h.z, 0, -h.x) / BALL_R
+		ball_wv = ball_wv.lerp(roll, clampf(dt * 14.0, 0.0, 1.0))
+	else:
+		# in the air it keeps the spin the boot gave it, slowly fading
+		ball_wv *= maxf(1.0 - 0.25 * dt, 0.0)
+	var w := ball_wv.length()
+	if w > 0.05:
+		ball_mesh.rotate(ball_wv / w, w * dt)
+
+# Ball physics (our own model, not a rigid body: players, keepers, passes and the landing ring all have to
+# know where it will be, so they use the same sums). In the air: gravity, air drag that grows with the
+# square of the speed (a hard shot loses pace on its way), curl (side spin) and backspin/topspin (Magnus:
+# a lofted ball with backspin hangs, a driven shot with topspin dips). On the grass: bounces that get
+# smaller each time, backspin bites on landing, then it rolls with rolling friction.
+const AIR_K := 0.0105
+const ROLL_DRAG := 0.05
+
+func _air_vel(v: Vector3, curl: float, bs: float, dt: float) -> Vector3:
+	v.y -= 9.8 * dt
+	v -= v * (AIR_K * v.length() * dt)
+	if curl != 0.0:
+		v = v.rotated(Vector3.UP, curl * dt)
+	if bs != 0.0:
+		var hd := Vector3(v.x, 0, v.z)
+		if hd.length() > 0.5:
+			v = v.rotated(hd.normalized().cross(Vector3.UP), bs * dt)
+	return v
+
+# where a ball in flight is after t seconds (it does not touch the ground on the way)
+func _fly_pos(pos: Vector3, v: Vector3, curl: float, bs: float, t: float) -> Vector3:
+	var st := 1.0 / 60.0
+	var n := int(ceil(t / st))
+	if n < 1:
+		return pos
+	st = t / n
+	for i in n:
+		v = _air_vel(v, curl, bs * exp(-0.12 * i * st), st)
+		pos += v * st
+	return pos
+
+# the same flight in the old, almost drag-free model the kicks were aimed with
+func _fly_pos_plain(pos: Vector3, v: Vector3, curl: float, t: float) -> Vector3:
+	var st := 1.0 / 60.0
+	var n := int(ceil(t / st))
+	if n < 1:
+		return pos
+	st = t / n
+	for i in n:
+		v.y -= 9.8 * st
+		v *= 1.0 - 0.05 * st
+		if curl != 0.0:
+			v = v.rotated(Vector3.UP, curl * st)
+		pos += v * st
+	return pos
+
+# where (and when) the ball now in the air comes down
+var _land_k := [Vector3.INF, Vector3.INF]
+var _land_c := [Vector3.ZERO, 0.0]
+func _land() -> Array:
+	if _land_k[0] == ball.position and _land_k[1] == ball_vel:
+		return _land_c
+	_land_k = [ball.position, ball_vel]
+	var pos := ball.position
+	var v := ball_vel
+	var bs := ball_bs
+	var st := 1.0 / 60.0
+	var t := 0.0
+	while t < 4.0:
+		v = _air_vel(v, ball_spin, bs, st)
+		bs *= 1.0 - 0.12 * st
+		pos += v * st
+		t += st
+		if pos.y <= BALL_R and v.y < 0.0:
+			break
+	pos.y = 0.0
+	_land_c = [pos, t]
+	return _land_c
+
+# The kick formulas aim with the old near-drag-free flight and a flight time t. Keep the spot and the time
+# and find the strike that gets there through the real air: harder off the foot, it slows on its way.
+func _fit_flight(v0: Vector3, t: float) -> void:
+	if t <= 0.05:
+		return
+	var from := ball.position
+	var tgt := _fly_pos_plain(from, v0, ball_spin, t)
+	var v := v0
+	for i in 6:
+		var e := tgt - _fly_pos(from, v, ball_spin, ball_bs, t)
+		if e.length() < 0.03:
+			break
+		v += e / t
+	ball_vel = v
 
 func _ball_free(dt: float) -> void:
-	ball_vel.y -= 9.8 * dt
-	ball_vel *= 1.0 - 0.05 * dt
-	if ball_spin != 0.0:
-		ball_vel = ball_vel.rotated(Vector3.UP, ball_spin * dt)
+	if ball.position.y > BALL_R + 0.01 or ball_vel.y > 0.0:
+		ball_vel = _air_vel(ball_vel, ball_spin, ball_bs, dt)
+		ball_bs *= maxf(1.0 - 0.12 * dt, 0.0)
+	else:
+		ball_vel.y -= 9.8 * dt
+		ball_vel *= 1.0 - ROLL_DRAG * dt
+		if ball_spin != 0.0:
+			ball_vel = ball_vel.rotated(Vector3.UP, ball_spin * dt)
 	ball.position += ball_vel * dt
 	if ball.position.y <= BALL_R:
 		ball.position.y = BALL_R
 		ball_spin *= maxf(1.0 - 5.0 * dt, 0.0)
-		if ball_vel.y < -1.6:
-			ball_vel.y = -ball_vel.y * 0.52
-			ball_vel.x *= 0.82
-			ball_vel.z *= 0.82
+		if ball_vel.y < -1.4:
+			# each bounce is lower: a soft pitch takes more out of a hard landing
+			var vin := -ball_vel.y
+			ball_vel.y = vin * clampf(0.64 - 0.012 * vin, 0.48, 0.6)
+			# the grass grips the ball: backspin bites and checks it, topspin skids on
+			var grip := clampf(0.82 - 1.7 * ball_bs, 0.6, 0.9)
+			ball_vel.x *= grip
+			ball_vel.z *= grip
+			ball_bs *= 0.3
+			ball_wv *= 0.5
 			if ball_vel.y > 2.0:
 				snd("touch")
 		else:
 			ball_vel.y = 0.0
+			ball_bs = 0.0
 		var h := Vector2(ball_vel.x, ball_vel.z)
 		var sp := h.length()
 		if sp > 0.0:
-			var ns := maxf(sp - (1.3 + 0.28 * sp) * dt, 0.0)
+			var ns := maxf(sp - (ROLL_C + (ROLL_K - ROLL_DRAG) * sp) * dt, 0.0)
 			ball_vel.x *= ns / sp
 			ball_vel.z *= ns / sp
 	# inside a net: the net catches the ball
@@ -3614,7 +3766,7 @@ func _meet_for(p, aim: Vector3) -> Vector3:
 	if sp < 2.0:
 		return aim
 	var dir := v / sp
-	var drag := 1.5 + 0.35 * sp
+	var drag := ROLL_C + ROLL_K * sp
 	var t_stop := sp / drag
 	var b0 := Vector3(ball.position.x, 0, ball.position.z)
 	var out := b0
@@ -3642,21 +3794,18 @@ func _ball_meet_point() -> Vector3:
 	var t := 0.6
 	if ball.position.y > 1.0 or ball_vel.y > 3.0:
 		# a ball in the air: go where it comes down
-		var vy := ball_vel.y
-		t = clampf((vy + sqrt(maxf(vy * vy + 19.6 * (p.y - BALL_R), 0.0))) / 9.8, 0.2, 3.0)
-		var o2 := p + v * t * 0.97
-		o2.y = 0.0
+		var o2: Vector3 = _land()[0]
 		o2.x = clampf(o2.x, -HL, HL)
 		o2.z = clampf(o2.z, -HW, HW)
 		return o2
-	var travel := sp * t - 0.5 * (1.5 + 0.35 * sp) * t * t
+	var travel := sp * t - 0.5 * (ROLL_C + ROLL_K * sp) * t * t
 	var out := p + v / sp * maxf(travel, 0.0)
 	out.y = 0.0
 	return out
 
 # ---------------------------------------------------------------- kicking
 
-func _release(p, v: Vector3, kind := 0) -> void:
+func _release(p, v: Vector3, kind := 0, fit_t := 0.0, bs := 0.0, curl := 0.0) -> void:
 	var h := Vector3(v.x, 0, v.z).normalized()
 	p.yaw = atan2(-h.x, -h.z)
 	p.start_kick(clampf((v.length() - 9.0) / 20.0, 0.2, 1.0), kind)
@@ -3665,7 +3814,15 @@ func _release(p, v: Vector3, kind := 0) -> void:
 	if kind == 2:
 		ball.position = p.position + h * 0.4 + Vector3(0, 2.3, 0)
 	ball_vel = v
-	ball_spin = 0.0
+	ball_spin = curl
+	ball_bs = bs
+	_fit_flight(v, fit_t)
+	# what the boot puts on it, for drawing: backspin turns it against the way it rolls, curl about the vertical
+	var hr := Vector3(ball_vel.x, 0, ball_vel.z)
+	ball_wv = Vector3.ZERO
+	if hr.length() > 0.5:
+		ball_wv = Vector3(hr.z, 0, -hr.x).normalized() * (-bs * 140.0 + 4.0)
+	ball_wv += Vector3.UP * curl * 18.0
 	ball_last = p
 	ball_ignore = p
 	ignore_t = 0.3
@@ -3780,7 +3937,7 @@ func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0, thru := false):
 			best = m
 	return best
 
-# Rolling ball: it slows by about 1.3 + 0.33 * speed per second (see _ball_free).
+# Rolling ball: it slows by 1.3 + 0.33 * speed per second (see _ball_free).
 const ROLL_C := 1.3
 const ROLL_K := 0.33
 
@@ -3817,6 +3974,9 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	var leadv := Vector3.ZERO
 	var thru_v := -1.0
 	var thru_t := 0.0
+	# flight time the high balls are aimed with, and the backspin on them
+	var ft := 0.0
+	var fb := 0.0
 	if lead > 0.0:
 		# A through ball goes where the runner will BE when it gets there, weighted so it slows down
 		# in front of him: lead is the time (s) he gets to run onto it, not a distance.
@@ -3895,6 +4055,8 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 			dir3 = dir3.normalized() * 24.0
 		tt = dir3.length() / vt
 		v = dir3.normalized() * vt + Vector3(0, (0.4 - 2.3) / tt + 4.9 * tt, 0)
+		ft = tt
+		fb = 0.03
 	elif cross:
 		# whipped in to arrive at head height
 		var vc := clampf(11.0 + d * 0.32, 15.0, 22.0)
@@ -3904,6 +4066,8 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		dir4.y = 0.0
 		tc = dir4.length() / vc
 		v = dir4.normalized() * vc + Vector3(0, (2.05 - 0.3) / tc + 4.9 * tc, 0)
+		ft = tc
+		fb = 0.04
 	elif not lofted:
 		var sp := clampf(8.0 + d * 0.75, 12.0, 27.0)
 		if pass_pw >= 0.0:
@@ -3929,6 +4093,9 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		t = clampf(0.62 + dir2.length() * 0.034, 0.8, 2.15)
 		var vh := dir2.length() / t * (1.0 + 0.026 * t)
 		v = dir2.normalized() * vh + Vector3(0, 4.9 * t + 0.12 * t * t, 0)
+		# struck under the ball: backspin makes it hang and then sit down where it lands
+		ft = t
+		fb = 0.10
 	var perr: float = maxf(92 - p.pas, 0) * 0.0011 * (1.6 if lofted else 1.0)
 	if p.has_ab("dirigent"):
 		perr *= 0.35
@@ -3937,9 +4104,10 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	v = v.rotated(Vector3.UP, (randf() - 0.5) * 2.0 * perr)
 	var h = _hum_of(p)
 	var offs: bool = set_piece in ["", "fk", "kick"] and _is_offside(p, m)
-	_release(p, v, 2 if thrown else 0)
+	_release(p, v, 2 if thrown else 0, ft, fb)
 	if cross:
 		ball_spin = 0.0
+		ball_bs = 0.0
 	m.recv = true
 	if offs:
 		m.offside = true
@@ -4001,8 +4169,7 @@ func _pen_kick(p, power: float, aim_z: float) -> void:
 		gk.pen_z = goes * GOAL_HW * 0.5 * (1.0 if r < 0.12 + right else -1.0)
 	if autotest:
 		print("PENKICK sho=", p.sho, " want=", snappedf(aim_z, 0.1), " aim=", snappedf(goal.z, 0.1), " guess=", snappedf(gk.pen_z, 0.1), " pw=", snappedf(power, 0.01), " h=", snappedf(hgt, 0.1), " gkz=", snappedf(gk.position.z, 0.1))
-	_release(p, dir * sp + Vector3(0, vy, 0))
-	ball_spin = 0.0
+	_release(p, dir * sp + Vector3(0, vy, 0), 0, t, -0.03 * power)
 	shot_live = true
 	stats["shots"] += 1
 	tst[p.team]["shots"] += 1
@@ -4034,7 +4201,7 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 			cd = Vector3(hh.stick.x, 0, hh.stick.y).normalized()
 		var far := 24.0 + 22.0 * power
 		var tc := 1.4 + 1.0 * power
-		_release(p, cd * (far / tc) + Vector3(0, 4.9 * tc, 0))
+		_release(p, cd * (far / tc) + Vector3(0, 4.9 * tc, 0), 0, tc, 0.07)
 		snd("kick")
 		fx("dust", [from.x, from.z])
 		return
@@ -4078,8 +4245,8 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 			spin = -spin
 			wide = dir.rotated(Vector3.UP, -spin * t * 0.5)
 		dir = wide
-	_release(p, dir * sp + Vector3(0, vy, 0))
-	ball_spin = spin
+	# struck through the middle with the laces: the harder it is hit, the more topspin, so it dips late
+	_release(p, dir * sp + Vector3(0, vy, 0), 0, t, -0.06 * power * power, spin)
 	shot_live = true
 	shot_hard = 0.12 if cannon else 0.0
 	if cannon and spin == 0.0:
@@ -4426,6 +4593,7 @@ func _pickups() -> void:
 			if hs > lerpf(15.0, 21.0, gq) and dh > 0.55:
 				var sgn := signf(b.z - g.position.z)
 				ball_vel = Vector3(-ball_vel.x * 0.3, absf(ball_vel.y) * 0.4 + 2.5, ball_vel.z * 0.4 + sgn * 5.0)
+				ball_bs = 0.0
 				ball_ignore = g
 				ignore_t = 0.5
 				ball_last = g
@@ -4489,6 +4657,7 @@ func _pickups() -> void:
 	if hs > 24.0 and not best.recv:
 		var n := Vector3(b.x - best.position.x, 0, b.z - best.position.z).normalized()
 		ball_vel = ball_vel.bounce(n) * 0.35
+		ball_bs = 0.0
 		ball_ignore = best
 		ignore_t = 0.4
 		ball_last = best
@@ -4508,6 +4677,7 @@ func _check_lines() -> void:
 		var in_mouth := absf(b.z) < GOAL_HW and b.y < GOAL_H
 		if absf(b.x) < HL + 0.6 and (absf(absf(b.z) - GOAL_HW) < 0.22 and b.y < GOAL_H + 0.2 or absf(b.z) < GOAL_HW and absf(b.y - GOAL_H) < 0.2) and ball_vel.x * sx > 0.0:
 			ball_vel.x *= -0.6
+			ball_bs = 0.0
 			ball_vel.z += (randf() - 0.5) * 4.0
 			ball.position.x = sx * (HL - 0.05)
 			shot_live = false
@@ -4776,13 +4946,23 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 			return _run_to(p, spot, p.top_speed * 0.92)
 	return _run_to(p, spot, p.top_speed * (1.0 if hurry else 0.88))
 
+# how long the ball takes to cover dx along the pitch length; in the air it slows with the drag
+func _t_to_x(dx: float) -> float:
+	if absf(ball_vel.x) < 0.5 or dx * ball_vel.x <= 0.0:
+		return -1.0
+	if ball.position.y < BALL_R + 0.02 and ball_vel.y <= 0.0:
+		return dx / ball_vel.x
+	var sp := ball_vel.length()
+	var path := absf(dx) * sp / absf(ball_vel.x)
+	return (exp(AIR_K * path) - 1.0) / (AIR_K * sp)
+
 func _ai_keeper(p, dt: float) -> Vector3:
 	var s := side(p.team)
 	var gx := -HL * s
 	var goal := Vector3(gx, 0, 0)
 	var b := ball.position
 	if ball_owner == null and ball_vel.x * -s > 5.0:
-		var t := (gx - b.x) / ball_vel.x
+		var t := _t_to_x(gx - b.x)
 		if t > 0.0 and t < 1.7:
 			var zc := b.z + ball_vel.z * t
 			if ball_spin != 0.0:
@@ -4799,7 +4979,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
 				# off his line he saves where he stands instead of running back to the goal line
-				var tk: float = (p.position.x - b.x) / ball_vel.x
+				var tk: float = _t_to_x(p.position.x - b.x)
 				if tk > 0.0 and absf(p.position.x - gx) > 1.2:
 					t = tk
 					var zk: float = b.z + ball_vel.z * tk
@@ -5139,10 +5319,10 @@ func _process(dt: float) -> void:
 	# landing ring for high balls
 	var show_ring := false
 	if loose and state == "play" and ball.position.y > 1.6 and screen == "match":
-		var vy := ball_vel.y
-		var t := (vy + sqrt(maxf(vy * vy + 19.6 * (ball.position.y - BALL_R), 0.0))) / 9.8
+		var lnd := _land()
+		var t: float = lnd[1]
 		if t > 0.25:
-			var lp := ball.position + Vector3(ball_vel.x, 0, ball_vel.z) * t * 0.97
+			var lp: Vector3 = lnd[0]
 			if absf(lp.x) < HL and absf(lp.z) < HW:
 				land_ring.position = Vector3(lp.x, 0.05, lp.z)
 				show_ring = true
