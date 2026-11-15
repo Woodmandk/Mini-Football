@@ -408,6 +408,29 @@ func _ready() -> void:
 			sub_sel = 7
 			print("SUBTEST ", teams[0][9].pname, " num=", teams[0][9].num, " left=", subs_left, " played=", sub_played)
 			hud.show_menu(menu_arg, _menu_info())
+		if OS.get_cmdline_user_args().has("--picktest"):
+			# who does a human pass go to? tap = nearest in the stick direction, hold = further
+			_kickoff(0)
+			var pp = teams[0][6]
+			pp.position = Vector3(-10, 0, 0)
+			var spots := [Vector3(-2, 0, 2), Vector3(14, 0, -3), Vector3(2, 0, 11), Vector3(-10, 0, -14), Vector3(-26, 0, 0)]
+			var who := []
+			for i in spots.size():
+				var q = teams[0][[9, 10, 8, 2, 3][i]]
+				q.position = spots[i]
+				q.vel = Vector3.ZERO
+				who.append(q)
+			for q in teams[0]:
+				if not (q in who) and q != pp:
+					q.position = Vector3(-HL + 1, 0, HW - 1)
+			for q in teams[1]:
+				q.position = Vector3(40, 0, 30)
+			for c in [[Vector2(1, 0), -1.0], [Vector2(1, 0), 0.3], [Vector2(1, 0), 1.0], [Vector2(1, 0.8), -1.0], [Vector2(0.3, 1), -1.0], [Vector2(0, -1), -1.0], [Vector2(-1, 0), -1.0], [Vector2(1, -0.25), -1.0]]:
+				var st: Vector2 = c[0].normalized()
+				var mm = _pass_target(pp, Vector3(st.x, 0, st.y), false, c[1])
+				print("PICKTEST stick=", st, " pw=", c[1], " -> ", (who.find(mm) if mm != null else -1), " at ", (mm.position if mm != null else Vector3.ZERO))
+			get_tree().quit()
+			return
 		if OS.get_cmdline_user_args().has("--thrutest"):
 			# through balls played by a human to a runner going forward: does the runner get there first?
 			humans = [Human.new()]
@@ -1706,8 +1729,8 @@ func _derive(p) -> void:
 	var dri: float = p.pas * 0.55 + p.pac * 0.45 - (8.0 if p.role in ["DF", "GK"] else 0.0)
 	var dk: float = clampf((dri - 50.0) / 40.0, 0.0, 1.0)
 	p.turn_k = lerpf(0.8, 1.25, dk)
-	# with the ball he is almost as quick as without it, so a man who gets past his marker is away
-	p.carry_k = lerpf(0.95, 0.99, dk)
+	# with the ball he is clearly slower than a free runner (good dribblers lose less), like FIFA
+	p.carry_k = lerpf(0.86, 0.93, dk)
 	p.phy = clampf(p.dfn * 0.7 + (100 - p.pac) * 0.3 + (6.0 if p.role == "DF" else 0.0), 35.0, 99.0)
 	if p.has_ab("raket"):
 		p.base_top *= 1.06
@@ -2631,6 +2654,7 @@ func _dbg() -> void:
 
 func _tick(dt: float) -> void:
 	state_t += dt
+	thru_left -= dt
 	match state:
 		"intro":
 			if state_t > 0.7 and state_t < intro_len - 1.9:
@@ -2776,7 +2800,7 @@ func _play(dt: float) -> void:
 				if k1 == 3:
 					_shoot(h.ctrl, 0.62, _human_aim(h, dir3), 0.95, 0.2)
 				else:
-					var m1 = _pass_target(h.ctrl, dir3, false, 22.0 if k1 == 2 else -1.0)
+					var m1 = _pass_target(h.ctrl, dir3, false, 0.5 if k1 == 2 else -1.0)
 					if m1 != null:
 						_pass(h.ctrl, m1, k1 == 2)
 				mine = ball_owner == h.ctrl
@@ -2802,12 +2826,15 @@ func _play(dt: float) -> void:
 				if h.thru_hold >= 0.0 and ball_owner == h.ctrl:
 					var tpw: float = clampf(h.thru_hold / 0.6, 0.0, 1.0)
 					pass_pw = tpw
-					var mt = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, 12.0 + 26.0 * tpw, true)
+					var mt = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(tpw, 0.01), true)
 					if mt == null and set_piece != "":
 						mt = _pass_target(h.ctrl, Vector3.ZERO, false)
 					if mt != null:
 						if set_piece == "":
-							_pass(h.ctrl, mt, h.hi, false, 0.55 + 0.85 * tpw)
+							# tap = a few metres in front of him, full meter = well into the space behind
+							lead_dir = dir3
+							_pass(h.ctrl, mt, h.hi, false, 0.7 + 1.7 * tpw)
+							lead_dir = Vector3.ZERO
 						else:
 							_pass(h.ctrl, mt, h.hi or set_piece in ["corner", "gk"], set_piece == "corner")
 				h.thru_hold = -1.0
@@ -2851,7 +2878,7 @@ func _play(dt: float) -> void:
 				if h.pass_hold >= 0.0 and ball_owner == h.ctrl:
 					var ppw: float = clampf(h.pass_hold / 0.6, 0.0, 1.0)
 					pass_pw = ppw
-					var m = _pass_target(h.ctrl, dir3, false, 7.0 + 28.0 * ppw)
+					var m = _pass_target(h.ctrl, dir3, false, maxf(ppw, 0.01))
 					if set_piece == "kick" and dir3.length() < 0.25:
 						m = _first_on(h.team, [6, 5, 7])
 					if m == null and set_piece != "":
@@ -2869,7 +2896,7 @@ func _play(dt: float) -> void:
 				# the high ball has its own button: the longer the hold, the further the man it looks for
 				if h.lob_hold >= 0.0 and ball_owner == h.ctrl:
 					var lpw: float = clampf(h.lob_hold / 0.6, 0.0, 1.0)
-					var ml = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, 14.0 + 28.0 * lpw)
+					var ml = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(0.3 + 0.7 * lpw, 0.01))
 					if ml == null and set_piece != "":
 						ml = _pass_target(h.ctrl, Vector3.ZERO, false)
 					if ml != null:
@@ -3522,6 +3549,10 @@ func _meet_for(p, aim: Vector3) -> Vector3:
 	var b0 := Vector3(ball.position.x, 0, ball.position.z)
 	var out := b0
 	var t := 0.1
+	# a through ball is run ONTO: he keeps his run going and meets it out in the space it was played into,
+	# he does not stop or come back to cut it off on the way
+	if p == thru_rx and thru_left > 0.0:
+		t = maxf(0.1, thru_left * 0.85)
 	while t < 3.0:
 		var tt := minf(t, t_stop)
 		out = b0 + dir * (sp * tt - 0.5 * drag * tt * tt)
@@ -3577,7 +3608,59 @@ func _release(p, v: Vector3, kind := 0) -> void:
 		q.recv = false
 		q.offside = false
 
+# A human pass like FIFA: the stick picks the direction, and the NEAREST team mate in that direction
+# gets it. Only a longer hold (power past the first third of the meter) reaches for a man further away.
+# pw is the power 0..1 (-1 = plain tap). Defenders in the lane or a marker do not change who it goes to.
+func _human_target(p, dir3: Vector3, pw: float, thru := false):
+	var dn := Vector3(dir3.x, 0, dir3.z).normalized()
+	var s := side(p.team)
+	var cand := []
+	for m in teams[p.team]:
+		if m == p or m.stun > 0.0:
+			continue
+		# where he is about to be: a runner is picked by where he is going
+		var fut: Vector3 = m.position + Vector3(m.vel.x, 0, m.vel.z) * (0.45 if thru else 0.25)
+		var to: Vector3 = fut - p.position
+		to.y = 0.0
+		var d := to.length()
+		if d < 3.0 or d > 55.0:
+			continue
+		cand.append([m, d, dn.dot(to / d)])
+	for cone in [0.8, 0.6, 0.25]:
+		var ins := []
+		var near := 1e9
+		for c in cand:
+			if c[2] >= cone:
+				ins.append(c)
+				near = minf(near, c[1])
+		if ins.is_empty():
+			continue
+		var eff := clampf((pw - 0.35) / 0.65, 0.0, 1.0)
+		var want := lerpf(near, 48.0, eff)
+		var best = null
+		var bs := 1e9
+		for c in ins:
+			var m = c[0]
+			var d: float = c[1]
+			# off the line of the stick costs about as much as 12 m further away
+			var sc: float = (1.0 - c[2]) * 22.0
+			sc += (d * 0.13) if eff <= 0.0 else absf(d - want) * 0.13
+			if m.role == "GK":
+				sc += 4.0
+			if thru:
+				sc -= clampf(m.vel.x * s, 0.0, 8.0) * 0.12
+			if set_piece in ["", "fk", "kick"] and _is_offside(p, m):
+				sc += 1.0
+			if sc < bs:
+				bs = sc
+				best = m
+		return best
+	return null
+
 func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0, thru := false):
+	if not ai and dir3.length() > 0.25 and set_piece != "corner":
+		var pw := -1.0 if want_d <= 0.0 else want_d
+		return _human_target(p, dir3, pw, thru)
 	var best = null
 	var bs := -1e9
 	var s := side(p.team)
@@ -3651,6 +3734,10 @@ func _roll_speed(dd: float, t: float) -> float:
 func _roll_left(v0: float, t: float) -> float:
 	return maxf((v0 + ROLL_C / ROLL_K) * exp(-ROLL_K * t) - ROLL_C / ROLL_K, 0.0)
 
+var lead_dir := Vector3.ZERO
+var thru_rx = null
+var thru_left := 0.0
+
 func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	var to: Vector3 = m.position - p.position
 	to.y = 0.0
@@ -3665,17 +3752,28 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		# in front of him: lead is the time (s) he gets to run onto it, not a distance.
 		var md: Vector3 = m.vel
 		md.y = 0.0
-		var rd := Vector3(side(p.team), 0, 0) * 0.7
+		# Into the space he is running into: his run, the way you pushed the stick and towards goal,
+		# and in the last third it bends in towards the goal instead of out to the corner flag.
+		var sx := float(side(p.team))
+		var rd := Vector3(sx, 0, 0) * 0.55
 		if md.length() > 1.5:
-			rd += md.normalized() * 0.45
+			rd += md.normalized() * 0.65
+		if lead_dir.length() > 0.25:
+			rd += lead_dir.normalized() * 0.45
+		if (m.position.x * sx) > HL - 36.0:
+			var tog: Vector3 = Vector3(HL * sx, 0, 0) - m.position
+			tog.y = 0.0
+			rd += tog.normalized() * 0.5
+		if rd.x * sx < 0.15:
+			rd.x = 0.15 * sx
 		rd = rd.normalized()
 		var vr: float = m.top_speed * 0.82
 		var tl := lead
 		var spot: Vector3 = m.position
 		for it in 30:
 			spot = m.position + rd * vr * tl
-			spot.x = clampf(spot.x, -HL + 3.0, HL - 3.0)
-			spot.z = clampf(spot.z, -HW + 2.0, HW - 2.0)
+			spot.x = clampf(spot.x, -HL + 7.0, HL - 7.0)
+			spot.z = clampf(spot.z, -HW + 3.0, HW - 3.0)
 			var dd: float = Vector2(spot.x - p.position.x, spot.z - p.position.z).length()
 			if lofted:
 				thru_t = clampf(0.62 + dd * 0.034, 0.8, 2.15)
@@ -3686,11 +3784,36 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 				continue
 			thru_v = _roll_speed(dd, tl + 0.12)
 			# too hard to arrive gently: give him a little longer and look again
-			if (thru_v <= 25.0 and _roll_left(thru_v, tl + 0.12) <= 8.5) or tl > 2.6:
+			if (thru_v <= 25.0 and _roll_left(thru_v, tl + 0.12) <= 11.5) or tl > 3.3:
 				break
 			tl += 0.08
 		leadv = spot - m.position
 		leadv.y = 0.0
+		thru_rx = m
+		thru_left = tl + 0.12
+		if OS.get_cmdline_user_args().has("--picktest"):
+			# who does a human pass go to? tap = nearest in the stick direction, hold = further
+			_kickoff(0)
+			var pp = teams[0][6]
+			pp.position = Vector3(-10, 0, 0)
+			var spots := [Vector3(-2, 0, 2), Vector3(14, 0, -3), Vector3(2, 0, 11), Vector3(-10, 0, -14), Vector3(-26, 0, 0)]
+			var who := []
+			for i in spots.size():
+				var q = teams[0][[9, 10, 8, 2, 3][i]]
+				q.position = spots[i]
+				q.vel = Vector3.ZERO
+				who.append(q)
+			for q in teams[0]:
+				if not (q in who) and q != pp:
+					q.position = Vector3(-HL + 1, 0, HW - 1)
+			for q in teams[1]:
+				q.position = Vector3(40, 0, 30)
+			for c in [[Vector2(1, 0), -1.0], [Vector2(1, 0), 0.3], [Vector2(1, 0), 1.0], [Vector2(1, 0.8), -1.0], [Vector2(0.3, 1), -1.0], [Vector2(0, -1), -1.0], [Vector2(-1, 0), -1.0], [Vector2(1, -0.25), -1.0]]:
+				var st: Vector2 = c[0].normalized()
+				var mm = _pass_target(pp, Vector3(st.x, 0, st.y), false, c[1])
+				print("PICKTEST stick=", st, " pw=", c[1], " -> ", (who.find(mm) if mm != null else -1), " at ", (mm.position if mm != null else Vector3.ZERO))
+			get_tree().quit()
+			return
 	if thrown:
 		# thrown by hand: a soft arc, never far
 		var vt := clampf(6.0 + d * 0.42, 7.0, 14.5)
@@ -5014,7 +5137,15 @@ func _process(dt: float) -> void:
 			hud.ctrl_name = ("%d  %s  %d" % [hm.ctrl.num, hm.ctrl.pname.to_upper(), hm.ctrl.ovr]) if hm.ctrl != null else ""
 			if state == "play" and hm.ctrl != null and ball_owner == hm.ctrl and set_piece != "pen":
 				var st2 := _stick() * view_flip
-				var tgt = _pass_target(hm.ctrl, Vector3(st2.x, 0, st2.y), false)
+				# the hint shows the man the ball would go to if you let go now (the hold reaches further)
+				var hpw := -1.0
+				if hm.pass_hold >= 0.0:
+					hpw = maxf(clampf(hm.pass_hold / 0.6, 0.0, 1.0), 0.01)
+				elif hm.thru_hold >= 0.0:
+					hpw = maxf(clampf(hm.thru_hold / 0.6, 0.0, 1.0), 0.01)
+				elif hm.lob_hold >= 0.0:
+					hpw = 0.3 + 0.7 * clampf(hm.lob_hold / 0.6, 0.0, 1.0)
+				var tgt = _pass_target(hm.ctrl, Vector3(st2.x, 0, st2.y), false, hpw, hm.thru_hold >= 0.0)
 				if tgt != null:
 					tgt.set_hint(Color(0.55, 0.95, 1.0))
 		_minimap()
