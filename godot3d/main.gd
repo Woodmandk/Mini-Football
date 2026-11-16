@@ -489,7 +489,7 @@ func _ready() -> void:
 					q.position = Vector3(-HL + 1, 0, HW - 1)
 			for q in teams[1]:
 				q.position = Vector3(40, 0, 30)
-			for c in [[Vector2(1, 0), -1.0], [Vector2(1, 0), 0.3], [Vector2(1, 0), 1.0], [Vector2(1, 0.8), -1.0], [Vector2(0.3, 1), -1.0], [Vector2(0, -1), -1.0], [Vector2(-1, 0), -1.0], [Vector2(1, -0.25), -1.0]]:
+			for c in [[Vector2(1, 0), -1.0], [Vector2(1, 0), 0.3], [Vector2(1, 0), 0.5], [Vector2(1, 0), 0.75], [Vector2(1, 0), 1.0], [Vector2(1, 0.45), -1.0], [Vector2(0, 0), -1.0], [Vector2(1, 0.8), -1.0], [Vector2(0.3, 1), -1.0], [Vector2(0, -1), -1.0], [Vector2(-1, 0), -1.0], [Vector2(1, -0.25), -1.0]]:
 				var st: Vector2 = c[0].normalized()
 				var mm = _pass_target(pp, Vector3(st.x, 0, st.y), false, c[1])
 				print("PICKTEST stick=", st, " pw=", c[1], " -> ", (who.find(mm) if mm != null else -1), " at ", (mm.position if mm != null else Vector3.ZERO))
@@ -3453,6 +3453,7 @@ func _physics_process(dt: float) -> void:
 				return
 			if state == "full":
 				print("AUTOTEST score=", score, " stats=", stats, " bot=", bstats)
+				print("AUTOTEST gk_hands frames=", get_meta("gk_n", 0), " nearest_opp_min=", snappedf(get_meta("gk_min", 99.0), 0.1))
 				print("AUTOTEST team=", tst)
 				for ti in 2:
 					var m: Array = shp[ti]
@@ -3538,6 +3539,12 @@ func _dbg() -> void:
 func _tick(dt: float) -> void:
 	state_t += dt
 	thru_left -= dt
+	if autotest and ball_owner != null and ball_owner.hands() and ball_owner.hold_t > 1.5:
+		var gmin := 99.0
+		for o in teams[1 - ball_owner.team]:
+			gmin = minf(gmin, o.position.distance_to(ball_owner.position))
+		set_meta("gk_min", minf(get_meta("gk_min", 99.0), gmin))
+		set_meta("gk_n", get_meta("gk_n", 0) + 1)
 	match state:
 		"intro":
 			if state_t > 0.7 and state_t < intro_len - 1.9:
@@ -4630,7 +4637,10 @@ func _human_target(p, dir3: Vector3, pw: float, thru := false):
 		if d < 3.0 or d > 55.0:
 			continue
 		cand.append([m, d, dn.dot(to / d)])
-	for cone in [0.8, 0.6, 0.25]:
+	# Nearest in the direction you aim: angle and distance are weighed together, so a man a bit off
+	# the line close by beats one dead on the line far away (like FIFA). The wide cone is only used
+	# when nobody is roughly where you point.
+	for cone in [0.5, 0.0]:
 		var ins := []
 		var near := 1e9
 		for c in cand:
@@ -4639,20 +4649,21 @@ func _human_target(p, dir3: Vector3, pw: float, thru := false):
 				near = minf(near, c[1])
 		if ins.is_empty():
 			continue
-		var eff := clampf((pw - 0.35) / 0.65, 0.0, 1.0)
-		var want := lerpf(near, 48.0, eff)
+		# a normal press is a tap; only a clear hold (over half the meter) reaches for a man further on
+		var eff := clampf((pw - 0.5) / 0.5, 0.0, 1.0)
+		var want := lerpf(near, 45.0, eff)
 		var best = null
 		var bs := 1e9
 		for c in ins:
 			var m = c[0]
 			var d: float = c[1]
-			# off the line of the stick costs about as much as 12 m further away
-			var sc: float = (1.0 - c[2]) * 22.0
-			sc += (d * 0.13) if eff <= 0.0 else absf(d - want) * 0.13
+			# 30 degrees off the line costs as much as 13 m further away
+			var sc: float = (1.0 - c[2]) * 18.0
+			sc += (d * 0.18) if eff <= 0.0 else absf(d - want) * 0.16
 			if m.role == "GK":
 				sc += 4.0
 			if thru:
-				sc -= clampf(m.vel.x * s, 0.0, 8.0) * 0.12
+				sc -= clampf(m.vel.x * s, 0.0, 8.0) * 0.08
 			if set_piece in ["", "fk", "kick"] and _is_offside(p, m):
 				sc += 1.0
 			if sc < bs:
@@ -4662,6 +4673,9 @@ func _human_target(p, dir3: Vector3, pw: float, thru := false):
 	return null
 
 func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0, thru := false):
+	if not ai and dir3.length() <= 0.25 and set_piece == "" and p.role != "GK":
+		# no stick: FIFA passes the way the player is facing
+		dir3 = p.fwd()
 	if not ai and dir3.length() > 0.25 and set_piece != "corner":
 		var pw := -1.0 if want_d <= 0.0 else want_d
 		return _human_target(p, dir3, pw, thru)
@@ -4815,7 +4829,7 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 					q.position = Vector3(-HL + 1, 0, HW - 1)
 			for q in teams[1]:
 				q.position = Vector3(40, 0, 30)
-			for c in [[Vector2(1, 0), -1.0], [Vector2(1, 0), 0.3], [Vector2(1, 0), 1.0], [Vector2(1, 0.8), -1.0], [Vector2(0.3, 1), -1.0], [Vector2(0, -1), -1.0], [Vector2(-1, 0), -1.0], [Vector2(1, -0.25), -1.0]]:
+			for c in [[Vector2(1, 0), -1.0], [Vector2(1, 0), 0.3], [Vector2(1, 0), 0.5], [Vector2(1, 0), 0.75], [Vector2(1, 0), 1.0], [Vector2(1, 0.45), -1.0], [Vector2(0, 0), -1.0], [Vector2(1, 0.8), -1.0], [Vector2(0.3, 1), -1.0], [Vector2(0, -1), -1.0], [Vector2(-1, 0), -1.0], [Vector2(1, -0.25), -1.0]]:
 				var st: Vector2 = c[0].normalized()
 				var mm = _pass_target(pp, Vector3(st.x, 0, st.y), false, c[1])
 				print("PICKTEST stick=", st, " pw=", c[1], " -> ", (who.find(mm) if mm != null else -1), " at ", (mm.position if mm != null else Vector3.ZERO))
@@ -5560,6 +5574,25 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		return _run_to(p, _meet_for(p, aim), p.top_speed)
 	if loose and p == chaser[t]:
 		return _run_to(p, aim, p.top_speed * cpu["spd"])
+	if not loose and not ours and ball_owner.hands():
+		# The keeper has it in his hands: like real players, everybody drops out of the box and gives
+		# him room to throw or kick it out, nobody stands in front of him.
+		var gk = ball_owner
+		var gx: float = signf(gk.position.x) * HL
+		var spot: Vector3 = p.position
+		var away: Vector3 = spot - gk.position
+		away.y = 0.0
+		if away.length() < 14.0:
+			if away.length() < 0.5:
+				away = Vector3(-signf(gx), 0, 0.3)
+			spot = gk.position + away.normalized() * 14.0
+		if absf(spot.x - gx) < 18.0 and absf(spot.z) < 21.5:
+			spot.x = gx - signf(gx) * 18.5
+		spot.x = clampf(spot.x, -HL + 1.0, HL - 1.0)
+		spot.z = clampf(spot.z, -HW + 1.0, HW - 1.0)
+		if p.position.distance_to(spot) < 1.0:
+			return Vector3.ZERO
+		return _run_to(p, spot, p.top_speed * 0.8)
 	if not loose and not ours and set_piece == "":
 		var c = ball_owner
 		var own_goal := Vector3(-HL * s, 0, 0)
