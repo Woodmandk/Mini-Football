@@ -10,9 +10,41 @@
 		return f.call(this, u, o);
 	};
 })();
+// iPhone (Safari) cannot lock the screen to landscape. When a phone shows the page standing up, the game is drawn
+// turned on its side, so it always plays wide: turn the phone and it fits. The build (build.sh) makes Godot ask
+// bbFit for the size of the page and for where a finger touched.
+window.bbFit = (function () {
+  var coarse = false, on = false;
+  try { coarse = matchMedia('(pointer:coarse)').matches; } catch (e) {}
+  function rot() {
+    var r = coarse && innerHeight > innerWidth * 1.05;
+    if (r !== on) {
+      on = r;
+      var c = document.getElementById('canvas');
+      if (c) {
+        c.style.position = r ? 'fixed' : '';
+        c.style.left = r ? '0' : '';
+        c.style.top = r ? '0' : '';
+        c.style.transformOrigin = r ? '0 0' : '';
+      }
+    }
+    if (r) { var cv = document.getElementById('canvas'); if (cv) cv.style.transform = 'translateX(' + innerWidth + 'px) rotate(90deg)'; }
+    else { var cu = document.getElementById('canvas'); if (cu && cu.style.transform) cu.style.transform = ''; }
+    return r;
+  }
+  return {
+    rot: rot,
+    w: function () { return rot() ? innerHeight : innerWidth; },
+    h: function () { return rot() ? innerWidth : innerHeight; },
+    pos: function (evt, rect, canvas) {
+      if (on) return [(evt.clientY - rect.top) * canvas.width / rect.height, (rect.right - evt.clientX) * canvas.height / rect.width];
+      return [(evt.clientX - rect.x) * canvas.width / rect.width, (evt.clientY - rect.y) * canvas.height / rect.height];
+    }
+  };
+})();
 // Tiny PeerJS glue for the Godot build: one host, one guest, JSON strings both ways.
 window.bbNet = (function () {
-  var peer = null, conn = null, q = [], PRE = 'banebold3d-', tries = 0, timer = 0, gen = 0;
+  var peer = null, conn = null, q = [], seq = 0, PRE = 'banebold3d-', tries = 0, timer = 0, gen = 0;
   // Plain JSON text on the wire: the packed binary format of PeerJS is the part that fails on iPhone (Safari).
   var OPT = { serialization: 'json', reliable: true };
   function note(o) { q.push(JSON.stringify(o)); }
@@ -20,9 +52,21 @@ window.bbNet = (function () {
     conn = c;
     var was = false;
     c.on('open', function () { if (conn !== c) return; was = true; clearTimeout(timer); note({ _: 'open' }); });
-    c.on('data', function (d) { if (conn !== c) return; if (typeof d === 'string') q.push(d); else if (d && typeof d === 'object') q.push(JSON.stringify(d)); });
+    var parts = {};
+    c.on('data', function (d) {
+      if (conn !== c) return;
+      if (d && typeof d === 'object' && d._ === '~') {
+        // one piece of a long message (see send): put it together again
+        var b = parts[d.k] || (parts[d.k] = { n: d.n, got: 0, p: [] });
+        if (b.p[d.i] === undefined) { b.p[d.i] = d.p; b.got++; }
+        if (b.got >= b.n) { delete parts[d.k]; q.push(b.p.join('')); }
+        return;
+      }
+      if (typeof d === 'string') q.push(d); else if (d && typeof d === 'object') q.push(JSON.stringify(d));
+    });
     c.on('close', function () { if (conn === c) { conn = null; if (was) note({ _: 'close' }); } });
-    c.on('error', function () { if (conn === c) { conn = null; if (was) note({ _: 'close' }); } });
+    // a message the line refused (too big) is not a broken line: keep it
+    c.on('error', function (e) { if (e && e.type === 'message-too-big') return; if (conn === c) { conn = null; if (was) note({ _: 'close' }); } });
   }
   function keep(p) {
     // phones drop the link to the meeting server when the page is hidden for a moment: pick it up again
@@ -159,7 +203,16 @@ window.bbNet = (function () {
         if (peer === me && !busy) note({ _: 'err', m: t });
       });
     },
-    send: function (s) { if (conn && conn.open !== false) { try { conn.send(s); } catch (e) {} } },
+    // PeerJS refuses any message over 16 KB in JSON mode (and the old code then took that for a lost line, so the
+    // friend vanished from the room as soon as the host's career was sent). Long messages go in pieces.
+    send: function (s) {
+      if (!conn || conn.open === false) return;
+      try {
+        if (s.length <= 4000) { conn.send(s); return; }
+        var n = Math.ceil(s.length / 4000), k = (++seq) + '' + Math.floor(Math.random() * 1000);
+        for (var i = 0; i < n; i++) conn.send({ _: '~', k: k, i: i, n: n, p: s.substr(i * 4000, 4000) });
+      } catch (e) {}
+    },
     poll: function () { if (!q.length) return ''; var r = '[' + q.join(',') + ']'; q = []; return r; },
     stop: function () {
       gen++; clearTimeout(timer);
