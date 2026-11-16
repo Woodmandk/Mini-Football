@@ -13,6 +13,30 @@ const STAT_KEYS := ["pac", "sho", "pas", "dfn"]
 
 var d := {}
 var web := false
+var eur := false # the career mode counts its own money in euros, not the game's coins
+
+# One unit of club money: coins outside the career, 10 000 euros inside it.
+const EUR_PER := 10000
+
+static func eur_text(n: int) -> String:
+	var v := float(n) * EUR_PER
+	var neg := v < 0.0
+	v = absf(v)
+	var t := ""
+	if v >= 1000000.0:
+		t = ("€%.1fM" % (v / 1000000.0)).replace(".0M", "M")
+	elif v >= 1000.0:
+		t = "€%dK" % int(round(v / 1000.0))
+	else:
+		t = "€%d" % int(v)
+	return ("-" if neg else "") + t
+
+# money as the player reads it: "120 COINS" or "€1.2M"
+func money(n: int) -> String:
+	return eur_text(n) if eur else "%d COINS" % n
+
+func money_word() -> String:
+	return "money" if eur else "coins"
 
 var last_coins := 0
 var names := []
@@ -71,7 +95,8 @@ func on() -> bool:
 func is_mine() -> bool:
 	return d.has("own")
 
-const CLUB_KEYS := ["squad", "xi", "coins", "fac", "form", "lay", "own", "abv", "st", "market"]
+# what your own club brings into a career: the players and the look, not its coins or buildings
+const CLUB_KEYS := ["squad", "xi", "form", "lay", "own", "abv"]
 
 # The first start: your own club, not in a career yet. It waits in the place of England's weakest club.
 func new_club() -> void:
@@ -85,7 +110,7 @@ func start_mine(li: int, slen: String, base: Dictionary) -> void:
 	var keep := {}
 	for k in CLUB_KEYS:
 		if base.has(k):
-			keep[k] = base[k]
+			keep[k] = base[k].duplicate(true) if (base[k] is Array or base[k] is Dictionary) else base[k]
 	new_career(weakest(li), true, slen)
 	for k in keep:
 		d[k] = keep[k]
@@ -223,7 +248,7 @@ func coop_reward(coins: int, won: bool) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	d["coins"] = int(d["coins"]) + coins
-	var lines := ["+%d COINS FOR YOUR OWN CLUB" % coins]
+	var lines := ["+%s FOR YOUR CLUB" % money(coins)]
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["xp"] = int(pl["xp"]) + 22 + (10 if won else 0)
@@ -444,13 +469,13 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
 	market_refresh()
-	lines.append("+%d COINS" % coins)
+	lines.append("+" + money(coins))
 	lines.append(_board_match(mine, theirs, opp_c, was_home, played if not played.is_empty() else d["xi"]))
 	if was_home:
 		# the gate: a bigger stadium and a club near the top bring more people in
 		var gate := int(round((fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)) * pay_k(lg())))
 		d["coins"] = int(d["coins"]) + gate
-		lines.append("+%d FROM THE GATE" % gate)
+		lines.append("+%s FROM THE GATE" % money(gate))
 	for i in (played if not played.is_empty() else d["xi"]):
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["apps"] = int(pl["apps"]) + 1
@@ -491,7 +516,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		if pos == 1:
 			what = ("  CHAMPIONS OF %s!" % league_name()) + what
 		d["move"] = mv
-		d["note"] = "%s, SEASON %d: YOU FINISHED %s.%s  +%d COINS" % [league_name(), int(d["season"]), ordinal(pos), what, prize]
+		d["note"] = "%s, SEASON %d: YOU FINISHED %s.%s  +%s" % [league_name(), int(d["season"]), ordinal(pos), what, money(prize)]
 		_sim_others()
 		_board_review()
 		lines.append("SEASON OVER: THE BOARD'S GRADE IS %s" % str(review().get("grade", "C")))
@@ -705,7 +730,7 @@ func open_pack(tier: int) -> Dictionary:
 	if (d["squad"] as Array).size() >= SQUAD_MAX:
 		return {"err": "Your squad is full. Sell a player from the bench first."}
 	if int(d["coins"]) < PACK_COST[tier]:
-		return {"err": "You need %d more coins." % (PACK_COST[tier] - int(d["coins"]))}
+		return {"err": "You need %s more." % money(PACK_COST[tier] - int(d["coins"]))}
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var taken := []
@@ -767,7 +792,7 @@ func buy(i: int) -> String:
 	if (d["squad"] as Array).size() >= SQUAD_MAX:
 		return "Your squad is full. Sell a player from the bench first."
 	if int(d["coins"]) < price:
-		return "You need %d more coins." % (price - int(d["coins"]))
+		return "You need %s more." % money(price - int(d["coins"]))
 	var used := []
 	for s in d["squad"]:
 		used.append(int(s["num"]))
@@ -814,7 +839,7 @@ func sell(i: int) -> String:
 		xi.append(int(x) - 1 if int(x) > i else int(x))
 	d["xi"] = xi
 	save()
-	return "%s SOLD TO %s FOR %d COINS" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", got]
+	return "%s SOLD TO %s FOR %s" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", money(got)]
 
 # ---- the club: three things to build
 
@@ -833,7 +858,7 @@ func fac_up(k: String) -> String:
 		return ""
 	var c := fac_cost(k)
 	if int(d["coins"]) < c:
-		return "You need %d more coins." % (c - int(d["coins"]))
+		return "You need %s more." % money(c - int(d["coins"]))
 	if not d.has("fac"):
 		d["fac"] = {}
 	d["coins"] = int(d["coins"]) - c
@@ -1044,7 +1069,7 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	coins += board_bonus(coins)
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
-	lines.insert(0, "+%d COINS" % coins)
+	lines.insert(0, "+" + money(coins))
 	lines.insert(1, _board_cup(won, r))
 	# the men who played learn from a cup tie too
 	for i in d["xi"]:
@@ -1146,7 +1171,7 @@ func learn_ab(i: int, slot: int, key: String) -> String:
 	slot = mini(slot, have.size())
 	var c := ab_price(pl, slot)
 	if int(d["coins"]) < c:
-		return "You need %d more coins." % (c - int(d["coins"]))
+		return "You need %s more." % money(c - int(d["coins"]))
 	if slot < have.size():
 		have[slot] = key
 	else:
@@ -1685,7 +1710,7 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	if (d["squad"] as Array).size() >= SQUAD_MAX:
 		return {"ok": false, "msg": "Your squad is full. Sell a player first."}
 	if int(d["coins"]) < amount:
-		return {"ok": false, "msg": "You need %d more coins." % (amount - int(d["coins"]))}
+		return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
 	var ask := ask_price(c, i)
 	var neg: Dictionary = d.get("neg", {})
 	var key := "%d:%s" % [c, str(sq[i]["n"])]
@@ -1721,10 +1746,10 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 		d["coins"] = int(d["coins"]) - amount
 		d["squad"].append(me_pl)
 		save()
-		return {"ok": true, "msg": "%s SIGNED FROM %s FOR %d COINS" % [str(pl["n"]).to_upper(), str(W[c]["n"]), amount]}
+		return {"ok": true, "msg": "%s SIGNED FROM %s FOR %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount)]}
 	if amount >= int(ask * 0.75):
 		neg[key] = ask
 		d["neg"] = neg
 		save()
-		return {"ok": false, "counter": ask, "msg": "%s SAY NO, BUT THEY WOULD TAKE %d COINS." % [str(W[c]["n"]), ask]}
+		return {"ok": false, "counter": ask, "msg": "%s SAY NO, BUT THEY WOULD TAKE %s." % [str(W[c]["n"]), money(ask)]}
 	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(W[c]["n"])}

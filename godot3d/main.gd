@@ -116,7 +116,9 @@ var scout_c := -1 # the club whose squad you are looking at
 var scout_i := -1 # the man you are looking at
 var scout_res := {} # the answer to your last bid
 var car
-var car_main # your club and career; while you play the cup mode, car points to the cup's own save
+var car_main # your own club outside the career; car points to the career or the cup mode while you are in them
+var carc # the career mode: its own save, its own club and its own money in euros
+var in_career := false # inside the career mode until you leave it yourself
 var cupc # the cup mode: a cup of its own, with your club or any club
 var cup_mode := false
 var start_kind := "" # how a new career (or cup) starts: "mine", "new", "club", "cup"
@@ -385,6 +387,18 @@ func _ready() -> void:
 	car.names = SURNAMES
 	car.load_save(net.web)
 	car_main = car
+	carc = Career.new()
+	carc.key = "bb3d-cmode"
+	carc.eur = true
+	carc.names = SURNAMES
+	carc.load_save(net.web)
+	_split_career()
+	if net.web:
+		in_career = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-incar')||''}catch(e){return ''}})()", true)) == "1"
+	if in_career and carc.has_save() and carc.on():
+		car = carc
+	else:
+		in_career = false
 	cupc = Career.new()
 	cupc.key = "bb3d-cupmode"
 	cupc.names = SURNAMES
@@ -393,9 +407,12 @@ func _ready() -> void:
 	rk.load_save(net.web)
 	_apply_own()
 	if new_car:
-		car.wipe()
-		car.stash_clear()
+		car_main.wipe()
+		car_main.stash_clear()
+		carc.wipe()
 		cupc.wipe()
+		car = car_main
+		in_career = false
 	if net.web:
 		dbg = str(JavaScriptBridge.eval("location.search", true)).contains("dbg")
 		var qs := str(JavaScriptBridge.eval("location.search", true))
@@ -666,11 +683,14 @@ func _ready() -> void:
 			if menu_arg.begins_with("hub_"):
 				hub_tab = menu_arg.substr(4)
 				menu_arg = "main"
-				if hub_tab == "career" or hub_tab == "play_on":
-					car.new_career(car.weakest(1), false)
-					car.set_mode("simple")
-					_apply_own()
-				if hub_tab == "play_on":
+				var ht := hub_tab
+				if ht in ["career", "play_on", "transfers", "office", "teamc", "clubc"]:
+					carc.new_career(carc.weakest(1), false)
+					carc.set_mode("simple")
+					if ht != "play_on":
+						_cr_enter(false)
+						hub_tab = {"teamc": "team", "clubc": "club"}.get(ht, ht)
+				if ht == "play_on":
 					hub_tab = "play"
 			if menu_arg == "myclub":
 				_own_start()
@@ -698,24 +718,42 @@ func _ready() -> void:
 					_cup_start(ClubDB.start_leagues(Career.FIRST)[0][3])
 				else:
 					_cup_start_mine("DENMARK")
+				car_main.d["squad"][0]["n"] = "OUTSIDEGK" if menu_arg == "cupmine" else car_main.d["squad"][0]["n"]
+				print("CUPMODE gk inside=", car.d["squad"][0]["n"], " outside=", car_main.d["squad"][0]["n"])
 				for k3 in 2:
 					print("CUPMODE ", car.cup_round_name(), " v ", car.cup_opp(), " due=", car.cup_due(), " ", car.cup_finish(3, 1, true), " main coins=", car_main.d["coins"])
+				_cm_leave()
+				print("CUPMODE after leave outside gk=", car_main.d["squad"][0]["n"], " cup gk=", cupc.d["squad"][0]["n"])
+				_cm_enter()
 				menu_arg = "cup"
+			if menu_arg == "splittest":
+				# an old save with a running career at a club taken over, and the own club waiting
+				car_main.d["squad"][0]["n"] = "OWNGK"
+				car_main.stash_put()
+				car_main.new_career(ClubDB.start_leagues(Career.FIRST)[0][0], false)
+				car_main.d.erase("on")
+				car_main.save()
+				carc.wipe()
+				in_career = false
+				_split_career()
+				print("SPLIT career=", carc.has_save(), " on=", carc.on(), " club=", carc.d["club"], " mine=", carc.is_mine(), " | outside on=", car_main.on(), " mine=", car_main.is_mine(), " gk=", car_main.d["squad"][0]["n"], " in=", in_career)
+				get_tree().quit()
+				return
 			if menu_arg == "minetest":
-				# own club: off -> career with my club -> take over another (my club waits) -> back to my club
-				print("MINE start on=", car.on(), " mine=", car.is_mine(), " club=", car.d["club"], " coins=", car.d["coins"], " lg=", car.league_name())
+				# own club outside -> career with my club (own money) -> back out: the club outside is untouched
 				car.d["coins"] = 4321
 				car.d["squad"][0]["n"] = "KEEPME"
 				start_li = 1
 				_start_mine()
-				print("MINE career on=", car.on(), " lg=", car.league_name(), " coins=", car.d["coins"], " gk=", car.d["squad"][0]["n"], " mode=", car.mode(), " name=", CLUBS[int(car.d["club"])]["n"])
-				start_kind = "club"
-				_action("st_club", ClubDB.start_leagues(Career.FIRST)[0][0])
-				print("MINE took over ", CLUBS[int(car.d["club"])]["n"], " mine=", car.is_mine(), " stash=", _my_info())
-				start_kind = "mine"
-				start_li = 2
-				_start_mine()
-				print("MINE back lg=", car.league_name(), " coins=", car.d["coins"], " gk=", car.d["squad"][0]["n"], " name=", CLUBS[int(car.d["club"])]["n"], " xi=", car.d["xi"].slice(0, 3), " stash=", car.stash_get().is_empty())
+				print("MINE career in=", in_career, " lg=", car.league_name(), " money=", car.money(int(car.d["coins"])), " gk=", car.d["squad"][0]["n"], " name=", CLUBS[int(car.d["club"])]["n"])
+				car.d["squad"][0]["n"] = "CAREERGK"
+				car.d["coins"] = 99
+				car.save()
+				_action("cr_exit")
+				print("MINE outside in=", in_career, " coins=", car.money(int(car.d["coins"])), " gk=", car.d["squad"][0]["n"], " tab=", hub_tab)
+				_action("tab", "team")
+				_action("c_home")
+				print("MINE back in=", in_career, " gk=", car.d["squad"][0]["n"], " tab=", hub_tab, " money=", car.money(int(car.d["coins"])))
 				get_tree().quit()
 				return
 			if menu_arg in ["rkfull", "rktest"]:
@@ -1383,9 +1421,18 @@ func _menu_info() -> Dictionary:
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
-		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": car.has_save() and car.on(),
+		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
+
+# the career's state for its tile on the Play tab
+func _cr_tile() -> Dictionary:
+	if not carc.has_save() or not carc.on():
+		return {}
+	var cc := ClubDB.clubs(CLUBS0)
+	var me_c := int(carc.d["club"])
+	var nm := str(carc.d["own"]["n"]) if carc.is_mine() else str(cc[me_c]["n"])
+	return {"name": nm, "lg": carc.league_name(), "season": int(carc.d["season"]), "rank": carc.rank_of(me_c)}
 
 # the cup mode's state for its tile on the Play tab
 func _cupc_info() -> Dictionary:
@@ -1703,19 +1750,69 @@ func _avg_ovr(dd: Dictionary) -> int:
 		n += 1
 	return int(round(float(t) / maxf(n, 1)))
 
-# A career with your own club: it keeps its squad, coins and buildings and starts in the league you picked.
+# A career with your own club: its players and kit go in, in the league you picked, with the career's own money.
 func _start_mine() -> void:
 	var base := _my_club()
 	if base.is_empty():
 		start_kind = "new"
 		_action("st_club", -1)
 		return
-	car.start_mine(start_li, opt_slen, base)
-	car.stash_clear()
+	carc.start_mine(start_li, opt_slen, base)
 	start_kind = ""
-	hub_tab = "career"
+	_cr_enter(false)
 	_own_changed()
 	hud.show_menu("cmode", _menu_info())
+
+# ---- the career mode: a place of its own. You are in it until you leave it yourself.
+# Saves from before: the running career moves into the career mode, your own club stays outside.
+func _split_career() -> void:
+	if not car_main.has_save() or not car_main.on() or carc.has_save():
+		return
+	carc.d = car_main.d.duplicate(true)
+	carc._ints()
+	carc.save()
+	var st: Dictionary = car_main.stash_get()
+	if not st.is_empty():
+		car_main.d = st
+		car_main._ints()
+	elif not car_main.is_mine():
+		car_main.new_club()
+		car_main.d["own"] = {"n": "MY CLUB", "s": "MYC", "k": ["dc2424", "f4f4f4", "dc2424"]}
+	car_main.d["on"] = false
+	car_main.d["mode"] = "simple"
+	car_main.stash_clear()
+	car_main.save()
+	# you were in a career: you still are
+	in_career = true
+	_incar_save()
+
+func _incar_save() -> void:
+	if net.web:
+		JavaScriptBridge.eval("try{localStorage.setItem('bb3d-incar','%s')}catch(e){}" % ("1" if in_career else "0"), true)
+
+func _cr_enter(show := true) -> void:
+	if cup_mode:
+		_cm_leave()
+	in_career = true
+	car = carc
+	_incar_save()
+	_apply_own()
+	hub_tab = "career"
+	car_sel = -1
+	car_sell = -1
+	car_msg = ""
+	car_sure = false
+	if show:
+		_show_hub()
+
+func _cr_exit() -> void:
+	in_career = false
+	car = car_main
+	_incar_save()
+	_apply_own()
+	hub_tab = "play"
+	car_msg = ""
+	_show_hub()
 
 # ---- the cup mode: a cup on its own, with any club in England or Denmark, or your own
 func _cup_start(c: int) -> void:
@@ -1732,6 +1829,11 @@ func _cup_start_mine(ctry: String) -> void:
 	var li := 3 if ctry == "ENGLAND" else 5
 	cupc.new_career(cupc.weakest(li), true)
 	cupc.d["own"] = (mc["own"] as Dictionary).duplicate(true) if mc.has("own") else {"n": "MY CLUB", "s": "MYC", "k": ["dc2424", "f4f4f4", "dc2424"]}
+	# your team goes into the cup as a copy: what happens there stays there
+	for k in ["squad", "xi", "form", "lay", "abv"]:
+		if mc.has(k):
+			cupc.d[k] = mc[k].duplicate(true) if (mc[k] is Array or mc[k] is Dictionary) else mc[k]
+	cupc._ints()
 	cupc.d["cupmode"] = true
 	cupc.d["mode"] = "simple"
 	cupc.save()
@@ -1742,15 +1844,6 @@ func _cm_enter() -> void:
 	start_kind = ""
 	cup_mode = true
 	car = cupc
-	if car.is_mine():
-		var mc := _my_club()
-		for k in ["squad", "xi", "form", "lay"]:
-			if mc.has(k):
-				car.d[k] = mc[k].duplicate(true) if (mc[k] is Array or mc[k] is Dictionary) else mc[k]
-			else:
-				car.d.erase(k)
-		car._ints()
-		car.save()
 	_apply_own()
 	hud.show_menu("cup", _menu_info())
 
@@ -1764,19 +1857,8 @@ func _cm_leave() -> void:
 	_apply_own()
 
 func _cm_sync() -> void:
-	if not cupc.has_save() or not cupc.is_mine():
-		return
-	var mc := _my_club()
-	if mc.is_empty():
-		return
-	for k in ["squad", "xi", "form", "lay"]:
-		if cupc.d.has(k):
-			mc[k] = cupc.d[k].duplicate(true) if (cupc.d[k] is Array or cupc.d[k] is Dictionary) else cupc.d[k]
-	if car_main.is_mine():
-		car_main._ints()
-		car_main.save()
-	else:
-		car_main.stash_put(mc)
+	# the cup's team is its own copy (Daniel: each mode keeps its own team), so nothing goes back
+	pass
 
 func _own_start() -> void:
 	if not car.d.has("own"):
@@ -1810,7 +1892,10 @@ func _show_hub(pick := true) -> void:
 			return
 	car_sel = -1
 	car_sell = -1
-	if hub_tab == "career" and not car.on():
+	if in_career:
+		if not (hub_tab in ["career", "team", "transfers", "club", "office"]):
+			hub_tab = "career"
+	elif hub_tab in ["career", "transfers", "office"]:
 		hub_tab = "play"
 	if car.on() and car.mode() == "":
 		# an old save, or a career made before the choice existed: ask once
@@ -1906,22 +1991,22 @@ func _action(act: String, arg = null) -> void:
 		"c_review":
 			hud.show_menu("review", _menu_info())
 		"c_job":
-			if car.is_mine():
-				car.stash_put()
 			car.take_job(int(arg))
 			_apply_own()
 			opt_club = int(car.d["club"])
 			_set_clubs(opt_club, car.next_match()[0], true)
 			_kickoff(0)
-			hub_tab = "play"
+			hub_tab = "career"
 			_show_hub()
 		"c_board":
 			hud.show_menu("board", _menu_info())
 		"c_home":
-			hub_tab = "career"
-			car_msg = ""
-			car_sure = false
-			hud.show_menu("main", _menu_info())
+			if carc.has_save() and carc.on():
+				_cr_enter()
+			else:
+				_action("c_start")
+		"cr_exit":
+			_cr_exit()
 		"c_start":
 			start_kind = ""
 			new_sure = false
@@ -1932,22 +2017,8 @@ func _action(act: String, arg = null) -> void:
 				start_kind = "new"
 			hud.show_menu("start_lg", _menu_info())
 		"cs_new":
-			if hud.menu_name != "car_start":
-				# from the Play tab: the start screen, asking before your club is replaced
-				new_sure = not _my_club().is_empty()
-				start_kind = ""
-				if new_sure:
-					hud.show_menu("car_start", _menu_info())
-					return
-				start_kind = "new"
-				hud.show_menu("start_lg", _menu_info())
-			elif not new_sure and not _my_club().is_empty():
-				# your own club would be replaced: ask once
-				new_sure = true
-				hud.refresh(_menu_info())
-			else:
-				start_kind = "new"
-				hud.show_menu("start_lg", _menu_info())
+			start_kind = "new"
+			hud.show_menu("start_lg", _menu_info())
 		"cs_club":
 			start_kind = "club"
 			hud.show_menu("start_lg", _menu_info())
@@ -1970,18 +2041,12 @@ func _action(act: String, arg = null) -> void:
 				return
 			# arg: a club to take over, or -1 = your own new club in the place of the league's weakest
 			var own := int(arg) < 0
-			var sc: int = car.weakest(start_li) if own else int(arg)
-			if own:
-				# a new club of your own takes the place of the old one
-				car.stash_clear()
-			elif car.is_mine():
-				# your own club waits while you run another one
-				car.stash_put()
-			car.new_career(sc, own, opt_slen)
+			var sc: int = carc.weakest(start_li) if own else int(arg)
+			carc.new_career(sc, own, opt_slen)
 			start_kind = ""
-			hub_tab = "career"
+			_cr_enter(false)
 			if own:
-				car.d["own"] = {"n": "MY CLUB", "s": "MYC", "k": (CLUBS[sc]["k"] as Array).duplicate()}
+				car.d["own"] = {"n": "NEW CLUB", "s": "NEW", "k": (ClubDB.clubs(CLUBS0)[sc]["k"] as Array).duplicate()}
 				own_new = true
 				_own_changed()
 				hud.show_menu("myclub", _menu_info())
@@ -2403,6 +2468,11 @@ func _rk_find() -> void:
 		return
 	if cup_mode:
 		_cm_leave()
+	if in_career:
+		in_career = false
+		car = car_main
+		_incar_save()
+		_apply_own()
 	net.stop()
 	rk_looking = true
 	rk_on = false

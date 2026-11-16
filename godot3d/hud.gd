@@ -288,6 +288,19 @@ static func _role_at(along: float) -> String:
 		return "MF"
 	return "FW"
 
+# club money as the player reads it: coins outside, euros inside the career mode
+func _m(n: int) -> String:
+	return Career.eur_text(n) if bool(_info.get("eur", false)) else "%d COINS" % n
+
+func _mp(n: int) -> String:
+	return Career.eur_text(n) if bool(_info.get("eur", false)) else str(n)
+
+func _mb(n: int) -> String:
+	return ("BUDGET  " + Career.eur_text(n)) if bool(_info.get("eur", false)) else "COINS  %d" % n
+
+func _mw() -> String:
+	return "money" if bool(_info.get("eur", false)) else "coins"
+
 func _ord(n: int) -> String:
 	return Career.ordinal(n)
 
@@ -690,7 +703,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var sub0 := _label("DIVISION %d   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("div", 4)), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 16, Color(1, 1, 1, 0.8), font2)
 			sub0.position = Vector2(162, 58)
 			menu.add_child(sub0)
-			var co := _label("COINS  %d" % int(c.get("coins", 0)), 24, GOLD)
+			var co := _label(_mb(int(c.get("coins", 0))), 24, GOLD)
 			co.position = Vector2(w - 260, 20)
 			co.size = Vector2(230, 34)
 			co.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -832,25 +845,25 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			menu.add_child(bk2)
 		"car_start":
 			var my: Dictionary = info.get("my", {})
-			_title("START A CAREER", "Three ways in. Then you pick a simple or a full career and how long a season is.")
+			_title("START A CAREER", ("This replaces your career now. " if bool(info.get("car_on", false)) else "") + "Three ways in. The career is its own world with its own money, until you exit it.")
 			var cw := (w - 64.0 - 2 * 16.0) / 3.0
 			var ph := h - 100.0 - 108.0
 			var sure := bool(info.get("new_sure", false))
 			var defs := [
 				["cs_mine", "YOUR OWN CLUB", ("%s   ·   TEAM RATING %d" % [str(my.get("n", "")), int(my.get("r", 0))]) if not my.is_empty() else "YOU HAVE NO CLUB YET", [
-					"Your squad, coins and buildings come with it",
+					"Your players, name and kit go into the career",
 					"You pick the league it starts in",
-					"The name and kit you made",
+					"Your club outside the career is not touched",
 				], "PLAY WITH MY CLUB" if not my.is_empty() else "MAKE MY CLUB"],
 				["cs_new", "A NEW CLUB", "NAME, CITY AND COLOURS OF YOUR OWN", [
 					"A fresh squad of young players",
 					"Starts at the bottom: League Two or Denmark's second league",
 					"Climb all the way to the top",
-				] + (["It replaces your club %s" % str(my.get("n", ""))] if not my.is_empty() else []), "SURE? TAP AGAIN" if sure else "MAKE A NEW CLUB"],
+				], "MAKE A NEW CLUB"],
 				["cs_club", "AN EXISTING CLUB", "ANY OF THE 116 CLUBS", [
 					"Take over a club as it is, with its squad and its strength",
 					"From the top of England to Denmark's second league",
-					"Your own club waits until you come back to it",
+					"The career has its own money, in euros",
 				], "PICK A CLUB"],
 			]
 			for i in 3:
@@ -882,7 +895,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				var pb := _btn(dd[4], dd[0], null, "primary" if i == 0 else "alt", Vector2(px, h - 96.0), Vector2(cw, 68), 22)
 				menu.add_child(pb)
 				items.append([pb, Vector2(0, 60), 0.1 + 0.05 * i])
-			menu.add_child(_btn("<  BACK", "tab", "play", "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+			menu.add_child(_btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
 		"cm_pick":
 			var my2: Dictionary = info.get("my", {})
 			_title("THE CUP", "A cup on its own: every club in the country, lose once and you are out. Your coins go to your club.")
@@ -1216,7 +1229,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				ab7.clip_text = true
 				rp6.add_child(ab7)
 				var ask := int(pl7["ask"])
-				var al := _label("THEY WANT ABOUT  %d  COINS" % ask, 17, Color.WHITE)
+				var al := _label("THEY WANT ABOUT  %s" % _m(ask), 17, Color.WHITE)
 				al.position = Vector2(20, 156)
 				rp6.add_child(al)
 				var ctr := int(res6.get("counter", 0))
@@ -1227,7 +1240,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				for bi in bids.size():
 					var amt: int = bids[bi][0]
 					var can6: bool = int(c6.get("coins", 0)) >= amt
-					var bb6 := _btn("%s\n%d" % [bids[bi][1], amt], "sc_bid", amt, "primary" if can6 else "off", Vector2(rx6 + 18 + bi * (bw6 + 8.0), 100 + 190), Vector2(bw6, 64), 17)
+					var bb6 := _btn("%s\n%s" % [bids[bi][1], _mp(amt)], "sc_bid", amt, "primary" if can6 else "off", Vector2(rx6 + 18 + bi * (bw6 + 8.0), 100 + 190), Vector2(bw6, 64), 17)
 					menu.add_child(bb6)
 			else:
 				var hint := _label("Tap a player to see him and make a bid. Their best men cost more, and a big club sells to a smaller one only for a lot.", 16, Color(1, 1, 1, 0.75), font2)
@@ -1242,14 +1255,14 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				rl6.position = Vector2(20, rp6.size.y - 110)
 				rl6.size = Vector2(rw6 - 40, 60)
 				rp6.add_child(rl6)
-			var co6 := _label("COINS  %d" % int(c6.get("coins", 0)), 20, GOLD)
+			var co6 := _label(_mb(int(c6.get("coins", 0))), 20, GOLD)
 			co6.position = Vector2(20, rp6.size.y - 40)
 			rp6.add_child(co6)
 			menu.add_child(_btn("<  BACK", "sc_back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
 		"cmode":
 			var cm: Dictionary = info.get("car", {})
 			var cur := str(cm.get("mode", ""))
-			_title("WHAT KIND OF CAREER?", "You can change it later under Profile.")
+			_title("WHAT KIND OF CAREER?", "You can change it later in the career's Office.")
 			var cw0 := (w - 64.0 - 24.0) * 0.5
 			var defs0 := [
 				["simple", "SIMPLE CAREER", "Just play and climb", [
@@ -1383,7 +1396,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			cl5.size = Vector2(lw5, 24)
 			cl5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			lp5.add_child(cl5)
-			var bn5 := _label("BOARD BONUS  +%d COINS" % int(rv.get("bonus", 0)), 17, Color.WHITE if int(rv.get("bonus", 0)) > 0 else Color(1, 1, 1, 0.5), font2)
+			var bn5 := _label("BOARD BONUS  +%s" % _m(int(rv.get("bonus", 0))), 17, Color.WHITE if int(rv.get("bonus", 0)) > 0 else Color(1, 1, 1, 0.5), font2)
 			bn5.position = Vector2(0, lp5.size.y - 34)
 			bn5.size = Vector2(lw5, 24)
 			bn5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1669,7 +1682,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 						atx = "SKILL 2: AT RATING 70"
 						akind = "off"
 					else:
-						atx = "+ LEARN A SKILL  (%d)" % int(sp2["ab_cost"][ai])
+						atx = "+ LEARN A SKILL  (%s)" % _mp(int(sp2["ab_cost"][ai]))
 						akind = "primary" if ai == abl.size() else "off"
 					var abb := _btn(atx, "c_ab", ai, akind, Vector2(bx3 + 16 + ai * (abw + 8), dy + 182), Vector2(abw, 40), 14)
 					if ai < abl.size():
@@ -1679,11 +1692,11 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) + int(sp2.get("tp", 0)) < int(sp2["pot"])
 				var on_bench: bool = not (xi.has(sel) or xi.has(float(sel)))
 				var tw3 := (bw3 - 32) * (0.6 if on_bench else 1.0)
-				var trb := _btn("BUY 1 TP   (%d COINS)" % int(sp2["cost"]), "c_train", null, "primary" if can else "off", Vector2(bx3 + 16, dy + dp.size.y - 62), Vector2(tw3, 48), 17)
+				var trb := _btn("BUY 1 TP   (%s)" % _m(int(sp2["cost"])), "c_train", null, "primary" if can else "off", Vector2(bx3 + 16, dy + dp.size.y - 62), Vector2(tw3, 48), 17)
 				menu.add_child(trb)
 				if on_bench:
 					var sure2: bool = int(c3.get("sell_sure", -1)) == sel
-					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  (%d)" % int(sp2["sell"]), "c_sell", null, "ghost", Vector2(bx3 + 16 + tw3 + 8, dy + dp.size.y - 62), Vector2(bw3 - 32 - tw3 - 8, 48), 14)
+					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  (%s)" % _mp(int(sp2["sell"])), "c_sell", null, "ghost", Vector2(bx3 + 16 + tw3 + 8, dy + dp.size.y - 62), Vector2(bw3 - 32 - tw3 - 8, 48), 14)
 					menu.add_child(slb)
 			else:
 				var hint2 := _label("Drag a player on the pitch to put him where you want him.
@@ -1697,7 +1710,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				var ms := _label(str(c3.get("msg", "")), 15, GOLD, font2)
 				ms.position = Vector2(bx3 + 16, dy + dp.size.y - 90)
 				menu.add_child(ms)
-			var co3 := _label("COINS  %d" % int(c3.get("coins", 0)), 22, GOLD)
+			var co3 := _label(_mb(int(c3.get("coins", 0))), 22, GOLD)
 			co3.position = Vector2(w - 260, 20)
 			co3.size = Vector2(230, 34)
 			co3.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -1716,9 +1729,9 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 			var opts9: Array = ap.get("opts", [])
 			var head9 := "%s  ·  %s" % [str(ap.get("n", "")), str(ap.get("pos", ""))]
 			if bool(ap.get("swap", false)):
-				head9 += "  ·  SWAP %s FOR %d COINS" % [str(ap.get("cur", "")), int(ap.get("price", 0))]
+				head9 += "  ·  SWAP %s FOR %s" % [str(ap.get("cur", "")), _m(int(ap.get("price", 0)))]
 			else:
-				head9 += "  ·  %d COINS" % int(ap.get("price", 0))
+				head9 += "  ·  " + _m(int(ap.get("price", 0)))
 			_title("LEARN A SKILL", head9)
 			var cols9 := 2 if opts9.size() > 3 else 1
 			var gw9 := minf(w - 80.0, 980.0)
@@ -1744,7 +1757,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				ms9.size = Vector2(w, 26)
 				ms9.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(ms9)
-			var co9 := _label("COINS  %d" % int(c9.get("coins", 0)), 22, GOLD)
+			var co9 := _label(_mb(int(c9.get("coins", 0))), 22, GOLD)
 			co9.position = Vector2(w - 260, 20)
 			co9.size = Vector2(230, 34)
 			co9.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -1833,7 +1846,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 			var bk6 := _btn("<  BACK", "pause", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk6)
 		"club":
-			_title("YOUR CLUB", "Build the club with the coins you earn")
+			_title("YOUR CLUB", "Build the club with the %s you earn" % _mw())
 			var c7: Dictionary = info.get("car", {})
 			var fcs: Array = c7.get("fac", [])
 			var cw7 := minf((w - 80.0 - 2 * 16.0) / 3.0, 370.0)
@@ -1885,7 +1898,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 					nx7.size = Vector2(cw7 - 36, 40)
 					cp7.add_child(nx7)
 					var can7: bool = int(c7.get("coins", 0)) >= int(fc["cost"])
-					var ub := _btn("BUILD   %d" % int(fc["cost"]), "c_fac", str(fc["k"]), "primary" if can7 else "alt", Vector2(x07 + fi7 * (cw7 + 16.0) + 18, 104 + ch7b - 70), Vector2(cw7 - 36, 54), 20)
+					var ub := _btn("BUILD   %s" % _mp(int(fc["cost"])), "c_fac", str(fc["k"]), "primary" if can7 else "alt", Vector2(x07 + fi7 * (cw7 + 16.0) + 18, 104 + ch7b - 70), Vector2(cw7 - 36, 54), 20)
 					menu.add_child(ub)
 				else:
 					var mx7 := _label("FULLY BUILT", 18, GOLD)
@@ -1897,7 +1910,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				ms7.size = Vector2(w, 26)
 				ms7.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(ms7)
-			var co7 := _label("COINS  %d" % int(c7.get("coins", 0)), 22, GOLD)
+			var co7 := _label(_mb(int(c7.get("coins", 0))), 22, GOLD)
 			co7.position = Vector2(w - 260, 20)
 			co7.size = Vector2(230, 34)
 			co7.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -1945,7 +1958,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 					vl5.position = Vector2(float(v5[1]) * tw5, cy5 - int(v5[2]) * 0.72)
 					rp5.add_child(vl5)
 				var can5: bool = int(c5.get("coins", 0)) >= int(mp["price"])
-				var bb5 := _btn("BUY   %d" % int(mp["price"]), "c_buy", mi, "primary" if can5 else "alt", Vector2(tx5 + tw5 * 0.81, 114 + mi * rh5 + 6), Vector2(tw5 * 0.19 - 8, rh5 - 18), 18)
+				var bb5 := _btn("BUY   %s" % _mp(int(mp["price"])), "c_buy", mi, "primary" if can5 else "alt", Vector2(tx5 + tw5 * 0.81, 114 + mi * rh5 + 6), Vector2(tw5 * 0.19 - 8, rh5 - 18), 18)
 				menu.add_child(bb5)
 			if mk.is_empty():
 				var em5 := _label("You have signed everyone. New players come after the next match.", 18, Color(1, 1, 1, 0.8), font2)
@@ -1959,7 +1972,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				ms5.size = Vector2(w, 26)
 				ms5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(ms5)
-			var co5 := _label("COINS  %d" % int(c5.get("coins", 0)), 22, GOLD)
+			var co5 := _label(_mb(int(c5.get("coins", 0))), 22, GOLD)
 			co5.position = Vector2(w - 260, 20)
 			co5.size = Vector2(230, 34)
 			co5.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -2291,8 +2304,9 @@ func _play_tab(info: Dictionary, w: float, y0: float, ch: float, items: Array, a
 	var c: Dictionary = info.get("car", {})
 	var on := bool(info.get("car_on", false))
 	var car_s := "Your club, a new club or one of 116 real-like clubs. The board, the table, promotion."
-	if on:
-		car_s = "%s   ·   %s   ·   season %d   ·   %s place" % [str(c.get("name", "")), str(c.get("lgname", "")).capitalize(), int(c.get("season", 1)), _ord(int(c.get("rank", 1))).to_lower()]
+	var cr: Dictionary = info.get("cr", {})
+	if on and not cr.is_empty():
+		car_s = "%s   ·   %s   ·   season %d   ·   %s place" % [str(cr["name"]), str(cr["lg"]).capitalize(), int(cr["season"]), _ord(int(cr["rank"])).to_lower()]
 	var cp: Dictionary = info.get("cupc", {})
 	var cs := "The English or the Danish cup, with your club or any club. Lose once and you are out."
 	if not cp.is_empty():
@@ -2302,7 +2316,7 @@ func _play_tab(info: Dictionary, w: float, y0: float, ch: float, items: Array, a
 		["CAREER", car_s, "c_home" if on else "c_start", GREEN.lightened(0.2)],
 		["THE CUP", cs, "cupm", GOLD],
 		["RANKED ONLINE", "%s   ·   %d points. Your club against other players' clubs." % [str(rki.get("n", "")), int(rki.get("rp", 0))], "online", Color(str(rki.get("c", "ffffff")))],
-		["PLAY WITH A FRIEND", "Same team, a career together or against each other", "friend", Color(0.55, 0.8, 1.0)],
+		["PLAY WITH A FRIEND", "Same team or against each other. A career together: from inside the career", "friend", Color(0.55, 0.8, 1.0)],
 		["QUICK MATCH", "A friendly against the computer", "quick", Color.WHITE],
 	]
 	var gap := 12.0
@@ -2427,16 +2441,21 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var nm := _label(str(c.get("name", "PITCH BOSS")), 26, Color.WHITE)
 	nm.position = Vector2(72, 4)
 	menu.add_child(nm)
-	var sub := _label(("%s   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [str(c.get("lgname", "")), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))]) if (bool(c.get("on", true)) and tab == "career") else ("YOUR CLUB   ·   TEAM RATING %d" % int(c.get("str", 0))), 14, Color(1, 1, 1, 0.75), font2)
+	var sub := _label(("%s   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [str(c.get("lgname", "")), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))]) if bool(info.get("incar", false)) else ("YOUR CLUB   ·   TEAM RATING %d" % int(c.get("str", 0))), 14, Color(1, 1, 1, 0.75), font2)
 	sub.position = Vector2(73, 37)
 	menu.add_child(sub)
-	var co := _label("COINS  %d" % int(c.get("coins", 0)), 24, GOLD)
+	var co := _label(_mb(int(c.get("coins", 0))), 24, GOLD)
 	co.position = Vector2(w - 270, 8)
 	co.size = Vector2(250, 34)
 	co.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	menu.add_child(co)
+	var incar := bool(info.get("incar", false))
+	if incar:
+		# inside the career: the way out is always in sight
+		var xb := _btn("EXIT CAREER", "cr_exit", null, "alt", Vector2(w - 270.0 - 190.0, 10), Vector2(176, 44), 17)
+		menu.add_child(xb)
 	# the game's logo, between the season line and the coins (left out when the UPDATE button needs the room)
-	if not bool(info.get("upd", false)) and w >= 900.0:
+	elif not bool(info.get("upd", false)) and w >= 900.0:
 		var lg := TextureRect.new()
 		lg.texture = load("res://logo.png")
 		lg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -2460,17 +2479,20 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	nb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(nb)
 	var tabs := [["shop", "SHOP"], ["team", "TEAM"], ["play", "PLAY"], ["club", "CLUB"], ["profile", "PROFILE"]]
+	if incar:
+		# the career mode has its own menus
+		tabs = [["career", "HOME"], ["team", "SQUAD"], ["transfers", "TRANSFERS"], ["club", "CLUB"], ["office", "OFFICE"]]
 	var tw := (w - 32.0 - 4 * 8.0) / 5.0
 	for i in tabs.size():
-		var on: bool = tabs[i][0] == tab or (tab == "career" and tabs[i][0] == "play")
-		var tb := _btn(tabs[i][1], "tab", tabs[i][0], "ghost", Vector2(16 + i * (tw + 8.0), h - nh - 2), Vector2(tw, nh - 6), 24 if tabs[i][0] == "play" else 20)
+		var on: bool = tabs[i][0] == tab
+		var tb := _btn(tabs[i][1], "tab", tabs[i][0], "ghost", Vector2(16 + i * (tw + 8.0), h - nh - 2), Vector2(tw, nh - 6), 24 if tabs[i][0] in ["play", "career"] else 20)
 		if on:
 			# chalk white = where you are
 			for st in ["normal", "hover", "focus", "pressed"]:
 				tb.add_theme_stylebox_override(st, _box(Color(0.94, 0.95, 0.92), 14))
 			for cc in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 				tb.add_theme_color_override(cc, Color(0.03, 0.08, 0.05))
-		elif tabs[i][0] == "play":
+		elif tabs[i][0] in ["play", "career"]:
 			for cc in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 				tb.add_theme_color_override(cc, GREEN.lightened(0.25))
 		menu.add_child(tb)
@@ -2588,6 +2610,47 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			items.append([t1, Vector2(80, 0), 0.04])
 			items.append([t2, Vector2(80, 0), 0.08])
 			items.append([t3, Vector2(80, 0), 0.12])
+		"transfers":
+			var cw8 := (w - 64.0 - 20.0) / 3.0
+			var mk8: Array = c.get("market", [])
+			var t8 := [
+				["TRANSFER LIST", "%d players for sale right now. New ones after every match." % mk8.size(), "c_market"],
+				["OTHER CLUBS", "See any club's squad in England and Denmark, bid for their players and haggle.", "scout"],
+				["SELL PLAYERS", "Open your squad, tap a bench player and sell him to a club that wants him.", "c_squad"],
+			]
+			for i in 3:
+				var tl8 := _tile(t8[i][0], t8[i][1], t8[i][2], null, Vector2(32 + i * (cw8 + 10.0), y0), Vector2(cw8, ch * 0.62), Color.WHITE, 26)
+				menu.add_child(tl8)
+				items.append([tl8, Vector2(0, 50), 0.04 * i])
+			var bp8 := _panel(Vector2(32, y0 + ch * 0.62 + 10.0), Vector2(w - 64.0, ch * 0.38 - 10.0))
+			var bl8 := _label("TRANSFER BUDGET", 14, GOLD, font2)
+			bl8.position = Vector2(18, 10)
+			bp8.add_child(bl8)
+			var bv8 := _label(_mp(int(c.get("coins", 0))), 40, Color.WHITE)
+			bv8.position = Vector2(18, 30)
+			bp8.add_child(bv8)
+			var bn8 := _label("The career has its own money: win matches, sell players and please the board to get more. It never mixes with your coins outside.", 15, Color(1, 1, 1, 0.7), font2)
+			bn8.autowrap_mode = TextServer.AUTOWRAP_WORD
+			bn8.position = Vector2(300, 22)
+			bn8.size = Vector2(w - 64.0 - 330.0, 60)
+			bp8.add_child(bn8)
+		"office":
+			var bdo: Dictionary = c.get("board", {})
+			var cwo := (w - 64.0 - 2 * 10.0) / 3.0
+			var tho := (ch - 10.0) * 0.5
+			var cpo: Dictionary = c.get("cup", {})
+			var to := [
+				["THE BOARD", "Confidence %d: %s. Your goals this season." % [int(bdo.get("conf", 50)), str(bdo.get("mood", "")).capitalize()], "c_board", GOLD],
+				["THE TABLE", "%s   ·   %s place" % [str(c.get("lgname", "")).capitalize(), _ord(int(c.get("rank", 1))).to_lower()], "c_table", Color.WHITE],
+				["THE CUP", str(cpo.get("cname", "The cup")).capitalize(), "cup", Color.WHITE],
+				["PLAY TOGETHER", "Your friend joins this career on his phone", "friend", Color(0.55, 0.8, 1.0)],
+				["CAREER: " + ("FULL" if str(c.get("mode", "")) == "full" else "SIMPLE"), "Simple or full: can the board sack you?", "cmode", Color.WHITE],
+				["NEW CAREER", "Start again with your club, a new club or another club", "c_new", Color(1, 1, 1, 0.8)],
+			]
+			for i in to.size():
+				var tlo := _tile(to[i][0], to[i][1], to[i][2], null, Vector2(32 + (i % 3) * (cwo + 10.0), y0 + (i / 3) * (tho + 10.0)), Vector2(cwo, tho), to[i][3], 22)
+				menu.add_child(tlo)
+				items.append([tlo, Vector2(0, 40), 0.03 * i])
 		"team":
 			var lw2 := w * 0.5 - 40.0
 			var sq: Array = c.get("squad", [])
@@ -2650,9 +2713,9 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				ft += ("" if ft == "" else "   ·   ") + "%s %d" % [str((f as Dictionary).get("n", "")).capitalize(), int((f as Dictionary).get("lv", 1))]
 			var cw := (w - 64.0 - 20.0) / 3.0
 			var defs := [
-				["FACILITIES", "Stadium, training ground and youth academy. Build them with your coins.", "c_club"],
+				["FACILITIES", "Stadium, training ground and youth academy. Build them with your %s." % _mw(), "c_club"],
 				["TRANSFERS", "%d players for sale. New ones after every match." % (c.get("market", []) as Array).size(), "c_market"],
-				["LEAGUE TABLE", "You are %s of %d in season %d." % [_ord(int(c.get("rank", 1))), int(c.get("n", 20)), int(c.get("season", 1))], "c_table"],
+				["LEAGUE TABLE", "You are %s of %d in season %d." % [_ord(int(c.get("rank", 1))), int(c.get("n", 20)), int(c.get("season", 1))], "c_table"] if incar else ["OTHER CLUBS", "See the squads of 116 clubs and bid for their players.", "scout"],
 			]
 			for i in 3:
 				var t := _tile(defs[i][0], defs[i][1], defs[i][2], null, Vector2(32 + i * (cw + 10.0), y0), Vector2(cw, ch * 0.62), Color.WHITE, 28)
@@ -2666,7 +2729,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			it.position = Vector2(18, 34)
 			it.size = Vector2(w - 100.0, 30)
 			ip.add_child(it)
-			var i2 := _label("A bigger stadium brings coins at home matches. A better training ground makes players grow faster.", 15, Color(1, 1, 1, 0.7), font2)
+			var i2 := _label("A bigger stadium brings %s at home matches. A better training ground makes players grow faster." % _mw(), 15, Color(1, 1, 1, 0.7), font2)
 			i2.autowrap_mode = TextServer.AUTOWRAP_WORD
 			i2.position = Vector2(18, 68)
 			i2.size = Vector2(w - 100.0, 44)
@@ -2703,7 +2766,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				var bb := _btn("OPEN   %d COINS" % int(pk["cost"]), "pack", i, "primary" if can else "off", Vector2(32 + i * (cw2 + 10.0) + 18.0, y0 + ch - 30.0 - 70.0), Vector2(cw2 - 36.0, 54), 22)
 				menu.add_child(bb)
 				items.append([bb, Vector2(0, 50), 0.05 * i])
-			var sm := _label(msg if msg != "" else "You earn coins by playing league matches.", 15, GOLD if msg != "" else Color(1, 1, 1, 0.7), font2)
+			var sm := _label(msg if msg != "" else "You earn coins in the cup and in ranked online.", 15, GOLD if msg != "" else Color(1, 1, 1, 0.7), font2)
 			sm.position = Vector2(0, y0 + ch - 22.0)
 			sm.size = Vector2(w, 22)
 			sm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2738,8 +2801,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				["SOUND: " + str(info.get("snd", "")), "snd_opt"], ["VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt"],
 				["LEVEL: " + str(info.get("diff", "")), "diff"], ["MATCH: " + str(info.get("len", "")), "len"],
 				["HOW TO PLAY", "how"], ["UPDATE THE GAME", "update"],
-				["INSTALLED" if bool(info.get("inst", false)) else "INSTALL THE GAME", "install"], ["CAREER: " + ("FULL" if str(c.get("mode", "")) == "full" else "SIMPLE"), "cmode"],
-				["NEW CAREER", "c_new"],
+				["INSTALLED" if bool(info.get("inst", false)) else "INSTALL THE GAME", "install"],
 			]
 			for i in sets.size():
 				var sb := _btn(sets[i][0], sets[i][1], null, "ghost" if sets[i][1] == "c_new" else "alt", Vector2(rx3 + (i % 2) * (bw + 10.0), y0 + 28.0 + (i / 2) * (sbh + 8.0)), Vector2(bw, sbh), 19)
@@ -2821,7 +2883,7 @@ func _board_meter(p: Panel, bd: Dictionary, pw: float) -> void:
 	msg.position = Vector2(20, 164)
 	msg.size = Vector2(pw - 40.0, 80)
 	p.add_child(msg)
-	var bn := _label("At 80 or more the board adds 20% to the coins you win in matches." + ("  IT DOES NOW!" if bool(bd.get("bonus", false)) else ""), 14, GOLD if bool(bd.get("bonus", false)) else Color(1, 1, 1, 0.6), font2)
+	var bn := _label("At 80 or more the board adds 20%% to the %s you win in matches." % _mw() + ("  IT DOES NOW!" if bool(bd.get("bonus", false)) else ""), 14, GOLD if bool(bd.get("bonus", false)) else Color(1, 1, 1, 0.6), font2)
 	bn.autowrap_mode = TextServer.AUTOWRAP_WORD
 	bn.position = Vector2(20, p.size.y - 58)
 	bn.size = Vector2(pw - 40.0, 44)
