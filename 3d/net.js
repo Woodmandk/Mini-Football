@@ -73,6 +73,92 @@ window.bbNet = (function () {
         note({ _: 'err', m: t });
       });
     },
+    // Find opponent: ranked matches against anyone, without a server. The meeting server lets only one phone own a
+    // name, so a few fixed names are the waiting room: call each one; whoever answers 'hi' is waiting for you.
+    // Nobody there: wait under the first free name yourself, and keep calling the lower names now and then,
+    // so two phones that both wait always find each other.
+    find: function () {
+      this.stop();
+      if (!window.Peer) { note({ _: 'err', m: 'nopeer' }); return; }
+      var g = gen, SL = 8, nm = function (k) { return PRE + 'rk' + k; };
+      var me = null, busy = false;
+      function done(c, role) {
+        if (g !== gen) return;
+        busy = true; clearTimeout(timer);
+        wire(c);
+        note({ _: 'role', r: role });
+        note({ _: 'open' });
+      }
+      // call name k on peer p; cb(true) when it answered and we are in its match
+      function call(p, k, cb) {
+        var c, fin = false;
+        try { c = p.connect(nm(k), OPT); } catch (e) { cb(false); return; }
+        if (!c) { cb(false); return; }
+        var t = setTimeout(function () { if (fin) return; fin = true; try { c.close(); } catch (e) {} cb(false); }, 3500);
+        c.on('data', function (d) {
+          if (fin) return;
+          var o = null; try { o = typeof d === 'string' ? JSON.parse(d) : d; } catch (e) {}
+          if (o && o._ === 'hi') { fin = true; clearTimeout(t); if (g !== gen || busy) { try { c.close(); } catch (e) {} cb(false); return; } done(c, 'guest'); cb(true); }
+        });
+        c.on('close', function () { if (!fin) { fin = true; clearTimeout(t); cb(false); } });
+        c.on('error', function () { if (!fin) { fin = true; clearTimeout(t); cb(false); } });
+        p._fail = function () { if (!fin) { fin = true; clearTimeout(t); cb(false); } };
+      }
+      function wait(k) {
+        if (g !== gen) return;
+        if (k > SL) { note({ _: 'err', m: 'full' }); return; }
+        var p = peer = new Peer(nm(k));
+        keep(p);
+        p.on('open', function () {
+          if (g !== gen) { try { p.destroy(); } catch (e) {} return; }
+          note({ _: 'wait', k: k });
+          probe(p, k);
+        });
+        p.on('connection', function (c) {
+          // already in a match: say no
+          if (busy || g !== gen) { c.on('open', function () { try { c.close(); } catch (e) {} }); return; }
+          c.on('open', function () {
+            if (busy || g !== gen) { try { c.close(); } catch (e) {} return; }
+            try { c.send(JSON.stringify({ _: 'hi' })); } catch (e) {}
+            done(c, 'host');
+          });
+        });
+        p.on('error', function (e) {
+          var t = String(e && e.type || e);
+          if (t === 'unavailable-id') { try { p.destroy(); } catch (x) {} if (!busy) wait(k + 1); return; }
+          if (t === 'peer-unavailable') { if (p._fail) p._fail(); return; }
+          if (peer === p && !busy) note({ _: 'err', m: t });
+        });
+      }
+      function probe(p, k) {
+        if (k <= 1) return;
+        setTimeout(function () {
+          if (g !== gen || busy || peer !== p) return;
+          var j = 1;
+          (function next() {
+            if (g !== gen || busy || peer !== p) return;
+            if (j >= k) { probe(p, k); return; }
+            call(p, j++, function (ok) { if (!ok) next(); });
+          })();
+        }, 4000 + Math.random() * 2000);
+      }
+      // first call everyone who is waiting, then wait yourself
+      me = peer = new Peer();
+      keep(me);
+      me.on('open', function () {
+        var k = 1;
+        (function next() {
+          if (g !== gen || busy) return;
+          if (k > SL) { try { me.destroy(); } catch (e) {} peer = null; wait(1); return; }
+          call(me, k++, function (ok) { if (!ok) next(); });
+        })();
+      });
+      me.on('error', function (e) {
+        var t = String(e && e.type || e);
+        if (t === 'peer-unavailable') { if (me._fail) me._fail(); return; }
+        if (peer === me && !busy) note({ _: 'err', m: t });
+      });
+    },
     send: function (s) { if (conn && conn.open !== false) { try { conn.send(s); } catch (e) {} } },
     poll: function () { if (!q.length) return ''; var r = '[' + q.join(',') + ']'; q = []; return r; },
     stop: function () {

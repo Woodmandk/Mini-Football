@@ -60,6 +60,8 @@ const SPRINT_R := 1.42
 const GREEN := Color(0.2, 0.78, 0.38)
 const GOLD := Color(1.0, 0.84, 0.25)
 const DARK := Color(0.04, 0.08, 0.06)
+const RankC := preload("res://rank.gd")
+const Career := preload("res://career.gd")
 
 var _last_size := Vector2.ZERO
 
@@ -287,7 +289,7 @@ static func _role_at(along: float) -> String:
 	return "FW"
 
 func _ord(n: int) -> String:
-	return str(n) + (["TH", "ST", "ND", "RD"][n] if n < 4 else "TH")
+	return Career.ordinal(n)
 
 # One squad player as a button: position stripe, name, rating.
 func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dictionary, chosen: bool, wrong: bool) -> Button:
@@ -794,7 +796,8 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var bk0 := _btn("<  BACK", "back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk0)
 		"table":
-			_title("DIVISION %d" % int((info.get("car", {}) as Dictionary).get("div", 4)), "")
+			var c7: Dictionary = info.get("car", {})
+			_title(str(c7.get("lgname", "THE LEAGUE")), "Top %d go up.   Bottom %d go down." % [int(c7.get("up", 0)), int(c7.get("down", 0))] if int(c7.get("up", 0)) > 0 and int(c7.get("down", 0)) > 0 else ("The champions win the league.   Bottom %d go down." % int(c7.get("down", 0)) if int(c7.get("down", 0)) > 0 else "Top %d go up." % int(c7.get("up", 0))))
 			var c2: Dictionary = info.get("car", {})
 			var rows2: Array = c2.get("table", [])
 			var tw2 := minf(w - 120.0, 860.0)
@@ -827,58 +830,674 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					rp.add_child(vl)
 			var bk2 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk2)
+		"car_start":
+			var my: Dictionary = info.get("my", {})
+			_title("START A CAREER", "Three ways in. Then you pick a simple or a full career and how long a season is.")
+			var cw := (w - 64.0 - 2 * 16.0) / 3.0
+			var ph := h - 100.0 - 108.0
+			var sure := bool(info.get("new_sure", false))
+			var defs := [
+				["cs_mine", "YOUR OWN CLUB", ("%s   ·   TEAM RATING %d" % [str(my.get("n", "")), int(my.get("r", 0))]) if not my.is_empty() else "YOU HAVE NO CLUB YET", [
+					"Your squad, coins and buildings come with it",
+					"You pick the league it starts in",
+					"The name and kit you made",
+				], "PLAY WITH MY CLUB" if not my.is_empty() else "MAKE MY CLUB"],
+				["cs_new", "A NEW CLUB", "NAME, CITY AND COLOURS OF YOUR OWN", [
+					"A fresh squad of young players",
+					"Starts at the bottom: League Two or Denmark's second league",
+					"Climb all the way to the top",
+				] + (["It replaces your club %s" % str(my.get("n", ""))] if not my.is_empty() else []), "SURE? TAP AGAIN" if sure else "MAKE A NEW CLUB"],
+				["cs_club", "AN EXISTING CLUB", "ANY OF THE 116 CLUBS", [
+					"Take over a club as it is, with its squad and its strength",
+					"From the top of England to Denmark's second league",
+					"Your own club waits until you come back to it",
+				], "PICK A CLUB"],
+			]
+			for i in 3:
+				var dd: Array = defs[i]
+				var px := 32.0 + i * (cw + 16.0)
+				var pn := _panel(Vector2(px, 100), Vector2(cw, ph), 0.9)
+				items.append([pn, Vector2(0, 50), 0.05 * i])
+				var tl := _label(dd[1], 26, GOLD if i == 0 else Color.WHITE)
+				tl.position = Vector2(20, 16)
+				pn.add_child(tl)
+				var sl := _label(str(dd[2]), 13, Color(1, 1, 1, 0.65), font2)
+				sl.position = Vector2(21, 52)
+				sl.size = Vector2(cw - 40, 20)
+				sl.clip_text = true
+				pn.add_child(sl)
+				var yy := 84.0
+				for ln in dd[3]:
+					var dot := ColorRect.new()
+					dot.color = GREEN
+					dot.position = Vector2(22, yy + 8)
+					dot.size = Vector2(7, 7)
+					pn.add_child(dot)
+					var bl := _label(str(ln), 16, Color(1, 1, 1, 0.9), font2)
+					bl.autowrap_mode = TextServer.AUTOWRAP_WORD
+					bl.position = Vector2(38, yy)
+					bl.size = Vector2(cw - 58.0, 24)
+					pn.add_child(bl)
+					yy += 24.0 * ceilf(font2.get_string_size(str(ln), HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x / (cw - 64.0)) + 8.0
+				var pb := _btn(dd[4], dd[0], null, "primary" if i == 0 else "alt", Vector2(px, h - 96.0), Vector2(cw, 68), 22)
+				menu.add_child(pb)
+				items.append([pb, Vector2(0, 60), 0.1 + 0.05 * i])
+			menu.add_child(_btn("<  BACK", "tab", "play", "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"cm_pick":
+			var my2: Dictionary = info.get("my", {})
+			_title("THE CUP", "A cup on its own: every club in the country, lose once and you are out. Your coins go to your club.")
+			var cw2 := (w - 64.0 - 20.0) * 0.5
+			var cups := [["ENGLAND", "THE ENGLISH CUP", "92 clubs from the top league to League Two. Seven rounds to the final."], ["DENMARK", "THE DANISH CUP", "24 clubs from both Danish leagues. Five rounds to the final."]]
+			for i in 2:
+				var px2 := 32.0 + i * (cw2 + 20.0)
+				var pn2 := _panel(Vector2(px2, 100), Vector2(cw2, minf(h - 100.0 - 190.0, 150.0)), 0.9)
+				items.append([pn2, Vector2(0, 50), 0.06 * i])
+				var t1 := _label(cups[i][1], 30, GOLD)
+				t1.position = Vector2(24, 18)
+				pn2.add_child(t1)
+				var t2 := _label(cups[i][2], 17, Color(1, 1, 1, 0.85), font2)
+				t2.autowrap_mode = TextServer.AUTOWRAP_WORD
+				t2.position = Vector2(26, 64)
+				t2.size = Vector2(cw2 - 52, 60)
+				pn2.add_child(t2)
+				var by2 := 100.0 + pn2.size.y + 14.0
+				var b1 := _btn(("WITH %s" % str(my2.get("n", "MY CLUB"))) if not my2.is_empty() else "WITH MY CLUB", "cm_mine", cups[i][0], "primary" if not my2.is_empty() else "off", Vector2(px2, by2), Vector2(cw2, 70), 22)
+				menu.add_child(b1)
+				var b2 := _btn("WITH ANOTHER CLUB", "cm_club", cups[i][0], "alt", Vector2(px2, by2 + 80.0), Vector2(cw2, 62), 20)
+				menu.add_child(b2)
+				items.append([b1, Vector2(0, 60), 0.1 + 0.05 * i])
+				items.append([b2, Vector2(0, 60), 0.14 + 0.05 * i])
+			menu.add_child(_btn("<  BACK", "tab", "play", "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"online":
+			var rk: Dictionary = info.get("rank", {})
+			_title("RANKED ONLINE", "Your club against another player's club. Win to climb from Bronze to Legend.")
+			var lw3 := w * 0.5 - 40.0
+			var pn3 := _panel(Vector2(32, 96), Vector2(lw3, h - 96.0 - 112.0), 0.9)
+			items.append([pn3, Vector2(-60, 0), 0.0])
+			var bs := minf(120.0, pn3.size.y - 70.0)
+			_rk_badge(pn3, Vector2(24, 18), bs, rk)
+			var rn := _label(str(rk.get("n", "")), 38, Color(str(rk.get("c", "ffffff"))))
+			rn.position = Vector2(bs + 44, 22)
+			pn3.add_child(rn)
+			var rp3 := _label(("%d RANK POINTS" % int(rk.get("rp", 0))) + (("   ·   %d TO %s" % [int(rk.get("need", 0)), str(rk.get("nn", ""))]) if str(rk.get("nn", "")) != "" else ""), 15, Color(1, 1, 1, 0.8), font2)
+			rp3.position = Vector2(bs + 46, 72)
+			pn3.add_child(rp3)
+			var bw3 := lw3 - bs - 70.0
+			var bg3 := ColorRect.new()
+			bg3.color = Color(1, 1, 1, 0.12)
+			bg3.position = Vector2(bs + 46, 102)
+			bg3.size = Vector2(bw3, 12)
+			pn3.add_child(bg3)
+			var fg3 := ColorRect.new()
+			fg3.color = Color(str(rk.get("c", "ffffff")))
+			fg3.position = Vector2(bs + 46, 102)
+			fg3.size = Vector2(maxf(bw3 * float(rk.get("p", 0.0)), 3.0), 12)
+			pn3.add_child(fg3)
+			var tiers: Array = rk.get("tiers", [])
+			var tw4 := (lw3 - 52.0 - 5 * 6.0) / 6.0
+			var ty4 := 168.0
+			var trl := _label("SEASON REWARD BY YOUR BEST RANK THIS MONTH", 12, Color(1, 1, 1, 0.55), font2)
+			trl.position = Vector2(26, ty4)
+			pn3.add_child(trl)
+			for ti4 in tiers.size():
+				var cur4: bool = ti4 == int(rk.get("t", 0))
+				var tp4 := Panel.new()
+				tp4.add_theme_stylebox_override("panel", _box(Color(str(tiers[ti4][1])) if cur4 else Color(1, 1, 1, 0.06), 8, Color(str(tiers[ti4][1])).darkened(0.1)))
+				tp4.position = Vector2(26 + ti4 * (tw4 + 6.0), ty4 + 22)
+				tp4.size = Vector2(tw4, 46)
+				tp4.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				pn3.add_child(tp4)
+				var tn4 := _label(str(tiers[ti4][0]), 12 if tw4 > 70 else 10, Color(0.05, 0.05, 0.05) if cur4 else Color(str(tiers[ti4][1])), font2)
+				tn4.position = Vector2(0, 5)
+				tn4.size = Vector2(tw4, 16)
+				tn4.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				tp4.add_child(tn4)
+				var tc4 := _label(str(int(tiers[ti4][3])), 15, Color(0.05, 0.05, 0.05) if cur4 else Color.WHITE)
+				tc4.position = Vector2(0, 21)
+				tc4.size = Vector2(tw4, 20)
+				tc4.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				tp4.add_child(tc4)
+			var stl := "WON %d   ·   DRAWN %d   ·   LOST %d" % [int(rk.get("w", 0)), int(rk.get("dr", 0)), int(rk.get("l", 0))]
+			if int(rk.get("ws", 0)) >= 2:
+				stl += "   ·   %d WINS IN A ROW" % int(rk.get("ws", 0))
+			var st3 := _label(stl, 15, Color.WHITE, font2)
+			st3.position = Vector2(26, pn3.size.y - 62)
+			pn3.add_child(st3)
+			var sh3 := _label(("SHIELDS %d   ·   " % int(rk.get("sh", 0)) if int(rk.get("sh", 0)) > 0 else "") + "THE RANK SEASON ENDS IN %d DAYS" % int(rk.get("days", 0)), 14, Color(1, 1, 1, 0.65), font2)
+			sh3.position = Vector2(26, pn3.size.y - 36)
+			pn3.add_child(sh3)
+			var fb := _btn("FIND OPPONENT", "rk_find", null, "primary", Vector2(32, h - 100.0), Vector2(lw3, 76), 34)
+			menu.add_child(fb)
+			items.append([fb, Vector2(0, 60), 0.08])
+			_pulse(fb)
+			var rx3 := w * 0.5 + 8.0
+			var rw3 := w - rx3 - 32.0
+			var th3 := (h - 96.0 - 24.0 - 20.0) / 3.0
+			var t3a := _tile("HOW IT WORKS", "Win +25, lose -18 (half in Bronze). Stronger opponents and win streaks give more. A new rank gives 3 shields.", "", null, Vector2(rx3, 96), Vector2(rw3, th3), GOLD, 20)
+			t3a.disabled = true
+			t3a.get_child(t3a.get_child_count() - 1).visible = false
+			menu.add_child(t3a)
+			var t3b := _tile("LEADERBOARD", "The best players in the game", "rk_lb", null, Vector2(rx3, 96 + th3 + 10.0), Vector2(rw3, th3), Color.WHITE, 22)
+			menu.add_child(t3b)
+			var t3c := _tile("PLAY WITH A FRIEND", "Room code or invite link, not ranked", "friend", null, Vector2(rx3, 96 + 2 * (th3 + 10.0)), Vector2(rw3, th3), Color.WHITE, 22)
+			menu.add_child(t3c)
+			for ti3 in 3:
+				items.append([[t3a, t3b, t3c][ti3], Vector2(80, 0), 0.04 * ti3])
+			menu.add_child(_btn("<  BACK", "tab", "play", "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"rk_find":
+			var rk4: Dictionary = info.get("rank", {})
+			var ts := int(rk4.get("t_s", 0))
+			_title("RANKED ONLINE", "%s   ·   %d RANK POINTS" % [str(rk4.get("n", "")), int(rk4.get("rp", 0))])
+			_rk_badge(menu, Vector2(w * 0.5 - 60, h * 0.5 - 150), 120.0, rk4)
+			var m4 := _label(str(rk4.get("msg", "")), 30, Color.WHITE)
+			m4.autowrap_mode = TextServer.AUTOWRAP_WORD
+			m4.position = Vector2(60, h * 0.5 + 0)
+			m4.size = Vector2(w - 120, 80)
+			m4.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(m4)
+			var tm := _label("%d:%02d" % [ts / 60, ts % 60], 22, GOLD, font2)
+			tm.position = Vector2(0, h * 0.5 + 84)
+			tm.size = Vector2(w, 30)
+			tm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(tm)
+			var hint := _label("The match starts by itself when someone is found. Keep the game open.", 15, Color(1, 1, 1, 0.65), font2)
+			hint.position = Vector2(0, h * 0.5 + 120)
+			hint.size = Vector2(w, 24)
+			hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(hint)
+			var stopped := str(rk4.get("msg", "")).contains("TRY AGAIN")
+			menu.add_child(_btn("TRY AGAIN" if stopped else "STOP", "rk_find" if stopped else "rk_stop", null, "primary" if stopped else "alt", Vector2(w * 0.5 - 150, h - 96.0), Vector2(300, 66), 26))
+			if stopped:
+				menu.add_child(_btn("<  BACK", "online", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"rk_lb":
+			var rk5: Dictionary = info.get("rank", {})
+			_title("LEADERBOARD", "Everyone's rank points in ranked online.")
+			var ls := str(rk5.get("lb_state", ""))
+			var rows: Array = rk5.get("lb", [])
+			if ls != "ok" or rows.is_empty():
+				var t5 := "LOADING..." if ls == "loading" else ("THE LEADERBOARD IS NOT SWITCHED ON YET" if ls == "off" else ("COULD NOT LOAD THE LEADERBOARD. TRY AGAIN LATER" if ls == "err" else "NOBODY HAS PLAYED RANKED YET. BE THE FIRST!"))
+				var l5 := _label(t5, 24, Color(1, 1, 1, 0.8))
+				l5.position = Vector2(0, h * 0.5 - 20)
+				l5.size = Vector2(w, 40)
+				l5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				menu.add_child(l5)
+			else:
+				var cols5 := 2
+				var per := int((h - 110.0 - 20.0) / 34.0)
+				var cw5 := (w - 64.0 - 20.0) / cols5
+				for ri in mini(rows.size(), per * cols5):
+					var r5: Dictionary = rows[ri]
+					var x5 := 32.0 + (ri / per) * (cw5 + 20.0)
+					var y5 := 104.0 + (ri % per) * 34.0
+					var bg5 := Panel.new()
+					bg5.add_theme_stylebox_override("panel", _box(Color(0.16, 0.2, 0.12, 0.95) if bool(r5["me"]) else Color(DARK.r, DARK.g, DARK.b, 0.78), 8, GOLD if bool(r5["me"]) else Color(0, 0, 0, 0)))
+					bg5.position = Vector2(x5, y5)
+					bg5.size = Vector2(cw5, 30)
+					bg5.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					menu.add_child(bg5)
+					var a5 := _label("%d.   %s" % [ri + 1, str(r5["n"])], 16, Color.WHITE)
+					a5.position = Vector2(12, 3)
+					bg5.add_child(a5)
+					var rkn: Dictionary = RankC.rank_of(int(r5["rp"]))
+					var b5 := _label("%s   ·   %d" % [str(rkn["n"]), int(r5["rp"])], 15, Color(str(rkn["c"])), font2)
+					b5.position = Vector2(cw5 - 232, 5)
+					b5.size = Vector2(220, 22)
+					b5.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+					bg5.add_child(b5)
+			menu.add_child(_btn("<  BACK", "online", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"start_lg":
+			var wl: Array = info.get("world", [])
+			var sk := str(info.get("start_kind", ""))
+			var only_c := str(info.get("cup_ctry", "")) if sk == "cup" else ""
+			_title("WHERE DO YOU START?" if sk != "cup" else "PICK YOUR CLUB", {"mine": "Pick the league your own club starts in. It takes the place of the league's weakest club.", "new": "A new club starts at the bottom. Pick the country.", "cup": "Pick a league, then the club you play the cup with."}.get(sk, "Pick a league, then the club you will run. The clubs are made up but remind you of the real ones."))
+			var cwl := (w - 64.0 - 20.0) * 0.5
+			var ctry := ["ENGLAND", "DENMARK"]
+			for ci in 2:
+				var hx := 32.0 + ci * (cwl + 20.0)
+				var hl := _label(ctry[ci], 18, GOLD, font2)
+				hl.position = Vector2(hx + 4, 100)
+				menu.add_child(hl)
+				var row := 0
+				for li in wl.size():
+					var L: Dictionary = wl[li]
+					if str(L["c"]) != ctry[ci] or (only_c != "" and only_c != ctry[ci]) or (sk == "new" and int(L.get("down", 0)) != 0):
+						continue
+					var cls: Array = L["clubs"]
+					var lo := 99
+					var hi := 0
+					for cc in cls:
+						lo = mini(lo, int(cc["r"]))
+						hi = maxi(hi, int(cc["r"]))
+					var th := (h - 130.0 - 110.0) / 4.0 - 8.0
+					var sub := "%d clubs   ·   team ratings %d to %d" % [cls.size(), lo, hi]
+					if int(L["t"]) == 1:
+						sub += "   ·   the top league"
+					var tl := _tile(str(L["n"]), sub, "st_lg", li, Vector2(hx, 128.0 + row * (th + 8.0)), Vector2(cwl, th), Color.WHITE, 22)
+					menu.add_child(tl)
+					items.append([tl, Vector2(0, 40), 0.04 * li])
+					row += 1
+			var short := str(info.get("slen", "full")) == "short"
+			if sk == "cup":
+				menu.add_child(_btn("<  BACK", "cupm", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+				short = false
+			var sl := _label("SEASON LENGTH", 14, Color(1, 1, 1, 0.6), font2)
+			sl.visible = sk != "cup"
+			sl.position = Vector2(32 + cwl + 24, h - 104)
+			menu.add_child(sl)
+			var sb := _btn("SHORT: EACH CLUB ONCE" if short else "FULL: HOME AND AWAY", "st_len", null, "alt", Vector2(32 + cwl + 20, h - 82), Vector2(cwl, 60), 22)
+			var sn := _label("A 20-club league: %d league matches a season." % (19 if short else 38), 14, Color(1, 1, 1, 0.6), font2)
+			sn.position = Vector2(32 + cwl + 24, h - 18)
+			if sk != "cup":
+				menu.add_child(sb)
+				menu.add_child(sn)
+				menu.add_child(_btn("<  BACK", "c_start" if sk != "" else "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"start_club", "scout":
+			var wl2: Array = info.get("world", [])
+			var sc0: Dictionary = info.get("scout", {})
+			var li2: int = int(info.get("start_li", 3)) if n == "start_club" else int(sc0.get("li", 0))
+			li2 = clampi(li2, 0, wl2.size() - 1)
+			var L2: Dictionary = wl2[li2]
+			var cls2: Array = L2["clubs"]
+			var top2 := 100.0
+			if n == "start_club":
+				_title(str(L2["n"]), "Play the cup with a club as it is." if str(info.get("start_kind", "")) == "cup" else "Take over a club as it is: its squad, its strength and its board.")
+			else:
+				_title("OTHER CLUBS", "See any club's squad and bid for its players.")
+				# the six leagues as tabs
+				var tw2 := (w - 64.0 - 5 * 8.0) / 6.0
+				for lj in wl2.size():
+					var on2 := lj == li2
+					var tb2 := _btn(str(wl2[lj]["n"]).replace("DIVISION ", "").replace("ENGLAND", "ENG").replace("DENMARK", "DEN"), "sc_lg", lj, "ghost", Vector2(32 + lj * (tw2 + 8.0), 96), Vector2(tw2, 40), 16)
+					if on2:
+						for st in ["normal", "hover", "focus", "pressed"]:
+							tb2.add_theme_stylebox_override(st, _box(Color(0.94, 0.95, 0.92), 12))
+						for cc2 in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+							tb2.add_theme_color_override(cc2, Color(0.03, 0.08, 0.05))
+					menu.add_child(tb2)
+				top2 = 146.0
+			var tiles := []
+			tiles.append_array(cls2)
+			var cols2 := 5 if tiles.size() > 20 else 4
+			var rows2 := int(ceil(tiles.size() / float(cols2)))
+			var gw2 := (w - 64.0 - (cols2 - 1) * 8.0) / cols2
+			var gh2 := minf(70.0, (h - top2 - 14.0) / rows2 - 6.0)
+			for ti in tiles.size():
+				var cl2: Dictionary = tiles[ti]
+				var pos2 := Vector2(32 + (ti % cols2) * (gw2 + 8.0), top2 + (ti / cols2) * (gh2 + 6.0))
+				var own2 := bool(cl2.get("own", false))
+				var me2 := bool(cl2.get("me", false))
+				var bt := _btn("", "st_club" if n == "start_club" else "sc_club", int(cl2["i"]), "alt", pos2, Vector2(gw2, gh2), 16)
+				if own2 or me2:
+					for st in ["normal", "hover", "focus"]:
+						bt.add_theme_stylebox_override(st, _box(Color(0.16, 0.2, 0.12, 0.95), 14, GOLD))
+				menu.add_child(bt)
+				items.append([bt, Vector2(0, 30), 0.01 * ti])
+				if not own2:
+					var kb2 := ColorRect.new()
+					kb2.color = Color(str(cl2["k"][0]))
+					kb2.position = Vector2(8, 8)
+					kb2.size = Vector2(8, gh2 - 16)
+					bt.add_child(kb2)
+					var kb3 := ColorRect.new()
+					kb3.color = Color(str(cl2["k"][1]))
+					kb3.position = Vector2(16, 8)
+					kb3.size = Vector2(4, gh2 - 16)
+					bt.add_child(kb3)
+				var fs2 := 16
+				var nm2 := str(cl2["n"])
+				while fs2 > 11 and font.get_string_size(nm2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > gw2 - 74.0:
+					fs2 -= 1
+				var nl := _label(nm2, fs2, GOLD if own2 else Color.WHITE)
+				nl.position = Vector2(28 if not own2 else 14, gh2 * 0.5 - fs2 * 0.7)
+				nl.size = Vector2(gw2 - 70.0, fs2 + 8)
+				bt.add_child(nl)
+				var rl2 := _label("NEW" if own2 else str(int(cl2["r"])), 18 if not own2 else 14, GOLD if not own2 else GOLD, font if not own2 else font2)
+				rl2.position = Vector2(gw2 - 48.0, gh2 * 0.5 - 13)
+				rl2.size = Vector2(40, 26)
+				rl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				bt.add_child(rl2)
+			menu.add_child(_btn("<  BACK", "st_back" if n == "start_club" else "c_market", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"scout_sq":
+			var sc1: Dictionary = info.get("scout", {})
+			var c6: Dictionary = info.get("car", {})
+			_title(str(sc1.get("cn", "")), "%s   ·   team rating %d   ·   tap a player" % [str(sc1.get("clg", "")), int(sc1.get("cr", 0))])
+			var sq6: Array = sc1.get("sq", [])
+			var sel6 := int(sc1.get("i", -1))
+			var lw6 := w * 0.6
+			var cw6 := (lw6 - 32.0 - 8.0) * 0.5
+			var rh6 := minf(46.0, (h - 100.0 - 16.0) / 9.0)
+			var pc6 := {"GK": Color(0.95, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
+			for pi in sq6.size():
+				var pl6: Dictionary = sq6[pi]
+				var pos6 := Vector2(32 + (pi / 9) * (cw6 + 8.0), 100 + (pi % 9) * rh6)
+				var pb := _btn("", "sc_pl", pi, "alt", pos6, Vector2(cw6, rh6 - 5), 16)
+				if pi == sel6:
+					for st in ["normal", "hover", "focus"]:
+						pb.add_theme_stylebox_override(st, _box(Color(0.16, 0.2, 0.12, 0.95), 12, GOLD))
+				menu.add_child(pb)
+				var ch6 := ColorRect.new()
+				ch6.color = pc6.get(str(pl6["pos"]), Color.WHITE)
+				ch6.position = Vector2(8, 7)
+				ch6.size = Vector2(5, rh6 - 19)
+				pb.add_child(ch6)
+				var nl6 := _label("%s   %s" % [str(pl6["pos"]), str(pl6["n"])], 15, Color.WHITE)
+				nl6.position = Vector2(20, rh6 * 0.5 - 14)
+				pb.add_child(nl6)
+				var ol6 := _label(str(int(pl6["ovr"])), 18, GOLD)
+				ol6.position = Vector2(cw6 - 46, rh6 * 0.5 - 15)
+				pb.add_child(ol6)
+			var rx6 := lw6 + 8.0
+			var rw6 := w - rx6 - 32.0
+			var rp6 := _panel(Vector2(rx6, 100), Vector2(rw6, h - 116.0))
+			items.append([rp6, Vector2(80, 0), 0.05])
+			var res6: Dictionary = sc1.get("res", {})
+			if sel6 >= 0 and sel6 < sq6.size():
+				var pl7: Dictionary = sq6[sel6]
+				var n7 := _label(str(pl7["n"]), 26, Color.WHITE)
+				n7.position = Vector2(18, 12)
+				rp6.add_child(n7)
+				var s7 := _label("%s   ·   AGE %d   ·   CAN REACH %d" % [{"GK": "GOALKEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}[str(pl7["pos"])], int(pl7["age"]), int(pl7["pot"])], 13, Color(1, 1, 1, 0.7), font2)
+				s7.position = Vector2(20, 48)
+				rp6.add_child(s7)
+				var o7 := _label(str(int(pl7["ovr"])), 48, GOLD)
+				o7.position = Vector2(rw6 - 90, 4)
+				rp6.add_child(o7)
+				var stn := ["PAC", "SHO", "PAS", "DEF"]
+				for k7 in 4:
+					var sl7 := _label("%s  %d" % [stn[k7], int(pl7["st"][k7])], 16, Color.WHITE, font2)
+					sl7.position = Vector2(20 + (k7 % 2) * (rw6 * 0.45), 76 + (k7 / 2) * 24)
+					rp6.add_child(sl7)
+				var abl := ""
+				for ab in pl7.get("ab", []):
+					abl += ("" if abl == "" else ", ") + str(ab[1])
+				var ab7 := _label(("SKILLS: " + abl) if abl != "" else "NO SKILLS", 13, GOLD if abl != "" else Color(1, 1, 1, 0.5), font2)
+				ab7.position = Vector2(20, 128)
+				ab7.size = Vector2(rw6 - 40, 20)
+				ab7.clip_text = true
+				rp6.add_child(ab7)
+				var ask := int(pl7["ask"])
+				var al := _label("THEY WANT ABOUT  %d  COINS" % ask, 17, Color.WHITE)
+				al.position = Vector2(20, 156)
+				rp6.add_child(al)
+				var ctr := int(res6.get("counter", 0))
+				var bids := [[int(round(ask * 0.8 / 5.0)) * 5, "LOW BID"], [ask, "THEIR PRICE"]]
+				if ctr > 0:
+					bids = [[ctr, "PAY WHAT THEY ASK"]]
+				var bw6 := (rw6 - 36.0 - 8.0 * (bids.size() - 1)) / bids.size()
+				for bi in bids.size():
+					var amt: int = bids[bi][0]
+					var can6: bool = int(c6.get("coins", 0)) >= amt
+					var bb6 := _btn("%s\n%d" % [bids[bi][1], amt], "sc_bid", amt, "primary" if can6 else "off", Vector2(rx6 + 18 + bi * (bw6 + 8.0), 100 + 190), Vector2(bw6, 64), 17)
+					menu.add_child(bb6)
+			else:
+				var hint := _label("Tap a player to see him and make a bid. Their best men cost more, and a big club sells to a smaller one only for a lot.", 16, Color(1, 1, 1, 0.75), font2)
+				hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+				hint.position = Vector2(20, 20)
+				hint.size = Vector2(rw6 - 40, 120)
+				rp6.add_child(hint)
+			var rm := str(res6.get("msg", ""))
+			if rm != "":
+				var rl6 := _label(rm, 15, GREEN.lightened(0.3) if bool(res6.get("ok", false)) else GOLD, font2)
+				rl6.autowrap_mode = TextServer.AUTOWRAP_WORD
+				rl6.position = Vector2(20, rp6.size.y - 110)
+				rl6.size = Vector2(rw6 - 40, 60)
+				rp6.add_child(rl6)
+			var co6 := _label("COINS  %d" % int(c6.get("coins", 0)), 20, GOLD)
+			co6.position = Vector2(20, rp6.size.y - 40)
+			rp6.add_child(co6)
+			menu.add_child(_btn("<  BACK", "sc_back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"cmode":
+			var cm: Dictionary = info.get("car", {})
+			var cur := str(cm.get("mode", ""))
+			_title("WHAT KIND OF CAREER?", "You can change it later under Profile.")
+			var cw0 := (w - 64.0 - 24.0) * 0.5
+			var defs0 := [
+				["simple", "SIMPLE CAREER", "Just play and climb", [
+					"The board sets three goals every season",
+					"Its confidence rises and falls with your results",
+					"A grade and a bonus when the season ends",
+					"The cup is part of the season",
+					"No sacking: the board only grumbles",
+				]],
+				["full", "FULL CAREER", "Like a real manager", [
+					"Everything in the simple career",
+					"The board CAN SACK YOU. Then you take a job at another club",
+					"Coming next: contracts and wages, player morale, press conferences, scouts and derbies",
+				]],
+			]
+			for i0 in 2:
+				var dd: Array = defs0[i0]
+				var px0 := 32.0 + i0 * (cw0 + 24.0)
+				var on0: bool = cur == dd[0]
+				var pn0 := _panel(Vector2(px0, 100), Vector2(cw0, h - 100.0 - 116.0), 0.9)
+				if on0:
+					pn0.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.92), 18, GOLD))
+				items.append([pn0, Vector2(0, 50), 0.06 * i0])
+				var tl0 := _label(dd[1], 30, GOLD if i0 == 1 else Color.WHITE)
+				tl0.position = Vector2(24, 16)
+				pn0.add_child(tl0)
+				var sl0 := _label(str(dd[2]).to_upper(), 14, Color(1, 1, 1, 0.65), font2)
+				sl0.position = Vector2(26, 56)
+				pn0.add_child(sl0)
+				var yy0 := 90.0
+				for ln0 in dd[3]:
+					var dot := ColorRect.new()
+					dot.color = GOLD if i0 == 1 else GREEN
+					dot.position = Vector2(26, yy0 + 9)
+					dot.size = Vector2(7, 7)
+					pn0.add_child(dot)
+					var bl := _label(str(ln0), 17, Color(1, 1, 1, 0.9), font2)
+					bl.autowrap_mode = TextServer.AUTOWRAP_WORD
+					bl.position = Vector2(44, yy0)
+					bl.size = Vector2(cw0 - 70.0, 24)
+					pn0.add_child(bl)
+					yy0 += 26.0 * ceilf(font2.get_string_size(str(ln0), HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x / (cw0 - 76.0)) + 6.0
+				var pb0 := _btn(("PLAYING " if on0 else "PLAY ") + str(dd[1]).split(" ")[0], "cmode_set", dd[0], "alt" if on0 else "primary", Vector2(px0, h - 100.0), Vector2(cw0, 72), 26)
+				menu.add_child(pb0)
+				items.append([pb0, Vector2(0, 60), 0.1 + 0.06 * i0])
+			if cur != "":
+				menu.add_child(_btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"board":
+			var cb: Dictionary = info.get("car", {})
+			var bd: Dictionary = cb.get("board", {})
+			var full0 := bool(bd.get("full", false))
+			_title("THE BOARD", ("FULL CAREER: at confidence %d or less when the season ends, you are sacked." % int(bd.get("sack_at", 20))) if full0 else "SIMPLE CAREER: the board cannot sack you, but it pays a bonus for a good season.")
+			var lw4 := w * 0.36
+			var lp4 := _panel(Vector2(32, 104), Vector2(lw4, h - 104.0 - 24.0))
+			items.append([lp4, Vector2(-60, 0), 0.0])
+			_board_meter(lp4, bd, lw4)
+			var rx4 := 32.0 + lw4 + 16.0
+			var rw4 := w - rx4 - 32.0
+			var gl4 := _label("THIS SEASON'S GOALS", 15, GOLD, font2)
+			gl4.position = Vector2(rx4 + 4, 102)
+			menu.add_child(gl4)
+			var objs: Array = bd.get("obj", [])
+			var tags := ["MAIN GOAL", "THE CUP", "EXTRA GOAL"]
+			var hist4: Array = bd.get("hist", [])
+			var oh := (h - 132.0 - 24.0 - (64.0 if not hist4.is_empty() else 0.0)) / 3.0 - 8.0
+			for i4 in objs.size():
+				var ob: Dictionary = objs[i4]
+				var rp := _panel(Vector2(rx4, 130.0 + i4 * (oh + 8.0)), Vector2(rw4, oh))
+				items.append([rp, Vector2(80, 0), 0.05 * i4])
+				_obj_row(rp, tags[i4], str(ob["t"]), str(ob["now"]), str(ob["st"]), rw4, oh)
+			if not hist4.is_empty():
+				var hy := h - 24.0 - 56.0
+				var hl := _label("PAST SEASONS", 14, Color(1, 1, 1, 0.6), font2)
+				hl.position = Vector2(rx4 + 4, hy)
+				menu.add_child(hl)
+				var hx := rx4
+				for hh in hist4.slice(maxi(hist4.size() - 6, 0)):
+					var chip := Panel.new()
+					chip.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.85), 10, _grade_col(str(hh["g"]))))
+					chip.position = Vector2(hx, hy + 22)
+					chip.size = Vector2(118, 34)
+					chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					menu.add_child(chip)
+					var ct := _label("SEASON %d  %s" % [int(hh["s"]), _ord(int(hh["pos"]))], 13, Color.WHITE, font2)
+					ct.position = Vector2(10, 7)
+					chip.add_child(ct)
+					var cg := _label(str(hh["g"]), 20, _grade_col(str(hh["g"])))
+					cg.position = Vector2(92, 2)
+					chip.add_child(cg)
+					hx += 126.0
+			menu.add_child(_btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"review":
+			var cr: Dictionary = info.get("car", {})
+			var br: Dictionary = cr.get("board", {})
+			var rv: Dictionary = br.get("review", {})
+			var sacked := bool(rv.get("sacked", false))
+			_title("SEASON %d: THE BOARD'S VERDICT" % int(rv.get("season", cr.get("season", 1))), "%s   ·   you finished %s" % [str(cr.get("lgname", "")).capitalize(), _ord(int(rv.get("pos", 1)))])
+			var bot := 108.0 if sacked else 100.0
+			var lw5 := w * 0.34
+			var lp5 := _panel(Vector2(32, 104), Vector2(lw5, h - 104.0 - bot))
+			items.append([lp5, Vector2(-60, 0), 0.0])
+			var gr := str(rv.get("grade", "C"))
+			var gb := Panel.new()
+			gb.add_theme_stylebox_override("panel", _box(Color(0.03, 0.06, 0.05, 1.0), 60, _grade_col(gr)))
+			gb.size = Vector2(110, 110)
+			gb.position = Vector2(lw5 * 0.5 - 55, 18)
+			gb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			lp5.add_child(gb)
+			var gt := _label(gr, 72, _grade_col(gr))
+			gt.position = Vector2(0, 4)
+			gt.size = Vector2(110, 96)
+			gt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			gb.add_child(gt)
+			gb.pivot_offset = Vector2(55, 55)
+			if anim:
+				gb.scale = Vector2(2.2, 2.2)
+				gb.modulate.a = 0.0
+				var tw5 := gb.create_tween()
+				tw5.set_parallel(true)
+				tw5.tween_property(gb, "scale", Vector2.ONE, 0.5).set_delay(0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+				tw5.tween_property(gb, "modulate:a", 1.0, 0.2).set_delay(0.35)
+			var wd := _label(str(rv.get("words", "")), 18, Color(0.95, 0.4, 0.35) if sacked else Color.WHITE)
+			wd.autowrap_mode = TextServer.AUTOWRAP_WORD
+			wd.position = Vector2(18, 140)
+			wd.size = Vector2(lw5 - 36.0, 70)
+			wd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lp5.add_child(wd)
+			var ch5 := int(rv.get("ch", 0))
+			var cl5 := _label("CONFIDENCE  %d   (%s%d)" % [int(rv.get("conf", 50)), "+" if ch5 >= 0 else "", ch5], 17, GOLD, font2)
+			cl5.position = Vector2(0, lp5.size.y - 62)
+			cl5.size = Vector2(lw5, 24)
+			cl5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lp5.add_child(cl5)
+			var bn5 := _label("BOARD BONUS  +%d COINS" % int(rv.get("bonus", 0)), 17, Color.WHITE if int(rv.get("bonus", 0)) > 0 else Color(1, 1, 1, 0.5), font2)
+			bn5.position = Vector2(0, lp5.size.y - 34)
+			bn5.size = Vector2(lw5, 24)
+			bn5.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			lp5.add_child(bn5)
+			var rx5 := 32.0 + lw5 + 16.0
+			var rw5 := w - rx5 - 32.0
+			var rows5: Array = rv.get("rows", [])
+			var tags5 := ["MAIN GOAL", "THE CUP", "EXTRA GOAL"]
+			var oh5 := (h - 104.0 - bot) / 3.0 - 8.0
+			for i5 in rows5.size():
+				var rr: Array = rows5[i5]
+				var rp5 := _panel(Vector2(rx5, 104.0 + i5 * (oh5 + 8.0)), Vector2(rw5, oh5))
+				items.append([rp5, Vector2(80, 0), 0.1 + 0.08 * i5])
+				_obj_row(rp5, tags5[i5], str(rr[0]), str(rr[1]), "done" if bool(rr[2]) else "missed", rw5, oh5)
+			if sacked:
+				var offs: Array = br.get("offers", [])
+				var ol := _label("THREE CLUBS WANT YOU. PICK YOUR NEW JOB:", 15, GOLD, font2)
+				ol.position = Vector2(34, h - bot + 2)
+				menu.add_child(ol)
+				var ow := (w - 64.0 - 20.0) / 3.0
+				for i6 in offs.size():
+					var of6: Dictionary = offs[i6]
+					var tb6 := _tile(str(of6["n"]), "%s   ·   team rating %d" % [str(of6["lgname"]).capitalize(), int(of6["lv"])], "c_job", i6, Vector2(32 + i6 * (ow + 10.0), h - bot + 26.0), Vector2(ow, 72), Color.WHITE, 20)
+					var kb := ColorRect.new()
+					kb.color = Color(str((of6["k"] as Array)[0]))
+					kb.position = Vector2(0, 8)
+					kb.size = Vector2(6, 56)
+					tb6.add_child(kb)
+					menu.add_child(tb6)
+					items.append([tb6, Vector2(0, 60), 0.4 + 0.06 * i6])
+			else:
+				var nb5 := _btn("NEXT SEASON", "c_next", null, "primary", Vector2(w - 32.0 - 360.0, h - 84.0), Vector2(360, 68), 30)
+				menu.add_child(nb5)
+				items.append([nb5, Vector2(0, 60), 0.4])
+				var mv := _label(str(cr.get("note", "")), 15, Color(1, 1, 1, 0.75), font2)
+				mv.autowrap_mode = TextServer.AUTOWRAP_WORD
+				mv.position = Vector2(34, h - 84.0)
+				mv.size = Vector2(w - 32.0 - 360.0 - 60.0, 68)
+				mv.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+				menu.add_child(mv)
+				menu.add_child(_btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
 		"cup":
 			var c8: Dictionary = (info.get("car", {}) as Dictionary).get("cup", {})
-			_title("THE CUP", "Knockout: lose and you are out. A draw goes to extra time and penalties.")
-			var cols8: Array = (c8.get("rounds", []) as Array).duplicate()
-			if not (c8.get("now", []) as Array).is_empty():
-				cols8.append(c8.get("now", []))
-			var names8: Array = c8.get("names", [])
-			var cw8 := (w - 80.0) / 3.0
-			for ci8 in 3:
-				var hl8 := _label(str(names8[ci8]) if ci8 < names8.size() else "", 16, GOLD if ci8 == cols8.size() - 1 else Color(1, 1, 1, 0.65), font2)
-				hl8.position = Vector2(40 + ci8 * cw8 + 8, 84)
+			var cm8 := bool(info.get("cupm", false))
+			_title(str(c8.get("cname", "THE CUP")), ("%s   ·   EVERY CLUB IN THE COUNTRY. LOSE AND YOU ARE OUT." % str((info.get("car", {}) as Dictionary).get("name", ""))) if cm8 else "Every club in the country, one cup a season, played between league rounds. Lose and you are out.")
+			# the rounds so far, left to right: your own tie on top in gold, a few of the others under it
+			var rds: Array = c8.get("rounds", [])
+			var shown: Array = rds.slice(maxi(rds.size() - 4, 0))
+			var cw8 := (w - 64.0 - 3 * 10.0) / 4.0
+			for ci8 in shown.size():
+				var rd: Dictionary = shown[ci8]
+				var x8 := 32.0 + ci8 * (cw8 + 10.0)
+				var now8 := bool(rd.get("now", false))
+				var hl8 := _label("%s   ·   %d TIES" % [str(rd["name"]), int(rd["n"])], 14, GOLD if now8 else Color(1, 1, 1, 0.65), font2)
+				hl8.position = Vector2(x8 + 4, 92)
 				menu.add_child(hl8)
-				if ci8 >= cols8.size():
-					continue
-				var ties: Array = cols8[ci8]
-				var th8 := minf(64.0, (h - 220.0) / maxf(ties.size(), 1.0))
+				var ties: Array = rd["ties"]
+				var th8 := minf(54.0, (h - 230.0) / maxf(ties.size(), 1.0) - 6.0)
 				for ti8 in ties.size():
 					var tt: Array = ties[ti8]
 					var mine8: bool = bool(tt[4])
 					var rp8 := Panel.new()
 					rp8.add_theme_stylebox_override("panel", _box(Color(0.16, 0.2, 0.12, 0.95) if mine8 else Color(DARK.r, DARK.g, DARK.b, 0.82), 10, GOLD if mine8 else Color(0, 0, 0, 0)))
-					rp8.position = Vector2(40 + ci8 * cw8, 112 + ti8 * (th8 + 6.0) + ci8 * 18.0)
-					rp8.size = Vector2(cw8 - 14.0, th8)
+					rp8.position = Vector2(x8, 116 + ti8 * (th8 + 6.0) + (8.0 if ti8 > 0 else 0.0))
+					rp8.size = Vector2(cw8, th8)
 					rp8.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					menu.add_child(rp8)
 					items.append([rp8, Vector2(0, 30), 0.03 * ti8 + 0.08 * ci8])
 					for k8 in 2:
 						var sc8: int = int(tt[2 + k8])
 						var win8: bool = sc8 >= 0 and sc8 > int(tt[3 - k8])
-						var nl8 := _label(str(tt[k8]), 16, Color.WHITE if (sc8 < 0 or win8) else Color(1, 1, 1, 0.45), font)
-						nl8.position = Vector2(12, 4 + k8 * (th8 * 0.5 - 2))
+						var fs8 := 14
+						while fs8 > 10 and font.get_string_size(str(tt[k8]), HORIZONTAL_ALIGNMENT_LEFT, -1, fs8).x > cw8 - 50.0:
+							fs8 -= 1
+						var nl8 := _label(str(tt[k8]), fs8, Color.WHITE if (sc8 < 0 or win8) else Color(1, 1, 1, 0.45), font)
+						nl8.position = Vector2(10, 3 + k8 * (th8 * 0.5 - 2))
 						rp8.add_child(nl8)
 						if sc8 >= 0:
-							var sl8 := _label(str(sc8), 16, GOLD if win8 else Color(1, 1, 1, 0.45), font)
-							sl8.position = Vector2(cw8 - 44.0, 4 + k8 * (th8 * 0.5 - 2))
+							var sl8 := _label(str(sc8), 14, GOLD if win8 else Color(1, 1, 1, 0.45), font)
+							sl8.position = Vector2(cw8 - 28.0, 3 + k8 * (th8 * 0.5 - 2))
 							rp8.add_child(sl8)
+			var left8 := _label("%d CLUBS STILL IN" % int(c8.get("left", 0)), 14, Color(1, 1, 1, 0.6), font2)
+			left8.position = Vector2(w - 332, 92)
+			left8.size = Vector2(300, 20)
+			left8.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			menu.add_child(left8)
 			var by8 := h - 96.0
 			if bool(c8.get("won", false)) or bool(c8.get("out", false)):
-				var rs8 := _label("YOU WON THE CUP!" if bool(c8.get("won", false)) else "YOU ARE OUT OF THIS CUP", 22, GOLD)
+				var rs8 := _label(("YOU WON %s!" % str(c8.get("cname", "THE CUP"))) if bool(c8.get("won", false)) else "YOU ARE OUT OF THIS CUP", 22, GOLD)
 				rs8.position = Vector2(40, by8 + 18)
 				menu.add_child(rs8)
-				var nb8 := _btn("START A NEW CUP", "cup_new", null, "primary", Vector2(w - 400.0, by8), Vector2(360, 76), 28)
-				menu.add_child(nb8)
+				if cm8:
+					var nc8 := _btn("NEW CUP", "cm_new", null, "primary", Vector2(w - 400.0, by8), Vector2(360, 76), 30)
+					menu.add_child(nc8)
+					_pulse(nc8)
+				else:
+					var nb8 := _label("A NEW CUP STARTS NEXT SEASON", 18, Color(1, 1, 1, 0.7), font2)
+					nb8.position = Vector2(w - 400.0, by8 + 26)
+					nb8.size = Vector2(360, 30)
+					nb8.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+					menu.add_child(nb8)
 			else:
 				var ol8 := _label("%s   ·   AGAINST %s" % [str(c8.get("name", "")), str(c8.get("opp", "")).to_upper()], 20, Color.WHITE)
 				ol8.position = Vector2(40, by8 + 20)
 				menu.add_child(ol8)
-				var pb8 := _btn("PLAY CUP MATCH", "cup_play", null, "primary", Vector2(w - 400.0, by8), Vector2(360, 76), 30)
+				var due8 := bool((info.get("car", {}) as Dictionary).get("cup_due", false))
+				var pb8 := _btn("PLAY CUP MATCH" if due8 else "AFTER LEAGUE ROUND %d" % int((info.get("car", {}) as Dictionary).get("cup_after", 0)), "cup_play", null, "primary" if due8 else "off", Vector2(w - 400.0, by8), Vector2(360, 76), 30 if due8 else 24)
 				menu.add_child(pb8)
-				_pulse(pb8)
-			var bk8 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
+				if due8:
+					_pulse(pb8)
+			var bk8 := _btn("<  BACK", "cm_back" if cm8 else "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk8)
+			if cm8:
+				menu.add_child(_btn("THE TEAM", "cm_team", null, "alt", Vector2(w - 200, 14), Vector2(170, 48), 18))
 		"squad":
 			_title("THE TEAM", "")
 			var c3: Dictionary = info.get("car", {})
@@ -1286,7 +1905,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 			var bk7 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk7)
 		"market":
-			_title("TRANSFERS", "New players are offered after every match")
+			_title("TRANSFERS", "Free agents, new ones after every match. Or buy from the other clubs.")
 			var c5: Dictionary = info.get("car", {})
 			var mk: Array = c5.get("market", [])
 			var pcol5 := {"GK": Color(0.95, 0.6, 0.1), "DF": Color(0.3, 0.6, 1.0), "MF": Color(0.3, 0.85, 0.45), "FW": Color(0.95, 0.3, 0.3)}
@@ -1347,6 +1966,8 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 			menu.add_child(co5)
 			var bk5 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk5)
+			var sc5 := _btn("OTHER CLUBS  >", "scout", null, "primary", Vector2(w - 260 - 230, 14), Vector2(220, 48), 18)
+			menu.add_child(sc5)
 		"teams":
 			if str(info.get("from", "")) == "new":
 				_title("PICK YOUR CLUB", "This is the club you will run and play for.")
@@ -1355,7 +1976,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 			var cl: Array = info.get("clubs", [])
 			var gw := minf(250.0, (w - 100.0) / 4.0 - 12.0)
 			var gx := (w - (gw + 12.0) * 4.0 + 12.0) * 0.5
-			for ci in cl.size():
+			for ci in mini(cl.size(), 8):
 				var cb := _club_btn(info, ci, "club", ci, Vector2(gx + (ci % 4) * (gw + 12.0), 96 + (ci / 4) * 172.0), Vector2(gw, 156), "")
 				menu.add_child(cb)
 				items.append([cb, Vector2(0, 50), 0.03 * ci])
@@ -1597,7 +2218,14 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 			var by2 := h - 84.0
 			var cls: Array = info.get("car_lines", [])
 			var co_car := bool(info.get("career", false)) and bool(info.get("online", false))
-			if str(info.get("role", "")) == "guest":
+			if bool(info.get("rk", false)):
+				var nr := _btn("NEXT OPPONENT", "rk_next", null, "primary", Vector2(w * 0.5 - 320, by2), Vector2(300, 70), 28)
+				var mr := _btn("MAIN MENU", "menu", null, "alt", Vector2(w * 0.5 + 20, by2), Vector2(300, 70), 24)
+				menu.add_child(nr)
+				menu.add_child(mr)
+				items.append([nr, Vector2(0, 60), 0.5])
+				items.append([mr, Vector2(0, 60), 0.58])
+			elif str(info.get("role", "")) == "guest":
 				var wt := _label("Waiting for the host...", 20, Color(1, 1, 1, 0.8), font2)
 				wt.position = Vector2(w * 0.5 - 330, by2 + 22)
 				menu.add_child(wt)
@@ -1621,7 +2249,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				for pass2 in 4:
 					for cl2 in cls:
 						var t2 := str(cl2)
-						var kind2 := 0 if t2.begins_with("+") else (1 if t2.begins_with("YOUTH") else (2 if t2.contains("IN THE TABLE") or t2.begins_with("SEASON") else 3))
+						var kind2 := 0 if t2.begins_with("+") else (1 if t2.begins_with("YOUTH") else (2 if t2.contains("IN THE TABLE") or t2.begins_with("SEASON") or t2.begins_with("THE BOARD") else 3))
 						if kind2 == pass2:
 							pri.append(t2)
 				var rows3 := [[], []]
@@ -1658,6 +2286,101 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 # ---------------------------------------------------------------- the hub: one home screen with five tabs
 
 # A big button with a title and a line of small text under it.
+# The Play tab: the ways to play, side by side and all the same size. The career is one of them.
+func _play_tab(info: Dictionary, w: float, y0: float, ch: float, items: Array, anim: bool) -> void:
+	var c: Dictionary = info.get("car", {})
+	var on := bool(info.get("car_on", false))
+	var car_s := "Your club, a new club or one of 116 real-like clubs. The board, the table, promotion."
+	if on:
+		car_s = "%s   ·   %s   ·   season %d   ·   %s place" % [str(c.get("name", "")), str(c.get("lgname", "")).capitalize(), int(c.get("season", 1)), _ord(int(c.get("rank", 1))).to_lower()]
+	var cp: Dictionary = info.get("cupc", {})
+	var cs := "The English or the Danish cup, with your club or any club. Lose once and you are out."
+	if not cp.is_empty():
+		cs = ("%s: you won it!" % str(cp["cname"]).capitalize()) if bool(cp["won"]) else (("%s: you are out" % str(cp["cname"]).capitalize()) if bool(cp["out"]) else "%s   ·   %s   ·   %s next" % [str(cp["cname"]).capitalize(), str(cp["club"]), str(cp["round"]).to_lower()])
+	var rki: Dictionary = info.get("rank", {})
+	var defs := [
+		["CAREER", car_s, "c_home" if on else "c_start", GREEN.lightened(0.2)],
+		["THE CUP", cs, "cupm", GOLD],
+		["RANKED ONLINE", "%s   ·   %d points. Your club against other players' clubs." % [str(rki.get("n", "")), int(rki.get("rp", 0))], "online", Color(str(rki.get("c", "ffffff")))],
+		["PLAY WITH A FRIEND", "Same team, a career together or against each other", "friend", Color(0.55, 0.8, 1.0)],
+		["QUICK MATCH", "A friendly against the computer", "quick", Color.WHITE],
+	]
+	var gap := 12.0
+	var h1 := (ch - gap) * 0.6
+	var h2 := ch - gap - h1
+	var w3 := (w - 64.0 - 2 * gap) / 3.0
+	var w2 := (w - 64.0 - gap) / 2.0
+	for i in defs.size():
+		var top := i < 3
+		var pos := Vector2(32 + i * (w3 + gap), y0) if top else Vector2(32 + (i - 3) * (w2 + gap), y0 + h1 + gap)
+		var sz := Vector2(w3, h1) if top else Vector2(w2, h2)
+		var b := _btn("", defs[i][2], null, "alt", pos, sz, 20)
+		menu.add_child(b)
+		items.append([b, Vector2(0, 40), 0.04 * i])
+		var bar := ColorRect.new()
+		bar.color = defs[i][3]
+		bar.position = Vector2(0, 14)
+		bar.size = Vector2(6, sz.y - 28)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(bar)
+		var fs := 30 if top else 26
+		var t := _label(defs[i][0], fs, defs[i][3])
+		t.position = Vector2(24, 16 if top else sz.y * 0.5 - fs - 2)
+		t.size = Vector2(sz.x - 48, fs + 10)
+		b.add_child(t)
+		var s := _label(defs[i][1], 15, Color(1, 1, 1, 0.75), font2)
+		s.autowrap_mode = TextServer.AUTOWRAP_WORD
+		s.position = Vector2(24, 16 + fs + 12 if top else sz.y * 0.5 + 4)
+		s.size = Vector2(sz.x - 48, 60)
+		b.add_child(s)
+		if i == 2:
+			_rk_badge(b, Vector2(sz.x - 84, sz.y - 98), 64.0, rki)
+		var ar := _label(">", 26, Color(1, 1, 1, 0.45))
+		ar.position = Vector2(sz.x - 36, sz.y - 44 if top else sz.y * 0.5 - 18)
+		b.add_child(ar)
+		if i == 2:
+			ar.visible = false
+
+# A rank badge: a shield in the rank's colours with the division on it.
+func _rk_badge(parent: Control, pos: Vector2, sz: float, rk: Dictionary) -> void:
+	var c := Color(str(rk.get("c", "d9955a")))
+	var c2 := Color(str(rk.get("c2", "6e3f1c")))
+	var dv := int(rk.get("dv", 0))
+	var t := int(rk.get("t", 0))
+	var dc := Control.new()
+	dc.position = pos
+	dc.size = Vector2(sz, sz * 1.16)
+	dc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dc.draw.connect(func():
+		var u := sz / 100.0
+		var outer := PackedVector2Array([Vector2(50, 8), Vector2(92, 22), Vector2(88, 64), Vector2(76, 88), Vector2(50, 108), Vector2(24, 88), Vector2(12, 64), Vector2(8, 22)])
+		var inner := PackedVector2Array([Vector2(50, 17), Vector2(83, 28), Vector2(80, 62), Vector2(70, 82), Vector2(50, 97), Vector2(30, 82), Vector2(20, 62), Vector2(17, 28)])
+		for i in outer.size():
+			outer[i] *= u
+			inner[i] *= u
+		dc.draw_colored_polygon(outer, c2)
+		dc.draw_colored_polygon(inner, c)
+		var hi := PackedVector2Array([inner[0], inner[1], Vector2(81, 48) * u, Vector2(19, 48) * u, inner[7]])
+		dc.draw_colored_polygon(hi, Color(1, 1, 1, 0.18))
+		# stars for the higher ranks
+		var ns := 0 if t >= 5 else t
+		for si in ns:
+			var sx := 50.0 + (si - (ns - 1) * 0.5) * 15.0
+			var sp := PackedVector2Array()
+			for k in 10:
+				var an := -PI * 0.5 + k * PI / 5.0
+				var rr := (7.0 if k % 2 == 0 else 3.2) * u
+				sp.append(Vector2(sx * u + cos(an) * rr, 32.0 * u + sin(an) * rr))
+			dc.draw_colored_polygon(sp, Color(1.0, 0.97, 0.84))
+			sp.append(sp[0])
+			dc.draw_polyline(sp, c2, maxf(1.0, 1.4 * u), true)
+		var txt := "I".repeat(3 - dv) if dv >= 0 else "L"
+		var fs := int(30 * u)
+		var tw := font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		dc.draw_string(font, Vector2(50 * u - tw * 0.5, 74 * u), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, c2)
+	)
+	parent.add_child(dc)
+
 func _tile(title: String, sub: String, act: String, arg, pos: Vector2, sz: Vector2, col := Color.WHITE, fs := 26) -> Button:
 	var b := _btn("", act, arg, "alt", pos, sz, fs)
 	var t := _label(title, fs, col)
@@ -1704,7 +2427,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var nm := _label(str(c.get("name", "PITCH BOSS")), 26, Color.WHITE)
 	nm.position = Vector2(72, 4)
 	menu.add_child(nm)
-	var sub := _label("DIVISION %d   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("div", 4)), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 14, Color(1, 1, 1, 0.75), font2)
+	var sub := _label(("%s   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [str(c.get("lgname", "")), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))]) if (bool(c.get("on", true)) and tab == "career") else ("YOUR CLUB   ·   TEAM RATING %d" % int(c.get("str", 0))), 14, Color(1, 1, 1, 0.75), font2)
 	sub.position = Vector2(73, 37)
 	menu.add_child(sub)
 	var co := _label("COINS  %d" % int(c.get("coins", 0)), 24, GOLD)
@@ -1739,7 +2462,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var tabs := [["shop", "SHOP"], ["team", "TEAM"], ["play", "PLAY"], ["club", "CLUB"], ["profile", "PROFILE"]]
 	var tw := (w - 32.0 - 4 * 8.0) / 5.0
 	for i in tabs.size():
-		var on: bool = tabs[i][0] == tab
+		var on: bool = tabs[i][0] == tab or (tab == "career" and tabs[i][0] == "play")
 		var tb := _btn(tabs[i][1], "tab", tabs[i][0], "ghost", Vector2(16 + i * (tw + 8.0), h - nh - 2), Vector2(tw, nh - 6), 24 if tabs[i][0] == "play" else 20)
 		if on:
 			# chalk white = where you are
@@ -1756,6 +2479,8 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var msg := str(c.get("msg", ""))
 	match tab:
 		"play":
+			_play_tab(info, w, y0, ch, items, anim)
+		"career":
 			var lw := w * 0.58 - 48.0
 			var bh := minf(84.0, ch * 0.24)
 			var card := _panel(Vector2(32, y0), Vector2(lw, ch - bh - 10.0))
@@ -1768,19 +2493,24 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				nt.size = Vector2(lw - 40, 90)
 				nt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				card.add_child(nt)
-				var ns := _btn("NEXT SEASON", "c_next", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 38)
+				if bool(c.get("sacked", false)):
+					nt.text = "THE BOARD HAS SACKED YOU. THREE CLUBS WANT YOU AS THEIR MANAGER."
+					nt.add_theme_color_override("font_color", Color(0.95, 0.4, 0.35))
+				var ns := _btn("THE BOARD'S VERDICT", "c_review", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 34)
 				menu.add_child(ns)
 				items.append([ns, Vector2(0, 60), 0.1])
 			else:
-				var nx := _label("NEXT LEAGUE MATCH   ·   " + ("HOME" if bool(c.get("home", true)) else "AWAY"), 17, GOLD, font2)
+				var cdue := bool(c.get("cup_due", false))
+				var cpn: Dictionary = c.get("cup", {})
+				var nx := _label(("THE CUP   ·   " + str(cpn.get("name", ""))) if cdue else ("NEXT LEAGUE MATCH   ·   " + ("HOME" if bool(c.get("home", true)) else "AWAY")), 17, GOLD, font2)
 				nx.position = Vector2(0, 14)
 				nx.size = Vector2(lw, 26)
 				nx.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				card.add_child(nx)
-				var kits := [c.get("kit", ["888888"]), c.get("opp_kit", ["888888"])]
-				var nms := [str(c.get("name", "")), str(c.get("opp", ""))]
-				var rks := [int(c.get("rank", 1)), int(c.get("opp_rank", 1))]
-				var my := cy * 0.5 - 62.0 + 16.0
+				var kits := [c.get("kit", ["888888"]), cpn.get("opp_kit", ["888888"]) if cdue else c.get("opp_kit", ["888888"])]
+				var nms := [str(c.get("name", "")), str(cpn.get("opp", "")) if cdue else str(c.get("opp", ""))]
+				var rks := [int(c.get("rank", 1)), int(cpn.get("opp_rank", 1)) if cdue else int(c.get("opp_rank", 1))]
+				var my := cy * 0.5 - 62.0 + 4.0
 				for si in 2:
 					var cx := lw * (0.25 if si == 0 else 0.75)
 					var sh2 := Panel.new()
@@ -1797,7 +2527,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 					nl2.size = Vector2(lw * 0.5, 34)
 					nl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 					card.add_child(nl2)
-					var rl := _label(_ord(rks[si]) + " IN THE TABLE", 14, Color(1, 1, 1, 0.7), font2)
+					var rl := _label((str(cpn.get("opp_lg", "")) if cdue and si == 1 and str(cpn.get("opp_lg", "")) != str(c.get("lgname", "")) else _ord(rks[si]) + " IN THE TABLE"), 14, Color(1, 1, 1, 0.7), font2)
 					rl.position = Vector2(cx - lw * 0.25, my + 102)
 					rl.size = Vector2(lw * 0.5, 24)
 					rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1807,7 +2537,34 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				vv.size = Vector2(lw, 40)
 				vv.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				card.add_child(vv)
-				var pm := _btn("PLAY MATCH", "c_play", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 38)
+				# the board's mood and the main goal, always in sight
+				var bdi: Dictionary = c.get("board", {})
+				var bc := int(bdi.get("conf", 50))
+				var strip := Panel.new()
+				strip.add_theme_stylebox_override("panel", _box(Color(0, 0, 0, 0.28), 10))
+				strip.position = Vector2(14, cy - 44)
+				strip.size = Vector2(lw - 28, 32)
+				strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				card.add_child(strip)
+				var sbar := ColorRect.new()
+				sbar.color = _conf_col(bc)
+				sbar.position = Vector2(10, 12)
+				sbar.size = Vector2(maxf(60.0 * bc / 100.0, 2.0), 8)
+				strip.add_child(sbar)
+				var sbg := ColorRect.new()
+				sbg.color = Color(1, 1, 1, 0.12)
+				sbg.position = Vector2(10, 12)
+				sbg.size = Vector2(60, 8)
+				strip.add_child(sbg)
+				sbg.move_to_front()
+				sbar.move_to_front()
+				var objs0: Array = bdi.get("obj", [])
+				var stl := _label("BOARD: %s   ·   %s" % [str(bdi.get("mood", "")), str(objs0[0]["t"]) if not objs0.is_empty() else ""], 14, Color(1, 1, 1, 0.85), font2)
+				stl.position = Vector2(80, 5)
+				stl.size = Vector2(lw - 28 - 90, 22)
+				stl.clip_text = true
+				strip.add_child(stl)
+				var pm := _btn("PLAY CUP MATCH" if cdue else "PLAY MATCH", "c_play", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 38)
 				menu.add_child(pm)
 				items.append([pm, Vector2(0, 60), 0.1])
 				if anim:
@@ -1818,11 +2575,12 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var rw := w - rx - 32.0
 			var th := (ch - 30.0) / 4.0
 			var cpi: Dictionary = c.get("cup", {})
-			var cps := "You won it! Tap to start a new cup" if bool(cpi.get("won", false)) else ("You are out. Tap to start a new cup" if bool(cpi.get("out", false)) else "%s against %s" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", ""))])
+			var cps := "You won it! A new cup starts next season" if bool(cpi.get("won", false)) else ("You are out. A new cup starts next season" if bool(cpi.get("out", false)) else ("%s against %s: next match!" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", ""))] if bool(c.get("cup_due", false)) else "%s against %s after round %d" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", "")), int(c.get("cup_after", 0))]))
 			var t0 := _tile("THE CUP", cps, "cup", null, Vector2(rx, y0), Vector2(rw, th), GOLD, 22)
-			var t1 := _tile("QUICK MATCH", "A friendly against the computer", "quick", null, Vector2(rx, y0 + th + 10.0), Vector2(rw, th), Color.WHITE, 22)
-			var t2 := _tile("PLAY WITH A FRIEND", "Same team, career, cup or against each other", "friend", null, Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
-			var t3 := _tile("LEAGUE TABLE", "Division %d. You are %s. Top two go up." % [int(c.get("div", 4)), _ord(int(c.get("rank", 1)))], "c_table", null, Vector2(rx, y0 + 3 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
+			var t1 := _tile("THE TABLE", "%s   ·   %s place" % [str(c.get("lgname", "")).capitalize(), _ord(int(c.get("rank", 1)))], "c_table", null, Vector2(rx, y0 + th + 10.0), Vector2(rw, th), Color.WHITE, 22)
+			var t2 := _tile("PLAY IT TOGETHER", "Your friend joins your career on his phone", "friend", null, Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
+			var bdt: Dictionary = c.get("board", {})
+			var t3 := _tile("THE BOARD", "Confidence %d: %s. Your goals this season." % [int(bdt.get("conf", 50)), str(bdt.get("mood", "")).capitalize()], "c_board", null, Vector2(rx, y0 + 3 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
 			menu.add_child(t0)
 			items.append([t0, Vector2(80, 0), 0.0])
 			for t in [t1, t2, t3]:
@@ -1894,7 +2652,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var defs := [
 				["FACILITIES", "Stadium, training ground and youth academy. Build them with your coins.", "c_club"],
 				["TRANSFERS", "%d players for sale. New ones after every match." % (c.get("market", []) as Array).size(), "c_market"],
-				["LEAGUE TABLE", "You are %s of 8 in season %d." % [_ord(int(c.get("rank", 1))), int(c.get("season", 1))], "c_table"],
+				["LEAGUE TABLE", "You are %s of %d in season %d." % [_ord(int(c.get("rank", 1))), int(c.get("n", 20)), int(c.get("season", 1))], "c_table"],
 			]
 			for i in 3:
 				var t := _tile(defs[i][0], defs[i][1], defs[i][2], null, Vector2(32 + i * (cw + 10.0), y0), Vector2(cw, ch * 0.62), Color.WHITE, 28)
@@ -1972,7 +2730,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var rx3 := w * 0.5 + 8.0
 			var rw3 := w - rx3 - 32.0
 			var bw := (rw3 - 10.0) * 0.5
-			var sbh := minf(62.0, (ch - 50.0) / 4.0 - 10.0)
+			var sbh := minf(62.0, (ch - 40.0) / 5.0 - 8.0)
 			var sl := _label("SETTINGS", 15, GOLD, font2)
 			sl.position = Vector2(rx3 + 4, y0 + 2)
 			menu.add_child(sl)
@@ -1980,10 +2738,11 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				["SOUND: " + str(info.get("snd", "")), "snd_opt"], ["VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt"],
 				["LEVEL: " + str(info.get("diff", "")), "diff"], ["MATCH: " + str(info.get("len", "")), "len"],
 				["HOW TO PLAY", "how"], ["UPDATE THE GAME", "update"],
-				["INSTALLED" if bool(info.get("inst", false)) else "INSTALL THE GAME", "install"], ["SURE? TAP AGAIN" if bool(c.get("sure", false)) else "START OVER", "c_new"],
+				["INSTALLED" if bool(info.get("inst", false)) else "INSTALL THE GAME", "install"], ["CAREER: " + ("FULL" if str(c.get("mode", "")) == "full" else "SIMPLE"), "cmode"],
+				["NEW CAREER", "c_new"],
 			]
 			for i in sets.size():
-				var sb := _btn(sets[i][0], sets[i][1], null, "ghost" if sets[i][1] == "c_new" else "alt", Vector2(rx3 + (i % 2) * (bw + 10.0), y0 + 28.0 + (i / 2) * (sbh + 10.0)), Vector2(bw, sbh), 19)
+				var sb := _btn(sets[i][0], sets[i][1], null, "ghost" if sets[i][1] == "c_new" else "alt", Vector2(rx3 + (i % 2) * (bw + 10.0), y0 + 28.0 + (i / 2) * (sbh + 8.0)), Vector2(bw, sbh), 19)
 				menu.add_child(sb)
 				items.append([sb, Vector2(80, 0), 0.03 * i])
 			var ver := _label("VERSION  " + str(info.get("version", "")), 14, Color(1, 1, 1, 0.6), font2)
@@ -1994,6 +2753,110 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	ver2.size = Vector2(250, 16)
 	ver2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	menu.add_child(ver2)
+
+static func _grade_col(g: String) -> Color:
+	return {"A": Color(1.0, 0.84, 0.25), "B": Color(0.45, 0.9, 0.5), "C": Color(0.85, 0.9, 0.88), "D": Color(1.0, 0.62, 0.25), "E": Color(0.95, 0.4, 0.35), "F": Color(0.95, 0.3, 0.3)}.get(g, Color.WHITE)
+
+static func _conf_col(c: int) -> Color:
+	if c >= 68:
+		return Color(0.4, 0.88, 0.5)
+	if c >= 50:
+		return Color(0.85, 0.92, 0.6)
+	if c >= 35:
+		return Color(1.0, 0.75, 0.3)
+	return Color(0.95, 0.35, 0.3)
+
+# The board's confidence: the number, the mood, a bar with the sack line in a FULL career, and what the board said.
+func _board_meter(p: Panel, bd: Dictionary, pw: float) -> void:
+	var c := int(bd.get("conf", 50))
+	var cl := _label("CONFIDENCE", 15, GOLD, font2)
+	cl.position = Vector2(20, 14)
+	p.add_child(cl)
+	var big := _label(str(c), 64, _conf_col(c))
+	big.position = Vector2(18, 30)
+	p.add_child(big)
+	var md := _label(str(bd.get("mood", "")), 24, _conf_col(c))
+	md.position = Vector2(110, 52)
+	p.add_child(md)
+	var chg := int(bd.get("chg", 0))
+	var cg := _label(("%s%d AFTER THE LAST MATCH" % ["+" if chg >= 0 else "", chg]) if chg != 0 else "NO CHANGE AFTER THE LAST MATCH", 13, Color(1, 1, 1, 0.6), font2)
+	cg.position = Vector2(112, 82)
+	p.add_child(cg)
+	var bw := pw - 40.0
+	var bar := ColorRect.new()
+	bar.color = Color(1, 1, 1, 0.12)
+	bar.position = Vector2(20, 116)
+	bar.size = Vector2(bw, 14)
+	p.add_child(bar)
+	var fill := ColorRect.new()
+	fill.color = _conf_col(c)
+	fill.position = Vector2(20, 116)
+	fill.size = Vector2(bw * c / 100.0, 14)
+	p.add_child(fill)
+	if bool(bd.get("full", false)):
+		var sx := 20.0 + bw * int(bd.get("sack_at", 20)) / 100.0
+		var sl := ColorRect.new()
+		sl.color = Color(0.95, 0.3, 0.3)
+		sl.position = Vector2(sx - 1, 110)
+		sl.size = Vector2(3, 26)
+		p.add_child(sl)
+		var st := _label("SACK", 11, Color(0.95, 0.4, 0.35), font2)
+		st.position = Vector2(sx - 14, 136)
+		p.add_child(st)
+	var bl := ColorRect.new()
+	bl.color = Color(1, 0.84, 0.25, 0.7)
+	bl.position = Vector2(20.0 + bw * 0.8 - 1, 110)
+	bl.size = Vector2(2, 26)
+	p.add_child(bl)
+	var bt := _label("BONUS", 11, GOLD, font2)
+	bt.position = Vector2(20.0 + bw * 0.8 - 16, 136)
+	p.add_child(bt)
+	var exl := _label("THE BOARD EXPECTED YOU TO FINISH ABOUT %s THIS SEASON" % _ord(int(bd.get("ex", 4))), 13, Color(1, 1, 1, 0.6), font2)
+	exl.autowrap_mode = TextServer.AUTOWRAP_WORD
+	exl.position = Vector2(20, p.size.y - 104)
+	exl.size = Vector2(pw - 40.0, 40)
+	p.add_child(exl)
+	var msg := _label(str(bd.get("msg", "")), 17, Color.WHITE)
+	msg.autowrap_mode = TextServer.AUTOWRAP_WORD
+	msg.position = Vector2(20, 164)
+	msg.size = Vector2(pw - 40.0, 80)
+	p.add_child(msg)
+	var bn := _label("At 80 or more the board adds 20% to the coins you win in matches." + ("  IT DOES NOW!" if bool(bd.get("bonus", false)) else ""), 14, GOLD if bool(bd.get("bonus", false)) else Color(1, 1, 1, 0.6), font2)
+	bn.autowrap_mode = TextServer.AUTOWRAP_WORD
+	bn.position = Vector2(20, p.size.y - 58)
+	bn.size = Vector2(pw - 40.0, 44)
+	p.add_child(bn)
+
+# One goal from the board: what it is, where it stands now, and a coloured tag.
+func _obj_row(p: Panel, tag: String, what: String, now: String, st: String, pw: float, ph: float) -> void:
+	var tg := _label(tag, 13, GOLD, font2)
+	tg.position = Vector2(20, 10)
+	p.add_child(tg)
+	var fs := 20
+	while fs > 14 and font.get_string_size(what, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > pw - 220.0:
+		fs -= 1
+	var wl := _label(what, fs, Color.WHITE)
+	wl.position = Vector2(20, 28)
+	wl.size = Vector2(pw - 210.0, 30)
+	wl.clip_text = true
+	p.add_child(wl)
+	var nl := _label(now, 15, Color(1, 1, 1, 0.7), font2)
+	nl.position = Vector2(20, minf(ph - 28.0, 60.0))
+	p.add_child(nl)
+	var names := {"on": "ON TRACK", "behind": "BEHIND", "done": "DONE", "failed": "FAILED", "missed": "MISSED"}
+	var cols := {"on": Color(0.4, 0.88, 0.5), "behind": Color(1.0, 0.65, 0.25), "done": GOLD, "failed": Color(0.95, 0.35, 0.3), "missed": Color(0.95, 0.35, 0.3)}
+	var col: Color = cols.get(st, Color.WHITE)
+	var chip := Panel.new()
+	chip.add_theme_stylebox_override("panel", _box(Color(col.r, col.g, col.b, 0.18), 12, col))
+	chip.position = Vector2(pw - 170.0, ph * 0.5 - 20.0)
+	chip.size = Vector2(150, 40)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(chip)
+	var ct := _label(str(names.get(st, st.to_upper())), 17, col)
+	ct.position = Vector2(0, 8)
+	ct.size = Vector2(150, 28)
+	ct.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	chip.add_child(ct)
 
 func _title(text: String, small: String) -> void:
 	var t := _label(text, 34, Color.WHITE)
