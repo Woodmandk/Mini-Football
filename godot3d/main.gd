@@ -145,6 +145,9 @@ var rk_msg := ""
 var rk_walk := false
 var tov := [{}, {}] # ranked: each side's own team (name, kit, formation, eleven)
 var RKI := 0 # the two places in CLUBS that the ranked teams use
+var ft_on := false # a match in a friend's room where a side plays with its own club and squad
+var opt_own := true # in a friend's room you play with your own club (not one of the eight)
+var guest_tm := {} # the host's copy of the friend's own team ({} = the friend picked one of the eight)
 var lb := [] # the leaderboard
 var lb_state := ""
 var career_on := false
@@ -438,6 +441,7 @@ func _ready() -> void:
 		if ss.length() == 2 and ss.is_valid_int():
 			opt_snd = clampi(int(ss.substr(0, 1)), 0, 2)
 			opt_voice = ss.substr(1, 1) == "1"
+		opt_own = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-ftown')||''}catch(e){return ''}})()", true)) != "0"
 		var sc := str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-club')||''}catch(e){return ''}})()", true))
 		if sc.is_valid_int():
 			opt_club = clampi(int(sc), 0, CLUBS.size() - 1)
@@ -923,6 +927,43 @@ func _ready() -> void:
 				else:
 					hub_tab = "team"
 					menu_arg = "main"
+			if menu_arg == "fttest":
+				# a friend's room: both bring their own club and eleven (host, then the same start on the guest)
+				print("FT has_own=", _has_own(), " own=", car_main.d.get("own", {}).get("n", "-"))
+				var gt := _ft_me().duplicate(true)
+				gt["n"] = "DADS FC"
+				gt["k"] = ["2961eb", "f4f4f4", "2961eb"]
+				gt["f"] = "4-4-2"
+				for i8 in 11:
+					gt["xi"][i8]["n"] = "DAD%d" % i8
+					gt["xi"][i8]["sho"] = 90
+				guest_tm = gt if _ft_ok(gt) else {}
+				var nm := func(t: int) -> String:
+					var o8 := []
+					for p8 in teams[t]:
+						o8.append("%s#%d" % [p8.pname, p8.num])
+					return " ".join(PackedStringArray(o8.slice(0, 4)))
+				var xi0: Dictionary = car_main.d["squad"][int(car_main.d["xi"][1])]
+				print("FT my squad #1 = ", xi0["n"], " #", xi0["num"])
+				for md8 in ["versus", "coop"]:
+					opt_mode = md8
+					_host_start()
+					print("FT host ", md8, " ft_on=", ft_on, " teams=", TEAM_NAMES, " forms=", forms, " | t0: ", nm.call(0), " | t1: ", nm.call(1), " | t1 sho=", teams[1][9].sho)
+					var sm: Dictionary = JSON.parse_string(JSON.stringify(start_msg))
+					_to_menu(true)
+					print("FT after menu ft_on=", ft_on, " teams=", CLUBS[RKI]["n"])
+					_guest_start(sm)
+					print("FT guest ", md8, " ft_on=", ft_on, " teams=", TEAM_NAMES, " forms=", forms, " | t0: ", nm.call(0), " | t1: ", nm.call(1))
+					_to_menu(true)
+				opt_own = false
+				guest_tm = {}
+				opt_mode = "versus"
+				opt_club = 2
+				guest_club = 5
+				_host_start()
+				print("FT plain clubs ft_on=", ft_on, " teams=", TEAM_NAMES, " start has ft=", start_msg.has("ft"))
+				get_tree().quit()
+				return
 			if menu_arg == "coinstest":
 				# a whole season won in the career: a few coins a match, a lot for the title, some for the cup
 				start_li = 1
@@ -1082,6 +1123,15 @@ func _ready() -> void:
 					if menu_arg == "squad7":
 						car.d["squad"][9]["tp"] = 2
 				menu_arg = "squad"
+			if menu_arg in ["ftteams", "ftlobby"]:
+				# the friend's room: team picker with MY CLUB, and the lobby with the friend's own club
+				teams_from = "lobby"
+				net.role = "host"
+				net.connected = true
+				room = "4821"
+				opt_mode = "versus"
+				guest_tm = {"n": "DADS FC", "xi": []}
+				menu_arg = "teams" if menu_arg == "ftteams" else "lobby"
 			if menu_arg == "cfull":
 				career_on = true
 				_set_clubs(int(car.d["club"]), car.next_match()[0], true)
@@ -1253,7 +1303,7 @@ func _set_clubs(a: int, b: int, force := false) -> void:
 	# a career club plays its own formation
 	if CLUBS[b].has("f"):
 		forms[1] = FORM_NAMES[clampi(int(CLUBS[b]["f"]), 0, FORM_NAMES.size() - 1)]
-	if rk_on:
+	if rk_on or ft_on:
 		for t in 2:
 			var fn := str((tov[t] as Dictionary).get("f", ""))
 			if FORMS.has(fn):
@@ -1328,7 +1378,7 @@ func _build_teams() -> void:
 			for f in FORM:
 				rl.append(str(f[0]))
 			cpu_xi = car.cpu_xi(clubs[1], rl)
-		if rk_on:
+		if rk_on or ft_on:
 			var tl = (tov[t] as Dictionary).get("lay", {})
 			FORM = _my_form(forms[t], tl if tl is Dictionary else {})
 		elif t == 0 and career_on:
@@ -1376,7 +1426,7 @@ func _build_teams() -> void:
 			if p.star or (p.role == "GK" and rng.randf() < 0.35):
 				var pool0 := Career.ab_for(p.role)
 				p.ab = [pool0[rng.randi() % pool0.size()]]
-			var rxi: Array = (tov[t] as Dictionary).get("xi", []) if rk_on else []
+			var rxi: Array = (tov[t] as Dictionary).get("xi", []) if (rk_on or ft_on) else []
 			if rxi.size() == 11 and rxi[i] is Dictionary:
 				# ranked: each side plays with its own club's eleven
 				var rp: Dictionary = rxi[i]
@@ -1622,7 +1672,7 @@ func _menu_info() -> Dictionary:
 	return {
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
-		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
+		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
@@ -1896,6 +1946,7 @@ func _to_menu(keep_net := false) -> void:
 		rk_on = false
 		tov = [{}, {}]
 		_apply_own()
+	_ft_off()
 	if not keep_net:
 		net.stop()
 		room = ""
@@ -2597,6 +2648,11 @@ func _action(act: String, arg = null) -> void:
 		"teams":
 			teams_from = "lobby" if net.role != "" else "quick"
 			hud.show_menu("teams", _menu_info())
+		"club_own":
+			# back to your own club in the friend's room
+			_own_ft(true)
+			_ft_send()
+			hud.show_menu(teams_from, _menu_info())
 		"teams_back":
 			if teams_from == "new":
 				_show_hub(false)
@@ -2606,8 +2662,10 @@ func _action(act: String, arg = null) -> void:
 			opt_club = int(arg)
 			if net.web:
 				JavaScriptBridge.eval("try{localStorage.setItem('bb3d-club','%d')}catch(e){}" % opt_club, true)
+			if teams_from == "lobby":
+				_own_ft(false)
 			if net.role == "guest":
-				net.send({"_": "club", "id": opt_club})
+				_ft_send()
 			else:
 				# show the new kit on the pitch behind the menu
 				_set_clubs(opt_club, clubs[1] if clubs[1] != opt_club else _other_club(opt_club))
@@ -2623,6 +2681,7 @@ func _action(act: String, arg = null) -> void:
 				opt_car = true
 				opt_cup = false
 			room = "%04d" % (randi() % 9000 + 1000)
+			guest_tm = {}
 			net.host(room)
 			co_rdy = [false, false]
 			if opt_car and in_career:
@@ -2749,15 +2808,70 @@ func _co_text() -> String:
 
 # ---------------------------------------------------------------- ranked online
 # Your team as the other phone needs it: the club's name and kit, its formation and your eleven with their numbers.
-func _rk_team() -> Dictionary:
-	var me_c := int(car.d["club"])
+func _rk_team(c = null) -> Dictionary:
+	if c == null:
+		c = car
+	var me_c := int(c.d["club"])
 	var cl: Dictionary = CLUBS[me_c]
 	var xi := []
-	for x in car.d["xi"]:
-		var pl: Dictionary = car.d["squad"][int(x)]
+	for x in c.d["xi"]:
+		var pl: Dictionary = c.d["squad"][int(x)]
 		xi.append({"n": str(pl["n"]), "num": int(pl["num"]), "pos": str(pl["pos"]), "pac": int(pl["pac"]), "sho": int(pl["sho"]), "pas": int(pl["pas"]), "dfn": int(pl["dfn"]), "ab": Career.ab_of(pl)})
-	return {"n": str(cl["n"]), "s": str(cl["s"]), "k": (cl["k"] as Array).duplicate(), "a": (cl.get("a", cl["k"]) as Array).duplicate(), "f": car.form(), "lay": car.lay(),
-		"xi": xi, "rp": rk.rp(), "rn": str(rk.now()["n"]), "ov": int(round(car.my_strength()))}
+	return {"n": str(cl["n"]), "s": str(cl["s"]), "k": (cl["k"] as Array).duplicate(), "a": (cl.get("a", cl["k"]) as Array).duplicate(), "f": c.form(), "lay": c.lay(),
+		"xi": xi, "rp": rk.rp(), "rn": str(rk.now()["n"]), "ov": int(round(c.my_strength()))}
+
+# ---- a friend's room: each of you can bring your own club, with your own eleven, formation and spots
+func _has_own() -> bool:
+	return car_main.has_save() and car_main.d.has("own") and (car_main.d.get("xi", []) as Array).size() == 11
+
+# your own team for the friend's room, or {} when you picked one of the eight clubs
+func _ft_me() -> Dictionary:
+	if not opt_own or not _has_own():
+		return {}
+	var t := _rk_team(car_main)
+	# the club outside the career: its own name and kit, not what the menu shows right now
+	var o: Dictionary = car_main.d["own"]
+	var k: Array = o["k"]
+	var alt := "1c1c20" if Color(str(k[0])).get_luminance() > 0.6 else "f4f4f4"
+	t["n"] = str(o["n"])
+	t["s"] = str(o["s"])
+	t["k"] = [str(k[0]), str(k[1]), str(k[2])]
+	t["a"] = [alt, str(k[0]), alt]
+	return t
+
+# one of the eight clubs written like an own team (no eleven: the usual players)
+func _ft_plain(ci: int) -> Dictionary:
+	var cl: Dictionary = CLUBS[clampi(ci, 0, CLUBS.size() - 1)]
+	return {"n": str(cl["n"]), "s": str(cl["s"]), "k": (cl["k"] as Array).duplicate(), "a": (cl.get("a", cl["k"]) as Array).duplicate()}
+
+func _ft_ok(t) -> bool:
+	return t is Dictionary and t.get("xi", []) is Array and (t["xi"] as Array).size() == 11
+
+# the club button in the lobby: your own club or the one of the eight you picked
+func _lobby_club() -> int:
+	if opt_own and _has_own():
+		return int(car_main.d["club"])
+	return opt_club
+
+func _guest_name() -> String:
+	if not guest_tm.is_empty():
+		return str(guest_tm.get("n", "")).substr(0, 18)
+	return str(CLUBS[clampi(guest_club, 0, CLUBS.size() - 1)]["n"])
+
+func _own_ft(v: bool) -> void:
+	opt_own = v
+	if net.web:
+		JavaScriptBridge.eval("try{localStorage.setItem('bb3d-ftown','%d')}catch(e){}" % (1 if v else 0), true)
+
+func _ft_send() -> void:
+	if net.role == "guest" and net.connected:
+		net.send({"_": "club", "id": opt_club, "tm": _ft_me()})
+
+func _ft_off() -> void:
+	if ft_on:
+		ft_on = false
+		tov = [{}, {}]
+		_apply_own()
 
 # a ranked team as a club entry: name, short name and both kits, with care for what came over the wire
 func _rk_club(t: Dictionary) -> Dictionary:
@@ -2908,6 +3022,7 @@ func _rk_info() -> Dictionary:
 		"tiers": RankS.TIERS}
 
 func _host_start() -> void:
+	_ft_off()
 	var h0 := Human.new()
 	var h1 := Human.new()
 	h1.local = false
@@ -2929,13 +3044,30 @@ func _host_start() -> void:
 		for p in teams[0]:
 			sq.append([p.pname, p.num])
 	else:
-		_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
+		var ta := _ft_me()
+		var tb: Dictionary = guest_tm if opt_mode == "versus" else {}
+		if not ta.is_empty() or not tb.is_empty():
+			# own clubs: each side plays with its own eleven, formation and spots
+			ft_on = true
+			if ta.is_empty():
+				ta = _ft_plain(opt_club)
+			if tb.is_empty():
+				tb = _ft_plain(_other_club(opt_club) if opt_mode == "coop" else guest_club)
+			tov = [ta, tb]
+			_apply_own()
+			_set_clubs(RKI, RKI + 1, true)
+		else:
+			_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
 	screen = "match"
 	hud.show_menu("", {})
 	var sq1 := []
 	for p in teams[1]:
 		sq1.append([p.pname, p.num])
 	start_msg = {"_": "start", "mode": opt_mode, "diff": opt_diff, "len": opt_len, "clubs": clubs, "forms": forms, "sq": sq, "sq1": sq1, "lay": car.lay() if career_on else {}}
+	if ft_on:
+		start_msg["ft"] = 1
+		start_msg["ta"] = tov[0]
+		start_msg["tb"] = tov[1]
 	wait_friend = 0.0
 	net.send(start_msg)
 	_begin_match(true)
@@ -2952,6 +3084,14 @@ func _guest_start(m: Dictionary) -> void:
 		m["clubs"] = [RKI, RKI + 1]
 		career_on = false
 		cup_on = false
+	elif m.has("ft") and m.get("ta") is Dictionary and m.get("tb") is Dictionary:
+		# a friend's room with own clubs: the host sends both teams
+		ft_on = true
+		tov = [m["ta"], m["tb"]]
+		_apply_own()
+		m["clubs"] = [RKI, RKI + 1]
+	else:
+		_ft_off()
 	var h0 := Human.new()
 	h0.local = false
 	var h1 := Human.new()
@@ -3012,6 +3152,8 @@ func _net_poll() -> void:
 			"club":
 				if net.role == "host":
 					guest_club = clampi(int(m.get("id", 1)), 0, CLUBS.size() - 1)
+					var gt = m.get("tm", {})
+					guest_tm = gt if _ft_ok(gt) else {}
 					hud.refresh(_menu_info())
 			"open":
 				net.connected = true
@@ -3030,7 +3172,7 @@ func _net_poll() -> void:
 				elif net.role == "host":
 					_send_lobby()
 				else:
-					net.send({"_": "club", "id": opt_club})
+					_ft_send()
 				if screen == "menu" and net.role == "host" and in_career and opt_car:
 					hud.toast("YOUR FRIEND IS IN THE CAREER")
 					au["blip2"].play()
@@ -3087,6 +3229,7 @@ func _net_poll() -> void:
 						h.evs.append(str(e))
 			"close":
 				net.connected = false
+				guest_tm = {}
 				_as_leave(false)
 				carv.d = {}
 				sugs = []
@@ -3901,7 +4044,13 @@ func _dbg() -> void:
 		"h": hs, "ball": [snappedf(ball.position.x, 0.1), snappedf(ball.position.z, 0.1)], "menu": hud.menu_name, "mode": opt_mode, "clock": int(clock),
 		"owner": players.find(ball_owner), "fps": Engine.get_frames_per_second(), "clubs": clubs,
 		"forms": forms, "career": career_on, "lines": car_lines, "coins": int(car.d.get("coins", -1)), "round": int(car.d.get("round", -1)), "n9": players[9].pname if players.size() > 9 else "",
+		"tn": TEAM_NAMES, "ft": ft_on, "n20": players[20].pname if players.size() > 20 else "", "gname": _guest_name(), "own": _has_own(), "own_ft": opt_own, "gtm": guest_tm.size(), "me_xi": (_ft_me().get("xi", []) as Array).size(),
 	}), true)
+	# a test can press a menu button by name: window.bbDo = "action" or "action|arg"
+	var cmd := str(JavaScriptBridge.eval("(function(){var c=window.bbDo||'';window.bbDo='';return c})()", true))
+	if cmd != "":
+		var cp := cmd.split("|")
+		_action(cp[0], cp[1] if cp.size() > 1 else null)
 	if test_ft > 0.0 and screen == "match" and state == "play" and net.role != "guest":
 		if Time.get_ticks_msec() / 1000.0 - test_t > test_ft:
 			_full_time()

@@ -348,7 +348,7 @@ func _club_btn(info: Dictionary, ci: int, act: String, arg, pos: Vector2, sz: Ve
 	var shirt := Color(str(c["k"][0]))
 	var shorts := Color(str(c["k"][1]))
 	var big := sz.y >= 80
-	var chosen: bool = big and ci == int(info.get("club", -1))
+	var chosen: bool = big and ci == int(info.get("club", -1)) and not (str(info.get("from", "")) == "lobby" and bool(info.get("own_ft", false)))
 	if big:
 		for st in ["normal", "hover", "focus", "pressed", "disabled"]:
 			b.add_theme_stylebox_override(st, _box(Color(0.22, 0.27, 0.25, 0.96), 14, GOLD if chosen else Color(1, 1, 1, 0.18)))
@@ -2147,6 +2147,8 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 		"teams":
 			if str(info.get("from", "")) == "new":
 				_title("PICK YOUR CLUB", "This is the club you will run and play for.")
+			elif str(info.get("from", "")) == "lobby" and int(info.get("own_i", -1)) >= 0:
+				_title("PICK YOUR TEAM", "Your own club plays with your own squad, formation and spots.")
 			else:
 				_title("PICK YOUR TEAM", "")
 			var cl: Array = info.get("clubs", [])
@@ -2156,6 +2158,15 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				var cb := _club_btn(info, ci, "club", ci, Vector2(gx + (ci % 4) * (gw + 12.0), 96 + (ci / 4) * 172.0), Vector2(gw, 156), "")
 				menu.add_child(cb)
 				items.append([cb, Vector2(0, 50), 0.03 * ci])
+			var oi := int(info.get("own_i", -1))
+			if str(info.get("from", "")) == "lobby" and oi >= 0 and oi < cl.size():
+				# in a friend's room: your own club, with your own squad, formation and spots
+				var ob := _club_btn(info, oi, "club_own", null, Vector2(w * 0.5 - 240, 96 + 2 * 172.0 - 4), Vector2(480, 58), "YOUR OWN CLUB:  ")
+				if bool(info.get("own_ft", false)):
+					for st in ["normal", "hover", "focus", "pressed"]:
+						ob.add_theme_stylebox_override(st, _box(Color(0.22, 0.27, 0.25, 0.96), 14, GOLD))
+				menu.add_child(ob)
+				items.append([ob, Vector2(0, 50), 0.26])
 			var bk := _btn("<  BACK", "teams_back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk)
 		"friend":
@@ -2219,7 +2230,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				menu.add_child(sh)
 				if str(info.get("co_text", "")) == "":
 					# in a career together you play as the career's club: no other team to pick
-					var tb2 := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(48, 318), Vector2(260, 50), "TEAM:  ")
+					var tb2 := _club_btn(info, int(info.get("lclub", info.get("club", 0))), "teams", null, Vector2(48, 318), Vector2(260, 50), "TEAM:  ")
 					menu.add_child(tb2)
 				var rx := w - col_w - 40.0
 				var cot := str(info.get("co_text", ""))
@@ -2229,7 +2240,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				menu.add_child(mt)
 				menu.add_child(md)
 				items.append([md, Vector2(80, 0), 0.05])
-				var mh := _label((cot if cot != "" else "You two against the computer") if str(info.get("mode", "")) == "coop" else "Your team against your friend's: " + str(info["clubs"][int(info.get("gclub", 1))]["n"]), 16, Color(1, 1, 1, 0.75), font2)
+				var mh := _label((cot if cot != "" else "You two against the computer") if str(info.get("mode", "")) == "coop" else "Your team against your friend's: " + str(info.get("gname", "")), 16, Color(1, 1, 1, 0.75), font2)
 				mh.position = Vector2(rx + 4, 158)
 				mh.size = Vector2(col_w - 8, 24)
 				mh.clip_text = true
@@ -2264,7 +2275,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				s3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(s3)
 				if conn and str(info.get("co_text", "")) == "" and not bool(info.get("has_cv", false)):
-					var tb3 := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(w * 0.5 - 170, h * 0.5 + 60), Vector2(340, 56), "YOUR TEAM:  ")
+					var tb3 := _club_btn(info, int(info.get("lclub", info.get("club", 0))), "teams", null, Vector2(w * 0.5 - 170, h * 0.5 + 60), Vector2(340, 56), "YOUR TEAM:  ")
 					menu.add_child(tb3)
 				if conn:
 					if bool(info.get("has_cv", false)):
