@@ -799,6 +799,25 @@ func _ready() -> void:
 						get_tree().quit()
 						return
 					menu_arg = "sug"
+			if menu_arg == "coinstest":
+				# a whole season won in the career: a few coins a match, a lot for the title, some for the cup
+				start_li = 1
+				_start_mine()
+				var c0 := int(car_main.d["coins"])
+				career_on = true
+				while not car.season_over():
+					score = [3, 0]
+					car_lines = car.finish_match(3, 0, [], [])
+					_car_coins(true)
+				print("COINS season: ", car_lines.slice(car_lines.size() - 2), " outside ", c0, " -> ", int(car_main.d["coins"]))
+				var c1 := int(car_main.d["coins"])
+				while not car.cup_over():
+					score = [2, 0]
+					car_lines = car.cup_finish(2, 0, true)
+					_car_coins(false)
+				print("COINS cup: ", car_lines[car_lines.size() - 1], " outside ", c1, " -> ", int(car_main.d["coins"]), " career money ", car.money(int(car.d["coins"])))
+				get_tree().quit()
+				return
 			if menu_arg == "minetest":
 				# own club outside -> career with my club (own money) -> back out: the club outside is untouched
 				car.d["coins"] = 4321
@@ -4430,9 +4449,11 @@ func _full_time() -> void:
 			car_main.save()
 			_cm_sync()
 		co_pay = [car.last_coins, _winner() == 0, ([car_lines[2]] if car_lines.size() > 2 else []) + ([car_lines[1]] if car_lines.size() > 1 else [])]
+		_car_coins(false)
 	elif career_on:
 		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
+		_car_coins(true)
 		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1], car_lines[1]] + ([str(car.d["note"])] if car.season_over() else [])]
 	hud.show_menu("full", _menu_info())
 
@@ -6831,3 +6852,29 @@ func _sug_answer(yes: bool) -> void:
 	sug_prev = ""
 	hud.show_menu(pm, _menu_info())
 	_sug_next()
+
+# The career has its own euros, but your club outside earns a few coins from it too (Daniel): a little for a match,
+# much more for winning the league or the cup, something for going up.
+const CAR_COINS := {"w": 5, "d": 2, "l": 1, "title": 300, "up": 150, "cup": 250}
+
+func _car_coins(league: bool) -> void:
+	if car != carc or cup_mode or not in_career:
+		return
+	var n := 0
+	var why := []
+	var won: bool = score[0] > score[1] or (not league and _winner() == 0)
+	n += int(CAR_COINS["w"]) if won else (int(CAR_COINS["d"]) if score[0] == score[1] else int(CAR_COINS["l"]))
+	if league and car.season_over():
+		var pos: int = car.rank_of(int(car.d["club"]))
+		if pos == 1:
+			n += int(CAR_COINS["title"])
+			why.append("THE TITLE")
+		elif int(car.d.get("move", 0)) < 0:
+			n += int(CAR_COINS["up"])
+			why.append("PROMOTION")
+	if not league and bool(car.cup().get("won", false)) and won:
+		n += int(CAR_COINS["cup"])
+		why.append("THE CUP")
+	car_main.d["coins"] = int(car_main.d["coins"]) + n
+	car_main.save()
+	car_lines.append("+%d COINS FOR YOUR CLUB%s" % [n, (" (" + " + ".join(PackedStringArray(why)) + ")") if not why.is_empty() else ""])
