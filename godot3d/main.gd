@@ -407,12 +407,9 @@ func _ready() -> void:
 	carv.ro = true
 	carv.names = SURNAMES
 	_split_career()
-	if net.web:
-		in_career = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-incar')||''}catch(e){return ''}})()", true)) == "1"
-	if in_career and carc.has_save() and carc.on():
-		car = carc
-	else:
-		in_career = false
+	# the game always opens on the normal home screen (Daniel); the career waits, saved, until you go into it
+	in_career = false
+	car = car_main
 	cupc = Career.new()
 	cupc.key = "bb3d-cupmode"
 	cupc.names = SURNAMES
@@ -1856,9 +1853,6 @@ func _split_career() -> void:
 	car_main.d["mode"] = "simple"
 	car_main.stash_clear()
 	car_main.save()
-	# you were in a career: you still are
-	in_career = true
-	_incar_save()
 
 func _incar_save() -> void:
 	if net.web:
