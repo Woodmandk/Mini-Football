@@ -126,6 +126,7 @@ var as_prev = null # where car pointed before
 var cv_last := 0 # the host: the last career sent (its hash)
 var cv_t := 0.0
 var sugs := [] # the host: the assistant's suggestions still waiting
+var ct_from := "" # where a contract talk started: back there when it ends
 var co_rdy := [false, false] # career together: the manager and the friend have tapped PLAY
 var sug_cur := {}
 var sug_prev := ""
@@ -800,6 +801,70 @@ func _ready() -> void:
 						get_tree().quit()
 						return
 					menu_arg = "sug"
+			if menu_arg in ["ecotest", "ctshot", "ctsign", "sqsel", "ecoclub", "ecotr"]:
+				# the career's money: wages, contracts, talks, buildings from the board
+				start_li = 1
+				_start_mine()
+				print("ECO wages=", car.wages(), " wb=", car.wb(), " fac=", car.d.get("fac", {}), " coins=", car.money(int(car.d["coins"])))
+				var bi := 13
+				car.talk_renew(bi)
+				var t0: Dictionary = car.talk()
+				print("ECO renew ask=", t0.get("ask"), " min=", t0.get("min"), " maxy=", t0.get("maxy"), " ct=", t0.get("ct"))
+				if menu_arg == "ctshot":
+					car.talk_set("w", -3)
+					car_msg = car.talk_offer()
+					menu_arg = "contract"
+				elif menu_arg == "sqsel":
+					car.talk_end()
+					car_sel = 2
+					menu_arg = "squad"
+				elif menu_arg == "ecoclub":
+					car.talk_end()
+					car.d["board"]["conf"] = 70
+					car_msg = car.fac_ask("training")
+					menu_arg = "club"
+				elif menu_arg == "ecotr":
+					car.talk_end()
+					hub_tab = "transfers"
+					menu_arg = "main"
+				else:
+					car.talk_set("w", -6)
+					print("ECO low offer: ", car.talk_offer())
+					car.talk_set("w", 6)
+					print("ECO fair offer: ", car.talk_offer(), " wk=", car.d["squad"][bi]["wk"], " ct=", car.d["squad"][bi]["ct"])
+					var n0 := (car.d["squad"] as Array).size()
+					car.buy(0)
+					print("ECO market talk=", not car.talk().is_empty(), " squad still ", (car.d["squad"] as Array).size() == n0)
+					if menu_arg == "ctsign":
+						menu_arg = "contract"
+					else:
+						print("ECO sign: ", car.talk_offer(), " squad ", n0, " -> ", (car.d["squad"] as Array).size(), " wages=", car.wages(), "/", car.wb())
+						print("ECO wb up: '", car.wb_move(true), "' wb=", car.wb(), " | down: '", car.wb_move(false), "'")
+						car.d["board"]["conf"] = 30
+						print("ECO fac low conf: ", car.fac_ask("stadium"))
+						car.d["freq"] = 0
+						car.d["board"]["conf"] = 90
+						car.d["coins"] = 99999
+						print("ECO fac yes: ", car.fac_ask("stadium"), " | again: ", car.fac_ask("youth"))
+						var lv0: int = car.fac("stadium")
+						var ln: Array = []
+						for r9 in 8:
+							ln = car.finish_match(2, 0, [], [])
+						print("ECO after 8 matches stadium ", lv0, " -> ", car.fac("stadium"), " lines has ready=", str(ln).contains("READY"), " grow lines=", str(ln).contains("+1"))
+						var gl := 0
+						var o0 := _avg_ovr(car.d)
+						while not car.season_over():
+							for l9 in car.finish_match(1, 0, [], []):
+								if str(l9).contains("  +") and not str(l9).contains("TP"):
+									gl += 1
+						print("ECO season growth lines=", gl, " xi ovr ", o0, " -> ", _avg_ovr(car.d))
+						var cts := []
+						for pl9 in car.d["squad"]:
+							cts.append(int(pl9.get("ct", -9)))
+						car.next_season()
+						print("ECO contracts before ", cts, " squad now ", (car.d["squad"] as Array).size(), " note=", car.d["note"], " xi ok=", (car.d["xi"] as Array).max() < (car.d["squad"] as Array).size())
+						get_tree().quit()
+						return
 			if menu_arg == "coinstest":
 				# a whole season won in the career: a few coins a match, a lot for the title, some for the cup
 				start_li = 1
@@ -1609,21 +1674,23 @@ func _fac_info() -> Array:
 		var nxt := ""
 		match k:
 			"stadium":
-				now = txt[k][2] % (lv * 9)
-				nxt = txt[k][2] % ((lv + 1) * 9)
+				now = "+%s from the gate at home" % car.money(lv * 9)
+				nxt = "+%s from the gate at home" % car.money((lv + 1) * 9)
 			"training":
 				now = (txt[k][2] % ((lv - 1) * 15)) if lv > 1 else "Normal XP from matches"
 				nxt = txt[k][2] % (lv * 15)
 			_:
 				now = txt[k][2] % (66 + lv * 4)
 				nxt = txt[k][2] % (70 + lv * 4)
-		out.append({"k": k, "n": txt[k][0], "what": txt[k][1], "lv": lv, "max": Career.FAC_MAX, "now": now, "next": nxt if lv < Career.FAC_MAX else "", "cost": car.fac_cost(k)})
+		out.append({"k": k, "n": txt[k][0], "what": txt[k][1], "lv": lv, "max": Career.FAC_MAX, "now": now, "next": nxt if lv < Career.FAC_MAX else "",
+			"cost": car.fac_build_cost(k) if car.eur else car.fac_cost(k), "need": car.fac_need(k)})
 	return out
 
 # Everything the career screens show.
 func _car_info() -> Dictionary:
 	if not car.has_save():
 		return {}
+	car.money_init()
 	var d: Dictionary = car.d
 	var me_c: int = int(d["club"])
 	var nm: Array = car.next_match()
@@ -1641,13 +1708,14 @@ func _car_info() -> Dictionary:
 		var pl: Dictionary = d["squad"][i]
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
 			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl),
-			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2})
+			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
+			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0))})
 	var tp_all := 0
 	for pl in d["squad"]:
 		tp_all += int(pl.get("tp", 0))
 	var mk := []
 	for pl in car.market():
-		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl)})
+		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl), "wk": Career.wage_of(pl)})
 	var roles := _my_form(car.form(), car.lay())
 	return {
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
@@ -1657,6 +1725,8 @@ func _car_info() -> Dictionary:
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 		"ab_pick": _ab_pick_info(), "board": _board_info(), "cup_due": car.cup_due(), "cup_after": car.cup_after(), "mode": car.mode(),
 		"sacked": car.d.has("sacked"), "on": car.on(),
+		"eur": car.eur, "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(),
+		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 	}
 
 func _board_info() -> Dictionary:
@@ -2208,6 +2278,11 @@ func _action(act: String, arg = null) -> void:
 			if scout_c >= 0 and scout_i >= 0:
 				var amt := int(arg)
 				scout_res = car.bid(scout_c, scout_i, amt)
+				if bool(scout_res.get("talk", false)):
+					car_msg = str(scout_res.get("msg", ""))
+					ct_from = "scout_sq"
+					hud.show_menu("contract", _menu_info())
+					return
 				if bool(scout_res.get("ok", false)):
 					au["cheer"].play()
 					scout_i = -1
@@ -2232,17 +2307,8 @@ func _action(act: String, arg = null) -> void:
 			var pi := int(arg)
 			car_msg = ""
 			car_sell = -1
-			if car_sel == pi:
-				car_sel = -1
-			elif car_sel < 0:
-				car_sel = pi
-			else:
-				var xi: Array = car.d["xi"]
-				if xi.has(car_sel) or xi.has(pi):
-					car.swap(car_sel, pi)
-					car_sel = -1
-				else:
-					car_sel = pi
+			# a tap only picks the man to look at; swapping is done by dragging (Daniel)
+			car_sel = -1 if car_sel == pi else pi
 			hud.refresh(_menu_info())
 		"c_train":
 			if car_sel >= 0:
@@ -2327,8 +2393,38 @@ func _action(act: String, arg = null) -> void:
 		"c_club":
 			car_msg = ""
 			hud.show_menu("club", _menu_info())
+		"ct_open":
+			if car_sel >= 0:
+				car_msg = car.talk_renew(car_sel)
+				if not car.talk().is_empty():
+					ct_from = "squad"
+					hud.show_menu("contract", _menu_info())
+				else:
+					hud.refresh(_menu_info())
+		"ct_w", "ct_y":
+			car.talk_set("w" if act == "ct_w" else "y", int(arg))
+			hud.refresh(_menu_info())
+		"ct_go":
+			car_msg = car.talk_offer()
+			if car.talk().is_empty():
+				# the talk is over: back to where it started, with the answer
+				au["blip2" if car_msg.contains("SIGN") else "blip"].play()
+				car_sel = -1
+				scout_i = -1
+				scout_res = {}
+				hud.show_menu("squad" if car_msg.contains("SIGN") or ct_from == "squad" else ct_from, _menu_info())
+			else:
+				hud.refresh(_menu_info())
+		"ct_back":
+			car.talk_end()
+			car_msg = ""
+			scout_res = {}
+			hud.show_menu(ct_from if ct_from != "" else "squad", _menu_info())
+		"c_wb":
+			car_msg = car.wb_move(str(arg) == "up")
+			hud.refresh(_menu_info())
 		"c_fac":
-			car_msg = car.fac_up(str(arg))
+			car_msg = car.fac_up(str(arg)) if not car.eur else car.fac_ask(str(arg))
 			if car_msg == "BUILT":
 				car_msg = ""
 				au["blip2"].play()
@@ -2338,6 +2434,10 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("market", _menu_info())
 		"c_buy":
 			car_msg = car.buy(int(arg))
+			if not car.talk().is_empty():
+				ct_from = "market"
+				hud.show_menu("contract", _menu_info())
+				return
 			if car_msg.ends_with("SIGNED"):
 				au["blip2"].play()
 			hud.refresh(_menu_info())
@@ -6808,11 +6908,6 @@ func _as_take(act: String, arg) -> bool:
 			_as_leave(true)
 		return true
 	if act == "c_pick":
-		var pi := int(arg)
-		var xi: Array = car.d["xi"]
-		if car_sel >= 0 and car_sel != pi and (xi.has(car_sel) or xi.has(pi)):
-			_as_suggest("c_swap", [car_sel, pi])
-			return true
 		return false
 	if act == "c_sell":
 		if car_sel >= 0 and car_sell == car_sel:
