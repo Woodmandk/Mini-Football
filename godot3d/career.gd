@@ -13,6 +13,7 @@ const STAT_KEYS := ["pac", "sho", "pas", "dfn"]
 
 var d := {}
 var web := false
+var ro := false # a copy only to look at (the host's career on the friend's phone): never saved
 var eur := false # the career mode counts its own money in euros, not the game's coins
 
 # One unit of club money: coins outside the career, 10 000 euros inside it.
@@ -158,6 +159,8 @@ func my_club() -> Dictionary:
 	return stash_get()
 
 func save() -> void:
+	if ro:
+		return
 	var txt := JSON.stringify(d)
 	if web:
 		JavaScriptBridge.eval("try{localStorage.setItem('%s',%s)}catch(e){}" % [key, JSON.stringify(txt)], true)
@@ -167,6 +170,9 @@ func save() -> void:
 			f.store_string(txt)
 
 func wipe() -> void:
+	if ro:
+		d = {}
+		return
 	d = {}
 	if web:
 		JavaScriptBridge.eval("try{localStorage.removeItem('%s')}catch(e){}" % key, true)

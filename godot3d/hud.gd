@@ -1259,6 +1259,36 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			co6.position = Vector2(20, rp6.size.y - 40)
 			rp6.add_child(co6)
 			menu.add_child(_btn("<  BACK", "sc_back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"sug":
+			var sg: Dictionary = info.get("sug", {})
+			var dm := ColorRect.new()
+			dm.color = Color(0.0, 0.03, 0.02, 0.72)
+			dm.size = Vector2(w, h)
+			menu.add_child(dm)
+			var pw := minf(w - 80.0, 760.0)
+			var ph := 300.0
+			var sp := Panel.new()
+			sp.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.97), 20, Color(GOLD.r, GOLD.g, GOLD.b, 0.6)))
+			sp.position = Vector2((w - pw) * 0.5, (h - ph) * 0.5)
+			sp.size = Vector2(pw, ph)
+			menu.add_child(sp)
+			items.append([sp, Vector2(0, 40), 0.0])
+			var st1 := _label("YOUR ASSISTANT MANAGER SUGGESTS", 18, Color(1, 1, 1, 0.7), font2)
+			st1.position = Vector2(0, 26)
+			st1.size = Vector2(pw, 26)
+			st1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			sp.add_child(st1)
+			var st2 := _label(str(sg.get("t", "")), 30, GOLD)
+			st2.position = Vector2(24, 64)
+			st2.size = Vector2(pw - 48, 110)
+			st2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			st2.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			st2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			sp.add_child(st2)
+			var yb := _btn("YES, DO IT", "sug_yes", null, "primary", Vector2(28, ph - 96), Vector2(pw * 0.5 - 40, 70), 28)
+			var nb2 := _btn("NO THANKS", "sug_no", null, "alt", Vector2(pw * 0.5 + 12, ph - 96), Vector2(pw * 0.5 - 40, 70), 24)
+			sp.add_child(yb)
+			sp.add_child(nb2)
 		"cmode":
 			var cm: Dictionary = info.get("car", {})
 			var cur := str(cm.get("mode", ""))
@@ -2101,6 +2131,11 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				if conn:
 					var tb3 := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(w * 0.5 - 170, h * 0.5 + 60), Vector2(340, 56), "YOUR TEAM:  ")
 					menu.add_child(tb3)
+					if bool(info.get("has_cv", false)):
+						# the host's career, to look around in as the assistant manager
+						var av := _btn("THE CAREER  ·  ASSISTANT MANAGER  ›", "as_open", null, "primary", Vector2(w * 0.5 - 250, h * 0.5 + 128), Vector2(500, 64), 24)
+						menu.add_child(av)
+						items.append([av, Vector2(0, 40), 0.1])
 		"how":
 			var hw := minf(w - 80.0, 860.0)
 			var hp := Panel.new()
@@ -2239,9 +2274,14 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				items.append([nr, Vector2(0, 60), 0.5])
 				items.append([mr, Vector2(0, 60), 0.58])
 			elif str(info.get("role", "")) == "guest":
-				var wt := _label("Waiting for the host...", 20, Color(1, 1, 1, 0.8), font2)
-				wt.position = Vector2(w * 0.5 - 330, by2 + 22)
-				menu.add_child(wt)
+				if bool(info.get("has_cv", false)):
+					var avb := _btn("THE CAREER  ›", "as_open", null, "primary", Vector2(w * 0.5 - 320, by2), Vector2(300, 70), 26)
+					menu.add_child(avb)
+					items.append([avb, Vector2(0, 60), 0.45])
+				else:
+					var wt := _label("Waiting for the host...", 20, Color(1, 1, 1, 0.8), font2)
+					wt.position = Vector2(w * 0.5 - 330, by2 + 22)
+					menu.add_child(wt)
 				var mb := _btn("MAIN MENU", "menu", null, "alt", Vector2(w * 0.5 + 20, by2), Vector2(300, 70), 24)
 				menu.add_child(mb)
 				items.append([mb, Vector2(0, 60), 0.5])
@@ -2441,7 +2481,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var nm := _label(str(c.get("name", "PITCH BOSS")), 26, Color.WHITE)
 	nm.position = Vector2(72, 4)
 	menu.add_child(nm)
-	var sub := _label(("%s   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [str(c.get("lgname", "")), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))]) if bool(info.get("incar", false)) else ("YOUR CLUB   ·   TEAM RATING %d" % int(c.get("str", 0))), 14, Color(1, 1, 1, 0.75), font2)
+	var sub := _label(("ASSISTANT MANAGER   ·   YOUR CHANGES BECOME SUGGESTIONS   ·   %s PLACE" % _ord(int(c.get("rank", 1)))) if bool(info.get("assist", false)) else ("%s   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [str(c.get("lgname", "")), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))]) if bool(info.get("incar", false)) else ("YOUR CLUB   ·   TEAM RATING %d" % int(c.get("str", 0))), 14, Color(1, 1, 1, 0.75), font2)
 	sub.position = Vector2(73, 37)
 	menu.add_child(sub)
 	var co := _label(_mb(int(c.get("coins", 0))), 24, GOLD)
@@ -2452,7 +2492,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var incar := bool(info.get("incar", false))
 	if incar:
 		# inside the career: the way out is always in sight
-		var xb := _btn("EXIT CAREER", "cr_exit", null, "alt", Vector2(w - 270.0 - 190.0, 10), Vector2(176, 44), 17)
+		var xb := _btn("BACK TO ROOM" if bool(info.get("assist", false)) else "EXIT CAREER", "as_back" if bool(info.get("assist", false)) else "cr_exit", null, "alt", Vector2(w - 270.0 - 190.0, 10), Vector2(176, 44), 17)
 		menu.add_child(xb)
 	# the game's logo, between the season line and the coins (left out when the UPDATE button needs the room)
 	elif not bool(info.get("upd", false)) and w >= 900.0:
@@ -2586,7 +2626,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				stl.size = Vector2(lw - 28 - 90, 22)
 				stl.clip_text = true
 				strip.add_child(stl)
-				var pm := _btn("PLAY CUP MATCH" if cdue else "PLAY MATCH", "c_play", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 38)
+				var pm := _btn("BACK TO THE ROOM" if bool(info.get("assist", false)) else ("PLAY CUP MATCH" if cdue else "PLAY MATCH"), "c_play", null, "primary", Vector2(32, y0 + ch - bh), Vector2(lw, bh), 38)
 				menu.add_child(pm)
 				items.append([pm, Vector2(0, 60), 0.1])
 				if anim:
@@ -2600,7 +2640,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var cps := "You won it! A new cup starts next season" if bool(cpi.get("won", false)) else ("You are out. A new cup starts next season" if bool(cpi.get("out", false)) else ("%s against %s: next match!" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", ""))] if bool(c.get("cup_due", false)) else "%s against %s after round %d" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", "")), int(c.get("cup_after", 0))]))
 			var t0 := _tile("THE CUP", cps, "cup", null, Vector2(rx, y0), Vector2(rw, th), GOLD, 22)
 			var t1 := _tile("THE TABLE", "%s   ·   %s place" % [str(c.get("lgname", "")).capitalize(), _ord(int(c.get("rank", 1)))], "c_table", null, Vector2(rx, y0 + th + 10.0), Vector2(rw, th), Color.WHITE, 22)
-			var t2 := _tile("PLAY IT TOGETHER", "Your friend joins your career on his phone", "friend", null, Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
+			var t2 := _tile("THE SQUAD", "Look at the players and suggest changes", "tab", "team", Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22) if bool(info.get("assist", false)) else _tile("PLAY IT TOGETHER", "Your friend joins your career on his phone", "friend", null, Vector2(rx, y0 + 2 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
 			var bdt: Dictionary = c.get("board", {})
 			var t3 := _tile("THE BOARD", "Confidence %d: %s. Your goals this season." % [int(bdt.get("conf", 50)), str(bdt.get("mood", "")).capitalize()], "c_board", null, Vector2(rx, y0 + 3 * (th + 10.0)), Vector2(rw, th), Color.WHITE, 22)
 			menu.add_child(t0)
