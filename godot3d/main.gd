@@ -718,8 +718,13 @@ func _ready() -> void:
 					_cup_start(ClubDB.start_leagues(Career.FIRST)[0][3])
 				else:
 					_cup_start_mine("DENMARK")
+				car_main.d["squad"][0]["n"] = "OUTSIDEGK" if menu_arg == "cupmine" else car_main.d["squad"][0]["n"]
+				print("CUPMODE gk inside=", car.d["squad"][0]["n"], " outside=", car_main.d["squad"][0]["n"])
 				for k3 in 2:
 					print("CUPMODE ", car.cup_round_name(), " v ", car.cup_opp(), " due=", car.cup_due(), " ", car.cup_finish(3, 1, true), " main coins=", car_main.d["coins"])
+				_cm_leave()
+				print("CUPMODE after leave outside gk=", car_main.d["squad"][0]["n"], " cup gk=", cupc.d["squad"][0]["n"])
+				_cm_enter()
 				menu_arg = "cup"
 			if menu_arg == "splittest":
 				# an old save with a running career at a club taken over, and the own club waiting
@@ -1824,6 +1829,11 @@ func _cup_start_mine(ctry: String) -> void:
 	var li := 3 if ctry == "ENGLAND" else 5
 	cupc.new_career(cupc.weakest(li), true)
 	cupc.d["own"] = (mc["own"] as Dictionary).duplicate(true) if mc.has("own") else {"n": "MY CLUB", "s": "MYC", "k": ["dc2424", "f4f4f4", "dc2424"]}
+	# your team goes into the cup as a copy: what happens there stays there
+	for k in ["squad", "xi", "form", "lay", "abv"]:
+		if mc.has(k):
+			cupc.d[k] = mc[k].duplicate(true) if (mc[k] is Array or mc[k] is Dictionary) else mc[k]
+	cupc._ints()
 	cupc.d["cupmode"] = true
 	cupc.d["mode"] = "simple"
 	cupc.save()
@@ -1834,15 +1844,6 @@ func _cm_enter() -> void:
 	start_kind = ""
 	cup_mode = true
 	car = cupc
-	if car.is_mine():
-		var mc := _my_club()
-		for k in ["squad", "xi", "form", "lay"]:
-			if mc.has(k):
-				car.d[k] = mc[k].duplicate(true) if (mc[k] is Array or mc[k] is Dictionary) else mc[k]
-			else:
-				car.d.erase(k)
-		car._ints()
-		car.save()
 	_apply_own()
 	hud.show_menu("cup", _menu_info())
 
@@ -1856,19 +1857,8 @@ func _cm_leave() -> void:
 	_apply_own()
 
 func _cm_sync() -> void:
-	if not cupc.has_save() or not cupc.is_mine():
-		return
-	var mc := _my_club()
-	if mc.is_empty():
-		return
-	for k in ["squad", "xi", "form", "lay"]:
-		if cupc.d.has(k):
-			mc[k] = cupc.d[k].duplicate(true) if (cupc.d[k] is Array or cupc.d[k] is Dictionary) else cupc.d[k]
-	if car_main.is_mine():
-		car_main._ints()
-		car_main.save()
-	else:
-		car_main.stash_put(mc)
+	# the cup's team is its own copy (Daniel: each mode keeps its own team), so nothing goes back
+	pass
 
 func _own_start() -> void:
 	if not car.d.has("own"):
