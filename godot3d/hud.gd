@@ -1259,6 +1259,65 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			co6.position = Vector2(20, rp6.size.y - 40)
 			rp6.add_child(co6)
 			menu.add_child(_btn("<  BACK", "sc_back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"contract":
+			var c9: Dictionary = info.get("car", {})
+			var t9: Dictionary = c9.get("talk", {})
+			var sign9 := str(t9.get("kind", "")) == "sign"
+			_title("CONTRACT TALKS", "%s   ·   %s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)" % [str(t9.get("n", "")).to_upper(), str(t9.get("pos", "")), int(t9.get("age", 0)), int(t9.get("ovr", 0)), int(t9.get("pot", 0))])
+			var pw9 := (w - 64.0 - 20.0) * 0.5
+			var lp9 := _panel(Vector2(32, 100), Vector2(pw9, h - 200))
+			var rp9 := _panel(Vector2(32 + pw9 + 20, 100), Vector2(pw9, h - 200))
+			var rows9 := []
+			if sign9:
+				rows9.append(["TRANSFER FEE", _mp(int(t9.get("fee", 0))) + ("   ·   AGREED WITH %s" % str(c9.get("club_n", "")) if str(c9.get("club_n", "")) != "" else "   ·   FOR HIS RIGHTS")])
+			else:
+				rows9.append(["NOW", "%s A WEEK   ·   %s" % [Career.wage_text(int(t9.get("cur", 0))), "LAST SEASON" if int(t9.get("ct", 1)) <= 1 else "%d SEASONS LEFT" % int(t9.get("ct", 1))]])
+			rows9.append(["HE ASKS FOR", "%s A WEEK" % Career.wage_text(int(t9.get("ask", 0)))])
+			rows9.append(["SEASONS", "UP TO %d AT HIS AGE" % int(t9.get("maxy", 3))])
+			rows9.append(["TRIES LEFT", str(int(t9.get("tries", 3)))])
+			for ri9 in rows9.size():
+				var k9 := _label(str(rows9[ri9][0]), 13, GOLD, font2)
+				k9.position = Vector2(20, 16 + ri9 * 58)
+				lp9.add_child(k9)
+				var v9 := _label(str(rows9[ri9][1]), 22 if ri9 == 1 else 18, Color.WHITE)
+				v9.position = Vector2(20, 34 + ri9 * 58)
+				lp9.add_child(v9)
+			var ol9 := _label("YOUR OFFER", 13, GOLD, font2)
+			ol9.position = Vector2(20, 16)
+			rp9.add_child(ol9)
+			var rx9 := 32 + pw9 + 20
+			for li9 in 2:
+				var yy9 := 100 + 44 + li9 * 70
+				var mn9 := _btn("–", "ct_w" if li9 == 0 else "ct_y", -1, "alt", Vector2(rx9 + 20, yy9), Vector2(60, 54), 28)
+				var pl9 := _btn("+", "ct_w" if li9 == 0 else "ct_y", 1, "alt", Vector2(rx9 + pw9 - 80, yy9), Vector2(60, 54), 28)
+				menu.add_child(mn9)
+				menu.add_child(pl9)
+				var vt9 := ("%s A WEEK" % Career.wage_text(int(t9.get("offer", 0)))) if li9 == 0 else ("%d SEASON%s" % [int(t9.get("yrs", 1)), "" if int(t9.get("yrs", 1)) == 1 else "S"])
+				var vl9 := _label(vt9, 26, Color.WHITE)
+				vl9.position = Vector2(90, 44 + li9 * 70 + 10)
+				vl9.size = Vector2(pw9 - 180, 34)
+				vl9.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				rp9.add_child(vl9)
+			var after9 := int(c9.get("wages", 0)) - int(t9.get("cur", 0)) + int(t9.get("offer", 0))
+			var wb9 := int(c9.get("wb", 0))
+			var wt9 := _label("WAGES AFTER:  %s  OF  %s A WEEK" % [Career.wage_text(after9), Career.wage_text(wb9)], 15, Color(1, 0.55, 0.45) if after9 > wb9 else Color(1, 1, 1, 0.75), font2)
+			wt9.position = Vector2(20, 190)
+			rp9.add_child(wt9)
+			var go9 := _btn("MAKE THE OFFER", "ct_go", null, "primary", Vector2(rx9, h - 88), Vector2(pw9, 66), 26)
+			menu.add_child(go9)
+			var bk9 := _btn("WALK AWAY", "ct_back", null, "ghost", Vector2(32, h - 88), Vector2(pw9, 66), 22)
+			menu.add_child(bk9)
+			if str(c9.get("msg", "")) != "":
+				var ms9 := _label(str(c9.get("msg", "")), 15, GOLD, font2)
+				ms9.position = Vector2(20, h - 200 - 40)
+				ms9.size = Vector2(pw9 * 2 + 20 - 40, 24)
+				ms9.clip_text = true
+				lp9.add_child(ms9)
+			var co9 := _label(_mb(int(c9.get("coins", 0))), 22, GOLD)
+			co9.position = Vector2(w - 260, 20)
+			co9.size = Vector2(230, 34)
+			co9.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			menu.add_child(co9)
 		"sug":
 			var sg: Dictionary = info.get("sug", {})
 			var dm := ColorRect.new()
@@ -1666,7 +1725,8 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				var dn := _label("%d  %s" % [int(sp2["num"]), str(sp2["n"])], 26, Color.WHITE)
 				dn.position = Vector2(16, 8)
 				dp.add_child(dn)
-				var dd := _label("%s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)   ·   %d GOALS" % [str(sp2["pos"]), int(sp2["age"]), int(sp2["ovr"]), int(sp2["pot"]), int(sp2["g"])], 13, Color(1, 1, 1, 0.75), font2)
+				var eur3 := bool(c3.get("eur", false))
+				var dd := _label(("%s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)   ·   %s A WEEK   ·   %s" % [str(sp2["pos"]), int(sp2["age"]), int(sp2["ovr"]), int(sp2["pot"]), Career.wage_text(int(sp2.get("wk", 0))), "LAST SEASON OF HIS CONTRACT" if int(sp2.get("ct", 1)) <= 1 else "CONTRACT: %d SEASONS" % int(sp2.get("ct", 1))]) if eur3 else ("%s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)   ·   %d GOALS" % [str(sp2["pos"]), int(sp2["age"]), int(sp2["ovr"]), int(sp2["pot"]), int(sp2["g"])]), 13, (GOLD if eur3 and int(sp2.get("ct", 1)) <= 1 else Color(1, 1, 1, 0.75)), font2)
 				dd.position = Vector2(16, 44)
 				dp.add_child(dd)
 				var sn := ["PACE", "SHOOTING", "PASSING", "DEFENDING"]
@@ -1677,7 +1737,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					var sv := _label(str(sp2["st"][sti]), 22, Color.WHITE)
 					sv.position = Vector2(16 + (sti % 2) * (bw3 * 0.5 - 8) + 104, 62 + (sti / 2) * 40)
 					dp.add_child(sv)
-					if int(sp2.get("tp", 0)) > 0:
+					if int(sp2.get("tp", 0)) > 0 and not eur3:
 						# a training point to use: you pick what he gets better at
 						var plus := _btn("+1", "c_tp", sti, "primary", Vector2(bx3 + 16 + (sti % 2) * (bw3 * 0.5 - 8) + 150, dy + 60 + (sti / 2) * 40), Vector2(64, 34), 17)
 						menu.add_child(plus)
@@ -1691,13 +1751,13 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				xf.position = Vector2(16, 152)
 				xf.size = Vector2((bw3 - 32) * clampf(float(sp2["xp"]) / 100.0, 0.0, 1.0), 8)
 				dp.add_child(xf)
-				var tpn := int(sp2.get("tp", 0))
-				var tpl := _label("TP  %d" % tpn, 24, GOLD if tpn > 0 else Color(1, 1, 1, 0.45))
+				var tpn := 0 if eur3 else int(sp2.get("tp", 0))
+				var tpl := _label("" if eur3 else "TP  %d" % tpn, 24, GOLD if tpn > 0 else Color(1, 1, 1, 0.45))
 				tpl.position = Vector2(bw3 - 136, 8)
 				tpl.size = Vector2(120, 32)
 				tpl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				dp.add_child(tpl)
-				var xl := _label(("YOU HAVE TRAINING POINTS: TAP +1 ON WHAT HE SHOULD LEARN" if tpn > 0 else "A FULL BAR GIVES 1 TRAINING POINT (TP). HE FILLS IT BY PLAYING.") if int(sp2["ovr"]) < int(sp2["pot"]) else "AT HIS BEST", 11, GOLD if tpn > 0 else Color(1, 1, 1, 0.6), font2)
+				var xl := _label(("HE GETS BETTER BY HIMSELF WHEN THE BAR IS FULL. HE FILLS IT BY PLAYING." if int(sp2["ovr"]) < int(sp2["pot"]) else "AT HIS BEST") if eur3 else ("YOU HAVE TRAINING POINTS: TAP +1 ON WHAT HE SHOULD LEARN" if tpn > 0 else "A FULL BAR GIVES 1 TRAINING POINT (TP). HE FILLS IT BY PLAYING.") if int(sp2["ovr"]) < int(sp2["pot"]) else "AT HIS BEST", 11, GOLD if tpn > 0 else Color(1, 1, 1, 0.6), font2)
 				xl.position = Vector2(16, 162)
 				dp.add_child(xl)
 				# his skills: two places, the second opens at rating 70
@@ -1722,7 +1782,7 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) + int(sp2.get("tp", 0)) < int(sp2["pot"])
 				var on_bench: bool = not (xi.has(sel) or xi.has(float(sel)))
 				var tw3 := (bw3 - 32) * (0.6 if on_bench else 1.0)
-				var trb := _btn("BUY 1 TP   (%s)" % _m(int(sp2["cost"])), "c_train", null, "primary" if can else "off", Vector2(bx3 + 16, dy + dp.size.y - 62), Vector2(tw3, 48), 17)
+				var trb := _btn(("NEW CONTRACT  ›" if int(sp2.get("ct", 1)) > 1 else "RENEW HIS CONTRACT  ›") if eur3 else "BUY 1 TP   (%s)" % _m(int(sp2["cost"])), "ct_open" if eur3 else "c_train", null, "primary" if (can or eur3) else "off", Vector2(bx3 + 16, dy + dp.size.y - 62), Vector2(tw3, 48), 17)
 				menu.add_child(trb)
 				if on_bench:
 					var sure2: bool = int(c3.get("sell_sure", -1)) == sel
@@ -1876,8 +1936,10 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 			var bk6 := _btn("<  BACK", "pause", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk6)
 		"club":
-			_title("YOUR CLUB", "Build the club with the %s you earn" % _mw())
 			var c7: Dictionary = info.get("car", {})
+			var eur7 := bool(c7.get("eur", false))
+			var fb7: Dictionary = c7.get("fbuild", {})
+			_title("YOUR CLUB", ("The club's buildings. Ask the board for better ones: once a season, and they want to believe in you (confidence %d)." % int(c7.get("conf", 50))) if eur7 else "Build the club with the %s you earn" % _mw())
 			var fcs: Array = c7.get("fac", [])
 			var cw7 := minf((w - 80.0 - 2 * 16.0) / 3.0, 370.0)
 			var x07 := (w - (cw7 * 3 + 32.0)) * 0.5
@@ -1928,8 +1990,19 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 					nx7.size = Vector2(cw7 - 36, 40)
 					cp7.add_child(nx7)
 					var can7: bool = int(c7.get("coins", 0)) >= int(fc["cost"])
-					var ub := _btn("BUILD   %s" % _mp(int(fc["cost"])), "c_fac", str(fc["k"]), "primary" if can7 else "alt", Vector2(x07 + fi7 * (cw7 + 16.0) + 18, 104 + ch7b - 70), Vector2(cw7 - 36, 54), 20)
-					menu.add_child(ub)
+					if eur7 and str(fb7.get("k", "")) == str(fc["k"]):
+						var bl7 := _label("BEING BUILT:  READY IN %d MATCHES" % int(fb7.get("left", 0)), 17, GOLD)
+						bl7.position = Vector2(18, ch7b - 52)
+						cp7.add_child(bl7)
+					elif eur7:
+						var nd7 := _label("THE BOARD WANTS CONFIDENCE %d  ·  COSTS %s" % [int(fc.get("need", 50)), _mp(int(fc["cost"]))], 12, Color(1, 1, 1, 0.7), font2)
+						nd7.position = Vector2(18, ch7b - 96)
+						cp7.add_child(nd7)
+						var ub2 := _btn("ASK THE BOARD", "c_fac", str(fc["k"]), "primary" if fb7.is_empty() and int(c7.get("conf", 0)) >= int(fc.get("need", 50)) else "alt", Vector2(x07 + fi7 * (cw7 + 16.0) + 18, 104 + ch7b - 70), Vector2(cw7 - 36, 54), 20)
+						menu.add_child(ub2)
+					else:
+						var ub := _btn("BUILD   %s" % _mp(int(fc["cost"])), "c_fac", str(fc["k"]), "primary" if can7 else "alt", Vector2(x07 + fi7 * (cw7 + 16.0) + 18, 104 + ch7b - 70), Vector2(cw7 - 36, 54), 20)
+						menu.add_child(ub)
 				else:
 					var mx7 := _label("FULLY BUILT", 18, GOLD)
 					mx7.position = Vector2(18, ch7b - 52)
@@ -1978,7 +2051,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				var n5 := _label(str(mp["n"]), 20, Color.WHITE)
 				n5.position = Vector2(0.04 * tw5, cy5 - 24)
 				rp5.add_child(n5)
-				var p5 := _label({"GK": "GOALKEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}[str(mp["pos"])], 12, pcol5.get(str(mp["pos"]), Color.WHITE), font2)
+				var p5 := _label({"GK": "GOALKEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}[str(mp["pos"])] + (("   ·   WANTS ABOUT %s A WEEK" % Career.wage_text(int(round(int(mp.get("wk", 1)) * 1.2)))) if bool(c5.get("eur", false)) else ""), 12, pcol5.get(str(mp["pos"]), Color.WHITE), font2)
 				p5.position = Vector2(0.04 * tw5, cy5 + 2)
 				rp5.add_child(p5)
 				var vals5 := [[str(mp["age"]), 0.27, 18, Color(1, 1, 1, 0.85)], [str(mp["ovr"]), 0.35, 26, GOLD], [str(mp["pot"]), 0.44, 20, GREEN.lightened(0.3)],
@@ -2685,11 +2758,33 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var bv8 := _label(_mp(int(c.get("coins", 0))), 40, Color.WHITE)
 			bv8.position = Vector2(18, 30)
 			bp8.add_child(bv8)
-			var bn8 := _label("The career has its own money: win matches, sell players and please the board to get more. It never mixes with your coins outside.", 15, Color(1, 1, 1, 0.7), font2)
-			bn8.autowrap_mode = TextServer.AUTOWRAP_WORD
-			bn8.position = Vector2(300, 22)
-			bn8.size = Vector2(w - 64.0 - 330.0, 60)
-			bp8.add_child(bn8)
+			if bool(c.get("eur", false)):
+				# the wage budget next to it, and money moved between the two
+				var wl8 := _label("WAGES A WEEK", 14, GOLD, font2)
+				wl8.position = Vector2(300, 10)
+				bp8.add_child(wl8)
+				var wv8 := _label("%s  OF  %s" % [Career.wage_text(int(c.get("wages", 0))), Career.wage_text(int(c.get("wb", 0)))], 30, Color.WHITE)
+				wv8.position = Vector2(300, 32)
+				bp8.add_child(wv8)
+				var wn8 := _label("Every new man and every new contract must fit in the wage budget.", 13, Color(1, 1, 1, 0.65), font2)
+				wn8.position = Vector2(300, 74)
+				bp8.add_child(wn8)
+				var bx8 := w - 32.0 - 300.0
+				var by8 := y0 + ch * 0.62 + 10.0
+				var u8 := _btn("+ %s WAGES  (– %s)" % [Career.wage_text(Career.WB_STEP), _mp(Career.WB_STEP * Career.WB_RATE)], "c_wb", "up", "alt", Vector2(bx8, by8 + 12), Vector2(280, 44), 15)
+				var d8 := _btn("– %s WAGES  (+ %s)" % [Career.wage_text(Career.WB_STEP), _mp(Career.WB_STEP * Career.WB_RATE)], "c_wb", "down", "ghost", Vector2(bx8, by8 + 62), Vector2(280, 44), 15)
+				menu.add_child(u8)
+				menu.add_child(d8)
+				if str(c.get("msg", "")) != "":
+					var ms8 := _label(str(c.get("msg", "")), 14, GOLD, font2)
+					ms8.position = Vector2(300, 96)
+					bp8.add_child(ms8)
+			else:
+				var bn8 := _label("The career has its own money: win matches, sell players and please the board to get more. It never mixes with your coins outside.", 15, Color(1, 1, 1, 0.7), font2)
+				bn8.autowrap_mode = TextServer.AUTOWRAP_WORD
+				bn8.position = Vector2(300, 22)
+				bn8.size = Vector2(w - 64.0 - 330.0, 60)
+				bp8.add_child(bn8)
 		"office":
 			var bdo: Dictionary = c.get("board", {})
 			var cwo := (w - 64.0 - 2 * 10.0) / 3.0

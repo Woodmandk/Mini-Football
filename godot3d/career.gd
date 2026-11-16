@@ -258,6 +258,8 @@ func coop_reward(coins: int, won: bool) -> Array:
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["xp"] = int(pl["xp"]) + 22 + (10 if won else 0)
+		if eur:
+			_grow_auto(pl, rng, lines)
 		# a full bar gives a training point: you choose what he learns
 		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
 			pl["xp"] = int(pl["xp"]) - 100
@@ -471,6 +473,9 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	d["st"] = stt
 	var lines := []
 	var coins := int(round((15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))) * pay_k(lg())))
+	if eur:
+		# a real club does not get rich from one match: the money is in the season (prize, board, sales)
+		coins = int(round(coins * 0.3))
 	coins += board_bonus(coins)
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
@@ -480,6 +485,8 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	if was_home:
 		# the gate: a bigger stadium and a club near the top bring more people in
 		var gate := int(round((fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)) * pay_k(lg())))
+		if eur:
+			gate = int(round(gate * 0.5))
 		d["coins"] = int(d["coins"]) + gate
 		lines.append("+%s FROM THE GATE" % money(gate))
 	for i in (played if not played.is_empty() else d["xi"]):
@@ -491,6 +498,8 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 				xp += 14
 				pl["g"] = int(pl["g"]) + 1
 		pl["xp"] = int(pl["xp"]) + xp
+		if eur:
+			_grow_auto(pl, rng, lines)
 		# a full bar gives a training point: you choose what he learns
 		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
 			pl["xp"] = int(pl["xp"]) - 100
@@ -526,6 +535,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		_sim_others()
 		_board_review()
 		lines.append("SEASON OVER: THE BOARD'S GRADE IS %s" % str(review().get("grade", "C")))
+	_fac_tick(lines)
 	save()
 	return lines
 
@@ -550,6 +560,9 @@ func _grow_key(pl: Dictionary, rng: RandomNumberGenerator) -> String:
 	return "pas"
 
 func next_season() -> void:
+	money_init()
+	var gone := _contracts_end()
+	var mv0 := int(d.get("move", 0))
 	d["season"] = int(d["season"]) + 1
 	_move_clubs()
 	d["lg"] = league_of(int(d["club"]))
@@ -566,6 +579,14 @@ func next_season() -> void:
 	board()
 	(d["board"] as Dictionary).erase("review")
 	_board_season()
+	if eur and d.has("wb"):
+		# the board sets the wage budget again: more after going up, less after going down
+		if mv0 < 0:
+			d["wb"] = int(round(int(d["wb"]) * 1.3))
+		elif mv0 > 0:
+			d["wb"] = maxi(wages(), int(round(int(d["wb"]) * 0.85)))
+	if not gone.is_empty():
+		d["note"] = "CONTRACTS RAN OUT: %s LEFT ON A FREE." % ", ".join(PackedStringArray(gone))
 	save()
 
 # The end of the season everywhere else: every other league plays its season in a blink.
@@ -799,6 +820,16 @@ func buy(i: int) -> String:
 		return "Your squad is full. Sell a player from the bench first."
 	if int(d["coins"]) < price:
 		return "You need %s more." % money(price - int(d["coins"]))
+	if eur:
+		# a free agent with a fee for his rights: first he has to agree a contract
+		talk_sign(pl, price, -1, i)
+		return ""
+	return _complete_buy(i, -1, -1)
+
+func _complete_buy(i: int, wk: int, yrs: int) -> String:
+	var m: Array = market()
+	var pl: Dictionary = m[i]
+	var price := value(pl)
 	var used := []
 	for s in d["squad"]:
 		used.append(int(s["num"]))
@@ -806,6 +837,9 @@ func buy(i: int) -> String:
 		if not used.has(n):
 			pl["num"] = n
 			break
+	if wk >= 0:
+		pl["wk"] = wk
+		pl["ct"] = yrs
 	d["coins"] = int(d["coins"]) - price
 	d["squad"].append(pl)
 	m.remove_at(i)
@@ -905,6 +939,9 @@ func youth_arrives(rng: RandomNumberGenerator) -> String:
 		if not used.has(n):
 			pl["num"] = n
 			break
+	if eur:
+		pl["wk"] = 1
+		pl["ct"] = 3
 	d["squad"].append(pl)
 	return "YOUTH: %s (%d, %s) JOINS, CAN REACH %d" % [str(pl["n"]).to_upper(), int(pl["age"]), role, int(pl["pot"])]
 
@@ -1060,6 +1097,8 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var stt: Dictionary = stats()
 	var nm := cup_names()
 	var coins := int(round((10 + mine * 5) * pay_k(lg())))
+	if eur:
+		coins = int(round(coins * 0.3))
 	if won:
 		coins += int(round([40, 60, 80, 120, 160, 250, 400][clampi(6 - (last_r - r), 0, 6)] * pay_k(lg())))
 		if r >= last_r:
@@ -1081,6 +1120,10 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["xp"] = int(pl["xp"]) + (30 if won else 20)
+		if eur:
+			var rng2 := RandomNumberGenerator.new()
+			rng2.randomize()
+			_grow_auto(pl, rng2, lines)
 		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
 			pl["xp"] = int(pl["xp"]) - 100
 			pl["tp"] = int(pl.get("tp", 0)) + 1
@@ -1533,6 +1576,8 @@ func take_job(i: int) -> void:
 	d.erase("sacked")
 	d.erase("offers")
 	d["fac"] = {}
+	for k0 in ["wb", "facb", "fbuild", "freq", "talk"]:
+		d.erase(k0)
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var q := club_level(c)
@@ -1724,6 +1769,24 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	if amount >= ask or (neg.has(key) and amount >= int(neg[key])):
 		neg.erase(key)
 		d["neg"] = neg
+		if eur:
+			# the clubs agree on the fee: now the player himself has to say yes to a contract
+			talk_sign(pl, amount, c, i)
+			save()
+			return {"ok": true, "talk": true, "msg": "FEE AGREED WITH %s. NOW TALK TO %s." % [str(W[c]["n"]), str(pl["n"]).to_upper()]}
+		return {"ok": true, "msg": _complete_bid(c, i, amount, -1, -1)}
+	if amount >= int(ask * 0.75):
+		neg[key] = ask
+		d["neg"] = neg
+		save()
+		return {"ok": false, "counter": ask, "msg": "%s SAY NO, BUT THEY WOULD TAKE %s." % [str(W[c]["n"]), money(ask)]}
+	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(W[c]["n"])}
+
+# The transfer goes through: he joins you, his club signs a younger, cheaper man for his place.
+func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
+	var sq := cpu_squad(c)
+	var pl: Dictionary = sq[i]
+	if true:
 		# he leaves: the club signs a younger, cheaper man for his place
 		var rng := RandomNumberGenerator.new()
 		rng.randomize()
@@ -1749,13 +1812,299 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 		me_pl["tp"] = 0
 		me_pl["g"] = 0
 		me_pl["apps"] = 0
+		if wk >= 0:
+			me_pl["wk"] = wk
+			me_pl["ct"] = yrs
 		d["coins"] = int(d["coins"]) - amount
 		d["squad"].append(me_pl)
 		save()
-		return {"ok": true, "msg": "%s SIGNED FROM %s FOR %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount)]}
-	if amount >= int(ask * 0.75):
-		neg[key] = ask
-		d["neg"] = neg
+		return "%s SIGNED FROM %s FOR %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount)]
+	return ""
+
+# ---------------------------------------------------------------- the career's money, like a real club (euros only)
+# Two budgets: the transfer budget (d["coins"]) and a wage budget a week (d["wb"], in thousands of euros).
+# Every player has a wage (pl["wk"], thousands a week) and a contract (pl["ct"], seasons left, this one counted).
+# A new man or a new contract is a talk with the player: he asks for a wage, you offer a wage and the seasons.
+# The club's buildings come with the club; better ones you ask the board for.
+const WB_STEP := 5 # thousands a week moved at a time
+const WB_RATE := 4 # transfer budget units (10K) for every 1K a week
+const FAC_BUILD := 8 # league matches a new building takes
+
+static func _nh(s: String) -> int:
+	return absi(s.hash())
+
+static func wage_of(pl: Dictionary) -> int:
+	var o := ovr_of(pl)
+	return maxi(1, int(round(1.0 + pow(maxf(o - 50.0, 0.0), 2.0) * 0.05 + maxf(int(pl["pot"]) - o, 0.0) * 0.1)))
+
+static func wage_text(k: int) -> String:
+	if k >= 1000:
+		return "€%sM" % String.num(k / 1000.0, 1).trim_suffix(".0")
+	return "€%dK" % k
+
+func wages() -> int:
+	var t := 0
+	for pl in d["squad"]:
+		t += int(pl.get("wk", 0))
+	return t
+
+func wb() -> int:
+	money_init()
+	return int(d.get("wb", 0))
+
+func money_init() -> void:
+	if not eur or d.is_empty() or not d.has("squad"):
+		return
+	var ch := false
+	for pl in d["squad"]:
+		if not pl.has("wk"):
+			pl["wk"] = wage_of(pl)
+			pl["ct"] = 2 + _nh(str(pl["n"])) % 3
+			ch = true
+	if not d.has("wb"):
+		d["wb"] = int(ceil(wages() * 1.3)) + 5
+		ch = true
+	if not d.has("facb"):
+		d["facb"] = true
+		if int(d["season"]) == 1 and int(d["round"]) == 0:
+			# a new club comes with the buildings that fit its size
+			var lv := clampi(1 + (rating(int(d["club"])) - 62) / 5, 1, FAC_MAX)
+			d["fac"] = {"stadium": lv, "training": lv, "youth": maxi(1, lv - 1)}
+		ch = true
+	if ch:
 		save()
-		return {"ok": false, "counter": ask, "msg": "%s SAY NO, BUT THEY WOULD TAKE %s." % [str(W[c]["n"]), money(ask)]}
-	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(W[c]["n"])}
+
+func wb_move(up: bool) -> String:
+	money_init()
+	var cost := WB_STEP * WB_RATE
+	if up:
+		if int(d["coins"]) < cost:
+			return "You need %s in the transfer budget for that." % money(cost)
+		d["coins"] = int(d["coins"]) - cost
+		d["wb"] = int(d["wb"]) + WB_STEP
+	else:
+		if int(d["wb"]) - WB_STEP < wages():
+			return "Your players' wages already use that money."
+		d["wb"] = int(d["wb"]) - WB_STEP
+		d["coins"] = int(d["coins"]) + cost
+	save()
+	return ""
+
+# ---- contract talks
+func talk() -> Dictionary:
+	return d.get("talk", {})
+
+func talk_end() -> void:
+	d.erase("talk")
+	save()
+
+func _talk_fill(t: Dictionary, pl: Dictionary, ask: int) -> void:
+	var h := _nh(str(pl["n"]))
+	var age := int(pl["age"])
+	t["n"] = str(pl["n"])
+	t["pos"] = str(pl["pos"])
+	t["age"] = age
+	t["ovr"] = ovr_of(pl)
+	t["pot"] = int(pl["pot"])
+	t["ask"] = ask
+	# what he would take in the end: a little under what he asks, different for every man
+	t["min"] = maxi(1, int(round(ask * (0.84 + (h % 11) * 0.012))))
+	t["maxy"] = 5 if age <= 26 else (4 if age <= 29 else (3 if age <= 31 else 2))
+	t["offer"] = ask
+	t["yrs"] = mini(3, int(t["maxy"]))
+	t["tries"] = 3
+	t["hint"] = ""
+
+func talk_renew(i: int) -> String:
+	money_init()
+	var sq: Array = d["squad"]
+	if i < 0 or i >= sq.size():
+		return ""
+	var pl: Dictionary = sq[i]
+	if int(pl.get("nt", 0)) == int(d["season"]):
+		return "%s WILL NOT TALK AGAIN BEFORE NEXT SEASON." % str(pl["n"]).to_upper()
+	var starter: bool = (d["xi"] as Array).has(i)
+	var ask := maxi(int(pl.get("wk", 1)), int(round(wage_of(pl) * (1.15 if starter else 1.0))))
+	var t := {"kind": "renew", "i": i, "cur": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 1))}
+	_talk_fill(t, pl, ask)
+	d["talk"] = t
+	save()
+	return ""
+
+func talk_sign(pl: Dictionary, fee: int, from: int, idx: int) -> void:
+	money_init()
+	var t := {"kind": "sign", "fee": fee, "from": from, "idx": idx, "cur": 0}
+	_talk_fill(t, pl, maxi(1, int(round(wage_of(pl) * 1.2))))
+	d["talk"] = t
+	save()
+
+func talk_set(what: String, step: int) -> void:
+	var t := talk()
+	if t.is_empty():
+		return
+	if what == "w":
+		var st := maxi(1, int(round(int(t["ask"]) * 0.04)))
+		t["offer"] = clampi(int(t["offer"]) + step * st, 1, int(t["ask"]) * 2)
+	else:
+		t["yrs"] = clampi(int(t["yrs"]) + step, 1, 5)
+	d["talk"] = t
+
+# You make the offer. Returns what happened; when the talk is over, talk() is empty.
+func talk_offer() -> String:
+	var t := talk()
+	if t.is_empty():
+		return ""
+	var nm := str(t["n"]).to_upper()
+	var after := wages() - int(t["cur"]) + int(t["offer"])
+	if after > wb():
+		return "THAT GOES OVER YOUR WAGE BUDGET (%s OF %s A WEEK). SELL SOMEONE OR MOVE MONEY TO WAGES." % [wage_text(after), wage_text(wb())]
+	if int(t["yrs"]) > int(t["maxy"]):
+		return "AT %d HE ONLY SIGNS FOR UP TO %d SEASONS." % [int(t["age"]), int(t["maxy"])]
+	var signing := str(t["kind"]) == "sign"
+	if signing:
+		if int(d["coins"]) < int(t["fee"]):
+			return "YOU NEED %s MORE FOR THE FEE." % money(int(t["fee"]) - int(d["coins"]))
+		if (d["squad"] as Array).size() >= SQUAD_MAX:
+			return "YOUR SQUAD IS FULL. SELL A PLAYER FIRST."
+		# is he still there?
+		var still := false
+		var fr := int(t["from"])
+		var ix := int(t["idx"])
+		if fr >= 0:
+			var cs := cpu_squad(fr)
+			still = ix < cs.size() and str(cs[ix]["n"]) == str(t["n"])
+		else:
+			var mk := market()
+			still = ix < mk.size() and str(mk[ix]["n"]) == str(t["n"])
+		if not still:
+			talk_end()
+			return "%s HAS GONE ELSEWHERE. THE DEAL IS OFF." % nm
+	if int(t["offer"]) >= int(t["min"]):
+		var wk := int(t["offer"])
+		var yrs := int(t["yrs"])
+		d.erase("talk")
+		if signing:
+			var r := _complete_bid(int(t["from"]), int(t["idx"]), int(t["fee"]), wk, yrs) if int(t["from"]) >= 0 else _complete_buy(int(t["idx"]), wk, yrs)
+			save()
+			return "%s  ·  %s A WEEK FOR %d SEASONS" % [r, wage_text(wk), yrs]
+		var pl: Dictionary = d["squad"][int(t["i"])]
+		pl["wk"] = wk
+		pl["ct"] = yrs
+		save()
+		return "%s SIGNS A NEW CONTRACT: %s A WEEK FOR %d SEASONS" % [nm, wage_text(wk), yrs]
+	t["tries"] = int(t["tries"]) - 1
+	if int(t["tries"]) <= 0:
+		d.erase("talk")
+		if not signing:
+			(d["squad"][int(t["i"])] as Dictionary)["nt"] = int(d["season"])
+		save()
+		return ("%s HAS HAD ENOUGH. HE WILL NOT TALK AGAIN BEFORE NEXT SEASON." % nm) if not signing else ("%s SAYS NO. THE DEAL IS OFF." % nm)
+	# how far off you are, the way an agent would say it
+	t["hint"] = "CLOSE. HE WANTS A LITTLE MORE." if int(t["offer"]) >= int(t["min"]) * 0.93 else "HE SAYS NO. THAT IS FAR FROM WHAT HE WANTS."
+	d["talk"] = t
+	save()
+	return "%s  %d %s LEFT." % [str(t["hint"]), int(t["tries"]), "TRY" if int(t["tries"]) == 1 else "TRIES"]
+
+# The season ends: every contract has one season less. Who has none left goes on a free.
+func _contracts_end() -> Array:
+	var gone := []
+	if not eur or not d.has("wb"):
+		return gone
+	var sq: Array = d["squad"]
+	for pl in sq:
+		pl["ct"] = int(pl.get("ct", 1)) - 1
+	var i := sq.size() - 1
+	while i >= 0:
+		if int(sq[i]["ct"]) <= 0:
+			var nm0 := str(sq[i]["n"]).to_upper()
+			if sq.size() > SQUAD_MIN and _drop(i):
+				gone.append(nm0)
+			else:
+				# too few men: he stays one more season on the same wage
+				sq[i]["ct"] = 1
+		i -= 1
+	return gone
+
+# A man leaves the squad: if he was in the eleven, the best bench man in his place takes it.
+func _drop(i: int) -> bool:
+	var sq: Array = d["squad"]
+	var xi: Array = d["xi"]
+	var slot := xi.find(i)
+	if slot >= 0:
+		var best := -1
+		for k in sq.size():
+			if xi.has(k) or k == i or int(sq[k].get("ct", 1)) <= 0:
+				continue
+			var sc := ovr_of(sq[k]) + (20 if str(sq[k]["pos"]) == str(sq[i]["pos"]) else 0)
+			if best < 0 or sc > ovr_of(sq[best]) + (20 if str(sq[best]["pos"]) == str(sq[i]["pos"]) else 0):
+				best = k
+		if best < 0:
+			return false
+		xi[slot] = best
+	sq.remove_at(i)
+	var nx := []
+	for x in xi:
+		nx.append(int(x) - 1 if int(x) > i else int(x))
+	d["xi"] = nx
+	return true
+
+# ---- buildings: ask the board
+func fac_build_cost(k: String) -> int:
+	if fac(k) >= FAC_MAX:
+		return 0
+	return int(round(FAC_COST[fac(k) - 1] * pay_k(lg()) * 0.6 / 5.0)) * 5
+
+func fac_need(k: String) -> int:
+	return 45 + 8 * fac(k)
+
+func fac_ask(k: String) -> String:
+	money_init()
+	if fac(k) >= FAC_MAX:
+		return "IT IS ALREADY THE BEST THERE IS."
+	var fb: Dictionary = d.get("fbuild", {})
+	if not fb.is_empty():
+		return "THE BOARD IS ALREADY BUILDING. ONE THING AT A TIME."
+	if int(d.get("freq", 0)) == int(d["season"]):
+		return "YOU HAVE ASKED THE BOARD THIS SEASON. ASK AGAIN NEXT SEASON."
+	var need := fac_need(k)
+	if conf() < need:
+		d["freq"] = int(d["season"])
+		save()
+		return "THE BOARD SAYS NO: THEY WANT MORE FAITH IN YOU FIRST (CONFIDENCE %d, THEY WANT %d)." % [conf(), need]
+	var cost := fac_build_cost(k)
+	if int(d["coins"]) < cost:
+		return "THE BOARD SAYS YES, BUT %s MUST COME FROM YOUR TRANSFER BUDGET." % money(cost)
+	d["coins"] = int(d["coins"]) - cost
+	d["fbuild"] = {"k": k, "left": FAC_BUILD}
+	d["freq"] = int(d["season"])
+	save()
+	return "THE BOARD SAYS YES! %s FROM YOUR BUDGET. READY IN %d MATCHES." % [money(cost), FAC_BUILD]
+
+func _fac_tick(lines: Array) -> void:
+	var fb: Dictionary = d.get("fbuild", {})
+	if fb.is_empty():
+		return
+	fb["left"] = int(fb["left"]) - 1
+	if int(fb["left"]) <= 0:
+		var k := str(fb["k"])
+		if not d.has("fac"):
+			d["fac"] = {}
+		d["fac"][k] = fac(k) + 1
+		d.erase("fbuild")
+		lines.append("THE NEW %s IS READY: LEVEL %d" % [{"stadium": "STADIUM", "training": "TRAINING GROUND", "youth": "YOUTH ACADEMY"}.get(k, k.to_upper()), fac(k)])
+	else:
+		d["fbuild"] = fb
+
+# The career grows players by itself, as in FIFA: a full bar makes him better where his position needs it.
+func _grow_auto(pl: Dictionary, rng: RandomNumberGenerator, lines: Array) -> void:
+	var got := []
+	while (int(pl["xp"]) >= 100 or int(pl.get("tp", 0)) > 0) and ovr_of(pl) < int(pl["pot"]):
+		if int(pl.get("tp", 0)) > 0:
+			pl["tp"] = int(pl["tp"]) - 1
+		else:
+			pl["xp"] = int(pl["xp"]) - 100
+		var gk := _grow_key(pl, rng)
+		pl[gk] = mini(int(pl[gk]) + 1, 97)
+		got.append(STAT_NAMES[STAT_KEYS.find(gk)])
+	if not got.is_empty():
+		lines.append("%s  +1 %s" % [str(pl["n"]).to_upper(), got[0]] if got.size() == 1 else "%s  +%d" % [str(pl["n"]).to_upper(), got.size()])
