@@ -126,6 +126,7 @@ var as_prev = null # where car pointed before
 var cv_last := 0 # the host: the last career sent (its hash)
 var cv_t := 0.0
 var sugs := [] # the host: the assistant's suggestions still waiting
+var co_rdy := [false, false] # career together: the manager and the friend have tapped PLAY
 var sug_cur := {}
 var sug_prev := ""
 var cupc # the cup mode: a cup of its own, with your club or any club
@@ -1500,7 +1501,7 @@ func _menu_info() -> Dictionary:
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
-		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
+		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -1757,7 +1758,7 @@ func _result() -> String:
 		return ("YOU WIN TOGETHER!" if both else "YOU WIN!") + pens
 	return "YOU LOSE" + pens
 
-func _to_menu() -> void:
+func _to_menu(keep_net := false) -> void:
 	if rk_on and screen == "match" and state != "full" and rk_res.is_empty():
 		rk.match_result(int(rk_opp.get("rp", 0)), 0.0, -3, 0)
 		hud.toast("You left a ranked match: it counts as a loss")
@@ -1766,7 +1767,10 @@ func _to_menu() -> void:
 		rk_on = false
 		tov = [{}, {}]
 		_apply_own()
-	net.stop()
+	if not keep_net:
+		net.stop()
+		room = ""
+		co_rdy = [false, false]
 	career_on = false
 	cup_on = false
 	Engine.time_scale = 1.0
@@ -1775,7 +1779,6 @@ func _to_menu() -> void:
 	humans = []
 	me = 0
 	view_flip = 1.0
-	room = ""
 	hud.show_controls = false
 	hud.replay_on = false
 	hud.hide_banner()
@@ -1791,7 +1794,8 @@ func _to_menu() -> void:
 	_kickoff(0)
 	if not crowd_au.playing:
 		crowd_au.play()
-	_show_hub()
+	if not keep_net:
+		_show_hub()
 
 # Your own club: its name and kit take the place of the club you started as.
 func _apply_own() -> void:
@@ -2015,7 +2019,13 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("", {})
 			_begin_match(true)
 		"friend":
-			hud.show_menu("friend", _menu_info())
+			if in_career and car == carc and net.role == "":
+				# the career together: open a room and stay in the career, the friend comes in with the code
+				_action("host")
+			elif in_career and net.role == "host":
+				_action("share")
+			else:
+				hud.show_menu("friend", _menu_info())
 		"career":
 			car_msg = ""
 			car_sure = false
@@ -2059,6 +2069,15 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_play":
+			if net.role == "host" and net.connected and in_career and car == carc:
+				# together: the match starts when both have tapped PLAY
+				co_rdy[0] = not co_rdy[0]
+				_co_ready_send()
+				if co_rdy[0] and co_rdy[1]:
+					_co_go()
+				else:
+					hud.refresh(_menu_info())
+				return
 			if car.cup_due():
 				_action("cup_play")
 			elif car.d.has("sacked"):
@@ -2095,7 +2114,22 @@ func _action(act: String, arg = null) -> void:
 			else:
 				_action("c_start")
 		"cr_exit":
+			if net.role == "host":
+				net.stop()
+				room = ""
+				co_rdy = [false, false]
 			_cr_exit()
+		"co_back":
+			_co_back(true)
+		"co_leave":
+			_as_leave(false)
+			_to_menu()
+		"co_close":
+			net.stop()
+			room = ""
+			co_rdy = [false, false]
+			hud.toast("The room is closed")
+			_show_hub()
 		"as_open":
 			_as_open()
 		"as_back":
@@ -2151,6 +2185,8 @@ func _action(act: String, arg = null) -> void:
 				_own_changed()
 				hud.show_menu("cmode", _menu_info())
 		"scout":
+			if not (in_career or assist):
+				return
 			if scout_li < 0:
 				scout_li = car.lg()
 			scout_c = -1
@@ -2419,7 +2455,13 @@ func _action(act: String, arg = null) -> void:
 				opt_cup = false
 			room = "%04d" % (randi() % 9000 + 1000)
 			net.host(room)
-			hud.show_menu("lobby", _menu_info())
+			co_rdy = [false, false]
+			if opt_car and in_career:
+				hud.toast("ROOM %s: YOUR FRIEND JOINS WITH THIS CODE" % room)
+				hub_tab = "career"
+				_show_hub()
+			else:
+				hud.show_menu("lobby", _menu_info())
 		"joinmenu":
 			hud.show_menu("join", _menu_info())
 		"code":
@@ -2820,7 +2862,12 @@ func _net_poll() -> void:
 					_send_lobby()
 				else:
 					net.send({"_": "club", "id": opt_club})
-				if screen == "menu":
+				if screen == "menu" and net.role == "host" and in_career and opt_car:
+					hud.toast("YOUR FRIEND IS IN THE CAREER")
+					au["blip2"].play()
+					if hud.menu_name != "sug":
+						hud.refresh(_menu_info())
+				elif screen == "menu":
 					hud.show_menu("lobby", _menu_info())
 					au["blip2"].play()
 			"lobby":
@@ -2841,7 +2888,10 @@ func _net_poll() -> void:
 						carv.d = cvd
 						carv._ints()
 						_apply_own()
-						if screen == "menu" or assist or (screen == "match" and state == "full"):
+						if screen == "menu" and not assist and hud.menu_name in ["lobby", "join", "friend", ""]:
+							# straight into the host's career: no lobby, no team to pick
+							_as_open()
+						elif screen == "menu" or assist or (screen == "match" and state == "full"):
 							hud.refresh(_menu_info())
 			"sug":
 				if net.role == "host" and in_career and car == carc:
@@ -2893,8 +2943,31 @@ func _net_poll() -> void:
 						humans[1].stick = Vector2.ZERO
 						humans[1].sprint = false
 						hud.toast("Your friend lost the connection. Waiting for him...")
+				elif in_career and opt_car:
+					co_rdy = [false, false]
+					hud.toast("Your friend left the career")
+					if hud.menu_name != "sug":
+						hud.refresh(_menu_info())
 				else:
 					hud.show_menu("lobby", _menu_info())
+			"rdy":
+				if net.role == "host":
+					co_rdy[1] = bool(m.get("r", false))
+					_co_ready_send()
+					if co_rdy[0] and co_rdy[1] and screen == "menu":
+						_co_go()
+					elif screen == "menu" and hud.menu_name != "sug":
+						hud.refresh(_menu_info())
+				else:
+					var hr = m.get("h", [false, false])
+					if hr is Array and hr.size() == 2:
+						co_rdy = [bool(hr[0]), bool(hr[1])]
+					if screen == "menu":
+						hud.refresh(_menu_info())
+			"cob":
+				# the manager went back to the career after the match: the friend comes along
+				if net.role == "guest" and screen == "match":
+					_co_back(false)
 			"err":
 				var em: String = str(m.get("m", ""))
 				if rk_looking:
@@ -6716,7 +6789,18 @@ func _as_take(act: String, arg) -> bool:
 		# back inside the career's menus: to its home screen, never out of the room
 		_show_hub()
 		return true
-	if act in ["c_play", "cup_play", "friend", "cr_exit", "c_home"]:
+	if act in ["c_play", "cup_play"]:
+		co_rdy[1] = not co_rdy[1]
+		net.send({"_": "rdy", "r": co_rdy[1]})
+		au["blip2"].play()
+		hud.refresh(_menu_info())
+		return true
+	if act in ["co_back", "co_leave"]:
+		return false
+	if act == "friend":
+		hud.toast("You are already in the career together")
+		return true
+	if act in ["cr_exit", "c_home"]:
 		if act == "c_home":
 			hub_tab = "career"
 			_show_hub()
@@ -6878,3 +6962,31 @@ func _car_coins(league: bool) -> void:
 	car_main.d["coins"] = int(car_main.d["coins"]) + n
 	car_main.save()
 	car_lines.append("+%d COINS FOR YOUR CLUB%s" % [n, (" (" + " + ".join(PackedStringArray(why)) + ")") if not why.is_empty() else ""])
+
+# ---------------------------------------------------------------- the career together: both in the career, both start the match
+func _co_ready_send() -> void:
+	net.send({"_": "rdy", "h": co_rdy})
+
+func _co_go() -> void:
+	co_rdy = [false, false]
+	_co_ready_send()
+	opt_mode = "coop"
+	opt_car = true
+	opt_cup = false
+	_host_start()
+
+# After a match played together: back into the career on both phones, the room stays open.
+func _co_back(tell: bool) -> void:
+	var host: bool = net.role == "host"
+	_to_menu(true)
+	co_rdy = [false, false]
+	if host:
+		if tell:
+			net.send({"_": "cob"})
+		cv_t = 0.0
+		hub_tab = "career"
+		_show_hub()
+	elif carv.has_save():
+		_as_open()
+	else:
+		hud.show_menu("lobby", _menu_info())
