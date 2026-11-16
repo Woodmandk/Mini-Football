@@ -119,6 +119,15 @@ var car
 var car_main # your own club outside the career; car points to the career or the cup mode while you are in them
 var carc # the career mode: its own save, its own club and its own money in euros
 var in_career := false # inside the career mode until you leave it yourself
+# Playing together: the friend's phone gets the host's whole career and can look around in it as the assistant manager.
+var carv # the host's career as the friend sees it (never saved)
+var assist := false # the friend is looking around in it now
+var as_prev = null # where car pointed before
+var cv_last := 0 # the host: the last career sent (its hash)
+var cv_t := 0.0
+var sugs := [] # the host: the assistant's suggestions still waiting
+var sug_cur := {}
+var sug_prev := ""
 var cupc # the cup mode: a cup of its own, with your club or any club
 var cup_mode := false
 var start_kind := "" # how a new career (or cup) starts: "mine", "new", "club", "cup"
@@ -392,6 +401,11 @@ func _ready() -> void:
 	carc.eur = true
 	carc.names = SURNAMES
 	carc.load_save(net.web)
+	carv = Career.new()
+	carv.key = "bb3d-assist"
+	carv.eur = true
+	carv.ro = true
+	carv.names = SURNAMES
 	_split_career()
 	if net.web:
 		in_career = str(JavaScriptBridge.eval("(function(){try{return localStorage.getItem('bb3d-incar')||''}catch(e){return ''}})()", true)) == "1"
@@ -739,6 +753,55 @@ func _ready() -> void:
 				print("SPLIT career=", carc.has_save(), " on=", carc.on(), " club=", carc.d["club"], " mine=", carc.is_mine(), " | outside on=", car_main.on(), " mine=", car_main.is_mine(), " gk=", car_main.d["squad"][0]["n"], " in=", in_career)
 				get_tree().quit()
 				return
+			if menu_arg in ["astest", "assist", "sugshot"]:
+				# playing a career together: the friend looks around as assistant manager, his changes are suggestions
+				start_li = 1
+				_start_mine()
+				carv.d = carc.d.duplicate(true)
+				net.role = "guest"
+				net.connected = true
+				_action("as_open")
+				print("ASSIST in=", assist, " car=carv ", car == carv, " menu=", hud.menu_name, " club=", CLUBS[int(carv.d["club"])]["n"], " budget=", car.money(int(car.d["coins"])))
+				var bench := -1
+				for i4 in (car.d["squad"] as Array).size():
+					if not (car.d["xi"] as Array).has(i4):
+						bench = i4
+						break
+				var n0 := (carc.d["squad"] as Array).size()
+				_action("c_squad")
+				_action("c_pick", bench)
+				_action("c_sell")
+				car_sell = car_sel
+				var t1 := _sug_text("c_sell", null)
+				var s1 := {"act": "c_sell", "arg": null, "ui": {"sel": car_sel, "ab": 0, "sc": -1, "si": -1}, "t": t1}
+				var s2 := {"act": "c_swap", "arg": [0.0, float(bench)], "ui": {"sel": -1, "ab": 0, "sc": -1, "si": -1}, "t": "SWAP SOMEONE AND SOMEONE ELSE"}
+				var s3 := {"act": "c_form", "arg": null, "ui": {"sel": -1, "ab": 0, "sc": -1, "si": -1}, "t": _sug_text("c_form", null)}
+				print("ASSIST sug1=", t1, " | sug3=", s3["t"], " | carv squad unchanged=", (carv.d["squad"] as Array).size() == n0)
+				_action("c_buy", 0)
+				print("ASSIST after buy tap carv=", (carv.d["squad"] as Array).size(), " carc=", (carc.d["squad"] as Array).size())
+				_action("cr_exit")
+				print("ASSIST after exit tap assist=", assist, " menu=", hud.menu_name)
+				if menu_arg == "assist":
+					_action("as_open")
+					menu_arg = "main"
+				else:
+					_as_leave(false)
+					net.role = "host"
+					print("HOST in=", in_career, " car=carc ", car == carc)
+					var f0: String = car.form()
+					for sg2 in [s1, s2, s3]:
+						sug_cur = sg2
+						sug_prev = "main"
+						if menu_arg == "sugshot":
+							hud.show_menu("sug", _menu_info())
+							break
+						_sug_answer(true)
+						print("HOST answered ", sg2["t"])
+					if menu_arg == "astest":
+						print("HOST squad ", n0, " -> ", (carc.d["squad"] as Array).size(), " form ", f0, " -> ", car.form())
+						get_tree().quit()
+						return
+					menu_arg = "sug"
 			if menu_arg == "minetest":
 				# own club outside -> career with my club (own money) -> back out: the club outside is untouched
 				car.d["coins"] = 4321
@@ -1421,7 +1484,7 @@ func _menu_info() -> Dictionary:
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
-		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
+		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -1716,6 +1779,17 @@ func _to_menu() -> void:
 
 # Your own club: its name and kit take the place of the club you started as.
 func _apply_own() -> void:
+	_apply_own0()
+	# the friend's phone: the host's own club looks the same here
+	if carv != null and car != carv and net.role == "guest" and carv.has_save() and carv.d.has("own"):
+		var o: Dictionary = carv.d["own"]
+		var k: Array = o["k"]
+		var alt := "1c1c20" if Color(str(k[0])).get_luminance() > 0.6 else "f4f4f4"
+		var ci := int(carv.d["club"])
+		if ci >= 0 and ci < CLUBS.size():
+			CLUBS[ci] = {"n": str(o["n"]), "s": str(o["s"]), "k": [str(k[0]), str(k[1]), str(k[2])], "a": [alt, str(k[0]), alt]}
+
+func _apply_own0() -> void:
 	CLUBS = ClubDB.clubs(CLUBS0)
 	# two more places at the end for the ranked teams
 	RKI = CLUBS.size()
@@ -1877,10 +1951,10 @@ func _own_changed() -> void:
 
 # The home screen. The club is always there: the first time, you make your own.
 func _show_hub(pick := true) -> void:
-	if cup_mode:
+	if cup_mode and not assist:
 		hud.show_menu("cup", _menu_info())
 		return
-	if not car.has_save():
+	if not car.has_save() and not assist:
 		# the first time: your own club, no career yet. Give it a name and colours
 		car.new_club()
 		car.d["own"] = {"n": "MY CLUB", "s": "MYC", "k": (CLUBS[int(car.d["club"])]["k"] as Array).duplicate()}
@@ -1892,12 +1966,12 @@ func _show_hub(pick := true) -> void:
 			return
 	car_sel = -1
 	car_sell = -1
-	if in_career:
+	if in_career or assist:
 		if not (hub_tab in ["career", "team", "transfers", "club", "office"]):
 			hub_tab = "career"
 	elif hub_tab in ["career", "transfers", "office"]:
 		hub_tab = "play"
-	if car.on() and car.mode() == "":
+	if car.on() and car.mode() == "" and not assist:
 		# an old save, or a career made before the choice existed: ask once
 		hud.show_menu("cmode", _menu_info())
 		return
@@ -1906,6 +1980,8 @@ func _show_hub(pick := true) -> void:
 func _action(act: String, arg = null) -> void:
 	au["blip2" if act in ["play", "start", "again"] else "blip"].play()
 	if act == "key":
+		return
+	if assist and _as_take(act, arg):
 		return
 	if act in ["play", "friend", "c_play"] and not seen_how:
 		how_next = act
@@ -2007,6 +2083,14 @@ func _action(act: String, arg = null) -> void:
 				_action("c_start")
 		"cr_exit":
 			_cr_exit()
+		"as_open":
+			_as_open()
+		"as_back":
+			_as_leave(true)
+		"sug_yes":
+			_sug_answer(true)
+		"sug_no":
+			_sug_answer(false)
 		"c_start":
 			start_kind = ""
 			new_sure = false
@@ -2315,6 +2399,11 @@ func _action(act: String, arg = null) -> void:
 			else:
 				hud.show_menu(teams_from, _menu_info())
 		"host":
+			if in_career and carc.has_save() and car == carc:
+				# a room made from inside the career: the friend comes into the career with you
+				opt_mode = "coop"
+				opt_car = true
+				opt_cup = false
 			room = "%04d" % (randi() % 9000 + 1000)
 			net.host(room)
 			hud.show_menu("lobby", _menu_info())
@@ -2628,6 +2717,7 @@ func _host_start() -> void:
 	_begin_match(true)
 
 func _guest_start(m: Dictionary) -> void:
+	_as_leave(false)
 	opt_mode = m.get("mode", "coop")
 	if m.has("rk") and m.get("ta") is Dictionary and m.get("tb") is Dictionary:
 		rk_looking = false
@@ -2706,6 +2796,8 @@ func _net_poll() -> void:
 					net.send({"_": "rkt", "t": rk_me})
 					au["blip2"].play()
 					continue
+				cv_last = 0
+				cv_t = 0.0
 				if net.role == "host" and screen == "match" and wait_friend > 0.0 and start_msg != null:
 					# the friend is back after a lost connection: straight into the running match again
 					wait_friend = 0.0
@@ -2728,6 +2820,25 @@ func _net_poll() -> void:
 			"start":
 				if net.role == "guest":
 					_guest_start(m)
+			"cv":
+				# the host's career, fresh: the assistant sees what the manager sees
+				if net.role == "guest":
+					var cvd = JSON.parse_string(str(m.get("d", "")))
+					if cvd is Dictionary and cvd.has("squad"):
+						carv.d = cvd
+						carv._ints()
+						_apply_own()
+						if screen == "menu" or assist or (screen == "match" and state == "full"):
+							hud.refresh(_menu_info())
+			"sug":
+				if net.role == "host" and in_career and car == carc:
+					sugs.append(m)
+					if sugs.size() > 6:
+						sugs.pop_front()
+					_sug_next()
+			"sugr":
+				if net.role == "guest":
+					hud.toast(("THE MANAGER SAID YES: " if bool(m.get("ok", false)) else "THE MANAGER SAID NO: ") + str(m.get("t", "")) + ("   " + str(m.get("r", "")) if str(m.get("r", "")) != "" else ""))
 			"s":
 				if net.role == "guest" and screen == "match":
 					snap = m
@@ -2744,6 +2855,9 @@ func _net_poll() -> void:
 						h.evs.append(str(e))
 			"close":
 				net.connected = false
+				_as_leave(false)
+				carv.d = {}
+				sugs = []
 				if rk_looking:
 					# the other one went away before the start: look again
 					_rk_find()
@@ -3473,6 +3587,7 @@ func _physics_process(dt: float) -> void:
 # stutters on any screen that does not draw exactly 60 pictures a second (90/120 Hz phones, slow phones).
 func _frame(dt: float) -> void:
 	_net_poll()
+	_cv_tick(dt)
 	var evs: Array = hud.ev.duplicate()
 	hud.ev.clear()
 	_keys_to_events(evs)
@@ -6524,3 +6639,201 @@ func _bot_inputs(dt: float) -> void:
 					bstats["switches"] += 1
 					t = 1.2
 		bot_t[id] = t
+
+# ---------------------------------------------------------------- the assistant manager (playing a career together)
+# The host's phone sends its career to the friend's phone whenever it changes. The friend can open it and look at
+# everything: the squad, the table, the transfers, the club and the office. What he changes there is not done: it goes
+# to the manager as a suggestion, and the manager says yes or no.
+const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
+	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "pause", "resume", "snd_opt", "voice_opt"]
+const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid"]
+
+func _cv_tick(dt: float) -> void:
+	if net.role != "host" or not net.connected or rk_on or rk_looking or not in_career or not carc.has_save():
+		return
+	cv_t -= dt
+	if cv_t > 0.0:
+		return
+	cv_t = 1.0
+	var txt := JSON.stringify(carc.d)
+	var hh := txt.hash()
+	if hh != cv_last:
+		cv_last = hh
+		net.send({"_": "cv", "d": txt})
+	_sug_next()
+
+func _as_open() -> void:
+	if not carv.has_save():
+		return
+	if not assist:
+		as_prev = car
+	assist = true
+	car = carv
+	hub_tab = "career"
+	car_sel = -1
+	car_sell = -1
+	car_msg = ""
+	scout_res = {}
+	_apply_own()
+	_show_hub()
+
+func _as_leave(show: bool) -> void:
+	if not assist:
+		return
+	assist = false
+	car = as_prev if as_prev != null else car_main
+	as_prev = null
+	car_sel = -1
+	car_sell = -1
+	car_msg = ""
+	_apply_own()
+	if show:
+		if screen == "match":
+			hud.show_menu("full" if state == "full" else "", _menu_info())
+		elif net.connected:
+			hud.show_menu("lobby", _menu_info())
+		else:
+			_show_hub()
+
+# The assistant's tap: looking is fine, a change becomes a suggestion, the rest is the manager's.
+func _as_take(act: String, arg) -> bool:
+	if act in ["back", "menu"]:
+		# back inside the career's menus: to its home screen, never out of the room
+		_show_hub()
+		return true
+	if act in ["c_play", "cup_play", "friend", "cr_exit", "c_home"]:
+		if act == "c_home":
+			hub_tab = "career"
+			_show_hub()
+		else:
+			_as_leave(true)
+		return true
+	if act == "c_pick":
+		var pi := int(arg)
+		var xi: Array = car.d["xi"]
+		if car_sel >= 0 and car_sel != pi and (xi.has(car_sel) or xi.has(pi)):
+			_as_suggest("c_swap", [car_sel, pi])
+			return true
+		return false
+	if act == "c_sell":
+		if car_sel >= 0 and car_sell == car_sel:
+			_as_suggest("c_sell", null)
+			return true
+		return false
+	if act in AS_SUG:
+		_as_suggest(act, arg)
+		return true
+	if act in AS_LOOK or act == "key":
+		return false
+	hud.toast("Only the manager can do that")
+	return true
+
+func _as_suggest(act: String, arg) -> void:
+	var t := _sug_text(act, arg)
+	if t == "":
+		return
+	net.send({"_": "sug", "act": act, "arg": arg, "ui": {"sel": car_sel, "ab": ab_slot, "sc": scout_c, "si": scout_i}, "t": t})
+	hud.toast("SUGGESTION SENT TO THE MANAGER: " + t)
+	car_sel = -1
+	car_sell = -1
+	car_msg = ""
+	if act == "c_abuy":
+		hud.show_menu("squad", _menu_info())
+	else:
+		hud.refresh(_menu_info())
+
+func _pn(i: int) -> String:
+	var sq: Array = car.d["squad"]
+	return str(sq[i]["n"]).to_upper() if i >= 0 and i < sq.size() else ""
+
+# What a suggestion does, in words. The host's phone works it out again: if it does not say the same, it is out of date.
+func _sug_text(act: String, arg) -> String:
+	match act:
+		"c_train":
+			return "TRAIN %s" % _pn(car_sel) if car_sel >= 0 else ""
+		"c_abuy":
+			return "TEACH %s: %s" % [_pn(car_sel), str(Career.ABIL[str(arg)][0]).to_upper()] if car_sel >= 0 and Career.ABIL.has(str(arg)) else ""
+		"c_tp":
+			return "%s GETS BETTER AT %s" % [_pn(car_sel), ["PACE", "SHOOTING", "PASSING", "DEFENDING"][clampi(int(arg), 0, 3)]] if car_sel >= 0 else ""
+		"c_fac":
+			return "BUILD: %s" % str(arg).to_upper()
+		"c_buy":
+			var m: Array = car.market()
+			var i := int(arg)
+			if i < 0 or i >= m.size():
+				return ""
+			return "SIGN %s (%s) FOR %s" % [str(m[i]["n"]).to_upper(), str(m[i]["pos"]), car.money(car.value(m[i]))]
+		"c_sell":
+			return "SELL %s" % _pn(car_sel) if car_sel >= 0 else ""
+		"c_swap":
+			var ws: Array = arg
+			return "SWAP %s AND %s" % [_pn(int(ws[0])), _pn(int(ws[1]))]
+		"c_spot":
+			var sa: Array = arg
+			var xi: Array = car.d["xi"]
+			var sl := int(sa[0])
+			return "MOVE %s TO A NEW SPOT" % _pn(int(xi[sl])) if sl >= 0 and sl < xi.size() else ""
+		"c_lay0":
+			return "PUT EVERY MAN BACK ON HIS NORMAL SPOT"
+		"c_form":
+			return "PLAY %s" % FORM_NAMES[(FORM_NAMES.find(car.form()) + 1) % FORM_NAMES.size()]
+		"sc_bid":
+			if scout_c < 0 or scout_i < 0:
+				return ""
+			var cs: Array = car.cpu_squad(scout_c)
+			if scout_i >= cs.size():
+				return ""
+			return "BID %s FOR %s OF %s" % [car.money(int(arg)), str(cs[scout_i]["n"]).to_upper(), str(CLUBS[scout_c]["n"])]
+	return ""
+
+# The manager's phone: one suggestion at a time, on top of whatever menu is open.
+func _sug_next() -> void:
+	if not sug_cur.is_empty() or sugs.is_empty() or hud.menu_name == "sug" or hud.menu_name == "":
+		return
+	if not (screen == "menu" or (screen == "match" and state == "full")):
+		return
+	sug_cur = sugs.pop_front()
+	sug_prev = hud.menu_name
+	au["blip2"].play()
+	hud.show_menu("sug", _menu_info())
+
+func _sug_answer(yes: bool) -> void:
+	var s := sug_cur
+	sug_cur = {}
+	if s.is_empty():
+		return
+	var res := ""
+	var ok := false
+	if yes and in_career and car == carc:
+		var ui: Dictionary = s.get("ui", {}) if s.get("ui", {}) is Dictionary else {}
+		var keep := [car_sel, car_sell, ab_slot, scout_c, scout_i, scout_res, car_msg]
+		car_sel = int(ui.get("sel", -1))
+		car_sell = car_sel
+		ab_slot = int(ui.get("ab", 0))
+		scout_c = int(ui.get("sc", -1))
+		scout_i = int(ui.get("si", -1))
+		var act := str(s.get("act", ""))
+		if act in AS_SUG or act == "c_sell":
+			if _sug_text(act, s.get("arg")) != str(s.get("t", "")):
+				res = "(TOO LATE: SOMETHING CHANGED)"
+			else:
+				car_msg = ""
+				scout_res = {}
+				_action(act, s.get("arg"))
+				ok = true
+				res = car_msg if car_msg != "" else str(scout_res.get("msg", scout_res.get("t", "")))
+		car_sel = keep[0]
+		car_sell = keep[1]
+		ab_slot = keep[2]
+		scout_c = keep[3]
+		scout_i = keep[4]
+		scout_res = keep[5]
+		car_msg = keep[6]
+		if res != "":
+			hud.toast(res)
+	net.send({"_": "sugr", "ok": yes and ok, "t": str(s.get("t", "")), "r": res})
+	cv_t = 0.0
+	var pm := sug_prev if sug_prev != "" and sug_prev != "sug" else "main"
+	sug_prev = ""
+	hud.show_menu(pm, _menu_info())
+	_sug_next()
