@@ -492,7 +492,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	for i in (played if not played.is_empty() else d["xi"]):
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["apps"] = int(pl["apps"]) + 1
-		var xp := int(round((22 + (10 if mine > theirs else 0)) * (1.0 + 0.15 * (fac("training") - 1))))
+		var xp := int(round((22 + (10 if mine > theirs else 0)) * (1.0 + 0.15 * (fac("training") - 1)) * (train_k(pl) if eur else 1.0)))
 		for s in scorers:
 			if int(s) == int(i):
 				xp += 14
@@ -536,6 +536,8 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		_board_review()
 		lines.append("SEASON OVER: THE BOARD'S GRADE IS %s" % str(review().get("grade", "C")))
 	_fac_tick(lines)
+	if eur:
+		_after_match(played if not played.is_empty() else d["xi"], mine > theirs, lines, rng)
 	save()
 	return lines
 
@@ -570,6 +572,9 @@ func next_season() -> void:
 	d["note"] = ""
 	for pl in d["squad"]:
 		pl["age"] = int(pl["age"]) + 1
+		if eur and int(pl["age"]) >= 31:
+			# past 30 the legs go first
+			_decline(pl)
 		pl["g"] = 0
 		pl["apps"] = 0
 	_age_world()
@@ -1130,6 +1135,10 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 			lines.append("%s  +1 TP" % str(pl["n"]).to_upper())
 		if int(pl["xp"]) > 100:
 			pl["xp"] = 100
+	if eur:
+		var rng3 := RandomNumberGenerator.new()
+		rng3.randomize()
+		_after_match(d["xi"], won, lines, rng3)
 	save()
 	return lines
 
@@ -1925,8 +1934,15 @@ func talk_renew(i: int) -> String:
 		return "%s WILL NOT TALK AGAIN BEFORE NEXT SEASON." % str(pl["n"]).to_upper()
 	var starter: bool = (d["xi"] as Array).has(i)
 	var ask := maxi(int(pl.get("wk", 1)), int(round(wage_of(pl) * (1.15 if starter else 1.0))))
-	var t := {"kind": "renew", "i": i, "cur": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 1))}
+	var unhappy := int(pl.get("mo", 65)) < 35
+	if unhappy:
+		# an unhappy man wants a lot more to stay
+		ask = int(round(ask * 1.3)) + 1
+	var t := {"kind": "renew", "i": i, "cur": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 1)), "unhappy": unhappy}
 	_talk_fill(t, pl, ask)
+	if unhappy:
+		t["maxy"] = mini(int(t["maxy"]), 2)
+		t["yrs"] = mini(int(t["yrs"]), 2)
 	d["talk"] = t
 	save()
 	return ""
@@ -2103,8 +2119,140 @@ func _grow_auto(pl: Dictionary, rng: RandomNumberGenerator, lines: Array) -> voi
 			pl["tp"] = int(pl["tp"]) - 1
 		else:
 			pl["xp"] = int(pl["xp"]) - 100
-		var gk := _grow_key(pl, rng)
+		var gk := _grow_pick(pl, rng)
 		pl[gk] = mini(int(pl[gk]) + 1, 97)
 		got.append(STAT_NAMES[STAT_KEYS.find(gk)])
 	if not got.is_empty():
 		lines.append("%s  +1 %s" % [str(pl["n"]).to_upper(), got[0]] if got.size() == 1 else "%s  +%d" % [str(pl["n"]).to_upper(), got.size()])
+
+# ---------------------------------------------------------------- mood and training (the career only)
+# Every man has a mood (pl["mo"], 0-100) and a role he expects from his level in the squad. Playing makes him
+# happy, sitting out when he expects to play makes him unhappy. Mood changes how well he plays (a little), and an
+# unhappy man wants more money to stay and in the end asks to leave.
+# The team trains between matches: a focus (what the players work on) and how hard (more growth, worse mood).
+const ROLE_NAMES := ["CRUCIAL", "IMPORTANT", "ROTATION", "SPORADIC", "PROSPECT"]
+const ROLE_WANT := ["WANTS TO PLAY EVERY MATCH", "WANTS TO START", "WANTS SOME MATCHES", "HAPPY TO WAIT", "HERE TO LEARN"]
+const ROLE_LOSS := [6, 4, 2, 0, 0] # mood lost for a match he sits out
+const FOCI := {"balanced": ["BALANCED", "", "A bit of everything."], "attack": ["ATTACK", "sho", "Finishing and movement: the forwards and midfielders gain shooting."],
+	"passing": ["PASSING", "pas", "Possession and vision: passing grows."], "defence": ["DEFENCE", "dfn", "Shape and tackling: defending grows."],
+	"fitness": ["FITNESS", "pac", "Running and strength: pace grows."], "rest": ["REST", "", "No hard work: little growth, better mood."]}
+const FOCUS_ORDER := ["balanced", "attack", "passing", "defence", "fitness", "rest"]
+const INTENS := [["LIGHT", 0.75, 1], ["NORMAL", 1.0, 0], ["HARD", 1.35, -1]] # name, growth, mood a match
+
+func plan() -> Dictionary:
+	var p: Dictionary = d.get("plan", {})
+	if not p.has("f"):
+		p = {"f": "balanced", "i": 1}
+	return p
+
+func set_plan(f: String, i: int) -> void:
+	var p := plan()
+	if f != "" and FOCI.has(f):
+		p["f"] = f
+	if i >= 0:
+		p["i"] = clampi(i, 0, 2)
+	d["plan"] = p
+	save()
+
+# how fast he grows: the plan, how hard, and his age (young men grow fast, old men slowly)
+func train_k(pl: Dictionary) -> float:
+	var p := plan()
+	var k: float = float(INTENS[int(p["i"])][1])
+	if str(p["f"]) == "rest":
+		k *= 0.5
+	var age := int(pl["age"])
+	k *= 1.4 if age <= 21 else (1.2 if age <= 24 else (1.0 if age <= 28 else (0.8 if age <= 31 else 0.5)))
+	return k
+
+# what grows: his own focus first, then the team's focus, then what his position needs
+func _grow_pick(pl: Dictionary, rng: RandomNumberGenerator) -> String:
+	var tf := str(pl.get("tf", ""))
+	if STAT_KEYS.has(tf) and rng.randf() < 0.6:
+		return tf
+	var ff := str(FOCI[str(plan()["f"])][1])
+	if ff != "" and rng.randf() < 0.4:
+		return ff
+	return _grow_key(pl, rng)
+
+func set_focus(i: int) -> void:
+	var sq: Array = d["squad"]
+	if i < 0 or i >= sq.size():
+		return
+	var order := ["", "pac", "sho", "pas", "dfn"]
+	var cur := order.find(str(sq[i].get("tf", "")))
+	sq[i]["tf"] = order[(maxi(cur, 0) + 1) % order.size()]
+	save()
+
+static func focus_name(tf: String) -> String:
+	var k := STAT_KEYS.find(tf)
+	return STAT_NAMES[k] if k >= 0 else "AUTO"
+
+# the role each man expects, from where he stands in the squad
+func roles() -> Dictionary:
+	var sq: Array = d["squad"]
+	var idx := []
+	for i in sq.size():
+		idx.append(i)
+	idx.sort_custom(func(a, b): return ovr_of(sq[a]) > ovr_of(sq[b]))
+	var out := {}
+	for r in idx.size():
+		var i: int = idx[r]
+		var ro := 0 if r < 4 else (1 if r < 11 else (2 if r < 15 else 3))
+		if ro >= 2 and int(sq[i]["age"]) <= 20:
+			ro = 4
+		out[i] = ro
+	return out
+
+static func mood_name(m: int) -> String:
+	return "VERY HAPPY" if m >= 80 else ("HAPPY" if m >= 60 else ("OKAY" if m >= 40 else ("UNHAPPY" if m >= 25 else "ANGRY")))
+
+# a happy man plays a little better, an angry one a lot worse
+func mood_off(pl: Dictionary) -> int:
+	if not eur:
+		return 0
+	var m := int(pl.get("mo", 65))
+	return 2 if m >= 80 else (1 if m >= 60 else (0 if m >= 40 else (-2 if m >= 25 else -4)))
+
+func _after_match(played: Array, won: bool, lines: Array, rng: RandomNumberGenerator) -> void:
+	var sq: Array = d["squad"]
+	var ro := roles()
+	var p := plan()
+	var pm: int = int(INTENS[int(p["i"])][2]) + (2 if str(p["f"]) == "rest" else 0)
+	var pl_set := []
+	for x in played:
+		pl_set.append(int(x))
+	for i in sq.size():
+		var pl: Dictionary = sq[i]
+		var r: int = int(ro.get(i, 2))
+		var m0 := int(pl.get("mo", 65))
+		var m := m0 + pm + (1 if won else 0)
+		# time softens everything: a mood drifts back a little towards normal every match
+		m += int(round((65 - m0) * 0.08))
+		if pl_set.has(i):
+			m += 2 if r <= 1 else 3
+		else:
+			m -= ROLE_LOSS[r]
+			# the men who did not play train: they grow too, slower
+			pl["xp"] = int(pl["xp"]) + int(round(10.0 * train_k(pl)))
+			_grow_auto(pl, rng, lines)
+			if int(pl["xp"]) > 100:
+				pl["xp"] = 100
+		m = clampi(m, 5, 100)
+		pl["mo"] = m
+		var nm := str(pl["n"]).to_upper()
+		if m0 >= 35 and m < 35:
+			lines.append("%s IS UNHAPPY: HE %s" % [nm, ROLE_WANT[r]])
+		if m < 20 and not pl.has("tr"):
+			pl["tr"] = true
+			lines.append("%s HAS ASKED TO LEAVE THE CLUB" % nm)
+		elif m >= 45 and pl.has("tr"):
+			pl.erase("tr")
+			lines.append("%s IS HAPPY AGAIN AND WANTS TO STAY" % nm)
+
+func _decline(pl: Dictionary) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	for k in mini(int(pl["age"]) - 30, 3):
+		var key: String = "pac" if rng.randf() < 0.5 else STAT_KEYS[rng.randi() % 4]
+		pl[key] = maxi(int(pl[key]) - 1, 20)
+	pl["pot"] = mini(int(pl["pot"]), ovr_of(pl))
