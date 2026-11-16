@@ -1259,6 +1259,54 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			co6.position = Vector2(20, rp6.size.y - 40)
 			rp6.add_child(co6)
 			menu.add_child(_btn("<  BACK", "sc_back", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18))
+		"training":
+			var c10: Dictionary = info.get("car", {})
+			var pl10: Dictionary = c10.get("plan", {})
+			var f10 := str(pl10.get("f", "balanced"))
+			var i10 := int(pl10.get("i", 1))
+			_title("TRAINING", "What the squad works on between matches. Every man grows from it, the ones who play the most.")
+			var fl := _label("FOCUS", 14, GOLD, font2)
+			fl.position = Vector2(40, 96)
+			menu.add_child(fl)
+			var fw10 := (w - 80.0 - 5 * 10.0) / 6.0
+			for fi in Career.FOCUS_ORDER.size():
+				var fk: String = Career.FOCUS_ORDER[fi]
+				var fb10 := _btn(str(Career.FOCI[fk][0]), "c_plan", [fk, -1], "primary" if fk == f10 else "alt", Vector2(40 + fi * (fw10 + 10.0), 118), Vector2(fw10, 56), 18)
+				menu.add_child(fb10)
+			var fd := _label(str(Career.FOCI[f10][2]), 15, Color(1, 1, 1, 0.8), font2)
+			fd.position = Vector2(40, 182)
+			menu.add_child(fd)
+			var il := _label("HOW HARD", 14, GOLD, font2)
+			il.position = Vector2(40, 220)
+			menu.add_child(il)
+			var idesc := ["Slower growth, the players like it.", "Normal growth.", "Faster growth, but the players feel it: their mood drops a little every match."]
+			for ii in 3:
+				var ib := _btn(str(Career.INTENS[ii][0]), "c_plan", ["", ii], "primary" if ii == i10 else "alt", Vector2(40 + ii * (fw10 + 10.0), 242), Vector2(fw10, 56), 18)
+				menu.add_child(ib)
+			var idl := _label(idesc[i10], 15, Color(1, 1, 1, 0.8), font2)
+			idl.position = Vector2(40, 306)
+			menu.add_child(idl)
+			# who is unhappy, and why
+			var up := _panel(Vector2(40, 344), Vector2(w - 80.0, h - 360.0))
+			var ut := _label("THE SQUAD'S MOOD", 14, GOLD, font2)
+			ut.position = Vector2(18, 10)
+			up.add_child(ut)
+			var sq10: Array = c10.get("squad", [])
+			var bad := []
+			var happy := 0
+			for p10 in sq10:
+				var m10 := int((p10 as Dictionary).get("mo", 65))
+				if m10 < 40:
+					bad.append("%s (%s, %s)" % [str(p10["n"]), Career.mood_name(m10), Career.ROLE_WANT[int(p10.get("role", 2))]])
+				elif m10 >= 60:
+					happy += 1
+			var ub10 := _label(("%d HAPPY   ·   %d OKAY   ·   %d UNHAPPY" % [happy, sq10.size() - happy - bad.size(), bad.size()]) + ("" if bad.is_empty() else ":   " + ",   ".join(PackedStringArray(bad))), 15, Color.WHITE if bad.is_empty() else Color(1, 0.7, 0.55), font2)
+			ub10.position = Vector2(18, 34)
+			ub10.size = Vector2(w - 80.0 - 36.0, h - 360.0 - 44.0)
+			ub10.autowrap_mode = TextServer.AUTOWRAP_WORD
+			up.add_child(ub10)
+			var bk10 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
+			menu.add_child(bk10)
 		"contract":
 			var c9: Dictionary = info.get("car", {})
 			var t9: Dictionary = c9.get("talk", {})
@@ -1268,6 +1316,8 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			var lp9 := _panel(Vector2(32, 100), Vector2(pw9, h - 200))
 			var rp9 := _panel(Vector2(32 + pw9 + 20, 100), Vector2(pw9, h - 200))
 			var rows9 := []
+			if bool(t9.get("unhappy", false)):
+				rows9.append(["HE IS UNHAPPY", "HE WANTS MORE MONEY TO STAY"])
 			if sign9:
 				rows9.append(["TRANSFER FEE", _mp(int(t9.get("fee", 0))) + ("   ·   AGREED WITH %s" % str(c9.get("club_n", "")) if str(c9.get("club_n", "")) != "" else "   ·   FOR HIS RIGHTS")])
 			else:
@@ -1751,6 +1801,14 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				xf.position = Vector2(16, 152)
 				xf.size = Vector2((bw3 - 32) * clampf(float(sp2["xp"]) / 100.0, 0.0, 1.0), 8)
 				dp.add_child(xf)
+				if eur3:
+					# his mood and what he expects, and what he works on
+					var mo3 := int(sp2.get("mo", 65))
+					var ml := _label("MOOD: %s   ·   %s: %s%s" % [Career.mood_name(mo3), Career.ROLE_NAMES[int(sp2.get("role", 2))], Career.ROLE_WANT[int(sp2.get("role", 2))], "   ·   WANTS TO LEAVE" if bool(sp2.get("tr", false)) else ""], 12, _mood_col(mo3), font2)
+					ml.position = Vector2(16, 128)
+					dp.add_child(ml)
+					var fcb := _btn("TRAINS: %s  ›" % Career.focus_name(str(sp2.get("tf", ""))), "c_focus", null, "alt", Vector2(bx3 + bw3 - 16 - 190, dy + 8), Vector2(190, 34), 13)
+					menu.add_child(fcb)
 				var tpn := 0 if eur3 else int(sp2.get("tp", 0))
 				var tpl := _label("" if eur3 else "TP  %d" % tpn, 24, GOLD if tpn > 0 else Color(1, 1, 1, 0.45))
 				tpl.position = Vector2(bw3 - 136, 8)
@@ -2813,7 +2871,12 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var p1 := _panel(Vector2(32, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0))
 			var p2 := _panel(Vector2(32 + hw2 + 10.0, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0))
 			p2.queue_free()
-			var ot := _tile("NAME AND KIT", "Your club's name and colours", "own", null, Vector2(32 + hw2 + 10.0, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0), Color.WHITE, 22)
+			var pln: Dictionary = c.get("plan", {})
+			var unh := 0
+			for sq0 in sq:
+				if int((sq0 as Dictionary).get("mo", 65)) < 35:
+					unh += 1
+			var ot := _tile("TRAINING", "%s  ·  %s%s" % [Career.FOCI[str(pln.get("f", "balanced"))][0], Career.INTENS[int(pln.get("i", 1))][0], ("  ·  %d UNHAPPY" % unh) if unh > 0 else ""], "c_trainm", null, Vector2(32 + hw2 + 10.0, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0), Color.WHITE, 22) if bool(c.get("eur", false)) else _tile("NAME AND KIT", "Your club's name and colours", "own", null, Vector2(32 + hw2 + 10.0, y0 + ch * 0.56 + 10.0), Vector2(hw2, ch * 0.44 - 10.0), Color.WHITE, 22)
 			menu.add_child(ot)
 			var vals := [["TEAM RATING", str(int(c.get("str", 0)))]]
 			var pp := [p1]
@@ -2852,6 +2915,10 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				var n1 := _label("%s   %s" % [str(pl["pos"]), str(pl["n"])], 20, Color.WHITE)
 				n1.position = Vector2(32, yy)
 				lp.add_child(n1)
+				if bool(c.get("eur", false)):
+					var md := _label(Career.mood_name(int(pl.get("mo", 65))), 12, _mood_col(int(pl.get("mo", 65))), font2)
+					md.position = Vector2(rw2 * 0.5, yy + 6)
+					lp.add_child(md)
 				var n2 := _label(("" if xi.has(idx[r]) else "BENCH    ") + str(int(pl["ovr"])), 20, Color.WHITE if xi.has(idx[r]) else Color(1, 1, 1, 0.6))
 				n2.position = Vector2(rw2 - 198, yy)
 				n2.size = Vector2(180, 30)
@@ -3317,3 +3384,6 @@ func _co_play_text(info: Dictionary, solo: String) -> String:
 			return "WAITING FOR YOUR FRIEND..."
 		return "PLAY  ·  YOUR FRIEND IS READY" if bool(r[1]) else "PLAY TOGETHER"
 	return solo
+
+static func _mood_col(m: int) -> Color:
+	return Color(0.45, 0.95, 0.55) if m >= 60 else (Color(1, 1, 1, 0.75) if m >= 40 else (Color(1.0, 0.75, 0.3) if m >= 25 else Color(1.0, 0.45, 0.4)))

@@ -865,6 +865,64 @@ func _ready() -> void:
 						print("ECO contracts before ", cts, " squad now ", (car.d["squad"] as Array).size(), " note=", car.d["note"], " xi ok=", (car.d["xi"] as Array).max() < (car.d["squad"] as Array).size())
 						get_tree().quit()
 						return
+			if menu_arg in ["moodtest", "trshot", "moodsq", "moodteam"]:
+				# mood and training: men who sit out get unhappy, the plan changes growth and mood
+				start_li = 1
+				_start_mine()
+				car.set_plan("attack", 2)
+				var ro0: Dictionary = car.roles()
+				var sq0: Array = car.d["squad"]
+				var xi0: Array = (car.d["xi"] as Array).duplicate()
+				var bench := []
+				for i9 in sq0.size():
+					if not xi0.has(i9):
+						bench.append(i9)
+				var sho0 := 0
+				for i9 in sq0.size():
+					sho0 += int(sq0[i9]["sho"])
+				var unh := 0
+				var lv := 0
+				var played_k := 0
+				for k9 in (12 if menu_arg == "moodtest" else 9):
+					for l9 in car.finish_match(2, 1, [], xi0):
+						if str(l9).contains("UNHAPPY"):
+							unh += 1
+						if str(l9).contains("ASKED TO LEAVE"):
+							lv += 1
+					played_k += 1
+				var sho1 := 0
+				for i9 in sq0.size():
+					sho1 += int(sq0[i9]["sho"])
+				var moods := []
+				for i9 in sq0.size():
+					moods.append("%d:%s r%d %d%s" % [i9, "XI" if xi0.has(i9) else "b", int(ro0.get(i9, 9)), int(sq0[i9].get("mo", -1)), " TR" if sq0[i9].has("tr") else ""])
+				print("MOOD after ", played_k, " matches: ", moods)
+				print("MOOD unhappy lines=", unh, " leave lines=", lv, " total sho ", sho0, " -> ", sho1, " plan=", car.plan())
+				var sad := -1
+				for i9 in bench:
+					if int(sq0[i9].get("mo", 65)) < 35:
+						sad = i9
+						break
+				if sad >= 0:
+					car.talk_renew(sad)
+					var ts: Dictionary = car.talk()
+					print("MOOD unhappy renew ask=", ts.get("ask"), " wk=", sq0[sad]["wk"], " maxy=", ts.get("maxy"), " unhappy=", ts.get("unhappy"), " off=", car.mood_off(sq0[sad]))
+					car.talk_end()
+				print("MOOD off for xi[0]=", car.mood_off(sq0[xi0[0]]), " k young/old ", car.train_k({"age": 19}), "/", car.train_k({"age": 33}))
+				car.set_focus(xi0[5])
+				car.set_focus(xi0[5])
+				print("MOOD focus ", car.focus_name(str(sq0[xi0[5]].get("tf", ""))))
+				if menu_arg == "moodtest":
+					get_tree().quit()
+					return
+				if menu_arg == "trshot":
+					menu_arg = "training"
+				elif menu_arg == "moodsq":
+					car_sel = sad if sad >= 0 else xi0[5]
+					menu_arg = "squad"
+				else:
+					hub_tab = "team"
+					menu_arg = "main"
 			if menu_arg == "coinstest":
 				# a whole season won in the career: a few coins a match, a lot for the title, some for the cup
 				start_li = 1
@@ -1341,7 +1399,7 @@ func _build_teams() -> void:
 				if t == 0:
 					# your own squad: the eleven you picked, with their own numbers
 					var pl: Dictionary = car.d["squad"][int(car.d["xi"][i])]
-					var off_pos := -6 if str(pl["pos"]) != p.role else 0
+					var off_pos: int = (-6 if str(pl["pos"]) != p.role else 0) + car.mood_off(pl)
 					p.sq = int(car.d["xi"][i])
 					p.pname = str(pl["n"])
 					p.pac = int(pl["pac"]) + off_pos
@@ -1644,7 +1702,7 @@ func _substitute(slot: int, sq_i: int) -> void:
 	sub_off.append(p.sq)
 	if not sub_played.has(sq_i):
 		sub_played.append(sq_i)
-	var off_pos := -6 if str(pl["pos"]) != p.role else 0
+	var off_pos: int = (-6 if str(pl["pos"]) != p.role else 0) + car.mood_off(pl)
 	p.sq = sq_i
 	p.pname = str(pl["n"])
 	p.set_num(int(pl["num"]))
@@ -1704,12 +1762,13 @@ func _car_info() -> Dictionary:
 	for r in d["last"]:
 		last.append("%s  %d - %d  %s" % [CLUBS[int(r[0])]["s"], int(r[2]), int(r[3]), CLUBS[int(r[1])]["s"]])
 	var squad := []
+	var ro_all: Dictionary = car.roles() if car.eur else {}
 	for i in (d["squad"] as Array).size():
 		var pl: Dictionary = d["squad"][i]
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
 			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl),
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
-			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0))})
+			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr")})
 	var tp_all := 0
 	for pl in d["squad"]:
 		tp_all += int(pl.get("tp", 0))
@@ -1725,7 +1784,7 @@ func _car_info() -> Dictionary:
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 		"ab_pick": _ab_pick_info(), "board": _board_info(), "cup_due": car.cup_due(), "cup_after": car.cup_after(), "mode": car.mode(),
 		"sacked": car.d.has("sacked"), "on": car.on(),
-		"eur": car.eur, "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(),
+		"eur": car.eur, "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 	}
 
@@ -2420,6 +2479,16 @@ func _action(act: String, arg = null) -> void:
 			car_msg = ""
 			scout_res = {}
 			hud.show_menu(ct_from if ct_from != "" else "squad", _menu_info())
+		"c_focus":
+			if car_sel >= 0:
+				car.set_focus(car_sel)
+				hud.refresh(_menu_info())
+		"c_trainm":
+			hud.show_menu("training", _menu_info())
+		"c_plan":
+			var pa: Array = arg
+			car.set_plan(str(pa[0]), int(pa[1]))
+			hud.refresh(_menu_info())
 		"c_wb":
 			car_msg = car.wb_move(str(arg) == "up")
 			hud.refresh(_menu_info())
@@ -6833,8 +6902,8 @@ func _bot_inputs(dt: float) -> void:
 # everything: the squad, the table, the transfers, the club and the office. What he changes there is not done: it goes
 # to the manager as a suggestion, and the manager says yes or no.
 const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
-	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "pause", "resume", "snd_opt", "voice_opt"]
-const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid"]
+	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt"]
+const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan"]
 
 func _cv_tick(dt: float) -> void:
 	if net.role != "host" or not net.connected or rk_on or rk_looking or not in_career or not carc.has_save():
@@ -6969,6 +7038,12 @@ func _sug_text(act: String, arg) -> String:
 			return "MOVE %s TO A NEW SPOT" % _pn(int(xi[sl])) if sl >= 0 and sl < xi.size() else ""
 		"c_lay0":
 			return "PUT EVERY MAN BACK ON HIS NORMAL SPOT"
+		"c_plan":
+			var pa2: Array = arg
+			var pp: Dictionary = car.plan()
+			var f2 := str(pa2[0]) if str(pa2[0]) != "" else str(pp["f"])
+			var i2 := int(pa2[1]) if int(pa2[1]) >= 0 else int(pp["i"])
+			return "TRAINING: %s, %s" % [Career.FOCI[f2][0], Career.INTENS[i2][0]]
 		"c_form":
 			return "PLAY %s" % FORM_NAMES[(FORM_NAMES.find(car.form()) + 1) % FORM_NAMES.size()]
 		"sc_bid":
