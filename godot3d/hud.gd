@@ -1946,6 +1946,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					meta += "  ·  %s a week  ·  %s" % [Career.wage_text(int(sp2.get("wk", 0))), "last season" if int(sp2.get("ct", 1)) <= 1 else "%d seasons" % int(sp2.get("ct", 1))]
 				elif not eur3:
 					meta += "  ·  %d goals" % int(sp2["g"])
+				if eur3 and sp2.has("fm"):
+					meta = "Form %s  ·  " % Career.form_name(int(sp2["fm"])).to_lower() + meta
 				var fit_t := ""
 				if int(sp2.get("cond", -1)) >= 0:
 					fit_t = ("Injured: " + str(sp2.get("injt", ""))) if bool(sp2.get("inj", false)) else "Fitness %d%%" % int(sp2["cond"])
@@ -4595,11 +4597,11 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		var on := int(m["id"]) == sel
 		if on:
 			cur = m
-		var open_bid := str(m["k"]) == "bid" and str(m.get("st", "")) == "open"
+		var open_bid := str(m["k"]) in ["bid", "press", "talk"] and str(m.get("st", "")) == "open"
 		var b := _btn("", "mail", int(m["id"]), "alt", Vector2(0, i * (rh + 6)), Vector2(lw - 12, rh), 16)
 		b.add_theme_stylebox_override("normal", _box(Color(S1.r, S1.g, S1.b, 0.95) if not on else Color(0.2, 0.32, 0.24, 0.98), 12, GOLD if open_bid else (GREEN if on else LINE)))
 		box.add_child(b)
-		var ic: Control = _icon({"bid": "mail", "deal": "swap", "window": "cal", "deadline": "cal", "info": "office", "med": "plus", "award": "cup"}.get(str(m["k"]), "mail"), 24, GOLD if open_bid or str(m["k"]) == "deadline" else MUT)
+		var ic: Control = _icon({"bid": "mail", "deal": "swap", "window": "cal", "deadline": "cal", "info": "office", "med": "plus", "award": "cup", "press": "mail", "talk": "office"}.get(str(m["k"]), "mail"), 24, GOLD if open_bid or str(m["k"]) == "deadline" else MUT)
 		ic.position = Vector2(12, 20)
 		b.add_child(ic)
 		var tf: Font = font2 if bool(m.get("rd", false)) else font3
@@ -4610,7 +4612,7 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		t.size = Vector2(lw - 12 - 60 - (14 if not bool(m.get("rd", false)) else 0), 28)
 		b.add_child(t)
 		var st := str(m.get("st", ""))
-		var stt: String = {"open": "Waiting for your answer", "acc": "You sold him", "rej": "You said no", "gone": "The offer is gone"}.get(st, "") if str(m["k"]) == "bid" else ""
+		var stt: String = {"open": "Waiting for your answer", "acc": "You sold him", "rej": "You said no", "gone": "The offer is gone"}.get(st, "") if str(m["k"]) == "bid" else ({"open": "Waiting for your answer", "done": "Answered", "gone": "You did not answer"}.get(st, "") if str(m["k"]) in ["press", "talk"] else "")
 		var dl := _label(str(m["date"]) + (("  ·  " + stt) if stt != "" else ""), 16, GOLD if st == "open" else MUT, font3)
 		dl.position = Vector2(48, 34)
 		dl.clip_text = true
@@ -4678,6 +4680,36 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 			menu.add_child(_btn("SELL", "bid_acc", int(cur["id"]), "primary", Vector2(px + 24, by), Vector2(bw, 62), 22))
 			menu.add_child(_btn("ASK FOR MORE", "bid_more", int(cur["id"]), "alt" if int(cur.get("cnt", 0)) == 0 else "off", Vector2(px + 34 + bw, by), Vector2(bw, 62), 18))
 			menu.add_child(_btn("SAY NO", "bid_rej", int(cur["id"]), "ghost", Vector2(px + 44 + bw * 2, by), Vector2(bw, 62), 20))
+		return
+	if str(cur["k"]) in ["press", "talk"]:
+		var qb := _label(str(cur["b"]), 20, CHALK, font3)
+		qb.autowrap_mode = TextServer.AUTOWRAP_WORD
+		qb.position = Vector2(24, 88)
+		qb.size = Vector2(pw - 48, 56)
+		pn.add_child(qb)
+		var opts: Array = cur.get("opts", [])
+		var oy := 156.0
+		var oh := minf(62.0, (ph - oy - 70) / maxf(opts.size(), 1) - 8)
+		var stq := str(cur.get("st", ""))
+		for k in opts.size():
+			var picked := stq == "done" and int(cur.get("ans", -1)) == k
+			var kind := "alt" if stq == "open" else ("primary" if picked else "off")
+			var ob := _btn(str(opts[k][0]), "mail_pick", [int(cur["id"]), k], kind, Vector2(px + 24, y0 + oy + k * (oh + 8)), Vector2(pw - 48, oh), 18)
+			if stq != "open":
+				ob.disabled = true
+			menu.add_child(ob)
+		var rt := ""
+		if stq == "done":
+			rt = str(cur.get("re", ""))
+		elif stq == "gone":
+			rt = "You did not answer in time. The board noticed." if str(cur["k"]) == "press" else "You never answered him."
+		elif stq == "open":
+			rt = "Pick an answer. Your words matter to the players and the board."
+		var rl := _label(rt, 19, GOLD if stq == "done" else MUT, font3)
+		rl.autowrap_mode = TextServer.AUTOWRAP_WORD
+		rl.position = Vector2(24, oy + opts.size() * (oh + 8) + 6)
+		rl.size = Vector2(pw - 48, 56)
+		pn.add_child(rl)
 		return
 	var body := _label(str(cur["b"]), 20, CHALK, font3)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD
