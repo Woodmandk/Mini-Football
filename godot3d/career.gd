@@ -2623,6 +2623,12 @@ func _fac_tick(lines: Array) -> void:
 
 # The career grows players by itself, as in FIFA: a full bar makes him better where his position needs it.
 func _grow_auto(pl: Dictionary, rng: RandomNumberGenerator, lines: Array) -> void:
+	if bool(pl.get("me", false)):
+		# a player career's own man: experience becomes skill points that you spend yourself
+		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
+			pl["xp"] = int(pl["xp"]) - 100
+			pl["tp"] = int(pl.get("tp", 0)) + 1
+		return
 	var got := []
 	while (int(pl["xp"]) >= 100 or int(pl.get("tp", 0)) > 0) and ovr_of(pl) < int(pl["pot"]):
 		if int(pl.get("tp", 0)) > 0:
@@ -4046,57 +4052,89 @@ const PRO_SPOTS := {"DF": [1, 2, 3, 4], "MF": [5, 6, 7], "FW": [8, 9, 10]}
 func pro() -> bool:
 	return d.has("pro")
 
-func pro_d() -> Dictionary:
-	return d.get("pro", {})
+# "pro" is you; "pro2" is your friend's player when you play the player career together
+func pro_d(k := "pro") -> Dictionary:
+	return d.get(k, {})
 
-func pro_i() -> int:
-	return _sq_find(str(pro_d().get("pn", "")))
+func pro_i(k := "pro") -> int:
+	if not d.has(k):
+		return -1
+	return _sq_find(str(pro_d(k).get("pn", "")))
 
-func pro_pl() -> Dictionary:
-	var i := pro_i()
+func pro_pl(k := "pro") -> Dictionary:
+	var i := pro_i(k)
 	return d["squad"][i] if i >= 0 else {}
 
-func new_pro(c: int, pname: String, pos: String) -> void:
-	new_career(c, false)
-	d["mode"] = "simple"
-	var nm := pname.strip_edges().to_upper()
-	if nm == "":
-		nm = "ROOKIE"
-	# nobody else in the squad has your name
-	for pl in d["squad"]:
-		if str(pl["n"]) == nm:
-			pl["n"] = str(pl["n"]) + "S"
+func pro2() -> bool:
+	return d.has("pro2")
+
+func _pro_new_d(nm: String) -> Dictionary:
+	return {"pn": nm, "trust": 50, "rt": [], "ss": {"apps": 0, "st": 0, "g": 0, "a": 0, "rs": 0.0}, "all": {"apps": 0, "g": 0, "a": 0, "rs": 0.0, "clubs": 1},
+		"pxp": 0, "next": "", "offer": -1, "hist": []}
+
+func _pro_make(nm: String, pos: String, num: int) -> Dictionary:
 	var base: Array = ROLE_BASE[pos]
-	var me := {"n": nm, "num": 22, "pos": pos, "age": 18, "xp": 0, "g": 0, "apps": 0, "me": true,
+	var me := {"n": nm, "num": num, "pos": pos, "age": 18, "xp": 0, "g": 0, "apps": 0, "me": true,
 		"pac": int(base[0]), "sho": int(base[1]), "pas": int(base[2]), "dfn": int(base[3]), "fm": 50, "mo": 70}
 	var gap := PRO_START_OVR - ovr_of(me)
 	for k in STAT_KEYS:
 		me[k] = clampi(int(me[k]) + gap, 25, 95)
 	me["pot"] = PRO_POT
-	(d["squad"] as Array).append(me)
-	d["pro"] = {"pn": nm, "trust": 50, "rt": [], "ss": {"apps": 0, "st": 0, "g": 0, "a": 0, "rs": 0.0}, "all": {"apps": 0, "g": 0, "a": 0, "rs": 0.0, "clubs": 1},
-		"pxp": 0, "next": "", "offer": -1, "hist": []}
+	return me
+
+static func _pro_clean(pname: String) -> String:
+	var nm := pname.strip_edges().to_upper()
+	return nm if nm != "" else "ROOKIE"
+
+# your friend joins the player career with a player of his own, at your club
+func add_pro2(pname: String, pos: String) -> void:
+	if pro2() or not pro():
+		return
+	var nm := _pro_clean(pname)
+	if nm == str(pro_d()["pn"]):
+		nm += " JR"
+	for pl in d["squad"]:
+		if str(pl["n"]) == nm:
+			pl["n"] = str(pl["n"]) + "S"
+	(d["squad"] as Array).append(_pro_make(nm, pos if PRO_SPOTS.has(pos) else "MF", 23))
+	d["pro2"] = _pro_new_d(nm)
+	_pro_goals("pro2")
+	pro_select("pro2", true)
+	save()
+
+func new_pro(c: int, pname: String, pos: String) -> void:
+	new_career(c, false)
+	d["mode"] = "simple"
+	var nm := _pro_clean(pname)
+	# nobody else in the squad has your name
+	for pl in d["squad"]:
+		if str(pl["n"]) == nm:
+			pl["n"] = str(pl["n"]) + "S"
+	(d["squad"] as Array).append(_pro_make(nm, pos, 22))
+	d["pro"] = _pro_new_d(nm)
 	_pro_goals()
 	pro_select()
 	save()
 
 # the manager's view of you before a match: your level, his trust and your form against the man in your place
-func _pro_score(pl: Dictionary, mine: bool) -> float:
+func _pro_score(pl: Dictionary, mine: bool, k := "pro") -> float:
 	var s := float(ovr_of(pl)) + (pform(pl) - 50) * 0.08
 	if mine:
-		s += (int(pro_d().get("trust", 50)) - 50) * 0.25
+		s += (int(pro_d(k).get("trust", 50)) - 50) * 0.25
 	if injured(pl):
 		s -= 100.0
 	s -= maxf(70.0 - cond_of(pl), 0.0) * 0.15
 	return s
 
 # Picks the eleven for the next match. You start when you beat the weakest man in your position.
-func pro_select() -> void:
-	if not pro():
+# Together (force) the manager always plays you both.
+func pro_select(k := "pro", force := false) -> void:
+	if not d.has(k):
 		return
-	var me := pro_i()
+	var me := pro_i(k)
 	if me < 0:
 		return
+	var other := pro_i("pro2" if k == "pro" else "pro")
 	var xi: Array = d["xi"]
 	var pl: Dictionary = d["squad"][me]
 	var at := xi.find(me)
@@ -4104,7 +4142,7 @@ func pro_select() -> void:
 	if at >= 0 and spots.has(at):
 		# in the side: he stays unless someone on the bench is clearly better now
 		var best := -1
-		var bs := _pro_score(pl, true) + 1.5
+		var bs := _pro_score(pl, true, k) + (1e6 if force else 1.5)
 		for i in (d["squad"] as Array).size():
 			if xi.has(i) or str(d["squad"][i]["pos"]) != str(pl["pos"]):
 				continue
@@ -4114,7 +4152,7 @@ func pro_select() -> void:
 				best = i
 		if best >= 0:
 			xi[at] = best
-		pro_d()["next"] = "start" if xi.has(me) else "bench"
+		pro_d(k)["next"] = "start" if xi.has(me) else "bench"
 		return
 	if at >= 0:
 		xi[at] = -1
@@ -4123,32 +4161,40 @@ func pro_select() -> void:
 	var ws := 1e9
 	for s in spots:
 		var j := int(xi[s])
+		if j == other and other >= 0:
+			continue
 		var sc := _pro_score(d["squad"][j], false) if j >= 0 else -1e9
 		if sc < ws:
 			ws = sc
 			wk = s
-	if wk >= 0 and _pro_score(pl, true) >= ws:
+	if wk < 0 and force:
+		# his spots are all taken by your friend: any outfield place will do
+		for s in [10, 9, 8, 7, 6, 5]:
+			if int(xi[s]) != other:
+				wk = s
+				break
+	if wk >= 0 and (force or _pro_score(pl, true, k) >= ws):
 		xi[wk] = me
 	if xi.has(-1):
 		# fill a hole left by the swap with the best man on the bench
 		var h := xi.find(-1)
 		var bi := -1
 		for i in (d["squad"] as Array).size():
-			if not xi.has(i) and i != me and (bi < 0 or ovr_of(d["squad"][i]) > ovr_of(d["squad"][bi])):
+			if not xi.has(i) and i != me and i != other and (bi < 0 or ovr_of(d["squad"][i]) > ovr_of(d["squad"][bi])):
 				bi = i
 		xi[h] = bi
-	pro_d()["next"] = "start" if xi.has(me) else "bench"
+	pro_d(k)["next"] = "start" if xi.has(me) else "bench"
 
-func pro_starts() -> bool:
-	return pro() and (d["xi"] as Array).has(pro_i())
+func pro_starts(k := "pro") -> bool:
+	return d.has(k) and (d["xi"] as Array).has(pro_i(k))
 
 # a match is over: rating (0 when you did not play), goals, assists. Returns lines for the end screen.
-func pro_after(rt: float, g: int, a: int, played: bool, started: bool) -> Array:
+func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro") -> Array:
 	var lines := []
-	if not pro():
+	if not d.has(k):
 		return lines
-	var p := pro_d()
-	var pl := pro_pl()
+	var p := pro_d(k)
+	var pl := pro_pl(k)
 	if pl.is_empty():
 		return lines
 	var ss: Dictionary = p["ss"]
@@ -4174,11 +4220,10 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool) -> Array:
 		p["trust"] = clampi(int(round(int(p["trust"]) + dt)), 0, 100)
 		pl["fm"] = clampi(int(round(pform(pl) * 0.6 + (rt - 3.0) / 7.0 * 100.0 * 0.4)), 5, 99)
 		# growth: points to spend, quicker for a good match
-		p["pxp"] = int(p.get("pxp", 0)) + int(round(14.0 + (rt - 5.0) * 9.0))
+		p["pxp"] = int(p.get("pxp", 0)) + maxi(int(round((rt - 6.0) * 12.0)), 0)
 		lines.append("YOUR RATING %.1f%s" % [rt, ("  ·  %d GOAL%s" % [g, "" if g == 1 else "S"] if g > 0 else "") + ("  ·  %d ASSIST%s" % [a, "" if a == 1 else "S"] if a > 0 else "")])
 	else:
-		# not used: form fades, he keeps training
-		p["pxp"] = int(p.get("pxp", 0)) + 6
+		# not used: form fades, he keeps training (the club's training gives him experience)
 		lines.append("YOU DID NOT PLAY")
 	while int(p["pxp"]) >= 100:
 		p["pxp"] = int(p["pxp"]) - 100
@@ -4188,23 +4233,23 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool) -> Array:
 	lines.append("MANAGER'S TRUST %d" % int(p["trust"]))
 	return lines
 
-func pro_avg(season := true) -> float:
-	var s: Dictionary = pro_d().get("ss" if season else "all", {})
+func pro_avg(season := true, k := "pro") -> float:
+	var s: Dictionary = pro_d(k).get("ss" if season else "all", {})
 	return float(s.get("rs", 0.0)) / maxf(int(s.get("apps", 0)), 1)
 
 # goals for the season, from your position
-func _pro_goals() -> void:
-	var pl := pro_pl()
+func _pro_goals(k := "pro") -> void:
+	var pl := pro_pl(k)
 	var pos := str(pl.get("pos", "MF"))
 	var gl: int = {"DF": 2, "MF": 5, "FW": 10}.get(pos, 5)
-	pro_d()["obj"] = [["Play in %d matches" % (rounds_total() / 2), "apps", rounds_total() / 2], ["Score %d goals" % gl, "g", gl], ["Average a rating of 6.8", "avg", 6.8]]
+	pro_d(k)["obj"] = [["Play in %d matches" % (rounds_total() / 2), "apps", rounds_total() / 2], ["Score %d goals" % gl, "g", gl], ["Average a rating of 6.8", "avg", 6.8]]
 
-func pro_obj() -> Array:
+func pro_obj(k := "pro") -> Array:
 	var out := []
-	var ss: Dictionary = pro_d().get("ss", {})
-	for o in pro_d().get("obj", []):
-		var k := str(o[1])
-		var v: float = pro_avg() if k == "avg" else float(ss.get(k, 0))
+	var ss: Dictionary = pro_d(k).get("ss", {})
+	for o in pro_d(k).get("obj", []):
+		var ok := str(o[1])
+		var v: float = pro_avg(true, k) if ok == "avg" else float(ss.get(ok, 0))
 		out.append([str(o[0]), v, float(o[2]), v >= float(o[2])])
 	return out
 
@@ -4244,8 +4289,8 @@ func league_name_of(c: int) -> String:
 	return str(ClubDB.LEAGUES[li]["n"]) if li >= 0 and li < ClubDB.LEAGUES.size() else ""
 
 # spend a skill point on one of your stats
-func pro_spend(si: int) -> String:
-	var i := pro_i()
+func pro_spend(si: int, k := "pro") -> String:
+	var i := pro_i(k)
 	if i < 0:
 		return ""
 	return spend_tp(i, si)
@@ -4254,7 +4299,11 @@ func pro_spend(si: int) -> String:
 func pro_next_season() -> void:
 	var p := pro_d()
 	var me: Dictionary = pro_pl().duplicate(true)
+	var me2: Dictionary = pro_pl("pro2").duplicate(true)
 	var c := int(p.get("offer", -1))
+	if pro2():
+		var p2 := pro_d("pro2")
+		(p2["hist"] as Array).append([int(d["season"]), int(d["club"]), int(p2["ss"]["apps"]), int(p2["ss"]["g"]), int(p2["ss"]["a"]), snappedf(pro_avg(true, "pro2"), 0.01)])
 	(p["hist"] as Array).append([int(d["season"]), int(d["club"]), int(p["ss"]["apps"]), int(p["ss"]["g"]), int(p["ss"]["a"]), snappedf(pro_avg(), 0.01)])
 	if c >= 0:
 		d["offers"] = [[c]]
@@ -4265,10 +4314,19 @@ func pro_next_season() -> void:
 		me["cond"] = 100
 		me.erase("inj")
 		me.erase("injn")
-		for pl in d["squad"]:
-			if str(pl["n"]) == str(me["n"]):
-				pl["n"] = str(pl["n"]) + "S"
-		(d["squad"] as Array).append(me)
+		for m2 in ([me, me2] if not me2.is_empty() else [me]):
+			m2["age"] = int(m2["age"]) + (1 if m2 != me else 0)
+			m2["g"] = 0
+			m2["apps"] = 0
+			m2["cond"] = 100
+			m2.erase("inj")
+			m2.erase("injn")
+			for pl in d["squad"]:
+				if str(pl["n"]) == str(m2["n"]):
+					pl["n"] = str(pl["n"]) + "S"
+			(d["squad"] as Array).append(m2)
+		if pro2():
+			pro_d("pro2")["trust"] = 50
 		d["mode"] = "simple"
 		p["trust"] = 50
 		p["all"]["clubs"] = int(p["all"].get("clubs", 1)) + 1
@@ -4277,7 +4335,10 @@ func pro_next_season() -> void:
 		next_season()
 		p["trust"] = clampi(int(p["trust"]) + (6 if pro_avg() >= 7.0 else 0), 0, 100)
 	p["offer"] = -1
-	p["ss"] = {"apps": 0, "st": 0, "g": 0, "a": 0, "rs": 0.0}
-	_pro_goals()
-	pro_select()
+	for k in (["pro", "pro2"] if pro2() else ["pro"]):
+		pro_d(k)["ss"] = {"apps": 0, "st": 0, "g": 0, "a": 0, "rs": 0.0}
+		_pro_goals(k)
+	pro_select("pro", pro2())
+	if pro2():
+		pro_select("pro2", true)
 	save()
