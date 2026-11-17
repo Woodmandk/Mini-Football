@@ -58,6 +58,11 @@ var offside := false
 var commit_t := -1.0
 var slide_cd := 0.0 # CPU: time before he may go to ground again
 var slide_w := 0.0 # CPU: how long the moment for a slide has been there
+var tq_err := 0.0 # CPU: how wrong he reads the moment to tackle (a better defender reads it better)
+var tq_t := 0.0 # CPU: time until he reads it again
+var rush_t := 0.0 # CPU: a poor defender's itch to dive in
+var card_up := 0 # the referee: 1 = holds up a yellow card, 2 = a red one
+var card_mesh: MeshInstance3D = null
 var kick_n := 0
 var tackle_n := 0
 var dive_n := 0
@@ -746,6 +751,27 @@ func animate(dt: float) -> void:
 			head_y = 0.0
 			lean = -0.1
 			bend = 0.12
+	if card_up > 0:
+		# the referee's arm goes straight up with the card in his hand
+		ab_r = 2.95
+		sh_r = -0.15
+		el_r = 0.0
+		if card_mesh == null:
+			card_mesh = MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			bm.size = Vector3(0.09, 0.13, 0.012)
+			card_mesh.mesh = bm
+			card_mesh.position = Vector3(0, -0.36, 0.02)
+			fore_r.add_child(card_mesh)
+		var cm := StandardMaterial3D.new()
+		cm.albedo_color = Color(1.0, 0.86, 0.1) if card_up == 1 else Color(0.9, 0.1, 0.1)
+		cm.emission_enabled = true
+		cm.emission = cm.albedo_color * 0.5
+		card_mesh.material_override = cm
+		card_mesh.visible = true
+		card_mesh.scale = Vector3.ONE * 2.2
+	elif card_mesh != null:
+		card_mesh.visible = false
 	leg_l.rotation.x = lerpf(leg_l.rotation.x, hip_l, k)
 	leg_r.rotation.x = lerpf(leg_r.rotation.x, hip_r, k)
 	leg_l.rotation.z = lerpf(leg_l.rotation.z, spread_l, k)
