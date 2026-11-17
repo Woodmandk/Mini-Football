@@ -343,8 +343,8 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 	b.add_child(chip)
 	var n1 := _label(nm.capitalize(), 19, Color.WHITE, font3)
 	n1.position = Vector2(18, 1)
-	n1.size = Vector2(sz.x - 22, 24)
 	n1.clip_text = true
+	n1.size = Vector2(sz.x - 22, 24)
 	b.add_child(n1)
 	var n2 := _label("%s  %d" % [str(pl["pos"]), int(pl["ovr"])], 17, GOLD if chosen else Color(1, 1, 1, 0.75), font3)
 	n2.position = Vector2(18, sz.y - 24)
@@ -988,8 +988,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				pn.add_child(tl)
 				var sl := _label(str(dd[2]), 16, Color(1, 1, 1, 0.65), font2)
 				sl.position = Vector2(21, 52)
-				sl.size = Vector2(cw - 40, 20)
 				sl.clip_text = true
+				sl.size = Vector2(cw - 40, 20)
 				pn.add_child(sl)
 				var yy := 84.0
 				for ln in dd[3]:
@@ -1337,8 +1337,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					abl += ("" if abl == "" else ", ") + str(ab[1])
 				var ab7 := _label(("Skills: " + abl) if abl != "" else "No skills", 16, GOLD if abl != "" else Color(1, 1, 1, 0.5), font2)
 				ab7.position = Vector2(20, 128)
-				ab7.size = Vector2(rw6 - 40, 20)
 				ab7.clip_text = true
+				ab7.size = Vector2(rw6 - 40, 20)
 				rp6.add_child(ab7)
 				var ask := int(pl7["ask"])
 				var al := _label("THEY WANT ABOUT  %s" % _m(ask), 18, Color.WHITE)
@@ -1472,8 +1472,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			if str(c9.get("msg", "")) != "":
 				var ms9 := _label(str(c9.get("msg", "")), 17, GOLD, font2)
 				ms9.position = Vector2(20, h - 200 - 40)
-				ms9.size = Vector2(pw9 * 2 + 20 - 40, 24)
 				ms9.clip_text = true
+				ms9.size = Vector2(pw9 * 2 + 20 - 40, 24)
 				lp9.add_child(ms9)
 			var co9 := _label(_mb(int(c9.get("coins", 0))), 22, GOLD)
 			co9.position = Vector2(w - 260, 20)
@@ -1908,9 +1908,9 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					meta += "  ·  %d goals" % int(sp2["g"])
 				var dd := _label(meta, 20, GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT, font3)
 				dd.position = Vector2(104, 46)
-				dd.size = Vector2(bw3 - 120, 28)
 				dd.clip_text = true
 				dd.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+				dd.size = Vector2(bw3 - 120, 28)
 				dp.add_child(dd)
 				var xc := _btn("✕", "c_pick", sel, "ghost", Vector2(bx3 + bw3 - 54, dy + 10), Vector2(44, 40), 20)
 				menu.add_child(xc)
@@ -1950,9 +1950,9 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					var mo3 := int(sp2.get("mo", 65))
 					var ml := _label("%s  ·  %s%s" % [Career.mood_name(mo3).capitalize(), Career.ROLE_WANT[int(sp2.get("role", 2))].capitalize(), "  ·  wants to leave" if bool(sp2.get("tr", false)) else ""], 19, _mood_col(mo3), font3)
 					ml.position = Vector2(18, ly)
-					ml.size = Vector2(bw3 - 250, 26)
 					ml.clip_text = true
 					ml.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+					ml.size = Vector2(bw3 - 250, 26)
 					dp.add_child(ml)
 					var fcb := _btn("Trains: %s  ›" % Career.focus_name(str(sp2.get("tf", ""))).capitalize(), "c_focus", null, "alt", Vector2(bx3 + bw3 - 18 - 220, dy + ly - 6), Vector2(220, 38), 17)
 					fcb.add_theme_font_override("font", font3)
@@ -2015,8 +2015,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			if str(c3.get("msg", "")) != "":
 				var ms := _label(str(c3.get("msg", "")), 19, GOLD, font3)
 				ms.position = Vector2(bx3 + 18, dy + dp.size.y - 100)
-				ms.size = Vector2(bw3 - 36, 26)
 				ms.clip_text = true
+				ms.size = Vector2(bw3 - 36, 26)
 				menu.add_child(ms)
 			var co3 := _label(_mb(int(c3.get("coins", 0))), 22, GOLD)
 			co3.position = Vector2(w - 260, 20)
@@ -2402,8 +2402,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				items.append([md, Vector2(80, 0), 0.05])
 				var mh := _label((cot if cot != "" else "You two against the computer") if str(info.get("mode", "")) == "coop" else "Your team against your friend's: " + str(info.get("gname", "")), 18, Color(1, 1, 1, 0.75), font2)
 				mh.position = Vector2(rx + 4, 158)
-				mh.size = Vector2(col_w - 8, 24)
 				mh.clip_text = true
+				mh.size = Vector2(col_w - 8, 24)
 				menu.add_child(mh)
 				var d2 := _btn("LEVEL: " + str(info.get("diff", "")), "diff", null, "ghost", Vector2(rx, 190), Vector2(col_w * 0.5 - 6, 50), 17)
 				var l2 := _btn("MATCH: " + str(info.get("len", "")), "len", null, "ghost", Vector2(rx + col_w * 0.5 + 6, 190), Vector2(col_w * 0.5 - 6, 50), 17)
@@ -2471,6 +2471,10 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			_sim_page(info, w, h, items, anim)
 		"youth":
 			_youth_page(info, w, h, items)
+		"inbox":
+			_inbox_page(info, w, h, items)
+		"tnews":
+			_tnews_page(info, w, h, items)
 		"adv":
 			_adv_page(info, w, h, anim)
 		"how":
@@ -2560,8 +2564,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			for gi in 2:
 				var gl := _label(str(info.get("g%d" % gi, "")), 17, Color(1, 1, 1, 0.85), font2)
 				gl.position = Vector2(0 if gi == 0 else w * 0.5 + 190, h * 0.5 - 114)
-				gl.size = Vector2(w * 0.5 - 190, 22)
 				gl.clip_text = true
+				gl.size = Vector2(w * 0.5 - 190, 22)
 				gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if gi == 0 else HORIZONTAL_ALIGNMENT_LEFT
 				menu.add_child(gl)
 			var rs := _label(str(info.get("result", "")), 40, GREEN.lightened(0.35) if str(info.get("result", "")).begins_with("YOU WIN") else Color.WHITE)
@@ -2768,8 +2772,8 @@ func _youth_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		box.add_child(pn2)
 		var n1 := _label("%s  %s" % [r["pos"], r["n"]], 22, CHALK)
 		n1.position = Vector2(18, 8)
-		n1.size = Vector2(300, 30)
 		n1.clip_text = true
+		n1.size = Vector2(300, 30)
 		pn2.add_child(n1)
 		var ab3: Array = r.get("ab", [])
 		var sub := "Age %d  ·  %s" % [int(r["age"]), r["rg"]] + (("  ·  " + str(ab3[0][1]).capitalize()) if not ab3.is_empty() else "")
@@ -2777,8 +2781,8 @@ func _youth_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 			sub += "  ·  gone in %d" % int(r["exp"])
 		var n2 := _label(sub, 17, MUT, font3)
 		n2.position = Vector2(18, 40)
-		n2.size = Vector2(320, 24)
 		n2.clip_text = true
+		n2.size = Vector2(320, 24)
 		pn2.add_child(n2)
 		var ov := _label(("Rating %d" % int(r["olo"])) if int(r["olo"]) == int(r["ohi"]) else ("Rating %d-%d" % [int(r["olo"]), int(r["ohi"])]), 20, CHALK, font3)
 		ov.position = Vector2(340, 22)
@@ -2902,8 +2906,8 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		cell.add_child(strip)
 		var ol := _label(("" if bool(e["home"]) or str(e["kind"]) == "cup" else "@") + str(e["os"]), 18, CHALK)
 		ol.position = Vector2(14, chh - 34)
-		ol.size = Vector2(cw - 18, 26)
 		ol.clip_text = true
+		ol.size = Vector2(cw - 18, 26)
 		cell.add_child(ol)
 		var res: Array = e["res"]
 		if res.size() == 2:
@@ -2932,13 +2936,13 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 			continue
 		var l1 := _label(str(e["date"]) + "  ·  " + ("Cup, " + str(e["name"]).to_lower() if str(e["kind"]) == "cup" else ("Home" if bool(e["home"]) else "Away")), 17, GOLD if bool(e["next"]) else MUT, font3)
 		l1.position = Vector2(18, y2)
-		l1.size = Vector2(rw - 36, 22)
 		l1.clip_text = true
+		l1.size = Vector2(rw - 36, 22)
 		pn.add_child(l1)
 		var l2 := _label(str(e["opp"]).capitalize() if str(e["opp"]) != "" else "Drawn after the last round", 20, CHALK, font3)
 		l2.position = Vector2(18, y2 + 21)
-		l2.size = Vector2(rw - 36, 26)
 		l2.clip_text = true
+		l2.size = Vector2(rw - 36, 26)
 		pn.add_child(l2)
 		y2 += 56.0
 		shown += 1
@@ -3071,26 +3075,26 @@ func _adv_page(info: Dictionary, w: float, h: float, anim: bool) -> void:
 	var hl := _label("While the days go by", 26, CHALK)
 	hl.position = Vector2(nx, 60)
 	menu.add_child(hl)
-	var icons := {"result": "play", "table": "table", "cup": "cup", "market": "swap", "board": "board"}
+	var icons := {"result": "play", "table": "table", "cup": "cup", "market": "swap", "board": "board", "deal": "swap", "bid": "mail", "window": "cal"}
 	var rows := []
 	for k in news.size():
 		var it: Array = news[k]
 		var ry := 104.0 + k * 50.0
 		var row := _card_panel(Vector2(nx, ry), Vector2(nw, 44))
-		var ic := _icon(str(icons.get(str(it[0]), "play")), 24, GOLD if str(it[0]) == "cup" else MUT)
+		var ic := _icon(str(icons.get(str(it[0]), "play")), 24, GOLD if str(it[0]) in ["cup", "bid", "window"] else MUT)
 		ic.position = Vector2(14, 10)
 		row.add_child(ic)
 		var tl := _label(str(it[1]), 20, CHALK, font3)
 		tl.position = Vector2(52, 8)
-		tl.size = Vector2(nw - 66, 28)
 		tl.clip_text = true
 		tl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		tl.size = Vector2(nw - 66, 28)
 		row.add_child(tl)
 		rows.append(row)
 	var nl := _label("Next: " + str(av.get("ndate", "")) + "  ·  " + str(av.get("next", "")), 22, GOLD, font3)
 	nl.position = Vector2(48, h - 118)
-	nl.size = Vector2(w - 96, 30)
 	nl.clip_text = true
+	nl.size = Vector2(w - 96, 30)
 	menu.add_child(nl)
 	var cb := _btn("CONTINUE", "adv_done", null, "primary", Vector2(w * 0.5 - 170, h - 86), Vector2(340, 70), 30)
 	menu.add_child(cb)
@@ -3289,6 +3293,9 @@ func _icon(kind: String, sz: float, col: Color) -> Control:
 				pl.call([[8, 9], [16, 9]])
 				pl.call([[8, 13], [16, 13]])
 				pl.call([[8, 17], [13, 17]])
+			"mail":
+				pl.call([[3, 6], [21, 6], [21, 18], [3, 18]], true)
+				pl.call([[3, 6], [12, 13], [21, 6]])
 			"swap":
 				pl.call([[4, 8], [19, 8]])
 				pl.call([[15, 4], [19, 8], [15, 12]])
@@ -3511,15 +3518,15 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 func _card_text(b: Control, title: String, sub: String, sz: Vector2, fs := 28, col := CHALK) -> void:
 	var t := _label(title, fs, col)
 	t.position = Vector2(22, sz.y - (fs + 14) - (30 if sub != "" else 0) - 10)
-	t.size = Vector2(sz.x - 40, fs + 10)
 	t.clip_text = true
+	t.size = Vector2(sz.x - 40, fs + 10)
 	b.add_child(t)
 	if sub != "":
 		var s := _label(sub, 20, MUT, font3)
 		s.position = Vector2(22, sz.y - 40)
-		s.size = Vector2(sz.x - 40, 28)
 		s.clip_text = true
 		s.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		s.size = Vector2(sz.x - 40, 28)
 		b.add_child(s)
 
 func _tab_play(info: Dictionary, w: float, y0: float, ch: float, items: Array) -> void:
@@ -3545,8 +3552,8 @@ func _tab_play(info: Dictionary, w: float, y0: float, ch: float, items: Array) -
 	hero.add_child(qt)
 	var qs := _label("Against the computer  ·  %s  ·  %s" % [str(info.get("len", "")).to_lower(), str(info.get("diff", "")).capitalize()], 20, MUT, font3)
 	qs.position = Vector2(22, 62)
-	qs.size = Vector2(hw - 40, 28)
 	qs.clip_text = true
+	qs.size = Vector2(hw - 40, 28)
 	hero.add_child(qs)
 	var clubs: Array = info.get("clubs", [])
 	var oc := int(info.get("club", 0))
@@ -3646,8 +3653,8 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		var dtx := str(c.get("ndate", ""))
 		var nx := _label((dtx + "  ·  " if dtx != "" else "") + (("The cup, " + str(cpn.get("name", "")).to_lower()) if cdue else ("League, " + ("home" if bool(c.get("home", true)) else "away"))), 22, GOLD, font3)
 		nx.position = Vector2(22, 16)
-		nx.size = Vector2(lw - 80, 30)
 		nx.clip_text = true
+		nx.size = Vector2(lw - 80, 30)
 		card.add_child(nx)
 		var kits := [c.get("kit", ["888888"]), cpn.get("opp_kit", ["888888"]) if cdue else c.get("opp_kit", ["888888"])]
 		var nms := [str(c.get("name", "")), str(cpn.get("opp", "")) if cdue else str(c.get("opp", ""))]
@@ -3714,8 +3721,8 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		tt.add_child(a)
 		var b := _label(str(r[1]).capitalize(), 21, col, font3)
 		b.position = Vector2(64, 14 + k * 34.0)
-		b.size = Vector2(rw - 150, 28)
 		b.clip_text = true
+		b.size = Vector2(rw - 150, 28)
 		tt.add_child(b)
 		var p := _label(str(r[7]), 21, col)
 		p.position = Vector2(rw - 70, 14 + k * 34.0)
@@ -3759,11 +3766,53 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	cb.add_child(ci)
 	var ct := _label(cps, 21, CHALK, font3)
 	ct.position = Vector2(64, each * 0.5 - 14)
-	ct.size = Vector2(rw - 84, 28)
 	ct.clip_text = true
 	ct.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	ct.size = Vector2(rw - 84, 28)
 	cb.add_child(ct)
-	if together:
+	var wd: Dictionary = c.get("live", {})
+	if together and str(info.get("co_room", "")) == "" and not wd.is_empty():
+		var ib: Array = wd.get("inbox", [])
+		var un := int(wd.get("unread", 0))
+		var wn: Dictionary = wd.get("win", {})
+		var ibc := _card("inbox", null, Vector2(rx, yy + 2 * (each + gap)), Vector2(rw, each))
+		menu.add_child(ibc)
+		items.append([ibc, Vector2(80, 0), 0.12])
+		var mi := _icon("mail", 34, GOLD if un > 0 else MUT)
+		mi.position = Vector2(18, each * 0.5 - 17)
+		ibc.add_child(mi)
+		var it2 := "Inbox"
+		var col2 := CHALK
+		if bool(wn.get("open", false)) and bool(wn.get("deadline", false)):
+			it2 = "Deadline day! The window shuts %s" % str(wn.get("ctext", ""))
+			col2 = GOLD
+		elif un > 0 and not ib.is_empty():
+			for m in ib:
+				if not bool(m.get("rd", false)):
+					it2 = str(m["t"])
+					break
+		elif not ib.is_empty():
+			it2 = "Inbox: " + str(ib[0]["t"])
+		var ilt := _label(it2, 21, col2, font3)
+		ilt.position = Vector2(64, each * 0.5 - 14)
+		ilt.clip_text = true
+		ilt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		ilt.size = Vector2(rw - 84 - (44 if un > 0 else 0), 28)
+		ibc.add_child(ilt)
+		if un > 0:
+			var dot := Panel.new()
+			dot.add_theme_stylebox_override("panel", _box(Color(0.86, 0.22, 0.2), 14))
+			dot.position = Vector2(rw - 52, each * 0.5 - 14)
+			dot.size = Vector2(34, 28)
+			dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ibc.add_child(dot)
+			var dl2 := _label(str(un), 18, Color.WHITE, font3)
+			dl2.position = Vector2(0, 0)
+			dl2.size = Vector2(34, 28)
+			dl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			dl2.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			dot.add_child(dl2)
+	elif together:
 		var cor := str(info.get("co_room", ""))
 		var fb := _card("friend", null, Vector2(rx, yy + 2 * (each + gap)), Vector2(rw, each))
 		menu.add_child(fb)
@@ -3773,9 +3822,9 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		fb.add_child(fi)
 		var ft := _label(("Room %s: your friend joins with this code" % cor) if cor != "" else "Play it together with a friend", 21, CHALK, font3)
 		ft.position = Vector2(64, each * 0.5 - 14)
-		ft.size = Vector2(rw - 84, 28)
 		ft.clip_text = true
 		ft.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		ft.size = Vector2(rw - 84, 28)
 		fb.add_child(ft)
 
 # a row of big tiles: icon top left, name and one short line at the bottom
@@ -3799,12 +3848,34 @@ func _tab_transfers(info: Dictionary, w: float, y0: float, ch: float, items: Arr
 	var c: Dictionary = info.get("car", {})
 	var mk: Array = c.get("market", [])
 	var top_h := ch * 0.6
+	var wd: Dictionary = c.get("live", {})
+	var nd := (wd.get("deals", []) as Array).size()
 	_tiles([
-		["For sale", "%d players, new after every match" % mk.size(), "c_market", "shop"],
-		["Other clubs", "England and Denmark: bid", "scout", "club"],
-		["Sell", "Tap a bench player in your squad", "c_squad", "swap"],
-	], 24, y0, w - 48, top_h, 3, items)
+		["For sale", "%d free players" % mk.size(), "c_market", "shop"],
+		["Other clubs", "Bid for their men", "scout", "club"],
+		["Sell", "From your bench", "c_squad", "swap"],
+		["Transfer news", ("%d deals so far" % nd) if nd > 0 else "Who buys whom", "tnews", "mail", Color(0.36, 0.6, 1.0)],
+	], 24, y0, w - 48, top_h, 4, items)
 	var bp := _card_panel(Vector2(24, y0 + top_h + 14), Vector2(w - 48, ch - top_h - 14))
+	if not wd.is_empty():
+		var wn: Dictionary = wd.get("win", {})
+		var wt := ""
+		var wcol := GREEN
+		if bool(wn.get("open", false)):
+			wt = ("Deadline day: the %s shuts %s" if bool(wn.get("deadline", false)) else "The %s is open until %s") % [str(wn.get("name", "")).to_lower(), str(wn.get("ctext", ""))]
+			wcol = GOLD if bool(wn.get("deadline", false)) else GREEN
+		elif bool(wd.get("won", false)):
+			wt = "The window is shut: it opens on %s" % str(wn.get("otext", ""))
+			wcol = MUT
+		else:
+			wt = "Simple career: you can deal all season"
+			wcol = MUT
+		var wl2 := _label(wt, 19, wcol, font3)
+		wl2.position = Vector2(22, ch - top_h - 14 - 36)
+		wl2.clip_text = true
+		wl2.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		wl2.size = Vector2(w - 48 - 44 - (320 if bool(c.get("wg", c.get("eur", false))) else 0), 26)
+		bp.add_child(wl2)
 	var bl := _label("Transfer budget", 20, MUT, font3)
 	bl.position = Vector2(22, 14)
 	bp.add_child(bl)
@@ -3825,8 +3896,8 @@ func _tab_transfers(info: Dictionary, w: float, y0: float, ch: float, items: Arr
 		if str(c.get("msg", "")) != "":
 			var ms := _label(str(c.get("msg", "")), 18, GOLD, font3)
 			ms.position = Vector2(300, 92)
-			ms.size = Vector2(w - 48 - 300 - 320, 26)
 			ms.clip_text = true
+			ms.size = Vector2(w - 48 - 300 - 320, 26)
 			bp.add_child(ms)
 
 func _tab_office(info: Dictionary, w: float, y0: float, ch: float, items: Array) -> void:
@@ -4135,8 +4206,8 @@ func _obj_row(p: Panel, tag: String, what: String, now: String, st: String, pw: 
 		fs -= 1
 	var wl := _label(what, fs, Color.WHITE)
 	wl.position = Vector2(20, 28)
-	wl.size = Vector2(pw - 210.0, 30)
 	wl.clip_text = true
+	wl.size = Vector2(pw - 210.0, 30)
 	p.add_child(wl)
 	var nl := _label(now, 17, Color(1, 1, 1, 0.7), font2)
 	nl.position = Vector2(20, minf(ph - 28.0, 60.0))
@@ -4405,3 +4476,198 @@ func _co_play_text(info: Dictionary, solo: String) -> String:
 
 static func _mood_col(m: int) -> Color:
 	return Color(0.45, 0.95, 0.55) if m >= 60 else (Color(1, 1, 1, 0.75) if m >= 40 else (Color(1.0, 0.75, 0.3) if m >= 25 else Color(1.0, 0.45, 0.4)))
+
+
+# ---------------------------------------------------------------- the inbox and the transfer news
+func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var wd: Dictionary = c.get("live", {})
+	var wn: Dictionary = wd.get("win", {})
+	var sub := "Bids, transfer news and the window"
+	if bool(wn.get("open", false)):
+		sub = ("Deadline day: the window shuts %s" if bool(wn.get("deadline", false)) else "The window is open until %s") % str(wn.get("ctext", ""))
+	elif bool(wd.get("won", false)):
+		sub = "The window is shut: it opens on %s" % str(wn.get("otext", ""))
+	_title("Inbox", sub)
+	menu.add_child(_back("career", null))
+	var ib: Array = wd.get("inbox", [])
+	if ib.is_empty():
+		var el := _label("Nothing yet. News comes in as the days go by.", 22, MUT, font3)
+		el.position = Vector2(0, 220)
+		el.size = Vector2(w, 30)
+		el.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		menu.add_child(el)
+		return
+	var sel := int(wd.get("sel", -1))
+	var lw := 400.0
+	var y0 := 104.0
+	var sc := ScrollContainer.new()
+	sc.position = Vector2(24, y0)
+	sc.size = Vector2(lw, h - y0 - 20)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu.add_child(sc)
+	var box := Control.new()
+	var rh := 64.0
+	box.custom_minimum_size = Vector2(lw - 12, ib.size() * (rh + 6))
+	sc.add_child(box)
+	var cur: Dictionary = {}
+	for i in ib.size():
+		var m: Dictionary = ib[i]
+		var on := int(m["id"]) == sel
+		if on:
+			cur = m
+		var open_bid := str(m["k"]) == "bid" and str(m.get("st", "")) == "open"
+		var b := _btn("", "mail", int(m["id"]), "alt", Vector2(0, i * (rh + 6)), Vector2(lw - 12, rh), 16)
+		b.add_theme_stylebox_override("normal", _box(Color(S1.r, S1.g, S1.b, 0.95) if not on else Color(0.2, 0.32, 0.24, 0.98), 12, GOLD if open_bid else (GREEN if on else LINE)))
+		box.add_child(b)
+		var ic: Control = _icon({"bid": "mail", "deal": "swap", "window": "cal", "deadline": "cal", "info": "office"}.get(str(m["k"]), "mail"), 24, GOLD if open_bid or str(m["k"]) == "deadline" else MUT)
+		ic.position = Vector2(12, 20)
+		b.add_child(ic)
+		var tf: Font = font2 if bool(m.get("rd", false)) else font3
+		var t := _label(_trim(str(m["t"]), tf, 19, lw - 12 - 60 - (14 if not bool(m.get("rd", false)) else 0)), 19, CHALK if on or not bool(m.get("rd", false)) else MUT, tf)
+		t.position = Vector2(48, 6)
+		t.clip_text = true
+		t.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		t.size = Vector2(lw - 12 - 60 - (14 if not bool(m.get("rd", false)) else 0), 28)
+		b.add_child(t)
+		var st := str(m.get("st", ""))
+		var stt: String = {"open": "Waiting for your answer", "acc": "You sold him", "rej": "You said no", "gone": "The offer is gone"}.get(st, "") if str(m["k"]) == "bid" else ""
+		var dl := _label(str(m["date"]) + (("  ·  " + stt) if stt != "" else ""), 16, GOLD if st == "open" else MUT, font3)
+		dl.position = Vector2(48, 34)
+		dl.clip_text = true
+		dl.size = Vector2(lw - 72, 22)
+		b.add_child(dl)
+		if not bool(m.get("rd", false)):
+			var dot := ColorRect.new()
+			dot.color = Color(0.86, 0.22, 0.2)
+			dot.position = Vector2(lw - 30, 14)
+			dot.size = Vector2(10, 10)
+			dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			b.add_child(dot)
+	# the open mail
+	var px := 24.0 + lw + 16.0
+	var pw := w - px - 24.0
+	var pn := _card_panel(Vector2(px, y0), Vector2(pw, h - y0 - 20))
+	items.append([pn, Vector2(40, 0), 0.0])
+	if cur.is_empty():
+		return
+	var hl := _label(str(cur["t"]), 26, CHALK)
+	hl.position = Vector2(24, 18)
+	hl.clip_text = true
+	hl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	hl.size = Vector2(pw - 48, 34)
+	pn.add_child(hl)
+	var dt := _label(str(cur["date"]), 17, MUT, font3)
+	dt.position = Vector2(24, 54)
+	pn.add_child(dt)
+	var ph := h - y0 - 20
+	if str(cur["k"]) == "bid":
+		var shirt := _shirt(cur.get("ck", []), 64)
+		shirt.position = Vector2(24, 88)
+		pn.add_child(shirt)
+		var cl := _label(str(cur.get("cn", "")), 22, CHALK, font3)
+		cl.position = Vector2(104, 92)
+		cl.clip_text = true
+		cl.size = Vector2(pw - 128, 28)
+		pn.add_child(cl)
+		var who := "%s  ·  %s %d" % [str(cur["pn"]).capitalize(), str(cur.get("pos", "")), int(cur.get("ovr", 0))] + ("  ·  in your eleven" if bool(cur.get("xi", false)) else "")
+		var wl := _label(who, 19, MUT, font3)
+		wl.position = Vector2(104, 122)
+		wl.clip_text = true
+		wl.size = Vector2(pw - 128, 26)
+		pn.add_child(wl)
+		var ol := _label("They offer", 18, MUT, font3)
+		ol.position = Vector2(24, 172)
+		pn.add_child(ol)
+		var ov := _label(str(cur.get("amt_t", "")), 44, GOLD)
+		ov.position = Vector2(24, 194)
+		pn.add_child(ov)
+		if cur.has("val_t"):
+			var vl := _label("His value: " + str(cur["val_t"]), 19, MUT, font3)
+			vl.position = Vector2(pw * 0.5, 214)
+			pn.add_child(vl)
+		var msg := str(c.get("msg", ""))
+		if msg != "":
+			var ml := _label(msg, 18, GOLD, font3)
+			ml.position = Vector2(24, ph - 120)
+			ml.clip_text = true
+			ml.size = Vector2(pw - 48, 26)
+			pn.add_child(ml)
+		if str(cur.get("st", "")) == "open":
+			var bw := (pw - 48 - 20) / 3.0
+			var by := y0 + ph - 84
+			menu.add_child(_btn("SELL", "bid_acc", int(cur["id"]), "primary", Vector2(px + 24, by), Vector2(bw, 62), 22))
+			menu.add_child(_btn("ASK FOR MORE", "bid_more", int(cur["id"]), "alt" if int(cur.get("cnt", 0)) == 0 else "off", Vector2(px + 34 + bw, by), Vector2(bw, 62), 18))
+			menu.add_child(_btn("SAY NO", "bid_rej", int(cur["id"]), "ghost", Vector2(px + 44 + bw * 2, by), Vector2(bw, 62), 20))
+		return
+	var body := _label(str(cur["b"]), 20, CHALK, font3)
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.position = Vector2(24, 92)
+	body.clip_text = true
+	body.size = Vector2(pw - 48, ph - 110)
+	pn.add_child(body)
+
+func _tnews_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var wd: Dictionary = c.get("live", {})
+	var dl: Array = wd.get("deals", [])
+	_title("Transfer news", "Deals between the clubs in your country. Your league's clubs are marked.")
+	menu.add_child(_back("tab", "transfers"))
+	if dl.is_empty():
+		var el := _label("No deals yet. The clubs trade while a transfer window is open.", 22, MUT, font3)
+		el.position = Vector2(0, 220)
+		el.size = Vector2(w, 30)
+		el.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		menu.add_child(el)
+		return
+	var y0 := 104.0
+	var sc := ScrollContainer.new()
+	sc.position = Vector2(24, y0)
+	sc.size = Vector2(w - 48, h - y0 - 20)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu.add_child(sc)
+	var box := Control.new()
+	var rh := 60.0
+	box.custom_minimum_size = Vector2(w - 60, dl.size() * (rh + 6))
+	sc.add_child(box)
+	for i in dl.size():
+		var x: Dictionary = dl[i]
+		var pn := Panel.new()
+		pn.add_theme_stylebox_override("panel", _box(Color(S1.r, S1.g, S1.b, 0.95), 12, GREEN if bool(x["near"]) else LINE))
+		pn.position = Vector2(0, i * (rh + 6))
+		pn.size = Vector2(w - 60, rh)
+		pn.mouse_filter = Control.MOUSE_FILTER_PASS
+		box.add_child(pn)
+		var shirt := _shirt(x.get("kt", []), 40)
+		shirt.position = Vector2(14, 10)
+		pn.add_child(shirt)
+		var n1 := _label("%s  %s  %d" % [str(x["pos"]), str(x["n"]), int(x["ovr"])], 21, CHALK)
+		n1.position = Vector2(68, 4)
+		n1.clip_text = true
+		n1.size = Vector2(330, 28)
+		pn.add_child(n1)
+		var n2 := _label("%s  ·  age %d" % [str(x["date"]), int(x["age"])], 16, MUT, font3)
+		n2.position = Vector2(68, 32)
+		pn.add_child(n2)
+		var mv := _label(_trim("%s  ›  %s" % [str(x["from"]), str(x["to"])], font3, 19, w - 60 - 410 - 180), 19, CHALK, font3)
+		mv.position = Vector2(410, 16)
+		mv.clip_text = true
+		mv.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		mv.size = Vector2(w - 60 - 410 - 180, 28)
+		pn.add_child(mv)
+		var fe := _label(str(x["fee"]), 24, GOLD)
+		fe.position = Vector2(w - 60 - 170, 14)
+		fe.size = Vector2(150, 30)
+		fe.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		pn.add_child(fe)
+
+
+# text cut to fit a width, with an ellipsis (a label's own clipping does not work inside a scroll list)
+func _trim(text: String, f: Font, fs: int, maxw: float) -> String:
+	var sz := maxi(fs, _min_fs)
+	if f == null or f.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x <= maxw:
+		return text
+	var t := text
+	while t.length() > 1 and f.get_string_size(t + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x > maxw:
+		t = t.substr(0, t.length() - 1)
+	return t.strip_edges() + "…"
