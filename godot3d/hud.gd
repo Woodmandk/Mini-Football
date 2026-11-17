@@ -3756,7 +3756,8 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		vv.size = Vector2(lw, 40)
 		vv.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		card.add_child(vv)
-		var can_sim := not bool(info.get("assist", false)) and str(info.get("co_room", "")) == "" and not bool(c.get("sacked", false))
+		# simulate works together too: the manager's tap simulates on both phones, the friend's tap asks him
+		var can_sim := not bool(c.get("sacked", false))
 		var pw := (lw - 40) * (0.64 if can_sim else 1.0)
 		var pm := _btn(_co_play_text(info, "PLAY EUROPE" if edue else ("PLAY CUP MATCH" if cdue else "PLAY MATCH")), "c_play", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(pw, bh), 30 if can_sim else 32)
 		menu.add_child(pm)
@@ -3802,7 +3803,9 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	var yy := y0 + tt.size.y + gap
 	var left_h := y0 + ch - yy
 	var bd: Dictionary = c.get("board", {})
-	var together := not bool(info.get("assist", false))
+	var wd0: Dictionary = c.get("live", {})
+	# the same screen for both of you when you play together: board, cup and inbox
+	var together := not bool(info.get("assist", false)) or not wd0.is_empty()
 	var each := (left_h - gap * (2 if together else 1)) / (3.0 if together else 2.0)
 	var bc := int(bd.get("conf", 50))
 	var bb := _card("c_board", null, Vector2(rx, yy), Vector2(rw, each))
@@ -3852,7 +3855,7 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	ct.size = Vector2(rw - 84, 28)
 	cb.add_child(ct)
 	var wd: Dictionary = c.get("live", {})
-	if together and str(info.get("co_room", "")) == "" and not wd.is_empty():
+	if not wd.is_empty():
 		var ib: Array = wd.get("inbox", [])
 		var un := int(wd.get("unread", 0))
 		var wn: Dictionary = wd.get("win", {})
