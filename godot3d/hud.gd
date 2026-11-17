@@ -2496,7 +2496,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				if conn:
 					if bool(info.get("has_cv", false)):
 						# the host's career, to look around in as the assistant manager
-						var av := _btn("THE CAREER  ·  ASSISTANT MANAGER  ›", "as_open", null, "primary", Vector2(w * 0.5 - 250, h * 0.5 + 128), Vector2(500, 64), 24)
+						var av := _btn("THE PLAYER CAREER TOGETHER  ›" if bool(info.get("cv_pro", false)) else "THE CAREER  ·  ASSISTANT MANAGER  ›", "as_open", null, "primary", Vector2(w * 0.5 - 250, h * 0.5 + 128), Vector2(500, 64), 24)
 						menu.add_child(av)
 						items.append([av, Vector2(0, 40), 0.1])
 		"cal":
@@ -4029,9 +4029,10 @@ func _tab_office(info: Dictionary, w: float, y0: float, ch: float, items: Array)
 		_tiles([
 			["Inbox", "Offers and news", "inbox", "mail", GOLD],
 			["Calendar", ("Next: " + str(c.get("ndate", ""))) if str(c.get("ndate", "")) != "" else "The season", "cal", "cal", Color(0.36, 0.6, 1.0)],
+			["Play together", ("Together now" if bool(info.get("assist", false)) or bool(info.get("co_conn", false)) else "Your friend makes his own player"), "friend", "duo", Color(0.36, 0.6, 1.0)],
 			["Match settings", "%s  ·  %s" % [["Easy", "Normal", "Hard"][clampi(int(c.get("cdiff", 1)), 0, 2)], ["3 min", "5 min", "8 min"][clampi(int(c.get("clen", 1)), 0, 2)]], "cset", "sliders"],
 			["New player", "Start a new player career", "p_new", "plus"],
-		], 24, y0, w - 48, ch, 2, items)
+		], 24, y0, w - 48, ch, 3, items)
 		return
 	var bd: Dictionary = c.get("board", {})
 	var cp: Dictionary = c.get("cup", {})
