@@ -5,11 +5,36 @@ const ClubDB := preload("res://clubdb.gd")
 const FIRST := 8 # world indices below this are the quick-match clubs
 
 var key := "bb3d-career" # localStorage key (native: user://<key>.json); the cup mode keeps its own
-const ROLE_BASE := {"GK": [52, 30, 62, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}
+# A keeper's four numbers are keeper skills, like FIFA: diving, handling, kicking and reflexes (they sit in the
+# same four slots as pace, shooting, passing and defending, so every screen and save keeps working).
+const ROLE_BASE := {"GK": [72, 70, 60, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}
 const SQUAD_ROLES := ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW", "GK", "DF", "MF", "MF", "FW"]
 const SQUAD_NUMS := [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7, 12, 14, 15, 16, 17]
 const STAT_NAMES := ["PACE", "SHOOTING", "PASSING", "DEFENDING"]
 const STAT_KEYS := ["pac", "sho", "pas", "dfn"]
+const GK_NAMES := ["DIVING", "HANDLING", "KICKING", "REFLEXES"]
+const STAT_SHORT := ["PAC", "SHO", "PAS", "DEF"]
+const GK_SHORT := ["DIV", "HAN", "KIC", "REF"]
+
+static func stat_name(pos: String, i: int) -> String:
+	return (GK_NAMES if pos == "GK" else STAT_NAMES)[clampi(i, 0, 3)]
+
+static func stat_short(pos: String, i: int) -> String:
+	return (GK_SHORT if pos == "GK" else STAT_SHORT)[clampi(i, 0, 3)]
+
+# Saves from before keepers had their own stats: a keeper's pace and shooting become diving and handling,
+# set close to his reflexes, so his rating stays about what it was.
+static func gk_fix(v) -> void:
+	if v is Dictionary:
+		if str(v.get("pos", "")) == "GK" and v.has("pac") and v.has("sho") and v.has("dfn"):
+			var r := int(v["dfn"])
+			v["pac"] = clampi(r - 3, 30, 97)
+			v["sho"] = clampi(r - 2, 30, 97)
+		for k in v.keys():
+			gk_fix(v[k])
+	elif v is Array:
+		for x in v:
+			gk_fix(x)
 
 var d := {}
 var web := false
@@ -75,6 +100,10 @@ func load_save(is_web: bool) -> void:
 			if not d.has("on"):
 				# a save from before the career was a choice: it is a running career
 				d["on"] = true
+			if not d.has("gkv"):
+				gk_fix(d)
+				d["gkv"] = 1
+				save()
 
 # JSON turns whole numbers into floats: put the ones used as indices back
 func _ints() -> void:
@@ -161,6 +190,7 @@ func my_club() -> Dictionary:
 func save() -> void:
 	if ro:
 		return
+	d["gkv"] = 1
 	var txt := JSON.stringify(d)
 	if web:
 		JavaScriptBridge.eval("try{localStorage.setItem('%s',%s)}catch(e){}" % [key, JSON.stringify(txt)], true)
@@ -181,7 +211,7 @@ func wipe() -> void:
 
 static func ovr_of(p: Dictionary) -> int:
 	match str(p["pos"]):
-		"GK": return int(round(p["dfn"] * 0.8 + p["pas"] * 0.2))
+		"GK": return int(round(p["dfn"] * 0.35 + p["pac"] * 0.3 + p["sho"] * 0.25 + p["pas"] * 0.1))
 		"DF": return int(round(p["dfn"] * 0.55 + p["pac"] * 0.25 + p["pas"] * 0.2))
 		"MF": return int(round(p["pas"] * 0.45 + p["pac"] * 0.2 + p["sho"] * 0.2 + p["dfn"] * 0.15))
 	return int(round(p["sho"] * 0.5 + p["pac"] * 0.35 + p["pas"] * 0.15))
@@ -600,7 +630,7 @@ static func ordinal(n: int) -> String:
 
 # The stat that grows: mostly the ones that matter for the player's position.
 func _grow_key(pl: Dictionary, rng: RandomNumberGenerator) -> String:
-	var w: Array = {"GK": [0, 0, 2, 6], "DF": [2, 0, 2, 5], "MF": [2, 2, 5, 1], "FW": [3, 5, 2, 0]}[str(pl["pos"])]
+	var w: Array = {"GK": [3, 3, 1, 4], "DF": [2, 0, 2, 5], "MF": [2, 2, 5, 1], "FW": [3, 5, 2, 0]}[str(pl["pos"])]
 	var tot := 0
 	for x in w:
 		tot += int(x)
@@ -1066,7 +1096,7 @@ func spend_tp(i: int, si: int) -> String:
 	pl[k] = int(pl[k]) + 1
 	pl["tp"] = int(pl["tp"]) - 1
 	save()
-	return "%s  +1 %s" % [str(pl["n"]).to_upper(), STAT_NAMES[si]]
+	return "%s  +1 %s" % [str(pl["n"]).to_upper(), stat_name(str(pl["pos"]), si)]
 
 # ---------------------------------------------------------------- the cup
 # Each country's knockout cup with every club in it, one a season, its rounds spread through the league season.
@@ -2643,7 +2673,7 @@ func _grow_auto(pl: Dictionary, rng: RandomNumberGenerator, lines: Array) -> voi
 			pl["xp"] = int(pl["xp"]) - 100
 		var gk := _grow_pick(pl, rng)
 		pl[gk] = mini(int(pl[gk]) + 1, 97)
-		got.append(STAT_NAMES[STAT_KEYS.find(gk)])
+		got.append(stat_name(str(pl["pos"]), STAT_KEYS.find(gk)))
 	if not got.is_empty():
 		lines.append("%s  +1 %s" % [str(pl["n"]).to_upper(), got[0]] if got.size() == 1 else "%s  +%d" % [str(pl["n"]).to_upper(), got.size()])
 
@@ -2705,9 +2735,9 @@ func set_focus(i: int) -> void:
 	sq[i]["tf"] = order[(maxi(cur, 0) + 1) % order.size()]
 	save()
 
-static func focus_name(tf: String) -> String:
+static func focus_name(tf: String, pos := "") -> String:
 	var k := STAT_KEYS.find(tf)
-	return STAT_NAMES[k] if k >= 0 else "AUTO"
+	return stat_name(pos, k) if k >= 0 else "AUTO"
 
 # the role each man expects, from where he stands in the squad
 func roles() -> Dictionary:
@@ -4374,7 +4404,7 @@ func _pro_train(k: String, played: bool, lines: Array) -> void:
 	if int(dp[si]) >= 100:
 		dp[si] = int(dp[si]) - 100
 		pl[sk] = int(pl[sk]) + 1
-		lines.append("TRAINING PAYS OFF: +1 %s" % STAT_NAMES[si])
+		lines.append("TRAINING PAYS OFF: +1 %s" % stat_name(str(pl["pos"]), si))
 	p["dp"] = dp
 
 # spend skill points on one of your stats: one point below 70, two below 80, three above
@@ -4390,11 +4420,11 @@ func pro_spend(si: int, k := "pro") -> String:
 	if ovr_of(pl) >= int(pl["pot"]):
 		return "You are at your best: rating %d." % int(pl["pot"])
 	if int(pl.get("tp", 0)) < cost:
-		return "%s %d to %d costs %d points." % [STAT_NAMES[si].capitalize(), int(pl[sk]), int(pl[sk]) + 1, cost]
+		return "%s %d to %d costs %d points." % [stat_name(str(pl["pos"]), si).capitalize(), int(pl[sk]), int(pl[sk]) + 1, cost]
 	pl[sk] = int(pl[sk]) + 1
 	pl["tp"] = int(pl["tp"]) - cost
 	save()
-	return "+1 %s" % STAT_NAMES[si]
+	return "+1 %s" % stat_name(str(pl["pos"]), si)
 
 # a skill (evne) for your player, bought with skill points: the second opens at rating 70
 func pro_learn(key: String, k := "pro") -> String:

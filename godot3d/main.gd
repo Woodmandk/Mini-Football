@@ -163,6 +163,7 @@ var pen_shot := false
 var shot_hard := 0.0 # a Cannon shot: the keeper's reach is shorter against it
 # extra time and a penalty shootout when a cup tie or a match against each other ends level
 var half_kick := 1
+var et_kick := 0
 var so_on := false
 var so_done := false
 var so_g := [0, 0]
@@ -208,6 +209,7 @@ class Human:
 	var charge := 0.0
 	var pass_hold := -1.0
 	var switch_cool := 0.0
+	var pick_t := 0.0 # you picked this man yourself with SWITCH: the game leaves him under your thumb for a while
 	var local := true
 	var stam := 1.0
 	var skill_cool := 0.0
@@ -541,6 +543,69 @@ func _ready() -> void:
 				print("PICKTEST stick=", st, " pw=", c[1], " -> ", (who.find(mm) if mm != null else -1), " at ", (mm.position if mm != null else Vector3.ZERO))
 			get_tree().quit()
 			return
+		if OS.get_cmdline_user_args().has("--gktest"):
+			# the same shots at both keepers (same stats), with a human on team 0: do both save the same?
+			humans = [Human.new()]
+			for gstat in [55, 75, 90]:
+				var res := [[0, 0, 0], [0, 0, 0]]
+				for t in 2:
+					for si in 150:
+						_kickoff(0)
+						clock = 600.0
+						half = 1
+						var g = teams[t][0]
+						var gv := ""
+						for a9 in OS.get_cmdline_user_args():
+							if a9.begins_with("--gkvar="):
+								gv = a9.substr(8)
+						g.pac = gstat if gv in ["", "pac"] else 75
+						g.sho = gstat if gv in ["", "sho"] else 75
+						g.dfn = gstat if gv in ["", "dfn"] else 75
+						_derive(g)
+						g.pas = 60
+						g.ab = []
+						var a = teams[1 - t][9]
+						for q in players:
+							if q != g and q != a:
+								q.position = Vector3(0, 0, HW + 1.0)
+								q.stun = 99.0
+						humans[0].ctrl = teams[0][5]
+						var rr := RandomNumberGenerator.new()
+						rr.seed = si * 31 + 5
+						var sa := side(1 - t)
+						var dd := rr.randf_range(10.0, 22.0)
+						var zz := rr.randf_range(-9.0, 9.0)
+						a.position = Vector3(sa * (HL - dd), 0, zz)
+						a.yaw = atan2(-float(sa), 0.0)
+						g.position = Vector3(-side(t) * (HL - 1.0), 0, clampf(zz * 0.25, -2.0, 2.0))
+						g.vel = Vector3.ZERO
+						g.dive_t = -1.0
+						g.react_t = 0.0
+						ball_owner = a
+						ball_last = a
+						ball.position = a.position + Vector3(sa * 0.6, BALL_R, 0)
+						set_piece = ""
+						protect_t = 0.0
+						state = "play"
+						var aimz := rr.randf_range(-1.0, 1.0) * GOAL_HW * 0.8
+						seed(si * 7 + 3)
+						_shoot(a, rr.randf_range(0.4, 0.9), aimz, 0.8)
+						var tt := 0.0
+						var out := 2
+						while tt < 3.0:
+							_tick(1.0 / 60.0)
+							tt += 1.0 / 60.0
+							if ball_owner == g or ball_last == g:
+								out = 1
+								break
+							if state != "play":
+								out = 0 if score[1 - t] > 0 or state == "goal" else 2
+								break
+						score = [0, 0]
+						res[t][out] += 1
+				print("GKTEST stats=", gstat, " team0 keeper goals/saves/miss=", res[0], "  team1 keeper=", res[1])
+			get_tree().quit()
+			return
 		if OS.get_cmdline_user_args().has("--thrutest"):
 			# through balls played by a human to a runner going forward: does the runner get there first?
 			humans = [Human.new()]
@@ -576,6 +641,7 @@ func _ready() -> void:
 							tt += 1.0 / 60.0
 						th.evs.append("thru_up")
 						_tick(1.0 / 60.0)
+						var v00 := Vector2(ball_vel.x, ball_vel.z).length()
 						var start: Vector3 = tm.position
 						var t4 := 0.0
 						var gap := 0.0
@@ -584,7 +650,7 @@ func _ready() -> void:
 							_tick(1.0 / 60.0)
 							t4 += 1.0 / 60.0
 							gap = maxf(gap, (ball.position.x - tm.position.x))
-						print("THRUTEST hi=", hi, " d=", dd, " hold=", hold, " got=", players.find(ball_owner), " (want 9) t=", snappedf(t4, 0.01), " state=", state, " ran=", snappedf(tm.position.distance_to(start), 0.1), " max_ball_ahead=", snappedf(gap, 0.1), " ball_x=", snappedf(ball.position.x, 0.1))
+						print("THRUTEST hi=", hi, " d=", dd, " hold=", hold, " got=", players.find(ball_owner), " (want 9) t=", snappedf(t4, 0.01), " state=", state, " ran=", snappedf(tm.position.distance_to(start), 0.1),  " max_ball_ahead=", snappedf(gap, 0.1), " ball_x=", snappedf(ball.position.x, 0.1), " v0=", snappedf(v00, 0.1))
 			get_tree().quit()
 			return
 		if OS.get_cmdline_user_args().has("--balltest"):
@@ -838,6 +904,22 @@ func _ready() -> void:
 						pro_new = {"pos": "MF", "n": "SCHALDE", "pick": []}
 					print("COPRO guest pro info keys=", _pro_info().keys().slice(0, 5), " n=", _pro_info().get("n", ""))
 					menu_arg = "main"
+			if menu_arg == "gkcard":
+				# a keeper's card shows keeper skills; an old save's keeper gets them with about the same rating
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				var old := {"pos": "GK", "pac": 52, "sho": 30, "pas": 62, "dfn": 74}
+				var o0 := Career.ovr_of({"pos": "GK", "pac": 0, "sho": 0, "pas": 62, "dfn": 74})
+				Career.gk_fix({"sq": [old]})
+				print("GKFIX old_rating~", int(round(74 * 0.8 + 62 * 0.2)), " now=", Career.ovr_of(old), " ", old, " (zero-check ", o0, ")")
+				_action("c_squad")
+				for gi in (car.d["squad"] as Array).size():
+					if str(car.d["squad"][gi]["pos"]) == "GK":
+						set_meta("tsel", gi)
+						print("GKCARD idx=", gi, " ", car.d["squad"][gi])
+						break
+				menu_arg = "squad9"
 			if menu_arg.begins_with("rv-"):
 				# review: the same career page alone (s), as the manager with the friend in the room (h), and on the friend's phone (g)
 				var rp: PackedStringArray = menu_arg.split("-")
@@ -871,7 +953,7 @@ func _ready() -> void:
 				if rtg.begins_with("a."):
 					for ra in rtg.substr(2).split("."):
 						var rab := ra.split("=")
-						_action(rab[0], int(rab[1]) if rab.size() > 1 else null)
+						_action(rab[0], (int(rab[1]) if rab[1].is_valid_int() else rab[1]) if rab.size() > 1 else null)
 					menu_arg = hud.menu_name
 				else:
 					hub_tab = rtg
@@ -1847,7 +1929,7 @@ func _build_teams() -> void:
 				socks = shirt
 			var boots: Color = [Color(0.08, 0.08, 0.08), Color(0.95, 0.95, 0.95), Color(1.0, 0.45, 0.1), Color(0.3, 0.9, 0.9)][rng.randi() % 4]
 			p.build(shirt, shorts, socks, skins[rng.randi() % skins.size()], hairs[rng.randi() % hairs.size()], boots)
-			var base: Array = {"GK": [52, 30, 62, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}[p.role]
+			var base: Array = {"GK": [72, 70, 60, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}[p.role]
 			var up := 0
 			p.star = i == 9 or i == (6 + clubs[t] % 2)
 			if p.star:
@@ -1857,7 +1939,7 @@ func _build_teams() -> void:
 			p.pas = clampi(base[2] + up + rng.randi_range(-5, 5), 40, 96)
 			p.dfn = clampi(base[3] + up + rng.randi_range(-5, 5), 25, 96)
 			match p.role:
-				"GK": p.ovr = int(round(p.dfn * 0.8 + p.pas * 0.2))
+				"GK": p.ovr = int(round(p.dfn * 0.35 + p.pac * 0.3 + p.sho * 0.25 + p.pas * 0.1))
 				"DF": p.ovr = int(round(p.dfn * 0.55 + p.pac * 0.25 + p.pas * 0.2))
 				"MF": p.ovr = int(round(p.pas * 0.45 + p.pac * 0.2 + p.sho * 0.2 + p.dfn * 0.15))
 				_: p.ovr = int(round(p.sho * 0.5 + p.pac * 0.35 + p.pas * 0.15))
@@ -4378,7 +4460,9 @@ func _begin_match(with_intro: bool) -> void:
 	score = [0, 0]
 	clock = 0.0
 	half = 1
-	kick_team = 0
+	# a real coin toss: either side can kick off, the other one starts the second half
+	kick_team = randi() % 2
+	half_kick = 1 - kick_team
 	rec.clear()
 	tst = [{"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}, {"shots": 0, "fouls": 0, "poss": 0, "saves": 0, "g": []}]
 	for h in humans:
@@ -4393,7 +4477,7 @@ func _begin_match(with_intro: bool) -> void:
 		p.yellow = 0
 		p.set_meta("fouls", 0)
 		p.visible = true
-	_formation(0, true)
+	_formation(kick_team, true)
 	ball_owner = null
 	ball.position = Vector3(0, BALL_R, 0)
 	ball_vel = Vector3.ZERO
@@ -4923,6 +5007,8 @@ func _assign_defenders(t: int, force: bool) -> void:
 	var hs := []
 	for h in humans:
 		if h.team == t and (force or h.switch_cool <= 0.0):
+			if h.pick_t > 0.0 and h.ctrl != null and not h.ctrl.off and h.ctrl.role != "GK":
+				continue # he picked this man himself a moment ago
 			hs.append(h)
 	if hs.is_empty():
 		return
@@ -5069,6 +5155,9 @@ func _switch(h) -> void:
 				at = i
 		h.ctrl = c[(at + 1) % n][1]
 	h.switch_cool = 1.6
+	# Daniel: the game took away the man he had just switched to. A man you pick yourself stays yours
+	# for a couple of seconds: no auto switch takes him, only you (SWITCH again) or a ball he wins.
+	h.pick_t = 3.0
 	if h.local:
 		au["blip"].play()
 
@@ -5092,7 +5181,7 @@ func _switch_for_pass(t: int, m) -> void:
 	var hw = null
 	var worst := 0.0
 	for h in humans:
-		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0:
+		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0 and h.pick_t <= 0.0:
 			# a man who stands in the path of the pass, or close to the receiver, is kept: he can win it himself
 			var ln: Vector3 = m.position - ball.position
 			ln.y = 0.0
@@ -5361,6 +5450,9 @@ func _play(dt: float) -> void:
 	# --- human buttons
 	for h in humans:
 		h.switch_cool -= dt
+		h.pick_t -= dt
+		if h.ctrl != null and h.pick_t > 0.0 and ball_owner == h.ctrl:
+			h.pick_t = 0.0 # he has the ball now: from here the usual rules
 		h.skill_cool -= dt
 		if h.ctrl == null:
 			continue
@@ -5422,7 +5514,7 @@ func _play(dt: float) -> void:
 						if set_piece == "":
 							# tap = a few metres in front of him, full meter = well into the space behind
 							lead_dir = dir3
-							_pass(h.ctrl, mt, h.hi, false, 0.7 + 1.7 * tpw)
+							_pass(h.ctrl, mt, h.hi, false, 0.9 + 1.6 * tpw)
 							lead_dir = Vector3.ZERO
 						else:
 							_pass(h.ctrl, mt, h.hi or set_piece in ["corner", "gk"], set_piece == "corner")
@@ -5566,7 +5658,7 @@ func _play(dt: float) -> void:
 		# loose ball: hand the nearest player to a human on that team
 		if ball_owner == null and chaser[t] != null and _hum_of(chaser[t]) == null:
 			var h = _nearest_human(t, aim)
-			if h != null and h.switch_cool <= 0.0 and h.ctrl != null and not h.ctrl.recv:
+			if h != null and h.switch_cool <= 0.0 and h.pick_t <= 0.0 and h.ctrl != null and not h.ctrl.recv:
 				# Not while your man can still cut the ball out himself: standing in or near the path of an
 				# opponent's pass you keep him, however close someone else is to where it will land.
 				var ln: Vector3 = aim - ball.position
@@ -5576,6 +5668,9 @@ func _play(dt: float) -> void:
 				var tl: float = clampf(hp.dot(ln) / maxf(ln.length_squared(), 0.01), 0.0, 1.0)
 				var in_lane: bool = (hp - ln * tl).length() < 5.0
 				var margin := 3.0 if ball_last == null or ball_last.team == t else 6.0
+				if h.stick.length() > 0.3:
+					# you are steering him somewhere: only switch when the other man is clearly nearer
+					margin += 4.0
 				if not in_lane and chaser[t].position.distance_to(aim) + margin < h.ctrl.position.distance_to(aim):
 					h.ctrl = chaser[t]
 					h.switch_cool = 0.8
@@ -5819,9 +5914,9 @@ func _play(dt: float) -> void:
 		_banner("HALF TIME", Color(1, 1, 1), 2.2, "%d - %d" % [score[0], score[1]])
 	elif half == 2 and clock >= 5400.0 and score[0] == score[1] and _needs_winner() and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 5550.0):
 		# level after 90 minutes in a tie that needs a winner: two halves of extra time
-		_break(3, 5400.0, 0, "EXTRA TIME", "2 x 15 MINUTES")
+		_break(3, 5400.0, randi() % 2, "EXTRA TIME", "2 x 15 MINUTES")
 	elif half == 3 and clock >= 6300.0 and (ball_owner != null or clock > 6390.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 6450.0):
-		_break(4, 6300.0, 1, "HALF TIME", "EXTRA TIME  %d - %d" % [score[0], score[1]])
+		_break(4, 6300.0, 1 - et_kick, "HALF TIME", "EXTRA TIME  %d - %d" % [score[0], score[1]])
 	elif half == 4 and clock >= 7200.0 and (ball_owner != null or clock > 7290.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 7350.0):
 		if score[0] == score[1]:
 			_so_start()
@@ -5845,6 +5940,8 @@ func _break(nh: int, at: float, kicker: int, title: String, small: String) -> vo
 	half = nh
 	clock = at
 	half_kick = kicker
+	if nh == 3:
+		et_kick = kicker
 	for p in players:
 		p.fit = minf(p.fit + 0.05, 1.0)
 	state = "half"
@@ -5864,7 +5961,7 @@ func _so_start() -> void:
 	so_g = [0, 0]
 	so_n = [0, 0]
 	so_win = -1
-	so_turn = 0
+	so_turn = randi() % 2
 	half = 5
 	state = "pens"
 	state_t = -1.2
@@ -6589,9 +6686,11 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 					break
 				tl = thru_t * 0.85
 				continue
-			thru_v = _roll_speed(dd, tl + 0.12)
-			# too hard to arrive gently: give him a little longer and look again
-			if (thru_v <= 25.0 and _roll_left(thru_v, tl + 0.12) <= 11.5) or tl > 3.3:
+			# A real through ball is struck firmly: it gets to the spot a little before him and keeps rolling
+			# on into his path, so he runs onto it at speed instead of waiting for it (Daniel: "for svag").
+			thru_v = _roll_speed(dd, (tl + 0.12) * 0.9)
+			# too hard to control: give him a little longer and look again
+			if (thru_v <= 28.0 and _roll_left(thru_v, (tl + 0.12) * 0.9) <= 12.5) or tl > 3.3:
 				break
 			tl += 0.08
 		leadv = spot - m.position
@@ -6657,7 +6756,7 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		dir.y = 0.0
 		if lead > 0.0:
 			# weighted to slow down in front of him
-			sp = clampf(thru_v, 9.0, 26.0)
+			sp = clampf(thru_v, 11.0, 27.0)
 		v = dir.normalized() * sp + Vector3(0, 0.6, 0)
 	else:
 		# a real high ball: about 1.0 s over 10 m, 1.6 s over 30 m, and drops at the receiver's feet
@@ -6723,6 +6822,9 @@ func _pen_kick(p, power: float, aim_z: float) -> void:
 	var sn: float = clampf((p.sho - 40) / 50.0, 0.0, 1.0)
 	var spread: float = lerpf(0.8, 0.25, sn) * (0.65 + 0.7 * power)
 	var err: float = (randf() + randf() - 1.0) * spread
+	if absf(aim_z) > 0.6 and signf(aim_z + err) != signf(aim_z):
+		# a miss can drift wide or towards the middle, never across to the other side of the goal
+		err = -aim_z * 0.85
 	var goal := Vector3(HL * s, 0, clampf(aim_z + err, -GOAL_HW - 0.6, GOAL_HW + 0.6))
 	var dir := goal - from
 	dir.y = 0.0
@@ -6761,9 +6863,15 @@ func _human_aim(h, dir3: Vector3) -> float:
 	if set_piece == "pen":
 		# a penalty goes exactly where you aim: stick to the side = that far across the goal, centred = the middle
 		return clampf(dir3.z, -1.0, 1.0) * GOAL_HW * 0.84
-	if absf(dir3.z) > 0.3:
-		return clampf(dir3.z * 1.3, -1.0, 1.0) * GOAL_HW * 0.82
-	# no side picked: the far side from the keeper, well inside the post (0.62 was where he stands)
+	# The shot goes to the side the stick points to, always (Daniel: it sometimes went the other way when
+	# the stick was only a little to one side, because that counted as "no side" and it took the far post).
+	# A little to a side = inside that post, all the way = into the corner.
+	# With the thumb off the stick it is the way he faces, the same way the arrow on the grass shows.
+	var ad: Vector3 = dir3.normalized() if dir3.length() > 0.3 else (h.ctrl.fwd() if h.ctrl != null else Vector3.ZERO)
+	if absf(ad.z) > 0.08:
+		var k: float = clampf((absf(ad.z) - 0.08) / 0.55, 0.0, 1.0)
+		return signf(ad.z) * lerpf(0.42, 0.82, k) * GOAL_HW
+	# stick dead straight or let go: the far side from the keeper, well inside the post
 	return (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * 0.74
 
 func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
@@ -6805,6 +6913,9 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	if cannon:
 		err_k *= 0.85
 	var err := (randf() + randf() - 1.0) * (0.35 + d * 0.03 + power * 0.75) * err_k
+	if absf(aim_z) > 1.0 and signf(aim_z + err) != signf(aim_z):
+		# a poor finish goes wide or at the keeper, it does not swap to the other corner
+		err = -aim_z * 0.8
 	var goal := Vector3(HL * s, 0, aim_z + err)
 	var dir := goal - from
 	dir.y = 0.0
@@ -7375,8 +7486,11 @@ func _pickups() -> void:
 		var gx := -HL * side(t)
 		if absf(b.x - gx) > 16.5 or absf(b.z) > 20.16:
 			continue
-		var gq: float = clampf((g.dfn - 60) / 30.0, 0.0, 1.0)
-		var reach := 0.77 + (lerpf(0.64, 0.78, gq) if g.dive_t >= 0.0 else 0.0)
+		# A keeper's own skills, the same rules for both sides: DIVING (his pace slot) sets how far he gets,
+		# HANDLING (shooting slot) whether he holds it or pushes it away, REFLEXES (defending slot) how quickly he moves.
+		var gdiv: float = clampf((g.pac - 50) / 42.0, 0.0, 1.0)
+		var ghan: float = clampf((g.sho - 50) / 42.0, 0.0, 1.0)
+		var reach := 0.77 + (lerpf(0.56, 0.84, gdiv) if g.dive_t >= 0.0 else 0.0)
 		# skills: the cat reaches further, the penalty killer too from close in; a Cannon shot is harder to get to
 		var close_in: bool = pen_shot or Vector2(b.x - gx, b.z).length() < 12.0
 		if g.has_ab("kat") and g.dive_t >= 0.0:
@@ -7397,7 +7511,7 @@ func _pickups() -> void:
 		var dh := Vector2(b.x - g.position.x, b.z - g.position.z).length()
 		if dh < reach and b.y < 2.6:
 			# good keepers hold harder shots, the rest push them away
-			if hs > lerpf(15.0, 21.0, gq) and dh > 0.55:
+			if hs > lerpf(15.0, 21.0, ghan) and dh > 0.55:
 				var sgn := signf(b.z - g.position.z)
 				ball_vel = Vector3(-ball_vel.x * 0.3, absf(ball_vel.y) * 0.4 + 2.5, ball_vel.z * 0.4 + sgn * 5.0)
 				ball_bs = 0.0
@@ -7921,7 +8035,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 				zc = p.pen_z
 			if absf(zc) < GOAL_HW + 1.2:
 				p.react_t += dt
-				if p.react_t < (0.06 if (pen_shot and shot_live) else lerpf(0.30, 0.22, clampf((p.dfn - 60) / 30.0, 0.0, 1.0))):
+				if p.react_t < (0.06 if (pen_shot and shot_live) else lerpf(0.33, 0.20, clampf((p.dfn - 50) / 42.0, 0.0, 1.0))):
 					return p.vel * 0.5
 				var target := Vector3(gx + s * 0.7, 0, clampf(zc, -GOAL_HW + 0.2, GOAL_HW - 0.2))
 				# off his line he saves where he stands instead of running back to the goal line
@@ -7938,7 +8052,7 @@ func _ai_keeper(p, dt: float) -> Vector3:
 				var dz: float = target.z - p.position.z
 				if long_test and long_n < 4:
 					print("KDBG n=", long_n, " t=", snappedf(t, 0.01), " zc=", snappedf(zc, 0.01), " tz=", snappedf(target.z, 0.01), " pz=", snappedf(p.position.z, 0.01), " px=", snappedf(p.position.x, 0.1), " dive=", snappedf(p.dive_t, 0.01), " by=", snappedf(b.y, 0.01), " spin=", snappedf(ball_spin, 0.01))
-				if absf(dz) > 1.0 and t < 0.6 and p.dive_t < 0.0:
+				if absf(dz) > 0.7 and t < 0.6 and p.dive_t < 0.0:
 					var right := Vector3(cos(p.yaw), 0, -sin(p.yaw))
 					p.start_dive(signf(Vector3(0, 0, dz).dot(right)))
 					p.vel = Vector3(0, 0, signf(dz) * DIVE_V)
@@ -8894,7 +9008,7 @@ func _sug_text(act: String, arg) -> String:
 		"c_abuy":
 			return "TEACH %s: %s" % [_pn(car_sel), str(Career.ABIL[str(arg)][0]).to_upper()] if car_sel >= 0 and Career.ABIL.has(str(arg)) else ""
 		"c_tp":
-			return "%s GETS BETTER AT %s" % [_pn(car_sel), ["PACE", "SHOOTING", "PASSING", "DEFENDING"][clampi(int(arg), 0, 3)]] if car_sel >= 0 else ""
+			return "%s GETS BETTER AT %s" % [_pn(car_sel), Career.stat_name(str(car.d["squad"][car_sel]["pos"]), int(arg))] if car_sel >= 0 else ""
 		"c_fac":
 			return "BUILD: %s" % str(arg).to_upper()
 		"c_buy":
