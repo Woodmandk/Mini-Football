@@ -927,6 +927,20 @@ func _ready() -> void:
 				else:
 					hub_tab = "team"
 					menu_arg = "main"
+			if menu_arg == "rectest":
+				# the Profile record counts every match you play (here: a quick match won 2-1, then lost 0-3 as the guest)
+				print("REC before ", _rec())
+				humans = [Human.new()]
+				screen = "match"
+				score = [2, 1]
+				_full_time()
+				print("REC after win ", _rec())
+				humans[0].team = 1
+				score = [3, 0]
+				_full_time()
+				print("REC after loss as team 1 ", _rec(), " shown=", _menu_info()["pstats"])
+				get_tree().quit()
+				return
 			if menu_arg == "fttest":
 				# a friend's room: both bring their own club and eleven (host, then the same start on the guest)
 				print("FT has_own=", _has_own(), " own=", car_main.d.get("own", {}).get("n", "-"))
@@ -1673,7 +1687,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": car.stats() if car.has_save() else {}, "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
@@ -4826,6 +4840,7 @@ func _full_time() -> void:
 		p.mood_t = 0.0
 		p.mood = 0 if score[0] == score[1] else (2 if (score[p.team] > score[1 - p.team]) else 3)
 	fx("say", "Full time! %s %d, %s %d." % [TEAM_NAMES[0].capitalize(), score[0], TEAM_NAMES[1].capitalize(), score[1]])
+	var ti0 := int(car.stats().get("titles", 0)) if career_on and not cup_on and car.has_save() else -1
 	if score[0] != score[1]:
 		fx("excite", 0.6)
 	if rk_on:
@@ -4846,7 +4861,43 @@ func _full_time() -> void:
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		_car_coins(true)
 		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1], car_lines[1]] + ([str(car.d["note"])] if car.season_over() else [])]
+	_rec_add(ti0 >= 0 and int(car.stats().get("titles", 0)) > ti0)
 	hud.show_menu("full", _menu_info())
+
+# Your record on the Profile tab: every match you play counts, in every mode, on both phones.
+func _rec() -> Dictionary:
+	if not car_main.has_save():
+		return {}
+	if not car_main.d.has("rec"):
+		# the first time: start from what the club and the career have played so far
+		var r := {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "titles": 0}
+		for c in [car_main, carc]:
+			if c.has_save() and c.d.has("st"):
+				for k in r:
+					r[k] = int(r[k]) + int(c.d["st"].get(k, 0))
+		car_main.d["rec"] = r
+	return car_main.d["rec"]
+
+func _rec_add(title: bool) -> void:
+	var r := _rec()
+	if r.is_empty():
+		return
+	var mt := -1
+	for h in humans:
+		if h.local:
+			mt = h.team
+			break
+	if mt < 0:
+		return
+	var w := _winner()
+	r["p"] = int(r["p"]) + 1
+	var k := "d" if w < 0 else ("w" if w == mt else "l")
+	r[k] = int(r[k]) + 1
+	r["gf"] = int(r["gf"]) + score[mt]
+	r["ga"] = int(r["ga"]) + score[1 - mt]
+	if title:
+		r["titles"] = int(r["titles"]) + 1
+	car_main.save()
 
 func _idle_players(dt: float) -> void:
 	for p in players:
@@ -6560,6 +6611,7 @@ func _guest_frame(dt: float) -> void:
 		if state == "full" and prev != "full":
 			if rk_on:
 				_rk_finish()
+			_rec_add(false)
 			hud.show_menu("full", _menu_info())
 		elif state != "full" and prev == "full":
 			hud.show_menu("", {})
