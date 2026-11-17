@@ -2113,7 +2113,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
@@ -3995,6 +3995,13 @@ func _host_start() -> void:
 	career_on = _co_text() != ""
 	pro_sq = -1
 	pro_sq2 = -1
+	if career_on and car.pro() and not car.pro2():
+		# never a player career match together before the friend has made his own man
+		career_on = false
+		humans = [Human.new()]
+		hud.toast("Your friend makes his own player first")
+		hud.refresh(_menu_info())
+		return
 	if career_on and car.pro():
 		# the player career together: the manager plays you both, each thumb on his own man
 		car.pro_select("pro", true)
@@ -6043,7 +6050,7 @@ func _full_time() -> void:
 			car.pro_select("pro", true)
 			car.pro_select("pro2", true)
 		if has_meta("pro_fast"):
-			print("PRO full time lines=", car_lines.slice(0, 4))
+			print("PRO full time lines=", car_lines.slice(0, 4), " pro2 lv=", car.pro_lv("pro2"), " xp=", car.pro_d("pro2").get("pxp"), " co2=", (co_pay[2] as Array).slice(0, 3) if co_pay.size() > 2 else [])
 		car.pro_select()
 		car.save()
 		pro_sq = -1
@@ -8007,6 +8014,7 @@ func _send_snap() -> void:
 		"_": "s", "st": state, "t": snappedf(state_t, 0.01), "sc": score, "ck": int(clock), "so": [so_g[0], so_g[1], so_win], "p": _pack(),
 		"h": hc, "c": ch, "e": out_ev, "sr": players.find(scorer), "rp": hud.replay_on, "rf": [snappedf(ref.position.x, 0.01), snappedf(ref.position.z, 0.01), snappedf(ref.yaw, 0.01), ref.card_up, snappedf(ref.vel.x, 0.1), snappedf(ref.vel.z, 0.1), players.find(book_p) if book_t >= 0.0 else -1] if ref != null else [],
 		"ts": tst if state == "full" else null, "co": co_pay if (state == "full" and career_on) else null, "sm": snappedf(humans[1].stam, 0.02) if humans.size() > 1 else 1.0,
+		"pq": humans[1].psq if humans.size() > 1 else -1,
 	})
 	out_ev = []
 
@@ -8054,6 +8062,8 @@ func _guest_frame(dt: float) -> void:
 			tst = snap["ts"]
 		if humans.size() > me:
 			humans[me].stam = float(snap.get("sm", 1.0))
+			# the player career: the friend's thumb is his own man too (no switch button)
+			humans[me].psq = int(snap.get("pq", -1))
 		if state == "full" and snap.get("co") != null and not co_got:
 			# a career match played together pays the guest's own club too
 			co_got = true
@@ -8238,6 +8248,9 @@ func _process(dt: float) -> void:
 			# the buttons are for what YOUR man can do: with a partner on the ball you can only switch player
 			hud.lab_a = "SHOOT" if mine2 else ("" if ours else "TACKLE")
 			hud.lab_b = "PASS" if mine2 else "SWITCH"
+			if hm.psq >= 0:
+				# the player career: you are one man, so no switching. With the ball at a team mate you call for it
+				hud.lab_b = "PASS" if mine2 else ("CALL" if ours else "")
 			hud.charge = hm.charge
 			hud.stam = hm.stam
 			hud.ctrl_name = ("%d  %s  %d" % [hm.ctrl.num, hm.ctrl.pname.to_upper(), hm.ctrl.ovr]) if hm.ctrl != null else ""
