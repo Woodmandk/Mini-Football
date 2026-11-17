@@ -2928,11 +2928,7 @@ func world_tick(lines: Array) -> void:
 		# men on the transfer list: clubs look at them first
 		for li in _listed_free():
 			var lpl: Dictionary = d["squad"][li]
-<<<<<<< HEAD
 			var lch := interest(lpl) + (0.15 if bool(wn["deadline"]) else 0.0)
-=======
-			var lch := 0.45 + (0.3 if bool(wn["deadline"]) else 0.0) + clampf((ovr_of(lpl) - my_strength()) * 0.03, -0.25, 0.2)
->>>>>>> origin/main
 			if rng.randf() < lch:
 				_cpu_bid(rng, lines, li)
 		var ch := 0.25 + (0.4 if bool(wn["deadline"]) else 0.0)
@@ -3061,11 +3057,7 @@ func _cpu_bid(rng: RandomNumberGenerator, lines: Array, force := -1) -> void:
 		return
 	var c: int = cand[rng.randi() % cand.size()]
 	# a man you have listed is cheaper: they know you want to sell
-<<<<<<< HEAD
 	var amt := int(round(value(pl) * (rng.randf_range(0.7, 1.0) if listed(pl) else rng.randf_range(0.8, 1.25)) * (0.85 + pform(pl) * 0.003) / 5.0)) * 5
-=======
-	var amt := int(round(value(pl) * (rng.randf_range(0.7, 1.0) if listed(pl) else rng.randf_range(0.8, 1.25)) / 5.0)) * 5
->>>>>>> origin/main
 	_mail("bid", "%s bid for %s" % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize()],
 		"%s want %s (%s, %d, age %d) and offer %s. Their scouts say his form is %s. The offer stands for two matches." % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize(), str(pl["pos"]), o, int(pl["age"]), money(amt), form_name(pform(pl)).to_lower()],
 		{"c": c, "pn": str(pl["n"]), "amt": amt, "st": "open", "left": 1, "cnt": 0})
