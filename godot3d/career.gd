@@ -907,25 +907,39 @@ func _complete_buy(i: int, wk: int, yrs: int) -> String:
 	save()
 	return "%s SIGNED" % str(pl["n"]).to_upper()
 
+# Selling works like real football: you put a man on the transfer list, and he only goes when a club
+# makes a bid you accept. Tap again to take him off the list.
+static func listed(pl: Dictionary) -> bool:
+	return pl.has("tl")
+
 func sell(i: int) -> String:
 	var sq: Array = d["squad"]
 	if i < 0 or i >= sq.size():
 		return ""
-	for x in d["xi"]:
-		if int(x) == i:
-			return "Move him to the bench before you sell him."
-	if sq.size() <= SQUAD_MIN:
-		return "You need at least %d players." % SQUAD_MIN
-	var shut := window_msg()
-	if shut != "":
-		return shut
 	var pl: Dictionary = sq[i]
-	# a club at his level in your country buys him and he plays for them from now on
-	var rng := RandomNumberGenerator.new()
-	rng.randomize()
-	var buyer := _buyer_for(pl, rng)
-	var got := int(round(sell_value(pl) * rng.randf_range(1.0, 1.25) / 5.0)) * 5
-	return _sell_to(i, buyer, got)
+	if listed(pl):
+		pl.erase("tl")
+		save()
+		return "%s IS OFF THE TRANSFER LIST" % str(pl["n"]).to_upper()
+	pl["tl"] = today()
+	save()
+	var wn := window()
+	if bool(wn["open"]):
+		return "%s IS ON THE TRANSFER LIST. CLUBS CAN NOW BID FOR HIM" % str(pl["n"]).to_upper()
+	return "%s IS ON THE TRANSFER LIST. BIDS CAN COME WHEN THE WINDOW OPENS" % str(pl["n"]).to_upper()
+
+# a man on the list with no open bid for him
+func _listed_free() -> Array:
+	var open := []
+	for m in inbox():
+		if str(m["k"]) == "bid" and str(m.get("st", "")) == "open":
+			open.append(str(m["pn"]))
+	var out := []
+	var sq: Array = d["squad"]
+	for i in sq.size():
+		if listed(sq[i]) and not open.has(str(sq[i]["n"])):
+			out.append(i)
+	return out
 
 # He goes to club `buyer` (-1 = abroad) for `got`; he takes the place of their weakest man in his position.
 func _sell_to(i: int, buyer: int, got: int) -> String:
@@ -2894,6 +2908,12 @@ func world_tick(lines: Array) -> void:
 			d["dlw"] = int(wn["close"])
 			_mail("deadline", "Deadline day is coming", "The window shuts on %s, before your next match. Anything you want to do, do it now." % str(wn["ctext"]))
 			lines.append("DEADLINE DAY: THE WINDOW SHUTS BEFORE YOUR NEXT MATCH")
+		# men on the transfer list: clubs look at them first
+		for li in _listed_free():
+			var lpl: Dictionary = d["squad"][li]
+			var lch := 0.45 + (0.3 if bool(wn["deadline"]) else 0.0) + clampf((ovr_of(lpl) - my_strength()) * 0.03, -0.25, 0.2)
+			if rng.randf() < lch:
+				_cpu_bid(rng, lines, li)
 		var ch := 0.25 + (0.4 if bool(wn["deadline"]) else 0.0)
 		if today() < 0:
 			ch = 0.0 # the first days of a new career: let the man settle in
@@ -2980,9 +3000,9 @@ func _sq_find(pn: String) -> int:
 	return -1
 
 # A club wants one of your men: good men, young men with a future, and above all anyone who asked to leave.
-func _cpu_bid(rng: RandomNumberGenerator, lines: Array) -> void:
+func _cpu_bid(rng: RandomNumberGenerator, lines: Array, force := -1) -> void:
 	var sq: Array = d["squad"]
-	if sq.size() <= SQUAD_MIN:
+	if sq.size() <= SQUAD_MIN and force < 0:
 		return
 	var open := []
 	for m in inbox():
@@ -2998,18 +3018,27 @@ func _cpu_bid(rng: RandomNumberGenerator, lines: Array) -> void:
 		if wv > bw:
 			bw = wv
 			best = i
+	if force >= 0:
+		best = force
 	if best < 0:
 		return
 	var pl: Dictionary = sq[best]
 	var o := ovr_of(pl)
 	var cand := []
 	for c in _country_clubs():
-		if rating(c) >= maxi(o - 3, int(my_strength()) - 2) and rating(c) <= maxi(o, int(my_strength())) + 8:
+		if c == int(d["club"]):
+			continue
+		if force >= 0:
+			# a listed man: any club around his level can be the buyer
+			if rating(c) >= o - 8 and rating(c) <= o + 6:
+				cand.append(c)
+		elif rating(c) >= maxi(o - 3, int(my_strength()) - 2) and rating(c) <= maxi(o, int(my_strength())) + 8:
 			cand.append(c)
 	if cand.is_empty():
 		return
 	var c: int = cand[rng.randi() % cand.size()]
-	var amt := int(round(value(pl) * rng.randf_range(0.8, 1.25) / 5.0)) * 5
+	# a man you have listed is cheaper: they know you want to sell
+	var amt := int(round(value(pl) * (rng.randf_range(0.7, 1.0) if listed(pl) else rng.randf_range(0.8, 1.25)) / 5.0)) * 5
 	_mail("bid", "%s bid for %s" % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize()],
 		"%s want %s (%s, %d, age %d) and offer %s. The offer stands for two matches." % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize(), str(pl["pos"]), o, int(pl["age"]), money(amt)],
 		{"c": c, "pn": str(pl["n"]), "amt": amt, "st": "open", "left": 1, "cnt": 0})

@@ -383,6 +383,14 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 		cr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		cr.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		b.add_child(cr)
+	if bool(pl.get("tl", false)):
+		# on the transfer list: a small blue tag in the corner
+		var tlb := _label("TL", 11, Color.WHITE)
+		tlb.add_theme_stylebox_override("normal", _box(Color(0.25, 0.5, 0.95), 6))
+		tlb.position = Vector2(sz.x - (52 if int(pl.get("tp", 0)) > 0 else 26), sz.y - 20)
+		tlb.size = Vector2(22, 15)
+		tlb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.add_child(tlb)
 	if wrong:
 		var wr := ColorRect.new()
 		wr.color = Color(1.0, 0.85, 0.1)
@@ -2036,7 +2044,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 						abb.tooltip_text = str(abl[ai][2])
 					menu.add_child(abb)
 				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) + int(sp2.get("tp", 0)) < int(sp2["pot"])
-				var on_bench: bool = not (xi.has(sel) or xi.has(float(sel)))
+				# the transfer list button is there for every man, in the eleven or not
+				var on_bench := true
 				var tw3 := (bw3 - 36) * (0.58 if on_bench else 1.0)
 				if eur3 and not wg3:
 					# a simple career: no contracts, so only selling (from the bench)
@@ -2045,8 +2054,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				if tw3 > 0.0:
 					menu.add_child(trb)
 				if on_bench:
-					var sure2: bool = int(c3.get("sell_sure", -1)) == sel
-					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  ·  %s" % _mp(int(sp2["sell"])), "c_sell", null, "ghost", Vector2(bx3 + 18 + tw3 + 10, dy + dph - 70), Vector2(bw3 - 36 - tw3 - 10, 56), 20)
+					var lst2: bool = bool(sp2.get("tl", false))
+					var slb := _btn("TAKE OFF LIST" if lst2 else "TRANSFER LIST", "c_sell", null, "alt" if lst2 else "ghost", Vector2(bx3 + 18 + tw3 + 10, dy + dph - 70), Vector2(bw3 - 36 - tw3 - 10, 56), 20)
 					menu.add_child(slb)
 			else:
 				var fit_on := not sqd.is_empty() and int((sqd[0] as Dictionary).get("cond", -1)) >= 0
