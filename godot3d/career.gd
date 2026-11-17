@@ -322,6 +322,11 @@ func _new_season() -> void:
 	d["last"] = []
 	d["myres"] = {}
 	d["day"] = -4 # pre-season: a few days before the first match
+	d["gs"] = {}
+	d["mg"] = {}
+	d["mp"] = {}
+	d["mon"] = -1
+	d["aw"] = []
 
 func rounds_total() -> int:
 	return (d["fix"] as Array).size()
@@ -470,6 +475,13 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			ga = _poisson(rng, 1.35 * exp(diff) + 0.15)
 			gb = _poisson(rng, 1.35 * exp(-diff))
 		_book(a, b, ga, gb)
+		_month_pts(a, b, ga, gb)
+		if a != me:
+			for g in ga:
+				_goal_cpu(a, rng)
+		if b != me:
+			for g in gb:
+				_goal_cpu(b, rng)
 		last.append([a, b, ga, gb])
 	d["last"] = last
 	if not d.has("myres"):
@@ -483,6 +495,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	stt["gf"] = int(stt["gf"]) + mine
 	stt["ga"] = int(stt["ga"]) + theirs
 	d["st"] = stt
+	_rec_result(mine, theirs, opp_c, false)
 	var lines := []
 	var coins := int(round((15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))) * pay_k(lg())))
 	if eur:
@@ -509,6 +522,10 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			if int(s) == int(i):
 				xp += 14
 				pl["g"] = int(pl["g"]) + 1
+				pl["cg"] = int(pl.get("cg", 0)) + 1
+				_goal_add(me, pl)
+		pl["ca"] = int(pl.get("ca", 0)) + 1
+		_rec_player(pl)
 		pl["xp"] = int(pl["xp"]) + xp
 		if eur:
 			_grow_auto(pl, rng, lines)
@@ -533,6 +550,11 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		d["coins"] = int(d["coins"]) + prize
 		if pos == 1:
 			stt["titles"] = int(stt["titles"]) + 1
+			_honour("lg", "Champions of %s" % league_name().capitalize())
+		if pos <= int(league()["up"]):
+			_honour("up", "Promoted from %s" % league_name().capitalize())
+		_season_awards(lines)
+		_rec_season(pos)
 		var mv := 0
 		var what := ""
 		var lgd := league()
@@ -878,6 +900,7 @@ func _complete_buy(i: int, wk: int, yrs: int) -> String:
 	d["coins"] = int(d["coins"]) - price
 	d["squad"].append(pl)
 	m.remove_at(i)
+	_rec_fee("buy", price, str(pl["n"]))
 	save()
 	return "%s SIGNED" % str(pl["n"]).to_upper()
 
@@ -906,6 +929,7 @@ func _sell_to(i: int, buyer: int, got: int) -> String:
 	var sq: Array = d["squad"]
 	var pl: Dictionary = sq[i]
 	d["coins"] = int(d["coins"]) + got
+	_rec_fee("sell", got, str(pl["n"]))
 	sq.remove_at(i)
 	if buyer >= 0:
 		var their: Array = cpu_squad(buyer)
@@ -1140,7 +1164,10 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var won: bool = mine > theirs or (mine == theirs and won_tie)
 	if not bool(d.get("cupmode", false)):
 		d["day"] = cup_day(r)
+	var copp := cup_opp()
 	_cup_round(mine, theirs, won_tie)
+	if not bool(d.get("cupmode", false)):
+		_rec_result(mine, theirs, copp, true)
 	var stt: Dictionary = stats()
 	var nm := cup_names()
 	var coins := int(round((10 + mine * 5) * pay_k(lg())))
@@ -1151,6 +1178,8 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		if r >= last_r:
 			cp["won"] = true
 			stt["cups"] = int(stt.get("cups", 0)) + 1
+			if not bool(d.get("cupmode", false)):
+				_honour("cup", "Won %s" % cup_name().capitalize())
 			lines.append("YOU WON %s!" % cup_name())
 		else:
 			lines.append("THROUGH TO THE %s" % nm[r + 1])
@@ -2245,6 +2274,7 @@ func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
 			me_pl["ct"] = yrs
 		d["coins"] = int(d["coins"]) - amount
 		d["squad"].append(me_pl)
+		_rec_fee("buy", amount, str(pl["n"]))
 		save()
 		return "%s SIGNED FROM %s FOR %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount)]
 	return ""
@@ -2819,6 +2849,7 @@ func world_tick(lines: Array) -> void:
 			_mail("med", "%s is fit again" % str(pl["n"]).capitalize(), "%s is over %s and can play in your next match." % [str(pl["n"]).capitalize(), str(pl.get("injn", "his injury"))])
 			pl.erase("inj")
 			pl.erase("injn")
+	_month_awards(lines)
 	# bids for your men: only while a window is open for you
 	var wn := window()
 	for m in inbox():
@@ -3144,3 +3175,217 @@ func rotate() -> String:
 	if n == 0:
 		return "Nobody to rest: the eleven is fit, or the bench has no fresher man good enough."
 	return "%d tired man rested." % n if n == 1 else "%d tired men rested." % n
+
+
+# ---------------------------------------------------------------- top scorers, awards, the trophy cabinet and records
+# Every league goal has a scorer (the computer clubs' too), so there is a real top scorers list. Each month the
+# league names a player and a manager of the month; at the end of the season the big awards. What your club wins
+# goes in the trophy cabinet, and the club keeps its records.
+
+func _goal_key(c: int, n: String) -> String:
+	return "%d:%s" % [c, n]
+
+func _goal_add(c: int, pl: Dictionary) -> void:
+	var gs: Dictionary = d.get("gs", {})
+	var k := _goal_key(c, str(pl["n"]))
+	var e: Array = gs.get(k, [0, c, str(pl["n"]), str(pl["pos"]), int(pl.get("age", 25))])
+	e[0] = int(e[0]) + 1
+	gs[k] = e
+	d["gs"] = gs
+	var mg: Dictionary = d.get("mg", {})
+	mg[k] = int(mg.get(k, 0)) + 1
+	d["mg"] = mg
+
+func _goal_cpu(c: int, rng: RandomNumberGenerator) -> void:
+	var sq := cpu_squad(c)
+	var pool := []
+	var wsum := 0.0
+	for i in mini(11, sq.size()):
+		var pl: Dictionary = sq[i]
+		var wv: float = float({"FW": 6, "MF": 2.5, "DF": 0.7}.get(str(pl["pos"]), 0.0)) * pow(int(pl["sho"]) / 60.0, 2.0)
+		pool.append([wv, pl])
+		wsum += wv
+	var r := rng.randf() * wsum
+	for x in pool:
+		r -= float(x[0])
+		if r <= 0.0:
+			_goal_add(c, x[1])
+			return
+
+func _month_pts(a: int, b: int, ga: int, gb: int) -> void:
+	var mp: Dictionary = d.get("mp", {})
+	mp[str(a)] = int(mp.get(str(a), 0)) + (3 if ga > gb else (1 if ga == gb else 0))
+	mp[str(b)] = int(mp.get(str(b), 0)) + (3 if gb > ga else (1 if ga == gb else 0))
+	d["mp"] = mp
+	if int(d.get("mon", -1)) < 0:
+		d["mon"] = int(date_of(lg_day(int(d["round"])))["m"])
+
+# [[goals, club, name, pos, age], ...] best first
+func scorers_top(n := 20) -> Array:
+	var out := []
+	for k in (d.get("gs", {}) as Dictionary):
+		out.append(d["gs"][k])
+	var rk := _ranks()
+	out.sort_custom(func(a, b): return int(a[0]) > int(b[0]) if int(a[0]) != int(b[0]) else int(rk.get(int(a[1]), 99)) < int(rk.get(int(b[1]), 99)))
+	return out.slice(0, n)
+
+func _ranks() -> Dictionary:
+	var rk := {}
+	var o := order()
+	for i in o.size():
+		rk[int(o[i])] = i + 1
+	return rk
+
+func awards() -> Array:
+	return d.get("aw", [])
+
+func cabinet() -> Array:
+	return d.get("cab", [])
+
+func records() -> Dictionary:
+	return d.get("rec", {})
+
+func _honour(k: String, t: String) -> void:
+	var cb: Array = cabinet()
+	cb.append([int(d.get("season", 1)), k, t])
+	d["cab"] = cb
+
+func _award(k: String, title: String, c: int, n: String, v: String, lines: Array) -> void:
+	var aw: Array = awards()
+	aw.append({"k": k, "t": title, "c": c, "n": n, "v": v})
+	d["aw"] = aw
+	var mine := c == int(d["club"])
+	var who := ("%s (%s)" % [n.capitalize(), str(W[c]["n"]).capitalize()]) if n != "" else str(W[c]["n"]).capitalize()
+	if mine:
+		_honour(k, "%s: %s" % [title, n.capitalize() if n != "" else "you"])
+		lines.append("%s: %s!" % [title.to_upper(), (n.to_upper() if n != "" else "YOU")])
+	_mail("award", "%s: %s" % [title, who], ("%s. " % v) + ("Well done!" if mine else ""), {"mine": mine})
+
+func _month_awards(lines: Array) -> void:
+	var mo := int(d.get("mon", -1))
+	if mo < 0:
+		return
+	var nm := int(date_of(now())["m"])
+	if nm == mo and not season_over():
+		return
+	var mname: String = MONTHS[mo - 1]
+	var mg: Dictionary = d.get("mg", {})
+	var gs: Dictionary = d.get("gs", {})
+	var rk := _ranks()
+	var best := ""
+	for k in mg:
+		if not gs.has(k):
+			continue
+		if best == "" or int(mg[k]) > int(mg[best]) or (int(mg[k]) == int(mg[best]) and int(rk.get(int(gs[k][1]), 99)) < int(rk.get(int(gs[best][1]), 99))):
+			best = k
+	if best != "" and int(mg[best]) >= 2:
+		var e: Array = gs[best]
+		_award("potm", "%s Player of the Month" % mname, int(e[1]), str(e[2]), "%d goals in %s" % [int(mg[best]), mname], lines)
+		if int(e[1]) == int(d["club"]):
+			var i := _sq_find(str(e[2]))
+			if i >= 0:
+				d["squad"][i]["mo"] = clampi(int(d["squad"][i].get("mo", 65)) + 10, 5, 100)
+	var mp: Dictionary = d.get("mp", {})
+	var bc := -1
+	for k in mp:
+		if not rk.has(int(k)):
+			continue
+		if bc < 0 or int(mp[k]) > int(mp[str(bc)]) or (int(mp[k]) == int(mp[str(bc)]) and int(rk[int(k)]) < int(rk[bc])):
+			bc = int(k)
+	if bc >= 0 and int(mp[str(bc)]) >= 6:
+		_award("motm", "%s Manager of the Month" % mname, bc, "", "%d points in %s" % [int(mp[str(bc)]), mname], lines)
+		if bc == int(d["club"]):
+			_conf_add(3)
+	d["mg"] = {}
+	d["mp"] = {}
+	d["mon"] = -1 if season_over() else nm
+
+func _season_awards(lines: Array) -> void:
+	_month_awards(lines)
+	var top := scorers_top(60)
+	if top.is_empty():
+		return
+	var e: Array = top[0]
+	_award("boot", "Golden Boot", int(e[1]), str(e[2]), "%d league goals" % int(e[0]), lines)
+	# player of the season: goals, and how high his club finished
+	var n := ids().size()
+	var rk2 := _ranks()
+	var best: Array = []
+	var bs := -1.0
+	var young: Array = []
+	var ys := -1.0
+	for x in top:
+		var sc := int(x[0]) * 2.0 + float(n - int(rk2.get(int(x[1]), n))) * 0.6 + (2.0 if str(x[3]) != "FW" else 0.0)
+		if sc > bs:
+			bs = sc
+			best = x
+	for pass_n in 2:
+		for x in top:
+			var sc2 := int(x[0]) * 2.0 + float(n - int(rk2.get(int(x[1]), n))) * 0.6 + (2.0 if str(x[3]) != "FW" else 0.0)
+			if int(x[4]) <= 21 and sc2 > ys and (pass_n == 1 or x != best):
+				ys = sc2
+				young = x
+		if not young.is_empty():
+			break
+	if not best.is_empty():
+		_award("pots", "Player of the Season", int(best[1]), str(best[2]), "%d goals for the %s-placed club" % [int(best[0]), ordinal(rank_of(int(best[1]))).to_lower()], lines)
+	if not young.is_empty():
+		_award("ypots", "Young Player of the Season", int(young[1]), str(young[2]), "%d goals at %d" % [int(young[0]), int(young[4])], lines)
+	# manager of the season: the club that did most against what was expected of it
+	var by_r := ids()
+	by_r.sort_custom(func(a, b): return rating(a) > rating(b))
+	var mc := -1
+	var mv := -99.0
+	for c in ids():
+		var over := float(by_r.find(c) + 1 - rank_of(c)) + (3.0 if rank_of(c) == 1 else 0.0)
+		if c == int(d["club"]):
+			over = float(expected_rank() - rank_of(c)) + (3.0 if rank_of(c) == 1 else 0.0)
+		if over > mv:
+			mv = over
+			mc = c
+	if mc >= 0:
+		_award("mots", "Manager of the Season", mc, "", "%s, expected around %s" % [ordinal(rank_of(mc)).to_lower() + " place", ordinal(by_r.find(mc) + 1).to_lower()], lines)
+
+# ---- records
+func _rec_set(k: String, v: Array) -> void:
+	var r: Dictionary = records()
+	r[k] = v
+	d["rec"] = r
+
+func _rec_result(mine: int, theirs: int, opp: int, cup_t: bool) -> void:
+	var r: Dictionary = records()
+	var gd := mine - theirs
+	var txt := "%d-%d v %s, season %d%s" % [mine, theirs, str(W[opp]["n"]).capitalize() if opp >= 0 else "?", int(d.get("season", 1)), " (cup)" if cup_t else ""]
+	if gd > 0 and (not r.has("bw") or gd > int(r["bw"][0]) or (gd == int(r["bw"][0]) and mine > int(r["bw"][2]))):
+		_rec_set("bw", [gd, txt, mine])
+	if gd < 0 and (not r.has("bl") or -gd > int(r["bl"][0])):
+		_rec_set("bl", [-gd, txt, theirs])
+	var run := (int(r.get("run", 0)) + 1) if gd >= 0 else 0
+	r = records()
+	r["run"] = run
+	d["rec"] = r
+	if run > int((records().get("unb", [0]) as Array)[0]):
+		_rec_set("unb", [run, "%d matches without a defeat, season %d" % [run, int(d.get("season", 1))]])
+
+func _rec_player(pl: Dictionary) -> void:
+	var r: Dictionary = records()
+	if int(pl.get("cg", 0)) > 0 and int(pl.get("cg", 0)) > int((r.get("cg", [0]) as Array)[0]):
+		_rec_set("cg", [int(pl["cg"]), str(pl["n"])])
+	if int(pl.get("ca", 0)) > int((r.get("ca", [0]) as Array)[0]):
+		_rec_set("ca", [int(pl["ca"]), str(pl["n"])])
+	if int(pl["g"]) > int((r.get("sg", [0]) as Array)[0]):
+		_rec_set("sg", [int(pl["g"]), str(pl["n"]), int(d.get("season", 1))])
+
+func _rec_fee(k: String, fee: int, n: String) -> void:
+	if fee > int((records().get(k, [0]) as Array)[0]):
+		_rec_set(k, [fee, n, int(d.get("season", 1))])
+
+func _rec_season(pos: int) -> void:
+	var t := div()
+	var r: Dictionary = records()
+	var bf: Array = r.get("bf", [99, 99])
+	if t < int(bf[0]) or (t == int(bf[0]) and pos < int(bf[1])):
+		_rec_set("bf", [t, pos, "%s in %s, season %d" % [ordinal(pos).to_lower(), league_name().capitalize(), int(d.get("season", 1))]])
+	var pts := int(d["table"][str(int(d["club"]))]["pts"])
+	if pts > int((r.get("pts", [0]) as Array)[0]):
+		_rec_set("pts", [pts, "%s, season %d" % [league_name().capitalize(), int(d.get("season", 1))]])
