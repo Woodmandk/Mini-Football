@@ -447,6 +447,7 @@ func _book(a: int, b: int, ga: int, gb: int) -> void:
 # Books your result, plays the rest of the round, pays out coins and grows the players who played.
 # Returns lines for the full-time screen.
 func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) -> Array:
+	var fit0 := _fit_pre()
 	var me: int = int(d["club"])
 	var was_home: bool = next_match()[1]
 	var opp_c: int = next_match()[0]
@@ -551,6 +552,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	_fac_tick(lines)
 	if eur:
 		_after_match(played if not played.is_empty() else d["xi"], mine > theirs, lines, rng)
+	_fit_post(fit0, played, lines, rng)
 	world_tick(lines)
 	save()
 	return lines
@@ -586,6 +588,11 @@ func next_season() -> void:
 	d["note"] = ""
 	for pl in d["squad"]:
 		pl["age"] = int(pl["age"]) + 1
+		# a summer off: everyone starts the new season fit
+		pl.erase("inj")
+		pl.erase("injn")
+		pl["cond"] = 100
+		pl["cday"] = -4
 		if eur and int(pl["age"]) >= 31:
 			# past 30 the legs go first
 			_decline(pl)
@@ -700,11 +707,15 @@ func order() -> Array:
 func rank_of(c: int) -> int:
 	return order().find(c) + 1
 
-func swap(a: int, b: int) -> void:
+func swap(a: int, b: int) -> String:
 	# a and b are squad indices; either may be in the eleven
 	var xi: Array = d["xi"]
 	var ia := xi.find(a)
 	var ib := xi.find(b)
+	var sq: Array = d["squad"]
+	for k in [[ia, b], [ib, a]]:
+		if int(k[0]) >= 0 and xi.find(int(k[1])) < 0 and int(k[1]) < sq.size() and injured(sq[int(k[1])]):
+			return "%s is injured: %s." % [str(sq[int(k[1])]["n"]).capitalize(), inj_text(sq[int(k[1])])]
 	if ia >= 0 and ib >= 0:
 		xi[ia] = b
 		xi[ib] = a
@@ -713,6 +724,7 @@ func swap(a: int, b: int) -> void:
 	elif ib >= 0:
 		xi[ib] = a
 	save()
+	return ""
 
 # ---- transfer market
 
@@ -1119,6 +1131,7 @@ func cup_round_name() -> String:
 # Books your cup tie and plays the others. Returns lines for the full-time screen.
 # Books your cup tie and plays the others. Returns lines for the full-time screen.
 func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
+	var fit0 := _fit_pre()
 	var cp: Dictionary = cup()
 	var r: int = int(cp["r"])
 	var last_r := cup_rounds() - 1
@@ -1168,6 +1181,9 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		var rng3 := RandomNumberGenerator.new()
 		rng3.randomize()
 		_after_match(d["xi"], won, lines, rng3)
+	var rng4 := RandomNumberGenerator.new()
+	rng4.randomize()
+	_fit_post(fit0, [], lines, rng4)
 	world_tick(lines)
 	save()
 	return lines
@@ -2014,7 +2030,7 @@ func next_day() -> int:
 func sim_match(opp: int, home: bool) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var df := (my_strength() - _strength(opp)) / 14.0 + (0.12 if home else -0.12)
+	var df := (match_strength() - _strength(opp)) / 14.0 + (0.12 if home else -0.12)
 	var mine := _poisson(rng, 1.35 * exp(df) + 0.1)
 	var theirs := _poisson(rng, 1.35 * exp(-df))
 	var pool := []
@@ -2797,6 +2813,12 @@ func world_tick(lines: Array) -> void:
 				if not x.is_empty():
 					got.append(x)
 			_deal_mail(got)
+	for pl in d["squad"]:
+		var bk := int(pl.get("inj", -999))
+		if bk > from and bk <= t and from > -999:
+			_mail("med", "%s is fit again" % str(pl["n"]).capitalize(), "%s is over %s and can play in your next match." % [str(pl["n"]).capitalize(), str(pl.get("injn", "his injury"))])
+			pl.erase("inj")
+			pl.erase("injn")
 	# bids for your men: only while a window is open for you
 	var wn := window()
 	for m in inbox():
@@ -2991,7 +3013,7 @@ func _out_of_xi(i: int) -> void:
 	var best := -1
 	for pass_n in 2:
 		for j in sq.size():
-			if j == i or xi.has(j) or (pass_n == 0 and str(sq[j]["pos"]) != pos) or (pass_n == 1 and str(sq[j]["pos"]) == "GK"):
+			if j == i or xi.has(j) or injured(sq[j]) or (pass_n == 0 and str(sq[j]["pos"]) != pos) or (pass_n == 1 and str(sq[j]["pos"]) == "GK"):
 				continue
 			if best < 0 or ovr_of(sq[j]) > ovr_of(sq[best]):
 				best = j
@@ -3000,3 +3022,125 @@ func _out_of_xi(i: int) -> void:
 	if best >= 0:
 		xi[at] = best
 	d["xi"] = xi
+
+
+# ---------------------------------------------------------------- fitness, injuries and rotation (the career)
+# Every man has a fitness (0-100). A full match takes about a quarter of it, a few days' rest gives it back (faster
+# with a better training ground). A tired man plays slower and gets hurt more easily, so in a busy week you rotate.
+const INJ := [["a knock", 3, 7, 50], ["a hamstring strain", 10, 21, 30], ["an ankle injury", 14, 35, 15], ["a knee injury", 45, 100, 5]]
+
+func rec_rate() -> float:
+	return 4.8 + 0.5 * (fac("training") - 1)
+
+# his fitness on the eve of your next match
+func cond_of(pl: Dictionary) -> int:
+	var c := float(pl.get("cond", 100))
+	var since := int(pl.get("cday", -999))
+	if since == -999:
+		return int(c)
+	return clampi(int(round(c + maxi(now() - since, 0) * rec_rate())), 0, 100)
+
+func injured(pl: Dictionary) -> bool:
+	return int(pl.get("inj", -999)) > now()
+
+func inj_text(pl: Dictionary) -> String:
+	return "%s, back on %s" % [str(pl.get("injn", "injured")), date_text(int(pl.get("inj", 0)), true)]
+
+# your eleven's strength with tired legs counted (for a simulated match)
+func match_strength() -> float:
+	var s := 0.0
+	for i in d["xi"]:
+		var pl: Dictionary = d["squad"][int(i)]
+		s += ovr_of(pl) * (0.86 + 0.14 * cond_of(pl) / 100.0) * (0.6 if injured(pl) else 1.0)
+	return s / 11.0
+
+# before a match: everyone's fitness as it is on the day; returns {index: fitness}
+func _fit_pre() -> Dictionary:
+	var out := {}
+	if bool(d.get("cupmode", false)):
+		return out
+	var t := now()
+	var sq: Array = d["squad"]
+	for i in sq.size():
+		var pl: Dictionary = sq[i]
+		var c := cond_of(pl)
+		pl["cond"] = c
+		pl["cday"] = t
+		out[i] = c
+	return out
+
+# after it: the men who played are tired (a sub less so), and a tired man gets hurt more easily
+func _fit_post(fit0: Dictionary, played: Array, lines: Array, rng: RandomNumberGenerator) -> void:
+	if fit0.is_empty():
+		return
+	var sq: Array = d["squad"]
+	var xi: Array = (d["xi"] as Array).duplicate()
+	var who := []
+	for x in (played if not played.is_empty() else xi):
+		if not who.has(int(x)) and int(x) < sq.size():
+			who.append(int(x))
+	for i in who:
+		var pl: Dictionary = sq[i]
+		var full_m := xi.has(i)
+		var drain := (25.0 + maxf(int(pl["age"]) - 28, 0) * 1.2) if full_m else 10.0
+		if ab_of(pl).has("motor"):
+			drain *= 0.75
+		if str(pl["pos"]) == "GK":
+			drain *= 0.4
+		var c0 := int(fit0.get(i, 100))
+		pl["cond"] = maxi(int(round(c0 - drain * rng.randf_range(0.85, 1.15))), 15)
+		# the risk of an injury: small when fresh, much bigger when he started tired
+		var risk := 0.008 + maxf(75 - c0, 0) * 0.0016
+		if not full_m:
+			risk *= 0.5
+		if rng.randf() < risk:
+			var tot := 0
+			for k in INJ:
+				tot += int(k[3])
+			var r := rng.randi() % tot
+			var kind: Array = INJ[0]
+			for k in INJ:
+				r -= int(k[3])
+				if r < 0:
+					kind = k
+					break
+			var days := rng.randi_range(int(kind[1]), int(kind[2]))
+			pl["inj"] = int(pl.get("cday", now())) + days
+			pl["injn"] = str(kind[0])
+			var wk := int(round(days / 7.0))
+			var howlong := ("about %d week%s" % [wk, "" if wk == 1 else "s"]) if wk >= 1 else "a few days"
+			lines.append("%s IS INJURED: %s, OUT FOR %s" % [str(pl["n"]).to_upper(), str(kind[0]).to_upper(), howlong.to_upper()])
+			_mail("med", "%s is injured" % str(pl["n"]).capitalize(), "The medical team: %s has %s. He is out for %s, until %s." % [str(pl["n"]).capitalize(), str(kind[0]), howlong, date_text(int(pl["inj"]), true)])
+	# an injured man leaves the eleven: the best fit man in his position takes his place
+	for i in sq.size():
+		if injured(sq[i]) and (d["xi"] as Array).has(i):
+			_out_of_xi(i)
+
+# Rest the tired: every man in the eleven under 75 (or hurt) swaps with a fresher man in his position on the bench
+# who is not much worse. Returns what happened.
+func rotate() -> String:
+	var sq: Array = d["squad"]
+	var xi: Array = d["xi"]
+	var n := 0
+	for k in xi.size():
+		var i := int(xi[k])
+		var pl: Dictionary = sq[i]
+		var c := cond_of(pl)
+		if c >= 75 and not injured(pl):
+			continue
+		var best := -1
+		for j in sq.size():
+			if xi.has(j) or injured(sq[j]) or str(sq[j]["pos"]) != str(pl["pos"]) or cond_of(sq[j]) < c + 12:
+				continue
+			if ovr_of(sq[j]) < ovr_of(pl) - 7 and not injured(pl):
+				continue
+			if best < 0 or ovr_of(sq[j]) > ovr_of(sq[best]):
+				best = j
+		if best >= 0:
+			xi[k] = best
+			n += 1
+	d["xi"] = xi
+	save()
+	if n == 0:
+		return "Nobody to rest: the eleven is fit, or the bench has no fresher man good enough."
+	return "%d tired man rested." % n if n == 1 else "%d tired men rested." % n
