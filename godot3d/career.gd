@@ -2475,6 +2475,14 @@ func talk_set(what: String, step: int) -> void:
 		t["yrs"] = clampi(int(t["yrs"]) + step, 1, 5)
 	d["talk"] = t
 
+func talk_force(offer: int, yrs: int) -> void:
+	var t := talk()
+	if t.is_empty():
+		return
+	t["offer"] = clampi(offer, 1, int(t["ask"]) * 2)
+	t["yrs"] = clampi(yrs, 1, 5)
+	d["talk"] = t
+
 # You make the offer. Returns what happened; when the talk is over, talk() is empty.
 func talk_offer() -> String:
 	var t := talk()
@@ -2624,10 +2632,8 @@ func _fac_tick(lines: Array) -> void:
 # The career grows players by itself, as in FIFA: a full bar makes him better where his position needs it.
 func _grow_auto(pl: Dictionary, rng: RandomNumberGenerator, lines: Array) -> void:
 	if bool(pl.get("me", false)):
-		# a player career's own man: experience becomes skill points that you spend yourself
-		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
-			pl["xp"] = int(pl["xp"]) - 100
-			pl["tp"] = int(pl.get("tp", 0)) + 1
+		# a player career's own man grows from his own levels and training (pro_after), never by himself
+		pl["xp"] = 0
 		return
 	var got := []
 	while (int(pl["xp"]) >= 100 or int(pl.get("tp", 0)) > 0) and ovr_of(pl) < int(pl["pot"]):
@@ -4219,17 +4225,25 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro
 		var dt := (rt - (6.3 if started else 5.9)) * (3.5 if started else 4.0)
 		p["trust"] = clampi(int(round(int(p["trust"]) + dt)), 0, 100)
 		pl["fm"] = clampi(int(round(pform(pl) * 0.6 + (rt - 3.0) / 7.0 * 100.0 * 0.4)), 5, 99)
-		# growth: points to spend, quicker for a good match
-		p["pxp"] = int(p.get("pxp", 0)) + maxi(int(round((rt - 6.0) * 12.0)), 0)
+		# experience: for playing, more for a good match, goals and assists
+		var xg := 15 + maxi(int(round((rt - 6.0) * 20.0)), 0) + g * 20 + a * 12 + (5 if started else 0)
+		_pro_xp(k, xg, lines)
 		lines.append("YOUR RATING %.1f%s" % [rt, ("  ·  %d GOAL%s" % [g, "" if g == 1 else "S"] if g > 0 else "") + ("  ·  %d ASSIST%s" % [a, "" if a == 1 else "S"] if a > 0 else "")])
 	else:
 		# not used: form fades, he keeps training (the club's training gives him experience)
 		lines.append("YOU DID NOT PLAY")
-	while int(p["pxp"]) >= 100:
-		p["pxp"] = int(p["pxp"]) - 100
-		if ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
-			pl["tp"] = int(pl.get("tp", 0)) + 1
-			lines.append("+1 SKILL POINT TO SPEND")
+		_pro_xp(k, 5, lines)
+	# the week's training: the drill you chose fills its bar, more when you sat on the bench
+	_pro_train(k, played, lines)
+	# a season goal reached: a big lump of experience, once
+	var od: Array = p.get("objd", [])
+	var ob := pro_obj(k)
+	for oi in ob.size():
+		if bool(ob[oi][3]) and not od.has(oi):
+			od.append(oi)
+			lines.append("SEASON GOAL DONE: %s" % str(ob[oi][0]).to_upper())
+			_pro_xp(k, PRO_OBJ_XP, lines)
+	p["objd"] = od
 	lines.append("MANAGER'S TRUST %d" % int(p["trust"]))
 	return lines
 
@@ -4263,10 +4277,18 @@ func _pro_offers(rng: RandomNumberGenerator, lines: Array) -> void:
 	if n < 3:
 		return
 	var avg := pro_avg()
-	var ch := clampf((avg - 6.6) * 0.2 + (pform(pl) - 55) * 0.004, 0.0, 0.3)
+	var fm := pform(pl)
+	var ov := ovr_of(pl)
+	var both := pro2() and not pro_pl("pro2").is_empty()
+	if both:
+		# together you are one deal: a club buys you both or neither, on how you both play
+		avg = (avg + pro_avg(true, "pro2")) * 0.5
+		fm = (fm + pform(pro_pl("pro2"))) / 2
+		ov = (ov + ovr_of(pro_pl("pro2"))) / 2
+	var ch := clampf((avg - 6.6) * 0.2 + (fm - 55) * 0.004, 0.0, 0.3)
 	if rng.randf() >= ch:
 		return
-	var lvl := ovr_of(pl) + int(round((avg - 6.8) * 4.0))
+	var lvl := ov + int(round((avg - 6.8) * 4.0))
 	var cand := []
 	for c in range(FIRST, W.size()):
 		if c == int(d["club"]) or int(W[c].get("lg", -1)) < 0:
@@ -4280,6 +4302,11 @@ func _pro_offers(rng: RandomNumberGenerator, lines: Array) -> void:
 		return
 	var c: int = cand[rng.randi() % cand.size()]
 	var cn := str(W[c]["n"]).capitalize()
+	if both:
+		_mail("pjob", "%s want you both" % cn, "%s (%s) have watched you two: an average rating of %.1f this season. They want you both, together, when the season ends." % [cn, league_name_of(c).capitalize(), avg],
+			{"c": c, "st": "open", "left": 3, "opts": [["Yes, we join %s together this summer." % cn, {"join": 1}, "Agreed. You both move to %s when the season is over." % cn], ["No, we stay here.", {"stay": 1}, "You stay. The manager hears about it and likes your loyalty."]]})
+		lines.append("%s WANT TO SIGN YOU BOTH" % str(W[c]["n"]))
+		return
 	_mail("pjob", "%s want you" % cn, "%s (%s) have watched you: an average rating of %.1f this season. They want you to join them when the season ends." % [cn, league_name_of(c).capitalize(), avg],
 		{"c": c, "st": "open", "left": 3, "opts": [["Yes, I will join %s this summer." % cn, {"join": 1}, "Agreed. You move to %s when the season is over." % cn], ["No, I stay here.", {"stay": 1}, "You stay. The manager hears about it and likes your loyalty."]]})
 	lines.append("%s WANT TO SIGN YOU" % str(W[c]["n"]))
@@ -4288,12 +4315,109 @@ func league_name_of(c: int) -> String:
 	var li := league_of(c)
 	return str(ClubDB.LEAGUES[li]["n"]) if li >= 0 and li < ClubDB.LEAGUES.size() else ""
 
-# spend a skill point on one of your stats
+# ---- your player's growth, as in FIFA's player career: experience gives levels, a level gives skill points,
+# a point raises one stat (dearer the better it is), training raises the stat you drill, points also buy a skill.
+const PRO_LV_PTS := 2
+const PRO_OBJ_XP := 120
+const PRO_AB_PTS := [4, 6]
+
+func pro_lv(k := "pro") -> int:
+	return int(pro_d(k).get("lv", 1))
+
+func pro_need(k := "pro") -> int:
+	return 100 + 40 * (pro_lv(k) - 1)
+
+static func pro_cost(v: int) -> int:
+	return 1 if v < 70 else (2 if v < 80 else 3)
+
+func _pro_xp(k: String, n: int, lines: Array) -> void:
+	var p := pro_d(k)
+	var pl := pro_pl(k)
+	if pl.is_empty() or n <= 0:
+		return
+	p["pxp"] = int(p.get("pxp", 0)) + n
+	lines.append("+%d XP" % n)
+	while int(p["pxp"]) >= pro_need(k):
+		p["pxp"] = int(p["pxp"]) - pro_need(k)
+		p["lv"] = pro_lv(k) + 1
+		pl["tp"] = int(pl.get("tp", 0)) + PRO_LV_PTS
+		lines.append("LEVEL %d!  +%d SKILL POINTS TO SPEND" % [pro_lv(k), PRO_LV_PTS])
+
+# the drill you train between matches (0 pace, 1 shooting, 2 passing, 3 defending)
+func pro_drill(k := "pro") -> int:
+	var pl := pro_pl(k)
+	var def: int = {"DF": 3, "MF": 2, "FW": 1}.get(str(pl.get("pos", "MF")), 2)
+	return int(pro_d(k).get("drill", def))
+
+func pro_set_drill(si: int, k := "pro") -> void:
+	if d.has(k) and si >= 0 and si <= 3:
+		pro_d(k)["drill"] = si
+		save()
+
+func pro_dp(k := "pro") -> Array:
+	var a: Array = pro_d(k).get("dp", [0, 0, 0, 0])
+	return a if a.size() == 4 else [0, 0, 0, 0]
+
+func _pro_train(k: String, played: bool, lines: Array) -> void:
+	var p := pro_d(k)
+	var pl := pro_pl(k)
+	if pl.is_empty():
+		return
+	var si := pro_drill(k)
+	var dp := pro_dp(k)
+	# the club's training ground helps too
+	var gain := (22 if played else 36) + fac("training") * 3
+	var sk: String = STAT_KEYS[si]
+	if ovr_of(pl) >= int(pl["pot"]) or int(pl[sk]) >= 97:
+		return
+	dp[si] = int(dp[si]) + gain
+	if int(dp[si]) >= 100:
+		dp[si] = int(dp[si]) - 100
+		pl[sk] = int(pl[sk]) + 1
+		lines.append("TRAINING PAYS OFF: +1 %s" % STAT_NAMES[si])
+	p["dp"] = dp
+
+# spend skill points on one of your stats: one point below 70, two below 80, three above
 func pro_spend(si: int, k := "pro") -> String:
 	var i := pro_i(k)
-	if i < 0:
+	if i < 0 or si < 0 or si > 3:
 		return ""
-	return spend_tp(i, si)
+	var pl: Dictionary = d["squad"][i]
+	var sk: String = STAT_KEYS[si]
+	var cost := pro_cost(int(pl[sk]))
+	if int(pl[sk]) >= 97:
+		return "You cannot get better at that."
+	if ovr_of(pl) >= int(pl["pot"]):
+		return "You are at your best: rating %d." % int(pl["pot"])
+	if int(pl.get("tp", 0)) < cost:
+		return "%s %d to %d costs %d points." % [STAT_NAMES[si].capitalize(), int(pl[sk]), int(pl[sk]) + 1, cost]
+	pl[sk] = int(pl[sk]) + 1
+	pl["tp"] = int(pl["tp"]) - cost
+	save()
+	return "+1 %s" % STAT_NAMES[si]
+
+# a skill (evne) for your player, bought with skill points: the second opens at rating 70
+func pro_learn(key: String, k := "pro") -> String:
+	var pl := pro_pl(k)
+	if pl.is_empty() or not ABIL.has(key):
+		return ""
+	var have := ab_of(pl)
+	if have.has(key):
+		return "You already have %s." % ABIL[key][0]
+	if not (ABIL[key][2] as Array).has(str(pl["pos"])):
+		return "A %s cannot learn that." % str(pl["pos"])
+	if have.size() >= 2:
+		return "You have two skills already."
+	if have.size() == 1 and ovr_of(pl) < AB_SLOT2:
+		return "The second skill opens at rating %d." % AB_SLOT2
+	var cost: int = PRO_AB_PTS[have.size()]
+	if int(pl.get("tp", 0)) < cost:
+		return "%s costs %d skill points." % [str(ABIL[key][0]).capitalize(), cost]
+	have.append(key)
+	pl["ab"] = have
+	pl["tp"] = int(pl["tp"]) - cost
+	save()
+	return "YOU LEARNED %s" % ABIL[key][0]
 
 # the season is over: your move (if you agreed one) or a new season at the same club
 func pro_next_season() -> void:
@@ -4337,6 +4461,7 @@ func pro_next_season() -> void:
 	p["offer"] = -1
 	for k in (["pro", "pro2"] if pro2() else ["pro"]):
 		pro_d(k)["ss"] = {"apps": 0, "st": 0, "g": 0, "a": 0, "rs": 0.0}
+		pro_d(k)["objd"] = []
 		_pro_goals(k)
 	pro_select("pro", pro2())
 	if pro2():
