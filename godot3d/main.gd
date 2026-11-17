@@ -1350,9 +1350,15 @@ func _ready() -> void:
 				print("BUYTEST after buy size=", car.d["squad"].size(), " coins=", car.d["coins"], " msg=", car_msg)
 				car_sel = 12
 				_action("c_sell")
-				_action("c_sell")
+				print("BUYTEST after list listed=", Career.listed(car.d["squad"][12]))
+				car.d["wlast"] = car.now() - 7
+				var bl: Array = []
+				for bt in 6:
+					car.world_tick(bl)
+					car.d["wlast"] = car.now() - 7
+				print("BUYTEST bids=", bl)
 				print("BUYTEST after sell size=", car.d["squad"].size(), " coins=", car.d["coins"], " msg=", car_msg, " xi=", car.d["xi"])
-				car_sel = 13
+				car_sel = 12
 				menu_arg = "squad9"
 			if menu_arg == "abil":
 				car_sel = 9
@@ -2157,7 +2163,7 @@ func _car_info() -> Dictionary:
 	for i in (d["squad"] as Array).size():
 		var pl: Dictionary = d["squad"][i]
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
-			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl),
+			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl), "tl": Career.listed(pl),
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
 			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"),
 			"cond": car.cond_of(pl) if car.eur else -1, "inj": car.injured(pl) if car.eur else false, "injt": car.inj_text(pl) if car.eur and car.injured(pl) else ""})
@@ -3160,15 +3166,11 @@ func _action(act: String, arg = null) -> void:
 				au["blip2"].play()
 			hud.refresh(_menu_info())
 		"c_sell":
+			# on or off the transfer list (one tap, it can always be undone)
 			if car_sel >= 0:
-				if car_sell == car_sel:
-					car_msg = car.sell(car_sel)
-					if car_msg.contains("SOLD"):
-						car_sel = -1
-						au["blip2"].play()
-					car_sell = -1
-				else:
-					car_sell = car_sel
+				car_msg = car.sell(car_sel)
+				car_sell = -1
+				au["blip2"].play()
 				hud.refresh(_menu_info())
 		"c_spot":
 			# a man dragged to a new spot on the team screen: [slot, along, across]
@@ -8025,7 +8027,7 @@ func _as_take(act: String, arg) -> bool:
 	if act == "c_pick":
 		return false
 	if act == "c_sell":
-		if car_sel >= 0 and car_sell == car_sel:
+		if car_sel >= 0:
 			_as_suggest("c_sell", null)
 			return true
 		return false
@@ -8073,7 +8075,9 @@ func _sug_text(act: String, arg) -> String:
 				return ""
 			return "SIGN %s (%s) FOR %s" % [str(m[i]["n"]).to_upper(), str(m[i]["pos"]), car.money(car.value(m[i]))]
 		"c_sell":
-			return "SELL %s" % _pn(car_sel) if car_sel >= 0 else ""
+			if car_sel < 0:
+				return ""
+			return ("TAKE %s OFF THE TRANSFER LIST" if Career.listed(car.d["squad"][car_sel]) else "PUT %s ON THE TRANSFER LIST") % _pn(car_sel)
 		"c_swap":
 			var ws: Array = arg
 			return "SWAP %s AND %s" % [_pn(int(ws[0])), _pn(int(ws[1]))]
