@@ -2114,7 +2114,7 @@ func _menu_info() -> Dictionary:
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
-		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
+		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -8609,7 +8609,8 @@ func _as_open() -> void:
 		as_prev = car
 	assist = true
 	car = carv
-	hub_tab = "career"
+	# the player career, the first time: straight to making your own player
+	hub_tab = "pro" if car.pro() and not car.pro2() else "career"
 	car_sel = -1
 	car_sell = -1
 	car_msg = ""
@@ -8642,6 +8643,11 @@ func _as_take(act: String, arg) -> bool:
 		_show_hub()
 		return true
 	if act in ["c_play", "cup_play", "eu_play"]:
+		if car.pro() and not car.pro2():
+			hud.toast("Make your own player first")
+			hub_tab = "pro"
+			_show_hub()
+			return true
 		co_rdy[1] = not co_rdy[1]
 		net.send({"_": "rdy", "r": co_rdy[1]})
 		au["blip2"].play()
@@ -8889,6 +8895,11 @@ func _co_ready_send() -> void:
 func _co_go() -> void:
 	co_rdy = [false, false]
 	_co_ready_send()
+	if car == proc and car.pro() and not car.pro2():
+		# the player career together: your friend plays his own man, so he makes him first
+		hud.toast("Your friend makes his own player first")
+		hud.refresh(_menu_info())
+		return
 	opt_mode = "coop"
 	opt_car = true
 	opt_cup = false
