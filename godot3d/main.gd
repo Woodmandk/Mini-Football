@@ -170,6 +170,7 @@ var so_last := false
 var car_goals := []
 var y_tab := 0 # youth page: 0 scouts, 1 reports, 2 academy
 var mail_sel := -1 # the inbox: the open mail's id
+var cab_tab := 0 # trophy cabinet: 0 trophies, 1 awards, 2 records
 var cal_m := 0 # the calendar shows this many months after the month of your next match
 var sim_res := {} # the last simulated match, for its screen
 var adv_info := {} # the days between two matches: dates and news
@@ -791,6 +792,36 @@ func _ready() -> void:
 				else:
 					hub_tab = "career" if wt == "wtest2" else "transfers"
 					menu_arg = "main"
+			if menu_arg in ["htest0", "htest1", "htest2", "htest3", "htest4"]:
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				var rng8 := RandomNumberGenerator.new()
+				rng8.seed = 7
+				var full_s := menu_arg != "htest4"
+				var n8: int = car.rounds_total() if full_s else 9
+				for r8 in n8:
+					if car.cup_due():
+						car.cup_finish(2, 1, true)
+					var fw := []
+					for i8 in car.d["xi"]:
+						if str(car.d["squad"][int(i8)]["pos"]) in ["FW", "MF"]:
+							fw.append(int(i8))
+					var mine8: int = rng8.randi_range(1, 4)
+					var sc8 := []
+					for g8 in mine8:
+						sc8.append(fw[rng8.randi() % fw.size()])
+					for l8 in car.finish_match(mine8, rng8.randi_range(0, 1), sc8):
+						if "MONTH" in str(l8) or "SEASON" in str(l8) or "BOOT" in str(l8):
+							print("HLINE ", l8)
+				print("HON cab ", car.cabinet())
+				print("HON aw ", car.awards().size(), " rec ", car.records())
+				print("HON top ", car.scorers_top(5))
+				if menu_arg == "htest0":
+					menu_arg = "scorers"
+				else:
+					cab_tab = {"htest1": 0, "htest2": 1, "htest3": 2, "htest4": 1}[menu_arg]
+					menu_arg = "cab"
 			if menu_arg in ["ftest0", "ftest1", "ftest2"]:
 				carc.new_career(carc.weakest(3), true)
 				carc.set_mode("full")
@@ -2117,8 +2148,41 @@ func _car_info() -> Dictionary:
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "",
-		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(),
+		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(),
 	}
+
+# Top scorers, awards, the trophy cabinet and the club's records for the hud.
+func _hon_info() -> Dictionary:
+	if bool(car.d.get("cupmode", false)) or not car.d.has("leagues"):
+		return {}
+	var me_c := int(car.d["club"])
+	var top := []
+	for x in car.scorers_top(20):
+		top.append({"g": int(x[0]), "n": str(x[2]).capitalize(), "pos": str(x[3]), "club": str(CLUBS[int(x[1])]["n"]).capitalize(), "k": CLUBS[int(x[1])]["k"], "mine": int(x[1]) == me_c})
+	var aw := []
+	for a in car.awards():
+		var c := int(a["c"])
+		aw.append({"t": str(a["t"]), "who": (str(a["n"]).capitalize() + "  ·  " if str(a["n"]) != "" else "") + str(CLUBS[c]["n"]).capitalize(), "v": str(a["v"]), "mine": c == me_c, "k": str(a["k"]), "kit": CLUBS[c]["k"]})
+	var cab := []
+	var cnt := {}
+	for h in car.cabinet():
+		cab.append({"s": int(h[0]), "k": str(h[1]), "t": str(h[2])})
+		cnt[str(h[1])] = int(cnt.get(str(h[1]), 0)) + 1
+	var r: Dictionary = car.records()
+	var rec := []
+	var put := func(lbl: String, key: String, f: Callable):
+		rec.append([lbl, f.call(r[key]) if r.has(key) else "None yet"])
+	put.call("Biggest win", "bw", func(v): return str(v[1]))
+	put.call("Heaviest defeat", "bl", func(v): return str(v[1]))
+	put.call("Longest unbeaten run", "unb", func(v): return str(v[1]))
+	put.call("Most goals in a season", "sg", func(v): return "%s, %d (season %d)" % [str(v[1]).capitalize(), int(v[0]), int(v[2])])
+	put.call("Most goals for the club", "cg", func(v): return "%s, %d" % [str(v[1]).capitalize(), int(v[0])])
+	put.call("Most matches for the club", "ca", func(v): return "%s, %d" % [str(v[1]).capitalize(), int(v[0])])
+	put.call("Record signing", "buy", func(v): return "%s, %s (season %d)" % [str(v[1]).capitalize(), car.money(int(v[0])), int(v[2])])
+	put.call("Record sale", "sell", func(v): return "%s, %s (season %d)" % [str(v[1]).capitalize(), car.money(int(v[0])), int(v[2])])
+	put.call("Best finish", "bf", func(v): return str(v[2]))
+	put.call("Most points in a season", "pts", func(v): return "%d, %s" % [int(v[0]), str(v[1])])
+	return {"top": top, "aw": aw, "cab": cab, "cnt": cnt, "rec": rec, "tab": cab_tab, "season": int(car.d.get("season", 1))}
 
 # The living world for the hud: the transfer window, your inbox and the deals between the clubs.
 func _live_info() -> Dictionary:
@@ -2841,6 +2905,14 @@ func _action(act: String, arg = null) -> void:
 			_show_hub()
 		"c_table":
 			hud.show_menu("table", _menu_info())
+		"scorers":
+			hud.show_menu("scorers", _menu_info())
+		"cab":
+			cab_tab = int(arg) if arg != null else 0
+			hud.show_menu("cab", _menu_info())
+		"cab_tab":
+			cab_tab = int(arg)
+			hud.refresh(_menu_info())
 		"c_squad":
 			car_sell = -1
 			car_sel = -1

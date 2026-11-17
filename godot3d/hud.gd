@@ -980,6 +980,9 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			# open with your own club in view
 			var vis7 := sc7.size.y
 			sc7.set_deferred("scroll_vertical", int(clampf(mine7 * rh2 - vis7 * 0.5 + rh2 * 0.5, 0.0, maxf(n7 * rh2 - vis7, 0.0))))
+			if not (c7.get("hon", {}) as Dictionary).is_empty():
+				menu.add_child(_btn("TABLE", "c_table", null, "primary", Vector2(w - 330, 14), Vector2(130, 44), 17))
+				menu.add_child(_btn("TOP SCORERS", "scorers", null, "alt", Vector2(w - 192, 14), Vector2(170, 44), 17))
 			var bk2 := _back("career", null)
 			menu.add_child(bk2)
 		"car_start":
@@ -2513,6 +2516,10 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			_youth_page(info, w, h, items)
 		"inbox":
 			_inbox_page(info, w, h, items)
+		"scorers":
+			_scorers_page(info, w, h, items)
+		"cab":
+			_cab_page(info, w, h, items)
 		"tnews":
 			_tnews_page(info, w, h, items)
 		"adv":
@@ -4050,7 +4057,7 @@ func _tab_club(info: Dictionary, w: float, y0: float, ch: float, items: Array) -
 	var top_h := ch * 0.66
 	_tiles([
 		["Buildings", ft if ft != "" else "Stadium, training, youth", "c_club", "build", GREEN],
-		["Transfers", "%d players for sale" % (c.get("market", []) as Array).size(), "c_market", "swap"],
+		(["Trophy cabinet", _cab_line(c), "cab", "cup", GOLD] if incar else ["Transfers", "%d players for sale" % (c.get("market", []) as Array).size(), "c_market", "swap"]),
 		(["Youth academy", "Scouts, reports and your boys", "youth", "me", GOLD] if incar else ["Name and kit", "Your club's colours", "own", "kit"]),
 	], 24, y0, w - 48, top_h, 3, items)
 	var ip := _card_panel(Vector2(24, y0 + top_h + 14), Vector2(w - 48, ch - top_h - 14))
@@ -4560,7 +4567,7 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		var b := _btn("", "mail", int(m["id"]), "alt", Vector2(0, i * (rh + 6)), Vector2(lw - 12, rh), 16)
 		b.add_theme_stylebox_override("normal", _box(Color(S1.r, S1.g, S1.b, 0.95) if not on else Color(0.2, 0.32, 0.24, 0.98), 12, GOLD if open_bid else (GREEN if on else LINE)))
 		box.add_child(b)
-		var ic: Control = _icon({"bid": "mail", "deal": "swap", "window": "cal", "deadline": "cal", "info": "office", "med": "plus"}.get(str(m["k"]), "mail"), 24, GOLD if open_bid or str(m["k"]) == "deadline" else MUT)
+		var ic: Control = _icon({"bid": "mail", "deal": "swap", "window": "cal", "deadline": "cal", "info": "office", "med": "plus", "award": "cup"}.get(str(m["k"]), "mail"), 24, GOLD if open_bid or str(m["k"]) == "deadline" else MUT)
 		ic.position = Vector2(12, 20)
 		b.add_child(ic)
 		var tf: Font = font2 if bool(m.get("rd", false)) else font3
@@ -4711,3 +4718,195 @@ func _trim(text: String, f: Font, fs: int, maxw: float) -> String:
 	while t.length() > 1 and f.get_string_size(t + "…", HORIZONTAL_ALIGNMENT_LEFT, -1, sz).x > maxw:
 		t = t.substr(0, t.length() - 1)
 	return t.strip_edges() + "…"
+
+
+# ---------------------------------------------------------------- top scorers and the trophy cabinet
+func _cab_line(c: Dictionary) -> String:
+	var hn: Dictionary = c.get("hon", {})
+	var cab: Array = hn.get("cab", [])
+	if cab.is_empty():
+		return "Trophies, awards and records"
+	return "%d honour%s so far" % [cab.size(), "" if cab.size() == 1 else "s"]
+
+func _scorers_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var hn: Dictionary = c.get("hon", {})
+	_title(str(c.get("lgname", "The league")).capitalize(), "Top scorers this season")
+	menu.add_child(_btn("TABLE", "c_table", null, "alt", Vector2(w - 330, 14), Vector2(130, 44), 17))
+	menu.add_child(_btn("TOP SCORERS", "scorers", null, "primary", Vector2(w - 192, 14), Vector2(170, 44), 17))
+	menu.add_child(_back("career", null))
+	var top: Array = hn.get("top", [])
+	if top.is_empty():
+		var el := _label("No goals yet. The list fills up as the season goes.", 22, MUT, font3)
+		el.position = Vector2(0, 220)
+		el.size = Vector2(w, 30)
+		el.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		menu.add_child(el)
+		return
+	var tw := minf(w - 64.0, 900.0)
+	var tx := (w - tw) * 0.5
+	var y0 := 104.0
+	var sc := ScrollContainer.new()
+	sc.position = Vector2(tx, y0)
+	sc.size = Vector2(tw, h - y0 - 16)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu.add_child(sc)
+	var box := Control.new()
+	var rh := 46.0
+	box.custom_minimum_size = Vector2(tw - 12, top.size() * (rh + 4))
+	sc.add_child(box)
+	var place := 0
+	var last_g := -1
+	for i in top.size():
+		var x: Dictionary = top[i]
+		if int(x["g"]) != last_g:
+			place = i + 1
+			last_g = int(x["g"])
+		var mine := bool(x["mine"])
+		var pn := Panel.new()
+		pn.add_theme_stylebox_override("panel", _box(Color(0.2, 0.3, 0.22, 0.95) if mine else Color(S1.r, S1.g, S1.b, 0.92), 10, GOLD if mine else LINE))
+		pn.position = Vector2(0, i * (rh + 4))
+		pn.size = Vector2(tw - 12, rh)
+		pn.mouse_filter = Control.MOUSE_FILTER_PASS
+		box.add_child(pn)
+		var col := GOLD if mine else CHALK
+		var pl := _label(str(place), 21, col, font3)
+		pl.position = Vector2(16, 10)
+		pn.add_child(pl)
+		var sh := _shirt(x.get("k", []), 30)
+		sh.position = Vector2(56, 8)
+		pn.add_child(sh)
+		var nl := _label(_trim("%s  %s" % [str(x["pos"]), str(x["n"])], font3, 21, 260), 21, col, font3)
+		nl.position = Vector2(100, 10)
+		pn.add_child(nl)
+		var cl := _label(_trim(str(x["club"]), font3, 19, tw - 12 - 380 - 110), 19, MUT, font3)
+		cl.position = Vector2(380, 12)
+		pn.add_child(cl)
+		var gl := _label(str(int(x["g"])), 26, col)
+		gl.position = Vector2(tw - 12 - 100, 6)
+		gl.size = Vector2(80, 34)
+		gl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		pn.add_child(gl)
+
+func _cab_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var hn: Dictionary = c.get("hon", {})
+	_title("Trophy cabinet", str(c.get("name", "")).capitalize())
+	menu.add_child(_back("tab", "club"))
+	if hn.is_empty():
+		return
+	var tab := int(hn.get("tab", 0))
+	var nm := ["Trophies", "Awards this season", "Records"]
+	var tw := 240.0
+	var tx := w * 0.5 - (tw * 3 + 20) * 0.5
+	for k in 3:
+		menu.add_child(_btn(nm[k].to_upper(), "cab_tab", k, "primary" if k == tab else "alt", Vector2(tx + k * (tw + 10), 100), Vector2(tw, 46), 17))
+	var y0 := 160.0
+	if tab == 0:
+		# the shelf: one cup for each kind of honour, with how many
+		var cnt: Dictionary = hn.get("cnt", {})
+		var kinds := [["lg", "League titles", GOLD], ["cup", "Cups", GOLD], ["up", "Promotions", GREEN], ["boot", "Golden Boots", GOLD], ["pots", "Player of the Season", CHALK], ["mots", "Manager of the Season", CHALK]]
+		var sw := (w - 48 - 5 * 10) / 6.0
+		for k in kinds.size():
+			var kd: Array = kinds[k]
+			var n := int(cnt.get(str(kd[0]), 0))
+			var pn := _card_panel(Vector2(24 + k * (sw + 10), y0), Vector2(sw, 150))
+			items.append([pn, Vector2(0, 30), 0.04 * k])
+			var ic := _icon("cup", 48, kd[2] if n > 0 else Color(1, 1, 1, 0.18))
+			ic.position = Vector2(sw * 0.5 - 24, 14)
+			pn.add_child(ic)
+			var nl := _label(str(n), 34, kd[2] if n > 0 else MUT)
+			nl.position = Vector2(0, 62)
+			nl.size = Vector2(sw, 40)
+			nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pn.add_child(nl)
+			var tl := _label(_trim(str(kd[1]), font3, 16, sw - 12), 16, MUT, font3)
+			tl.position = Vector2(0, 108)
+			tl.size = Vector2(sw, 24)
+			tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			pn.add_child(tl)
+		var cab: Array = hn.get("cab", [])
+		var ly := y0 + 166.0
+		if cab.is_empty():
+			var el := _label("Nothing in the cabinet yet. Win the league, a cup or an award and it goes here.", 21, MUT, font3)
+			el.position = Vector2(24, ly + 20)
+			el.size = Vector2(w - 48, 30)
+			el.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(el)
+			return
+		var sc := ScrollContainer.new()
+		sc.position = Vector2(24, ly)
+		sc.size = Vector2(w - 48, h - ly - 16)
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		menu.add_child(sc)
+		var box := Control.new()
+		box.custom_minimum_size = Vector2(w - 60, cab.size() * 40)
+		sc.add_child(box)
+		for i in cab.size():
+			var e: Dictionary = cab[cab.size() - 1 - i]
+			var sl := _label("Season %d" % int(e["s"]), 19, MUT, font3)
+			sl.position = Vector2(8, i * 40 + 6)
+			box.add_child(sl)
+			var hl := _label(_trim(str(e["t"]), font3, 21, w - 60 - 140), 21, GOLD if str(e["k"]) in ["lg", "cup"] else CHALK, font3)
+			hl.position = Vector2(130, i * 40 + 4)
+			box.add_child(hl)
+		return
+	if tab == 1:
+		var aw: Array = hn.get("aw", [])
+		if aw.is_empty():
+			var el2 := _label("The first awards come at the end of the month: Player and Manager of the Month.", 21, MUT, font3)
+			el2.position = Vector2(24, y0 + 60)
+			el2.size = Vector2(w - 48, 30)
+			el2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(el2)
+			return
+		var sc2 := ScrollContainer.new()
+		sc2.position = Vector2(24, y0)
+		sc2.size = Vector2(w - 48, h - y0 - 16)
+		sc2.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		menu.add_child(sc2)
+		var box2 := Control.new()
+		var rh := 58.0
+		box2.custom_minimum_size = Vector2(w - 60, aw.size() * (rh + 6))
+		sc2.add_child(box2)
+		for i in aw.size():
+			var a: Dictionary = aw[aw.size() - 1 - i]
+			var mine := bool(a["mine"])
+			var pn2 := Panel.new()
+			pn2.add_theme_stylebox_override("panel", _box(Color(0.2, 0.3, 0.22, 0.95) if mine else Color(S1.r, S1.g, S1.b, 0.92), 12, GOLD if mine else LINE))
+			pn2.position = Vector2(0, i * (rh + 6))
+			pn2.size = Vector2(w - 60, rh)
+			pn2.mouse_filter = Control.MOUSE_FILTER_PASS
+			box2.add_child(pn2)
+			var ic2 := _icon("cup", 30, GOLD if mine else MUT)
+			ic2.position = Vector2(14, 14)
+			pn2.add_child(ic2)
+			var t1 := _label(_trim(str(a["t"]), font3, 21, 380), 21, GOLD if mine else CHALK, font3)
+			t1.position = Vector2(58, 4)
+			pn2.add_child(t1)
+			var t2 := _label(_trim(str(a["v"]), font3, 17, 380), 17, MUT, font3)
+			t2.position = Vector2(58, 31)
+			pn2.add_child(t2)
+			var sh2 := _shirt(a.get("kit", []), 30)
+			sh2.position = Vector2(460, 14)
+			pn2.add_child(sh2)
+			var t3 := _label(_trim(str(a["who"]), font3, 20, w - 60 - 520), 20, CHALK, font3)
+			t3.position = Vector2(504, 16)
+			pn2.add_child(t3)
+		return
+	var rec: Array = hn.get("rec", [])
+	var cw := (w - 48 - 14) * 0.5
+	var rh3 := 56.0
+	for i in rec.size():
+		var r: Array = rec[i]
+		var col_i := i % 2
+		var row_i := i / 2
+		var pn3 := _card_panel(Vector2(24 + col_i * (cw + 14), y0 + row_i * (rh3 + 8)), Vector2(cw, rh3))
+		items.append([pn3, Vector2(0, 20), 0.03 * i])
+		var l1 := _label(str(r[0]), 16, MUT, font3)
+		l1.position = Vector2(16, 4)
+		pn3.add_child(l1)
+		var none := str(r[1]) == "None yet"
+		var l2 := _label(_trim(str(r[1]), font3, 20, cw - 32), 20, MUT if none else CHALK, font3)
+		l2.position = Vector2(16, 26)
+		pn3.add_child(l2)
