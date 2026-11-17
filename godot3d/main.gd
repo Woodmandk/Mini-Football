@@ -1049,6 +1049,9 @@ func _ready() -> void:
 				print("ASSIST after exit tap assist=", assist, " menu=", hud.menu_name)
 				if menu_arg == "assist":
 					_action("as_open")
+					for la in ["inbox", "cal", "cab", "scorers", "tnews", "youth"]:
+						_action(la)
+						print("ASSIST look ", la, " -> ", hud.menu_name)
 					menu_arg = "main"
 				else:
 					_as_leave(false)
@@ -8011,8 +8014,10 @@ func _bot_inputs(dt: float) -> void:
 # everything: the squad, the table, the transfers, the club and the office. What he changes there is not done: it goes
 # to the manager as a suggestion, and the manager says yes or no.
 const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
-	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt"]
-const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan"]
+	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
+	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back"]
+const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
+	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus"]
 
 func _cv_tick(dt: float) -> void:
 	if net.role != "host" or not net.connected or rk_on or rk_looking or not in_career or not carc.has_save():
@@ -8067,7 +8072,7 @@ func _as_take(act: String, arg) -> bool:
 		# back inside the career's menus: to its home screen, never out of the room
 		_show_hub()
 		return true
-	if act in ["c_play", "cup_play"]:
+	if act in ["c_play", "cup_play", "eu_play"]:
 		co_rdy[1] = not co_rdy[1]
 		net.send({"_": "rdy", "r": co_rdy[1]})
 		au["blip2"].play()
@@ -8097,7 +8102,7 @@ func _as_take(act: String, arg) -> bool:
 		return true
 	if act in AS_LOOK or act == "key":
 		return false
-	hud.toast("Only the manager can do that")
+	hud.toast("The manager decides that. Your changes go to him as suggestions.")
 	return true
 
 func _as_suggest(act: String, arg) -> void:
@@ -8121,6 +8126,26 @@ func _pn(i: int) -> String:
 # What a suggestion does, in words. The host's phone works it out again: if it does not say the same, it is out of date.
 func _sug_text(act: String, arg) -> String:
 	match act:
+		"bid_acc", "bid_rej", "bid_more":
+			var bm: Dictionary = car.mail(int(arg))
+			if bm.is_empty() or str(bm.get("st", "")) != "open":
+				return ""
+			return ("SELL %s FOR %s" if act == "bid_acc" else ("SAY NO TO THE BID FOR %s" if act == "bid_rej" else "ASK FOR MORE FOR %s")) % ([str(bm["pn"]), car.money(int(bm["amt"]))] if act == "bid_acc" else [str(bm["pn"])])
+		"mail_pick":
+			var ma: Array = arg if arg is Array else []
+			if ma.size() < 2:
+				return ""
+			var mm: Dictionary = car.mail(int(ma[0]))
+			var mo: Array = mm.get("opts", [])
+			if mm.is_empty() or str(mm.get("st", "")) != "open" or int(ma[1]) < 0 or int(ma[1]) >= mo.size():
+				return ""
+			return "ANSWER: %s" % str(mo[int(ma[1])][0]).to_upper()
+		"c_rest":
+			return "REST THE TIRED PLAYERS"
+		"y_sign", "y_prom", "y_rel", "y_send":
+			return {"y_sign": "SIGN YOUTH TALENT %d", "y_prom": "PROMOTE ACADEMY PLAYER %d", "y_rel": "RELEASE ACADEMY PLAYER %d", "y_send": "SEND A SCOUT (%d)"}[act] % ((int(arg) if arg != null else 0) + 1)
+		"c_focus":
+			return "CHANGE %s'S TRAINING FOCUS" % _pn(car_sel) if car_sel >= 0 else ""
 		"c_train":
 			return "TRAIN %s" % _pn(car_sel) if car_sel >= 0 else ""
 		"c_abuy":
