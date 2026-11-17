@@ -3921,6 +3921,16 @@ func _net_poll() -> void:
 							_as_open()
 						elif screen == "menu" or assist or (screen == "match" and state == "full"):
 							hud.refresh(_menu_info())
+			"simr":
+				if net.role == "guest" and m.get("d") is Dictionary:
+					sim_res = m["d"]
+					# a simulated match played together pays the friend's own club too
+					var cp9 = m.get("co")
+					if cp9 is Array and cp9.size() >= 2 and car_main.has_save():
+						car_main.coop_reward(int(cp9[0]), bool(cp9[1]))
+						car_main.save()
+					if assist:
+						hud.show_menu("simres", _menu_info())
 			"sug":
 				if net.role == "host" and in_career and car == carc:
 					sugs.append(m)
@@ -8017,7 +8027,7 @@ const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", 
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
 	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
-	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus"]
+	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim"]
 
 func _cv_tick(dt: float) -> void:
 	if net.role != "host" or not net.connected or rk_on or rk_looking or not in_career or not carc.has_save():
@@ -8142,6 +8152,8 @@ func _sug_text(act: String, arg) -> String:
 			return "ANSWER: %s" % str(mo[int(ma[1])][0]).to_upper()
 		"c_rest":
 			return "REST THE TIRED PLAYERS"
+		"c_sim":
+			return "SIMULATE THE NEXT MATCH"
 		"y_sign", "y_prom", "y_rel", "y_send":
 			return {"y_sign": "SIGN YOUTH TALENT %d", "y_prom": "PROMOTE ACADEMY PLAYER %d", "y_rel": "RELEASE ACADEMY PLAYER %d", "y_send": "SEND A SCOUT (%d)"}[act] % ((int(arg) if arg != null else 0) + 1)
 		"c_focus":
@@ -8307,7 +8319,7 @@ func _car_opts() -> void:
 
 # Simulate your next match instead of playing it: the score comes from the two squads' strength.
 func _sim_mine() -> void:
-	if not in_career or car != carc or assist or net.role != "" or car.d.has("sacked"):
+	if not in_career or car != carc or assist or net.role == "guest" or car.d.has("sacked"):
 		return
 	var cupt: bool = car.cup_due()
 	var eut: bool = not cupt and car.eu_due()
@@ -8346,6 +8358,10 @@ func _sim_mine() -> void:
 		"pens": pens, "date": date, "what": what, "lines": car_lines.duplicate()}
 	score = keep[0]
 	so_win = int(keep[1])
+	if net.role == "host" and net.connected:
+		# playing together: the friend sees the same result, and the career catches up on his phone
+		net.send({"_": "simr", "d": sim_res, "co": [car.last_coins, int(sim_res.get("mine", 0)) > int(sim_res.get("theirs", 0))]})
+		cv_last = 0
 	hud.show_menu("simres", _menu_info())
 
 # The days between two matches go by on a calendar page, with the news of those days.
