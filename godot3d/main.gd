@@ -791,6 +791,42 @@ func _ready() -> void:
 				else:
 					hub_tab = "career" if wt == "wtest2" else "transfers"
 					menu_arg = "main"
+			if menu_arg in ["ftest0", "ftest1", "ftest2"]:
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				var nin := 0
+				for r9 in 12:
+					if car.cup_due():
+						for l9 in car.cup_finish(2, 1, true):
+							if "INJURED" in str(l9):
+								nin += 1
+					var c9: Array = []
+					for i9 in car.d["xi"]:
+						c9.append(car.cond_of(car.d["squad"][int(i9)]))
+					print("FIT r", r9, " ", car.date_text(car.now()), " xi ", c9)
+					for l9 in car.finish_match(1, 0, []):
+						if "INJURED" in str(l9):
+							nin += 1
+							print("FIT ", l9)
+				print("FIT injuries in 12+ matches: ", nin)
+				# a busy week: two matches three days apart
+				var xi9: Array = car.d["xi"]
+				car.d["squad"][int(xi9[3])]["cond"] = 58
+				car.d["squad"][int(xi9[3])]["cday"] = car.now()
+				car.d["squad"][int(xi9[7])]["inj"] = car.now() + 18
+				car.d["squad"][int(xi9[7])]["injn"] = "a hamstring strain"
+				var bi9 := -1
+				for j9 in (car.d["squad"] as Array).size():
+					if not xi9.has(j9) and str(car.d["squad"][j9]["pos"]) != "GK":
+						bi9 = j9
+				car.d["squad"][bi9]["inj"] = car.now() + 30
+				car.d["squad"][bi9]["injn"] = "a knee injury"
+				print("FIT swap msg: ", car.swap(int(xi9[5]), bi9))
+				if menu_arg == "ftest2":
+					print("FIT rotate: ", car.rotate())
+				set_meta("tsel", -1 if menu_arg == "ftest0" else (int(xi9[7]) if menu_arg == "ftest1" else int(xi9[3])))
+				menu_arg = "squad9"
 			if menu_arg in ["caltest", "simtest", "advtest", "csettest", "calhome"]:
 				carc.new_career(carc.weakest(3), false)
 				carc.set_mode("simple")
@@ -1279,6 +1315,8 @@ func _ready() -> void:
 					car_sel = 9
 					if menu_arg == "squad7":
 						car.d["squad"][9]["tp"] = 2
+				elif has_meta("tsel"):
+					car_sel = int(get_meta("tsel"))
 				menu_arg = "squad"
 			if menu_arg in ["ftteams", "ftlobby"]:
 				# the friend's room: team picker with MY CLUB, and the lobby with the friend's own club
@@ -1996,7 +2034,7 @@ func _sub_do(t: int, slot: int, b: int) -> void:
 	p.ovr = Career.ovr_of(pl) + off_pos
 	p.ab = Career.ab_of(pl) if pl.has("ab") else []
 	_derive(p)
-	p.fit = 1.0
+	p.fit = _start_fit(p)
 	sub_left2[t] = int(sub_left2[t]) - 1
 	subs_left = int(sub_left2[0])
 	if net.role == "host":
@@ -2059,7 +2097,8 @@ func _car_info() -> Dictionary:
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
 			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl),
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
-			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr")})
+			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"),
+			"cond": car.cond_of(pl) if car.eur else -1, "inj": car.injured(pl) if car.eur else false, "injt": car.inj_text(pl) if car.eur and car.injured(pl) else ""})
 	var tp_all := 0
 	for pl in d["squad"]:
 		tp_all += int(pl.get("tp", 0))
@@ -2107,6 +2146,12 @@ func _live_info() -> Dictionary:
 			"from": str(CLUBS[int(x[5])]["n"]).capitalize(), "to": str(CLUBS[int(x[6])]["n"]).capitalize(), "kt": CLUBS[int(x[6])]["k"], "fee": car.money(int(x[7])),
 			"near": car.ids().has(int(x[5])) or car.ids().has(int(x[6]))})
 	return {"win": car.window(), "won": car.windows_on(), "inbox": ib, "unread": car.unread(), "sel": mail_sel, "deals": dl}
+
+# In the career your men start a match as fit as they are (tired legs are slower); everyone else is fresh.
+func _start_fit(p) -> float:
+	if career_on and car.eur and p.team == 0 and p.sq >= 0 and p.sq < (car.d["squad"] as Array).size() and net.role != "guest":
+		return clampf(car.cond_of(car.d["squad"][p.sq]) / 100.0, 0.45, 1.0)
+	return 1.0
 
 # Scouting and the academy for the hud.
 func _youth_info() -> Dictionary:
@@ -2971,10 +3016,14 @@ func _action(act: String, arg = null) -> void:
 			# a man dropped onto another: they change places (the spots stay)
 			var ws: Array = arg
 			if int(ws[0]) != int(ws[1]):
-				car.swap(int(ws[0]), int(ws[1]))
-				au["blip2"].play()
+				car_msg = car.swap(int(ws[0]), int(ws[1]))
+				if car_msg == "":
+					au["blip2"].play()
 			car_sel = -1
-			car_msg = ""
+			hud.refresh(_menu_info())
+		"c_rest":
+			car_msg = car.rotate()
+			car_sel = -1
 			hud.refresh(_menu_info())
 		"c_lay0":
 			car.clear_lay()
@@ -3750,7 +3799,7 @@ func _begin_match(with_intro: bool) -> void:
 			# the friend's phone shows the benches too (and asks the host to make its changes)
 			net.send({"_": "bn", "b": sub_bench})
 	for p in players:
-		p.fit = 1.0
+		p.fit = _start_fit(p)
 	test_t = Time.get_ticks_msec() / 1000.0
 	car_goals = []
 	car_lines = []
@@ -8077,8 +8126,8 @@ func _adv_show(from: int) -> void:
 		if int(wv[1]) > from and int(wv[1]) <= to:
 			dl_day = int(wv[1])
 	for m in car.inbox():
-		if int(m["day"]) == car.now() and str(m["k"]) in ["deadline", "window"]:
-			news.append(["window", str(m["t"])])
+		if int(m["day"]) == car.now() and str(m["k"]) in ["deadline", "window", "med"]:
+			news.append(["med" if str(m["k"]) == "med" else "window", str(m["t"])])
 	for x in car.deals():
 		if int(x[0]) > from and int(x[0]) <= to and nd_deal < 2:
 			news.append(["deal", ("Deadline day: " if int(x[0]) == dl_day else "") + car.deal_text(x)])

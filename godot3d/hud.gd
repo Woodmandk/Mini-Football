@@ -327,6 +327,9 @@ func _mw() -> String:
 func _ord(n: int) -> String:
 	return Career.ordinal(n)
 
+func _fit_col(c: int) -> Color:
+	return GREEN if c >= 80 else (GOLD if c >= 60 else Color(0.92, 0.35, 0.3))
+
 # One squad player as a button: position stripe, name, rating.
 func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dictionary, chosen: bool, wrong: bool) -> Button:
 	var nm := str(pl["n"])
@@ -356,6 +359,30 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 		tpd.size = Vector2(22, 15)
 		tpd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.add_child(tpd)
+	# the career: how fit he is (a thin bar along the bottom) and a red cross when he is hurt
+	var cnd := int(pl.get("cond", -1))
+	if cnd >= 0:
+		var fb0 := ColorRect.new()
+		fb0.color = Color(1, 1, 1, 0.12)
+		fb0.position = Vector2(18, sz.y - 5)
+		fb0.size = Vector2(sz.x - 26, 3)
+		fb0.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(fb0)
+		var fb1 := ColorRect.new()
+		fb1.color = _fit_col(cnd)
+		fb1.position = Vector2(18, sz.y - 5)
+		fb1.size = Vector2((sz.x - 26) * cnd / 100.0, 3)
+		fb1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(fb1)
+	if bool(pl.get("inj", false)):
+		b.modulate = Color(1, 1, 1, 0.75)
+		var cr := _label("+", 22, Color.WHITE, font)
+		cr.add_theme_stylebox_override("normal", _box(Color(0.86, 0.22, 0.2), 6))
+		cr.position = Vector2(sz.x - 26, 4)
+		cr.size = Vector2(22, 22)
+		cr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		cr.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		b.add_child(cr)
 	if wrong:
 		var wr := ColorRect.new()
 		wr.color = Color(1.0, 0.85, 0.1)
@@ -1906,7 +1933,17 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					meta += "  ·  %s a week  ·  %s" % [Career.wage_text(int(sp2.get("wk", 0))), "last season" if int(sp2.get("ct", 1)) <= 1 else "%d seasons" % int(sp2.get("ct", 1))]
 				elif not eur3:
 					meta += "  ·  %d goals" % int(sp2["g"])
-				var dd := _label(meta, 20, GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT, font3)
+				var fit_t := ""
+				if int(sp2.get("cond", -1)) >= 0:
+					fit_t = ("Injured: " + str(sp2.get("injt", ""))) if bool(sp2.get("inj", false)) else "Fitness %d%%" % int(sp2["cond"])
+				var hurt := bool(sp2.get("inj", false))
+				var dd := _label(fit_t if hurt else meta, 20, Color(0.95, 0.45, 0.4) if hurt else (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT), font3)
+				if fit_t != "" and not hurt:
+					var ftl := _label(fit_t, 20, _fit_col(int(sp2["cond"])), font3)
+					ftl.position = Vector2(bw3 - 250, 16)
+					ftl.size = Vector2(180, 28)
+					ftl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+					dp.add_child(ftl)
 				dd.position = Vector2(104, 46)
 				dd.clip_text = true
 				dd.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -2007,11 +2044,14 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  ·  %s" % _mp(int(sp2["sell"])), "c_sell", null, "ghost", Vector2(bx3 + 18 + tw3 + 10, dy + dph - 70), Vector2(bw3 - 36 - tw3 - 10, 56), 20)
 					menu.add_child(slb)
 			else:
-				var hint2 := _label("Tap a player to see him.\nDrag a player to move him, or onto a team mate to swap.\nA yellow dot: he plays out of position.", 20, MUT, font3)
+				var fit_on := not sqd.is_empty() and int((sqd[0] as Dictionary).get("cond", -1)) >= 0
+				var hint2 := _label("Tap a player to see him.\nDrag a player to move him, or onto a team mate to swap.\nA yellow dot: he plays out of position." + ("\nThe bar under a name: his fitness. A red cross: injured." if fit_on else ""), 20, MUT, font3)
 				hint2.position = Vector2(18, 14)
-				hint2.size = Vector2(bw3 - 36, dp.size.y - 28)
 				hint2.autowrap_mode = TextServer.AUTOWRAP_WORD
+				hint2.size = Vector2(bw3 - 36, dp.size.y - 28 - (70 if fit_on else 0))
 				dp.add_child(hint2)
+				if fit_on:
+					menu.add_child(_btn("REST TIRED PLAYERS", "c_rest", null, "alt", Vector2(bx3 + 18, dy + dp.size.y - 70), Vector2(bw3 - 36, 56), 20))
 			if str(c3.get("msg", "")) != "":
 				var ms := _label(str(c3.get("msg", "")), 19, GOLD, font3)
 				ms.position = Vector2(bx3 + 18, dy + dp.size.y - 100)
@@ -3075,13 +3115,13 @@ func _adv_page(info: Dictionary, w: float, h: float, anim: bool) -> void:
 	var hl := _label("While the days go by", 26, CHALK)
 	hl.position = Vector2(nx, 60)
 	menu.add_child(hl)
-	var icons := {"result": "play", "table": "table", "cup": "cup", "market": "swap", "board": "board", "deal": "swap", "bid": "mail", "window": "cal"}
+	var icons := {"result": "play", "table": "table", "cup": "cup", "market": "swap", "board": "board", "deal": "swap", "bid": "mail", "window": "cal", "med": "plus"}
 	var rows := []
 	for k in news.size():
 		var it: Array = news[k]
 		var ry := 104.0 + k * 50.0
 		var row := _card_panel(Vector2(nx, ry), Vector2(nw, 44))
-		var ic := _icon(str(icons.get(str(it[0]), "play")), 24, GOLD if str(it[0]) in ["cup", "bid", "window"] else MUT)
+		var ic := _icon(str(icons.get(str(it[0]), "play")), 24, GOLD if str(it[0]) in ["cup", "bid", "window"] else (Color(0.95, 0.45, 0.4) if str(it[0]) == "med" else MUT))
 		ic.position = Vector2(14, 10)
 		row.add_child(ic)
 		var tl := _label(str(it[1]), 20, CHALK, font3)
@@ -4520,7 +4560,7 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		var b := _btn("", "mail", int(m["id"]), "alt", Vector2(0, i * (rh + 6)), Vector2(lw - 12, rh), 16)
 		b.add_theme_stylebox_override("normal", _box(Color(S1.r, S1.g, S1.b, 0.95) if not on else Color(0.2, 0.32, 0.24, 0.98), 12, GOLD if open_bid else (GREEN if on else LINE)))
 		box.add_child(b)
-		var ic: Control = _icon({"bid": "mail", "deal": "swap", "window": "cal", "deadline": "cal", "info": "office"}.get(str(m["k"]), "mail"), 24, GOLD if open_bid or str(m["k"]) == "deadline" else MUT)
+		var ic: Control = _icon({"bid": "mail", "deal": "swap", "window": "cal", "deadline": "cal", "info": "office", "med": "plus"}.get(str(m["k"]), "mail"), 24, GOLD if open_bid or str(m["k"]) == "deadline" else MUT)
 		ic.position = Vector2(12, 20)
 		b.add_child(ic)
 		var tf: Font = font2 if bool(m.get("rd", false)) else font3
