@@ -515,6 +515,12 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			gate = int(round(gate * 0.5))
 		d["coins"] = int(d["coins"]) + gate
 		lines.append("+%s FROM THE GATE" % money(gate))
+	var was_on := []
+	for i in (played if not played.is_empty() else d["xi"]):
+		was_on.append(int(i))
+	for i in (d["squad"] as Array).size():
+		if not was_on.has(i):
+			_form_rest(d["squad"][i])
 	for i in (played if not played.is_empty() else d["xi"]):
 		var pl: Dictionary = d["squad"][int(i)]
 		pl["apps"] = int(pl["apps"]) + 1
@@ -526,6 +532,11 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 				pl["cg"] = int(pl.get("cg", 0)) + 1
 				_goal_add(me, pl)
 		pl["ca"] = int(pl.get("ca", 0)) + 1
+		var ng := 0
+		for s2 in scorers:
+			if int(s2) == int(i):
+				ng += 1
+		_form_add(pl, mine, theirs, ng)
 		_rec_player(pl)
 		pl["xp"] = int(pl["xp"]) + xp
 		if eur:
@@ -2720,6 +2731,8 @@ func _after_match(played: Array, won: bool, lines: Array, rng: RandomNumberGener
 	var pl_set := []
 	for x in played:
 		pl_set.append(int(x))
+	_streak_add(won)
+	_bold_result(won, lines)
 	for i in sq.size():
 		var pl: Dictionary = sq[i]
 		var r: int = int(ro.get(i, 2))
@@ -2738,9 +2751,13 @@ func _after_match(played: Array, won: bool, lines: Array, rng: RandomNumberGener
 				pl["xp"] = 100
 		m = clampi(m, 5, 100)
 		pl["mo"] = m
+		_promise_check(pl, lines)
+		m = int(pl["mo"])
 		var nm := str(pl["n"]).to_upper()
 		if m0 >= 35 and m < 35:
 			lines.append("%s IS UNHAPPY: HE %s" % [nm, ROLE_WANT[r]])
+			if r <= 2 and not pl.has("pr") and not pl.has("tl") and not pl.has("tr"):
+				_talk_mail(pl, r)
 		if m < 20 and not pl.has("tr"):
 			pl["tr"] = true
 			lines.append("%s HAS ASKED TO LEAVE THE CLUB" % nm)
@@ -2911,7 +2928,11 @@ func world_tick(lines: Array) -> void:
 		# men on the transfer list: clubs look at them first
 		for li in _listed_free():
 			var lpl: Dictionary = d["squad"][li]
+<<<<<<< HEAD
+			var lch := interest(lpl) + (0.15 if bool(wn["deadline"]) else 0.0)
+=======
 			var lch := 0.45 + (0.3 if bool(wn["deadline"]) else 0.0) + clampf((ovr_of(lpl) - my_strength()) * 0.03, -0.25, 0.2)
+>>>>>>> origin/main
 			if rng.randf() < lch:
 				_cpu_bid(rng, lines, li)
 		var ch := 0.25 + (0.4 if bool(wn["deadline"]) else 0.0)
@@ -2919,6 +2940,8 @@ func world_tick(lines: Array) -> void:
 			ch = 0.0 # the first days of a new career: let the man settle in
 		if rng.randf() < ch:
 			_cpu_bid(rng, lines)
+	if eur:
+		_press_tick(rng, lines)
 
 func _deal_mail(got: Array) -> void:
 	if got.is_empty():
@@ -3014,7 +3037,7 @@ func _cpu_bid(rng: RandomNumberGenerator, lines: Array, force := -1) -> void:
 		var pl: Dictionary = sq[i]
 		if open.has(str(pl["n"])):
 			continue
-		var wv := value(pl) * rng.randf_range(0.5, 1.5) * (2.5 if pl.has("tr") else 1.0)
+		var wv := value(pl) * rng.randf_range(0.5, 1.5) * (2.5 if pl.has("tr") else 1.0) * (0.4 + pform(pl) / 70.0)
 		if wv > bw:
 			bw = wv
 			best = i
@@ -3038,9 +3061,13 @@ func _cpu_bid(rng: RandomNumberGenerator, lines: Array, force := -1) -> void:
 		return
 	var c: int = cand[rng.randi() % cand.size()]
 	# a man you have listed is cheaper: they know you want to sell
+<<<<<<< HEAD
+	var amt := int(round(value(pl) * (rng.randf_range(0.7, 1.0) if listed(pl) else rng.randf_range(0.8, 1.25)) * (0.85 + pform(pl) * 0.003) / 5.0)) * 5
+=======
 	var amt := int(round(value(pl) * (rng.randf_range(0.7, 1.0) if listed(pl) else rng.randf_range(0.8, 1.25)) / 5.0)) * 5
+>>>>>>> origin/main
 	_mail("bid", "%s bid for %s" % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize()],
-		"%s want %s (%s, %d, age %d) and offer %s. The offer stands for two matches." % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize(), str(pl["pos"]), o, int(pl["age"]), money(amt)],
+		"%s want %s (%s, %d, age %d) and offer %s. Their scouts say his form is %s. The offer stands for two matches." % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize(), str(pl["pos"]), o, int(pl["age"]), money(amt), form_name(pform(pl)).to_lower()],
 		{"c": c, "pn": str(pl["n"]), "amt": amt, "st": "open", "left": 1, "cnt": 0})
 	lines.append("%s HAVE BID %s FOR %s" % [str(W[c]["n"]), money(amt), str(pl["n"]).to_upper()])
 
@@ -3779,3 +3806,222 @@ func eu_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	world_tick(lines)
 	save()
 	return lines
+
+
+# ---------------------------------------------------------------- press conferences and promises
+# Now and then the press wants a word: after a run of results, before a big night, about your best man or about
+# the season. Your answer moves the players' mood, the board's confidence and sometimes one man. A bold answer
+# before a big match is remembered: win and the board loves it, lose and it costs. Skip the press and the board
+# notices.
+# A man who is unhappy about his playing time comes to your office. Promise him matches and you must keep it:
+# he has to play in enough of the next matches, or he is angry and asks to leave, and the dressing room sees it.
+const PROMISE_N := 5 # matches to keep a promise in
+const PROMISE_NEED := 3 # of them he must play
+
+func _team_mood(n: int) -> void:
+	for pl in d["squad"]:
+		pl["mo"] = clampi(int(pl.get("mo", 65)) + n, 5, 100)
+
+func _streak() -> int:
+	return int(d.get("strk", 0))
+
+func _press_tick(rng: RandomNumberGenerator, lines: Array) -> void:
+	# an old press conference you did not answer is gone, and the board did not like it
+	for m in inbox():
+		if str(m["k"]) == "press" and str(m.get("st", "")) == "open":
+			m["left"] = int(m.get("left", 1)) - 1
+			if int(m["left"]) < 0:
+				m["st"] = "gone"
+				_conf_add(-1)
+	d["pcn"] = int(d.get("pcn", 0)) + 1
+	if today() < 0:
+		return
+	var sk := _streak()
+	var q := {}
+	var rk := _ranks()
+	var last := str(d.get("pclast", ""))
+	var gap := int(d["pcn"])
+	# the press do not come after every match, and not with the same question twice in a row
+	if gap < 2:
+		return
+	var pos := int(rk.get(int(d["club"]), 0))
+	var topic := ""
+	if sk <= -3 and last != "bad":
+		topic = "bad"
+		q = {"t": "Is the job getting to you?", "b": "%d matches without a win. The press want to know if you can turn it round." % (-sk),
+			"o": [["We will fight our way out of this. Together.", {"tm": 3}, "The players liked hearing it."],
+				["The players have to look at themselves.", {"tm": -5, "bd": 3}, "The board liked it. The dressing room did not."],
+				["It is on me. I take full responsibility.", {"tm": 4, "bd": -1}, "The players stand by you. The board is less sure."]]}
+	elif sk >= 3 and last != "good":
+		topic = "good"
+		var aim := "the title" if pos <= 3 else "promotion" if int(league().get("up", 0)) > 0 and pos <= int(league()["up"]) + 2 else "the top half"
+		q = {"t": "Are you going for %s?" % aim, "b": "%d wins in a row. The press smell something big." % sk,
+			"o": [["Yes. We are going for %s." % aim, {"tm": 4, "bd": 2}, "Big words. The players are fired up."],
+				["One match at a time.", {"tm": 1}, "A calm answer. Nothing changes."],
+				["The others are still the favourites.", {"tm": -2, "bd": -1}, "The players wanted more belief from you."]]}
+	elif (eu_due() and eu_ko()) or cup_due():
+		topic = "big"
+		var what := ("%s, %s" % [EU_NAME.capitalize(), eu_round_name().capitalize()]) if eu_due() else "the cup tie"
+		q = {"t": "A big night: %s" % what, "b": "The press ask what your message is to the players before %s." % what,
+			"o": [["We fear nobody. We go there to win.", {"tm": 4, "bold": 1}, "Bold. Win and the board will love it; lose and they remember."],
+				["We are the underdogs. No pressure on us.", {"tm": 1, "bd": 1}, "The pressure is off the players."],
+				["The other side is very good. Respect.", {"tm": -1}, "Polite, but a bit flat."]]}
+	elif gap >= 4 and rng.randf() < 0.55:
+		topic = "talk"
+		var top := -1
+		var sq: Array = d["squad"]
+		for i in sq.size():
+			if top < 0 or int(sq[i].get("cg", 0)) * 10 + ovr_of(sq[i]) > int(sq[top].get("cg", 0)) * 10 + ovr_of(sq[top]):
+				top = i
+		if top >= 0 and rng.randf() < 0.5:
+			var tn := str(sq[top]["n"]).capitalize()
+			q = {"t": "All eyes on %s" % tn, "b": "The press ask about %s: is he the best player in the league?" % tn, "pn": str(sq[top]["n"]),
+				"o": [["He is the best. Nobody comes close.", {"pm": 12, "tm": -1}, "%s loved it. A few others felt left out." % tn],
+					["He is good, but he must keep working.", {"pm": -3, "tm": 1}, "Fair words. The squad agrees."],
+					["I do not talk about one man. We are a team.", {"tm": 2}, "The dressing room liked that."]]}
+		else:
+			q = {"t": "How is the season going?", "b": "You are %s in %s. The press want your view." % [ordinal(pos).to_lower(), league_name().capitalize()],
+				"o": [["We are on track. The plan is working.", {"tm": 2, "bd": 1}, "Calm and sure. Everyone is happy."],
+					["We can do much better than this.", {"tm": -2, "bd": 2}, "The board likes the hunger; the players feel the heat."],
+					["Thank the fans. They carry us.", {"tm": 1, "fan": 1}, "The fans loved it."]]}
+	if q.is_empty():
+		return
+	d["pcn"] = 0
+	d["pclast"] = topic
+	for m in inbox():
+		if str(m["k"]) == "press" and str(m.get("st", "")) == "open":
+			m["st"] = "gone"
+	_mail("press", "Press: " + str(q["t"]), str(q["b"]), {"opts": q["o"], "pn": str(q.get("pn", "")), "st": "open", "left": 1})
+	lines.append("PRESS CONFERENCE: %s" % str(q["t"]).to_upper())
+
+# An unhappy man knocks on your door.
+func _talk_mail(pl: Dictionary, r: int) -> void:
+	var nm := str(pl["n"]).capitalize()
+	_mail("talk", "%s wants to talk" % nm, "%s is not happy. He %s, and he is not getting it. What do you tell him?" % [nm, ROLE_WANT[r].to_lower()],
+		{"pn": str(pl["n"]), "st": "open", "left": 2, "opts": [
+			["I promise you more matches. (%d of the next %d)" % [PROMISE_NEED, PROMISE_N], {"promise": 1, "pm": 15}, "He is happy now. Keep your word: he must play %d of the next %d matches." % [PROMISE_NEED, PROMISE_N]],
+			["Fight for your place in training.", {"fight": 1}, ""],
+			["If you want to go, I will put you on the transfer list.", {"list": 1, "pm": 5}, "He is on the transfer list. Clubs can bid for him."]]})
+
+# you pick answer `k` in a press conference or a talk
+func mail_pick(id: int, k: int) -> String:
+	var m := mail(id)
+	if m.is_empty() or str(m.get("st", "")) != "open":
+		return ""
+	var opts: Array = m.get("opts", [])
+	if k < 0 or k >= opts.size():
+		return ""
+	m["rd"] = true
+	m["st"] = "done"
+	m["ans"] = k
+	var fx: Dictionary = opts[k][1]
+	var re := str(opts[k][2])
+	var i := _sq_find(str(m.get("pn", "")))
+	var pl: Dictionary = d["squad"][i] if i >= 0 else {}
+	if fx.has("tm"):
+		_team_mood(int(fx["tm"]))
+	if fx.has("bd"):
+		_conf_add(int(fx["bd"]))
+	if fx.has("bold"):
+		d["bold"] = true
+	if fx.has("fan"):
+		d["fanbuzz"] = int(d.get("fanbuzz", 0)) + int(fx["fan"])
+	if not pl.is_empty():
+		if fx.has("pm"):
+			pl["mo"] = clampi(int(pl.get("mo", 65)) + int(fx["pm"]), 5, 100)
+		if fx.has("promise"):
+			pl["pr"] = {"left": PROMISE_N, "a0": int(pl["apps"])}
+		if fx.has("list"):
+			pl["tl"] = today()
+		if fx.has("fight"):
+			# a man in good form takes it as a challenge; a man who feels ignored does not
+			var rng := RandomNumberGenerator.new()
+			rng.randomize()
+			if rng.randf() < 0.5 + clampf((65 - int(pl.get("mo", 65))) * -0.01, -0.3, 0.2):
+				pl["mo"] = clampi(int(pl.get("mo", 65)) + 6, 5, 100)
+				re = "He nods. He will show you in training."
+			else:
+				pl["mo"] = clampi(int(pl.get("mo", 65)) - 8, 5, 100)
+				re = "He walks out without a word. He is angrier than before."
+	elif fx.has("pm") or fx.has("promise") or fx.has("list") or fx.has("fight"):
+		re = "He is not at the club any more."
+	m["re"] = re
+	save()
+	return re
+
+# after each match: is a promise kept, broken or still running?
+func _promise_check(pl: Dictionary, lines: Array) -> void:
+	if not pl.has("pr"):
+		return
+	var pr: Dictionary = pl["pr"]
+	pr["left"] = int(pr["left"]) - 1
+	var got := int(pl["apps"]) - int(pr["a0"])
+	var nm := str(pl["n"]).capitalize()
+	if got >= PROMISE_NEED:
+		pl.erase("pr")
+		pl["mo"] = clampi(int(pl.get("mo", 65)) + 10, 5, 100)
+		_mail("info", "You kept your word to %s" % nm, "%s got his matches, as you promised. He trusts you, and the dressing room saw it." % nm)
+		_team_mood(1)
+		lines.append("PROMISE KEPT: %s GOT HIS MATCHES" % nm.to_upper())
+	elif int(pr["left"]) <= 0 or PROMISE_NEED - got > int(pr["left"]):
+		pl.erase("pr")
+		pl["mo"] = clampi(int(pl.get("mo", 65)) - 30, 5, 100)
+		pl["tr"] = true
+		_team_mood(-3)
+		_mail("info", "You broke your promise to %s" % nm, "You promised %s matches and he did not get them. He has asked to leave, and the other players noticed." % nm)
+		lines.append("PROMISE BROKEN: %s HAS ASKED TO LEAVE" % nm.to_upper())
+
+# a bold word before a big night: the result decides if it was smart
+func _bold_result(won: bool, lines: Array) -> void:
+	if not bool(d.get("bold", false)):
+		return
+	d.erase("bold")
+	if won:
+		_conf_add(3)
+		_team_mood(2)
+		lines.append("YOU SAID YOU WOULD WIN, AND YOU DID")
+	else:
+		_conf_add(-3)
+		lines.append("BIG WORDS BEFORE THE MATCH, NO WIN: THE BOARD NOTICED")
+
+# the run of results the press talk about: + wins in a row, - matches without a win
+func _streak_add(won: bool) -> void:
+	var sk := _streak()
+	if won:
+		sk = maxi(sk, 0) + 1
+	else:
+		sk = mini(sk, 0) - 1
+	d["strk"] = sk
+
+
+# ---------------------------------------------------------------- form: how well a man has played lately
+# Form (pl["fm"], 0-100, 50 is normal) rises when he plays, wins and scores, falls in defeats, and fades when he
+# sits out. Clubs watch it: a man in good form gets bids, a man who does not play or plays badly gets few or none.
+static func pform(pl: Dictionary) -> int:
+	return int(pl.get("fm", 50))
+
+static func form_name(f: int) -> String:
+	return "SUPERB" if f >= 75 else ("GOOD" if f >= 60 else ("NORMAL" if f >= 42 else ("POOR" if f >= 30 else "AWFUL")))
+
+func _form_add(pl: Dictionary, mine: int, theirs: int, goals: int) -> void:
+	var sc := 52.0 + (16.0 if mine > theirs else (0.0 if mine == theirs else -14.0)) + goals * 22.0
+	if theirs == 0 and str(pl["pos"]) in ["GK", "DF"]:
+		sc += 14.0
+	if theirs >= 3 and str(pl["pos"]) in ["GK", "DF"]:
+		sc -= 10.0
+	pl["fm"] = clampi(int(round(pform(pl) * 0.7 + clampf(sc, 0.0, 100.0) * 0.3)), 5, 99)
+
+func _form_rest(pl: Dictionary) -> void:
+	pl["fm"] = clampi(int(round(pform(pl) * 0.9 + 32.0 * 0.1)), 5, 99)
+
+# how likely clubs bid for a listed man at the next stop: his form above all, then his level, age and future
+func interest(pl: Dictionary) -> float:
+	var f := pform(pl)
+	var o := ovr_of(pl)
+	var ch := 0.08 + (f - 40) * 0.012
+	ch += clampf((o - my_strength()) * 0.02, -0.15, 0.15)
+	if int(pl["age"]) <= 22 and int(pl["pot"]) - o >= 6:
+		ch += 0.1
+	if int(pl["age"]) >= 32:
+		ch -= 0.1
+	return clampf(ch, 0.0, 0.7)

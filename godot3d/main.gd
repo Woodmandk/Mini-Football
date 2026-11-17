@@ -793,6 +793,61 @@ func _ready() -> void:
 				else:
 					hub_tab = "career" if wt == "wtest2" else "transfers"
 					menu_arg = "main"
+			if menu_arg in ["ptest0", "ptest1", "ptest2", "ptest3"]:
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				var pt := menu_arg
+				# a run of wins, so the press come; a benched starter goes unhappy and knocks on the door
+				var sq7: Array = car.d["squad"]
+				var star := int(car.d["xi"][9])
+				sq7[star]["mo"] = 38
+				var bench7: Array = []
+				for i7 in sq7.size():
+					if not (car.d["xi"] as Array).has(i7):
+						bench7.append(i7)
+				car.d["xi"][9] = int(bench7[0])
+				for r7 in 6:
+					if car.cup_due():
+						car.cup_finish(2, 1, true)
+					var l7: Array = car.finish_match(2 if r7 != 4 else 0, 0 if r7 != 4 else 1, [int(car.d["xi"][10])])
+					for x7 in l7:
+						if "PRESS" in str(x7) or "UNHAPPY" in str(x7) or "PROMISE" in str(x7) or "WORDS" in str(x7):
+							print("PLINE ", x7)
+				for m7 in car.inbox():
+					if str(m7["k"]) in ["press", "talk"]:
+						print("PMAIL ", m7["k"], " | ", m7["t"], " | ", m7["st"])
+				var pick := -1
+				var kind7 := "talk" if pt in ["ptest1", "ptest3"] else "press"
+				for m7 in car.inbox():
+					if str(m7["k"]) == kind7 and str(m7["st"]) == "open":
+						pick = int(m7["id"])
+						break
+				if pt == "ptest1" or pt == "ptest2":
+					if pick >= 0:
+						print("PANS ", car.mail_pick(pick, 0))
+				if pt == "ptest3" and pick >= 0:
+					# promise, then keep him on the bench: the promise breaks
+					var pn7 := str(car.mail(pick)["pn"])
+					print("PANS ", car.mail_pick(pick, 0))
+					for r7 in 5:
+						var l8: Array = car.finish_match(1, 0, [])
+						for x7 in l8:
+							if "PROMISE" in str(x7):
+								print("PLINE ", x7)
+					var i9: int = car._sq_find(pn7)
+					if i9 >= 0:
+						print("PMOOD ", car.d["squad"][i9]["mo"], " tr=", car.d["squad"][i9].has("tr"))
+				var fm7 := []
+				for p7 in car.d["squad"]:
+					fm7.append(Career.pform(p7))
+				print("PFORM ", fm7)
+				if pick >= 0:
+					mail_sel = pick
+				else:
+					mail_sel = int(car.inbox()[0]["id"])
+				car.mail_read(mail_sel)
+				menu_arg = "inbox"
 			if menu_arg in ["etest0", "etest1", "etest2", "etest3", "etest4"]:
 				var top0: int = int(ClubDB.start_leagues(Career.FIRST)[0][1])
 				carc.new_career(top0, false)
@@ -2163,7 +2218,11 @@ func _car_info() -> Dictionary:
 	for i in (d["squad"] as Array).size():
 		var pl: Dictionary = d["squad"][i]
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
+<<<<<<< HEAD
+			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl), "tl": Career.listed(pl), "fm": Career.pform(pl),
+=======
 			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl), "tl": Career.listed(pl),
+>>>>>>> origin/main
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
 			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"),
 			"cond": car.cond_of(pl) if car.eur else -1, "inj": car.injured(pl) if car.eur else false, "injt": car.inj_text(pl) if car.eur and car.injured(pl) else ""})
@@ -2752,6 +2811,12 @@ func _action(act: String, arg = null) -> void:
 			car_msg = ""
 			mail_sel = int(arg)
 			car.mail_read(mail_sel)
+			hud.refresh(_menu_info())
+		"mail_pick":
+			var mp2: Array = arg
+			car_msg = ""
+			car.mail_pick(int(mp2[0]), int(mp2[1]))
+			au["blip2"].play()
 			hud.refresh(_menu_info())
 		"bid_acc", "bid_rej", "bid_more":
 			car_msg = car.bid_answer(int(arg), {"bid_acc": "acc", "bid_rej": "rej", "bid_more": "more"}[act])
