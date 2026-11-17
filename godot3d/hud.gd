@@ -1414,7 +1414,6 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				["full", "FULL CAREER", "Like a real manager", [
 					"Everything in the simple career",
 					"The board CAN SACK YOU. Then you take a job at another club",
-					"Coming next: contracts and wages, player morale, press conferences, scouts and derbies",
 				]],
 			]
 			for i0 in 2:
@@ -2995,7 +2994,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 				var bb := _btn("OPEN   %d COINS" % int(pk["cost"]), "pack", i, "primary" if can else "off", Vector2(32 + i * (cw2 + 10.0) + 18.0, y0 + ch - 30.0 - 70.0), Vector2(cw2 - 36.0, 54), 22)
 				menu.add_child(bb)
 				items.append([bb, Vector2(0, 50), 0.05 * i])
-			var sm := _label(msg if msg != "" else "You earn coins in the cup and in ranked online.", 15, GOLD if msg != "" else Color(1, 1, 1, 0.7), font2)
+			var sm := _label(msg if msg != "" else "You earn coins in ranked online, the cup and your career.", 15, GOLD if msg != "" else Color(1, 1, 1, 0.7), font2)
 			sm.position = Vector2(0, y0 + ch - 22.0)
 			sm.size = Vector2(w, 22)
 			sm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
