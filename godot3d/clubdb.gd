@@ -80,7 +80,24 @@ const START := [
 	["MIDDELFART BLUES", "MIB", "0050a0", "ffffff", "0050a0", 56, 1], ["AARHUS FREMAD BLACK", "AFB", "1c1c1c", "fcd116", "1c1c1c", 56, 1]],
 ]
 
-# every club as {n, s, k, a, r, f, lg}: the quick-match clubs first, then the career clubs in league order
+# The rest of Europe: clubs that only play in the Champions Cup (no league of their own here). Made up too.
+const FOREIGN := [
+	["MADRID WHITES", "MAW", "ffffff", "ffffff", "ffffff", 88, 0, "SPAIN"], ["CATALAN STRIPES", "CAT", "a50044", "004d98", "a50044", 87, 0, "SPAIN"],
+	["MADRID STRIPES", "MAS", "cb3524", "1c2c5b", "cb3524", 83, 1, "SPAIN"], ["BASQUE LIONS", "BAL", "ee2523", "1c1c1c", "1c1c1c", 78, 1, "SPAIN"],
+	["SEVILLE WHITES", "SEW", "ffffff", "ffffff", "e30613", 77, 4, "SPAIN"], ["VALENCIA BATS", "VAB", "ffffff", "1c1c1c", "1c1c1c", 75, 1, "SPAIN"],
+	["MILAN SERPENTS", "MSE", "0068a8", "1c1c1c", "1c1c1c", 84, 2, "ITALY"], ["TURIN ZEBRAS", "TUZ", "1c1c1c", "ffffff", "ffffff", 82, 0, "ITALY"],
+	["NAPLES SKY", "NAS", "12a0d7", "ffffff", "12a0d7", 82, 0, "ITALY"], ["MILAN DEVILS", "MDE", "fb090b", "ffffff", "1c1c1c", 80, 0, "ITALY"],
+	["BERGAMO GODDESS", "BEG", "1e71b8", "1c1c1c", "1c1c1c", 80, 2, "ITALY"], ["ROME WOLVES", "ROW", "8e1f2f", "ffffff", "8e1f2f", 78, 4, "ITALY"],
+	["MUNICH REDS", "MUR", "dc052d", "dc052d", "dc052d", 88, 4, "GERMANY"], ["LEVERKUSEN LIONS", "LEL", "e32221", "1c1c1c", "1c1c1c", 84, 2, "GERMANY"],
+	["DORTMUND BEES", "DOB", "fde100", "1c1c1c", "fde100", 83, 4, "GERMANY"], ["LEIPZIG BULLS", "LEB", "ffffff", "ffffff", "dd0741", 80, 1, "GERMANY"],
+	["PARIS BLUES", "PAB", "004170", "004170", "004170", 87, 0, "FRANCE"], ["MONACO DIAMONDS", "MOD", "e51b22", "ffffff", "e51b22", 78, 4, "FRANCE"],
+	["MARSEILLE WHITES", "MAR", "ffffff", "ffffff", "2faee0", 76, 0, "FRANCE"], ["LILLE MASTIFFS", "LIM", "e01e13", "1c2c5b", "e01e13", 76, 4, "FRANCE"],
+	["LISBON EAGLES", "LIE", "e20e0e", "ffffff", "e20e0e", 80, 4, "PORTUGAL"], ["LISBON LIONS", "LIL", "008057", "1c1c1c", "008057", 79, 0, "PORTUGAL"],
+	["PORTO DRAGONS", "POD", "00428c", "00428c", "00428c", 79, 4, "PORTUGAL"], ["EINDHOVEN LIGHTS", "EIL", "ed1c24", "1c1c1c", "1c1c1c", 79, 0, "NETHERLANDS"],
+	["AMSTERDAM LANCERS", "AML", "ffffff", "ffffff", "ffffff", 78, 0, "NETHERLANDS"], ["ROTTERDAM PORT", "ROP", "ffffff", "1c1c1c", "1c1c1c", 76, 0, "NETHERLANDS"],
+]
+
+# every club as {n, s, k, a, r, f, lg}: the quick-match clubs first, then the career clubs in league order, then Europe (lg -1)
 static func clubs(first: Array) -> Array:
 	var out := first.duplicate(true)
 	for li in START.size():
@@ -88,6 +105,20 @@ static func clubs(first: Array) -> Array:
 			var light: bool = Color(str(row[2])).get_luminance() > 0.6
 			var alt := "1c1c20" if light else "f4f4f4"
 			out.append({"n": row[0], "s": row[1], "k": [row[2], row[3], row[4]], "a": [alt, str(row[2]) if not light else "f4f4f4", alt], "r": int(row[5]), "f": int(row[6]), "lg": li})
+	for row in FOREIGN:
+		var light2: bool = Color(str(row[2])).get_luminance() > 0.6
+		var alt2 := "1c1c20" if light2 else "f4f4f4"
+		out.append({"n": row[0], "s": row[1], "k": [row[2], row[3], row[4]], "a": [alt2, str(row[2]) if not light2 else "f4f4f4", alt2], "r": int(row[5]), "f": int(row[6]), "lg": -1, "c": row[7]})
+	return out
+
+# the world indices of the European clubs
+static func foreign_ids(first_n: int) -> Array:
+	var i := first_n
+	for li in START.size():
+		i += (START[li] as Array).size()
+	var out := []
+	for k in FOREIGN.size():
+		out.append(i + k)
 	return out
 
 # the world indices of each league at the start

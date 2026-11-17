@@ -288,6 +288,7 @@ func new_career(c: int, own := false, slen := "full") -> void:
 	cup_new()
 	board()
 	market_refresh()
+	eu_new(_eu_quals_by_rating())
 	world_tick([])
 	save()
 
@@ -603,6 +604,7 @@ func next_season() -> void:
 	money_init()
 	var gone := _contracts_end()
 	var mv0 := int(d.get("move", 0))
+	var quals := _eu_quals_final()
 	d["season"] = int(d["season"]) + 1
 	_move_clubs()
 	d["lg"] = league_of(int(d["club"]))
@@ -635,6 +637,7 @@ func next_season() -> void:
 			d["wb"] = maxi(wages(), int(round(int(d["wb"]) * 0.85)))
 	if not gone.is_empty():
 		d["note"] = "CONTRACTS RAN OUT: %s LEFT ON A FREE." % ", ".join(PackedStringArray(gone))
+	eu_new(quals)
 	d["wlast"] = -999
 	world_tick([])
 	save()
@@ -1707,7 +1710,10 @@ func cup_due() -> bool:
 		return false
 	if bool(d.get("cupmode", false)):
 		return true
-	return int(d["round"]) >= cup_after() or season_over()
+	var due := int(d["round"]) >= cup_after() or season_over()
+	if due and eu_due() and eu_day(int(eu()["md"])) < cup_day(int(cup()["r"])):
+		return false
+	return due
 
 # the league round after which this cup round is played: the rounds are spread evenly through the season
 func cup_after() -> int:
@@ -2039,6 +2045,30 @@ func calendar() -> Array:
 			elif cup_over():
 				continue
 			out.append(e)
+	var ee := eu()
+	if not ee.is_empty() and bool(ee.get("me", false)):
+		var lg_e: Array = ee.get("log", [])
+		var me_e := int(d["club"])
+		for md in EU_RD.size():
+			var e2 := {"day": eu_day(md), "kind": "eu", "opp": -1, "home": true, "res": [], "played": md < int(ee["md"]), "name": eu_round_name(md).capitalize(), "next": false}
+			if md < lg_e.size():
+				var found2 := false
+				for t in lg_e[md]:
+					if int(t[0]) == me_e or int(t[1]) == me_e:
+						var am := int(t[0]) == me_e
+						e2["opp"] = int(t[1]) if am else int(t[0])
+						e2["home"] = am
+						e2["res"] = [int(t[2]) if am else int(t[3]), int(t[3]) if am else int(t[2])]
+						found2 = true
+				if not found2:
+					continue
+			elif md == int(ee["md"]) and eu_due_ever():
+				var oh := eu_opp()
+				e2["opp"] = int(oh[0])
+				e2["home"] = bool(oh[1])
+			elif bool(ee.get("out", false)) or bool(ee.get("done", false)):
+				continue
+			out.append(e2)
 	out.sort_custom(func(a, b): return int(a["day"]) < int(b["day"]))
 	for e in out:
 		if not bool(e["played"]):
@@ -2050,6 +2080,8 @@ func calendar() -> Array:
 func next_day() -> int:
 	if cup_due():
 		return maxi(cup_day(int(cup()["r"])), today() + 1)
+	if eu_due():
+		return maxi(eu_day(int(eu()["md"])), today() + 1)
 	if season_over():
 		return -1
 	return lg_day(int(d["round"]))
@@ -3389,3 +3421,332 @@ func _rec_season(pos: int) -> void:
 	var pts := int(d["table"][str(int(d["club"]))]["pts"])
 	if pts > int((r.get("pts", [0]) as Array)[0]):
 		_rec_set("pts", [pts, "%s, season %d" % [league_name().capitalize(), int(d.get("season", 1))]])
+
+
+# ---------------------------------------------------------------- the Champions Cup: Europe's big cup
+# 32 clubs: England's top four, Denmark's top two and 26 clubs from the rest of Europe. Eight groups of four
+# (home and away, top two go through), then the last 16, quarter-finals, semi-finals and a final, one match each,
+# with extra time and penalties. The European nights are Tuesdays, never in a week with a domestic cup tie.
+const EU_NAME := "THE CHAMPIONS CUP"
+const EU_RD := ["GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "LAST 16", "QUARTER-FINAL", "SEMI-FINAL", "FINAL"]
+const EU_FR := [0.10, 0.17, 0.24, 0.31, 0.38, 0.45, 0.60, 0.70, 0.80, 0.93]
+const EU_GS := [[[0, 1], [2, 3]], [[2, 0], [1, 3]], [[0, 3], [2, 1]], [[1, 0], [3, 2]], [[0, 2], [3, 1]], [[3, 0], [1, 2]]]
+const EU_PAY := {"start": 300, "win": 50, "draw": 20, "ko": [120, 200, 320, 600]}
+
+func eu() -> Dictionary:
+	return d.get("eu", {})
+
+func eu_round_name(md := -1) -> String:
+	var e := eu()
+	var m := int(e.get("md", 0)) if md < 0 else md
+	if m < 6:
+		return "GROUP %s, MATCHDAY %d" % [str(e.get("gl", "A")), m + 1] if md < 0 or m == int(e.get("md", 0)) else "GROUP STAGE, MATCHDAY %d" % (m + 1)
+	return EU_RD[clampi(m, 0, EU_RD.size() - 1)]
+
+# which league round each European night comes after (never the same week as a cup tie)
+func eu_after(md: int) -> int:
+	var n := rounds_total()
+	var r := clampi(int(round(n * EU_FR[clampi(md, 0, EU_FR.size() - 1)])), 1, n - 1)
+	for k in 3:
+		var clash := false
+		for cr in cup_rounds():
+			if cup_after_r(cr) == r:
+				clash = true
+		if not clash:
+			break
+		r = mini(r + 1, n - 1)
+	return r
+
+# a Tuesday, three days after that league round
+func eu_day(md: int) -> int:
+	return lg_day(eu_after(md) - 1) + 3
+
+func eu_due_ever() -> bool:
+	var e := eu()
+	return not e.is_empty() and bool(e.get("me", false)) and not bool(e.get("out", false)) and not bool(e.get("done", false))
+
+func eu_due() -> bool:
+	if not eu_due_ever() or bool(d.get("cupmode", false)):
+		return false
+	return int(d["round"]) >= eu_after(int(eu()["md"]))
+
+func eu_ko() -> bool:
+	return int(eu().get("md", 0)) >= 6
+
+# [opponent, you at home]
+func eu_opp() -> Array:
+	var e := eu()
+	var md := int(e.get("md", 0))
+	var me := int(d["club"])
+	if md < 6:
+		for g in e["grp"]:
+			for pr in EU_GS[md]:
+				if int(g[pr[0]]) == me:
+					return [int(g[pr[1]]), true]
+				if int(g[pr[1]]) == me:
+					return [int(g[pr[0]]), false]
+		return [-1, true]
+	for t in e.get("ko", []):
+		if int(t[0]) == me:
+			return [int(t[1]), true]
+		if int(t[1]) == me:
+			return [int(t[0]), md == 9] # the final is played as our home night
+	return [-1, true]
+
+func _eu_quals_by_rating() -> Array:
+	var out := []
+	for li in [0, 4]:
+		var cl := ids(li)
+		cl.sort_custom(func(a, b): return _strength(a) > _strength(b))
+		out.append_array(cl.slice(0, 4 if li == 0 else 2))
+	return out
+
+func _eu_quals_final() -> Array:
+	var fin: Array = d.get("final", [])
+	if fin.size() != ClubDB.LEAGUES.size():
+		return _eu_quals_by_rating()
+	var out := []
+	out.append_array((fin[0] as Array).slice(0, 4))
+	out.append_array((fin[4] as Array).slice(0, 2))
+	return out
+
+# a new Champions Cup for this season; it only runs when your club is in it
+func eu_new(quals: Array) -> void:
+	var me := int(d["club"])
+	if bool(d.get("cupmode", false)) or not quals.has(me):
+		d.erase("eu")
+		return
+	var all := quals.duplicate()
+	for c in ClubDB.foreign_ids(FIRST):
+		if all.size() >= 32:
+			break
+		if c < W.size():
+			all.append(c)
+	# four pots by strength; each group gets one club from each pot, never two from the same country
+	all.sort_custom(func(a, b): return rating(a) > rating(b))
+	var grp := []
+	for g in 8:
+		grp.append([])
+	for pot in 4:
+		var pc: Array = all.slice(pot * 8, pot * 8 + 8)
+		pc.shuffle()
+		for c in pc:
+			var placed := false
+			var order := range(8)
+			order.shuffle()
+			for g in order:
+				if (grp[g] as Array).size() == pot and not _eu_same_country(grp[g], c):
+					grp[g].append(c)
+					placed = true
+					break
+			if not placed:
+				for g in order:
+					if (grp[g] as Array).size() == pot:
+						grp[g].append(c)
+						break
+	var gt := {}
+	for c in all:
+		gt[str(c)] = [0, 0, 0, 0, 0, 0, 0]
+	var gl := "A"
+	for g in 8:
+		if (grp[g] as Array).has(me):
+			gl = "ABCDEFGH"[g]
+	d["eu"] = {"grp": grp, "gt": gt, "md": 0, "ko": [], "log": [], "out": false, "done": false, "me": true, "gl": gl, "won": false, "win": -1}
+	d["coins"] = int(d["coins"]) + int(round(EU_PAY["start"]))
+	_mail("eu", "You are in %s" % EU_NAME.capitalize(), "Your club has a place in Europe's big cup: group %s. The European nights are Tuesdays. A start bonus of %s is in your budget." % [gl, money(int(round(EU_PAY["start"])))])
+
+func _eu_country(c: int) -> String:
+	if W[c].has("c"):
+		return str(W[c]["c"])
+	var li := league_of(c)
+	return str(ClubDB.LEAGUES[li]["c"]) if li >= 0 else ""
+
+func _eu_same_country(g: Array, c: int) -> bool:
+	for x in g:
+		if _eu_country(int(x)) == _eu_country(c):
+			return true
+	return false
+
+func _eu_sim(rng: RandomNumberGenerator, a: int, b: int, need_winner: bool) -> Array:
+	var df := (_strength(a) - _strength(b)) / 14.0 + 0.1
+	var ga := _poisson(rng, 1.3 * exp(df))
+	var gb := _poisson(rng, 1.3 * exp(-df))
+	var w := -1
+	if need_winner:
+		w = a if ga > gb else (b if gb > ga else (a if rng.randf() < 0.5 + df * 0.1 else b))
+	return [ga, gb, w]
+
+func _eu_book(a: int, b: int, ga: int, gb: int) -> void:
+	var gt: Dictionary = eu()["gt"]
+	for k in [[a, ga, gb], [b, gb, ga]]:
+		var r: Array = gt[str(int(k[0]))]
+		r[0] += 1
+		r[4] += int(k[1])
+		r[5] += int(k[2])
+		if int(k[1]) > int(k[2]):
+			r[1] += 1
+			r[6] += 3
+		elif int(k[1]) == int(k[2]):
+			r[2] += 1
+			r[6] += 1
+		else:
+			r[3] += 1
+
+# one group in table order
+func eu_group(g: int) -> Array:
+	var e := eu()
+	var gt: Dictionary = e["gt"]
+	var cl: Array = (e["grp"][g] as Array).duplicate()
+	cl.sort_custom(func(a, b):
+		var ra: Array = gt[str(a)]
+		var rb: Array = gt[str(b)]
+		var ka := [int(ra[6]), int(ra[4]) - int(ra[5]), int(ra[4])]
+		var kb := [int(rb[6]), int(rb[4]) - int(rb[5]), int(rb[4])]
+		return ka > kb if ka != kb else rating(a) > rating(b))
+	return cl
+
+# Play out one European night: your match as given, the rest by strength.
+func _eu_night(mine: int, theirs: int, won_tie: bool, rng: RandomNumberGenerator, lines: Array) -> void:
+	var e := eu()
+	var md := int(e["md"])
+	var me := int(d["club"])
+	var log := []
+	if md < 6:
+		for g in e["grp"]:
+			for pr in EU_GS[md]:
+				var a := int(g[pr[0]])
+				var b := int(g[pr[1]])
+				var r: Array
+				if mine >= 0 and (a == me or b == me):
+					r = [mine if a == me else theirs, theirs if a == me else mine, -1]
+				else:
+					r = _eu_sim(rng, a, b, false)
+				_eu_book(a, b, int(r[0]), int(r[1]))
+				log.append([a, b, int(r[0]), int(r[1])])
+		e["log"].append(log)
+		if md == 5:
+			# the groups are done: winners meet runners-up from another group, the winner at home
+			var w := []
+			var ru := []
+			for g in 8:
+				var o := eu_group(g)
+				w.append(o[0])
+				ru.append(o[1])
+			var ko := []
+			for g in 8:
+				ko.append([int(w[g]), int(ru[(g + 1) % 8])])
+			# no two clubs from the same country in the last 16: swap runners-up between ties
+			for i in 8:
+				if _eu_country(int(ko[i][0])) == _eu_country(int(ko[i][1])):
+					for j in 8:
+						if j != i and _eu_country(int(ko[i][0])) != _eu_country(int(ko[j][1])) and _eu_country(int(ko[j][0])) != _eu_country(int(ko[i][1])):
+							var tmp := int(ko[i][1])
+							ko[i][1] = ko[j][1]
+							ko[j][1] = tmp
+							break
+			e["ko"] = ko
+			if bool(e["me"]) and not w.has(me) and not ru.has(me):
+				e["out"] = true
+				lines.append("OUT OF %s IN THE GROUP STAGE" % EU_NAME)
+			elif bool(e["me"]) and not bool(e["out"]):
+				lines.append("THROUGH TO THE LAST 16 OF %s!" % EU_NAME)
+				_eu_pay(0, lines)
+	else:
+		var nxt := []
+		for t in e["ko"]:
+			var a := int(t[0])
+			var b := int(t[1])
+			var r: Array
+			if mine >= 0 and (a == me or b == me):
+				var gm := mine if a == me else theirs
+				var gt2 := theirs if a == me else mine
+				var iw := mine > theirs or (mine == theirs and won_tie)
+				r = [gm, gt2, me if iw else (b if a == me else a)]
+			else:
+				r = _eu_sim(rng, a, b, true)
+			log.append([a, b, int(r[0]), int(r[1])])
+			nxt.append(int(r[2]))
+		e["log"].append(log)
+		if md == 9:
+			e["done"] = true
+			e["win"] = int(nxt[0])
+			if int(nxt[0]) == me:
+				e["won"] = true
+				var stt: Dictionary = stats()
+				stt["eu"] = int(stt.get("eu", 0)) + 1
+				d["st"] = stt
+				_honour("eu", "Won %s" % EU_NAME.capitalize())
+				lines.append("CHAMPIONS OF EUROPE! YOU WON %s!" % EU_NAME)
+				_eu_pay(3, lines)
+				_conf_add(15)
+			else:
+				_mail("eu", "%s win %s" % [str(W[int(nxt[0])]["n"]).capitalize(), EU_NAME.capitalize()], "The final is over.")
+		else:
+			if mine >= 0 and not nxt.has(me) and bool(e["me"]) and not bool(e["out"]):
+				e["out"] = true
+				lines.append("OUT OF %s IN THE %s" % [EU_NAME, EU_RD[md]])
+			elif mine >= 0 and nxt.has(me):
+				lines.append("THROUGH TO THE %s OF %s!" % [EU_RD[md + 1], EU_NAME])
+				_eu_pay(md - 5, lines)
+				_conf_add(3)
+			var ko2 := []
+			for i in range(0, nxt.size() - 1, 2):
+				ko2.append([int(nxt[i]), int(nxt[i + 1])])
+			e["ko"] = ko2
+	e["md"] = md + 1
+
+func _eu_pay(k: int, lines: Array) -> void:
+	var p := int(round(EU_PAY["ko"][clampi(k, 0, 3)]))
+	d["coins"] = int(d["coins"]) + p
+	lines.append("+%s FROM EUROPE" % money(p))
+
+# once you are out, the rest of the cup is played in a blink and you read who won
+func _eu_rest(rng: RandomNumberGenerator, lines: Array) -> void:
+	var e := eu()
+	while not bool(e.get("done", false)) and int(e["md"]) < EU_RD.size():
+		_eu_night(-1, -1, false, rng, lines)
+
+# Your European match is over: book it, pay, grow the men who played, like a cup tie.
+func eu_finish(mine: int, theirs: int, won_tie := false) -> Array:
+	var fit0 := _fit_pre()
+	var e := eu()
+	var md := int(e["md"])
+	var opp := int(eu_opp()[0])
+	d["day"] = eu_day(md)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var lines := []
+	var won: bool = mine > theirs or (mine == theirs and won_tie)
+	var coins := 0
+	if md < 6:
+		coins = int(round((EU_PAY["win"] if mine > theirs else (EU_PAY["draw"] if mine == theirs else 0))))
+	coins += board_bonus(coins)
+	d["coins"] = int(d["coins"]) + coins
+	last_coins = coins
+	lines.append("+" + money(coins))
+	_eu_night(mine, theirs, won_tie, rng, lines)
+	if md < 6:
+		var gi := "ABCDEFGH".find(str(e.get("gl", "A")))
+		var o := eu_group(gi)
+		lines.append("%s IN GROUP %s" % [ordinal(o.find(int(d["club"])) + 1), str(e.get("gl", "A"))])
+	_rec_result(mine, theirs, opp, true)
+	for i in d["xi"]:
+		var pl: Dictionary = d["squad"][int(i)]
+		pl["xp"] = int(pl["xp"]) + (32 if won else 22)
+		pl["ca"] = int(pl.get("ca", 0)) + 1
+		if eur:
+			_grow_auto(pl, rng, lines)
+		while int(pl["xp"]) >= 100 and ovr_of(pl) + int(pl.get("tp", 0)) < int(pl["pot"]):
+			pl["xp"] = int(pl["xp"]) - 100
+			pl["tp"] = int(pl.get("tp", 0)) + 1
+			lines.append("%s  +1 TP" % str(pl["n"]).to_upper())
+		if int(pl["xp"]) > 100:
+			pl["xp"] = 100
+	if eur:
+		_after_match(d["xi"], won, lines, rng)
+	if bool(e.get("out", false)):
+		_eu_rest(rng, [])
+	_fit_post(fit0, [], lines, rng)
+	world_tick(lines)
+	save()
+	return lines
