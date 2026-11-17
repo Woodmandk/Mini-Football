@@ -4529,7 +4529,8 @@ func _draw() -> void:
 	var b := _btn_pos()
 	if lab_a != "":
 		_button(b["shoot"][0], b["shoot"][1], lab_a, shoot_down, Color(0.25, 0.85, 0.4))
-	_button(b["pass"][0], b["pass"][1], lab_b, pass_down, Color(0.95, 0.95, 0.95))
+	if lab_b != "":
+		_button(b["pass"][0], b["pass"][1], lab_b, pass_down, Color(0.95, 0.95, 0.95))
 	if lab_a == "SHOOT":
 		_button(b["thru"][0], b["thru"][1], "THROUGH", thru_down, Color(0.55, 0.8, 1.0))
 		for hk in ["pass", "thru"]:
