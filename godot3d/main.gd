@@ -4706,6 +4706,8 @@ func _physics_process(dt: float) -> void:
 				print("AUTOTEST score=", score, " stats=", stats, " bot=", bstats)
 				print("AUTOTEST gk_hands frames=", get_meta("gk_n", 0), " nearest_opp_min=", snappedf(get_meta("gk_min", 99.0), 0.1))
 				print("AUTOTEST team=", tst)
+				if def_dbg:
+					print("AUTOTEST def frames=", def_m[0], " dfspeed=", snappedf(def_m[1] / maxf(def_m[0], 1), 0.01), " close4=", snappedf(float(def_m[2]) / maxf(def_m[0], 1), 0.01), " nobody_goalside=", snappedf(float(def_m[3]) / maxf(def_m[0], 1), 0.01))
 				for ti in 2:
 					var m: Array = shp[ti]
 					print("AUTOTEST shape t", ti, " n=", m[0], " ahead=", snappedf(float(m[1]) / maxf(m[0], 1), 0.01), " near18=", snappedf(float(m[2]) / maxf(m[0], 1), 0.01), " inbox=", snappedf(float(m[3]) / maxf(m[4], 1), 0.01))
@@ -5663,7 +5665,7 @@ func _move(p, want: Vector3, dt: float) -> void:
 	if p.tackle_t >= 0.0 and p.tackle_t < SLIDE_T and p.slide_live:
 		# sliding on the grass, the 2D game's curve: a burst that eases off to under half
 		var sk: float = 0.45 + 0.55 * (1.0 - p.tackle_t / SLIDE_T)
-		p.vel = p.slide_dir * SLIDE_V * sk
+		p.vel = p.slide_dir * SLIDE_V * sk * p.slide_k
 		p.position += p.vel * dt
 		p.position.x = clampf(p.position.x, -HL - 2.5, HL + 2.5)
 		p.position.z = clampf(p.position.z, -HW - 2.5, HW + 2.5)
@@ -6486,7 +6488,9 @@ func _slide_go(me_p, dirs: Vector3) -> void:
 		me_p.start_tackle()
 	me_p.yaw = atan2(-dirs.x, -dirs.z)
 	me_p.slide_dir = dirs
-	me_p.vel = dirs * SLIDE_V
+	# a computer man goes in a touch slower and shorter than you: a slide you can see coming and step past
+	me_p.slide_k = 1.0 if _hum_of(me_p) != null else 0.82
+	me_p.vel = dirs * SLIDE_V * me_p.slide_k
 	me_p.slide_live = true
 	me_p.slide_fx = 0.0
 	me_p.stun = SLIDE_T + 0.3
@@ -6497,6 +6501,8 @@ func _slide_go(me_p, dirs: Vector3) -> void:
 # (a long touch at speed), he comes from the front or the side, the ball is within a slide, and the moment
 # has lasted his reaction time. A good defender waits for that moment; a poor one goes early or from a bad
 # angle. What the slide meets decides it (_slides): the ball is won, the man from behind is a foul. No dice.
+var slide_team_t := [0.0, 0.0] # real_t before which that side's computer men stay on their feet
+
 func _cpu_slide(o, c, dt: float) -> bool:
 	o.slide_cd -= dt
 	if o.slide_cd > 0.0 or o.tackle_t >= 0.0 or o.stun > 0.0 or state != "play" or set_piece != "":
@@ -6510,9 +6516,9 @@ func _cpu_slide(o, c, dt: float) -> bool:
 	var dq: float = clampf((o.dfn - 40) / 50.0, 0.0, 1.0)
 	# at speed the ball runs a step ahead of him (out of his feet); slow, it is tucked in and a slide only finds the man.
 	# A good defender waits for a runner at full tilt and a clean angle; a poor one also goes in early or from a worse angle.
-	var need_sp: float = lerpf(0.5, 0.72, dq)
+	var need_sp: float = lerpf(0.55, 0.75, dq)
 	var need_front: float = lerpf(-0.45, -0.15, dq)
-	var ok: bool = cs > c.top_speed * need_sp and c.skill_t < 0.0 and bd > 1.7 and bd < 3.9 and front > need_front and ball.position.y < 0.5
+	var ok: bool = cs > c.top_speed * need_sp and c.skill_t < 0.0 and bd > 2.0 and bd < 3.9 and front > need_front and real_t > slide_team_t[o.team] and ball.position.y < 0.5
 	# not in his own box: a slide there is a penalty if it goes wrong (only the very best dare)
 	var own_x := -HL * side(o.team)
 	if ok and absf(ball.position.x - own_x) < 16.5 and absf(ball.position.z) < 20.16 and dq < 0.8:
@@ -6530,13 +6536,15 @@ func _cpu_slide(o, c, dt: float) -> bool:
 	if o.slide_w < lerpf(0.32, 0.18, dq) * (_cpu(o.team)["need"] / 0.5):
 		return false
 	o.slide_w = 0.0
-	o.slide_cd = 6.0
+	o.slide_cd = 9.0
+	# a side does not throw itself in again and again: a real defender stays on his feet most of the time
+	slide_team_t[o.team] = real_t + 4.0
 	# aim where the ball will be when he gets there
-	var t: float = bd / (SLIDE_V * 0.6)
+	var t: float = bd / (SLIDE_V * 0.82 * 0.6)
 	# a good defender reads where the ball is going; a poor one slides at where it is now and arrives behind it, into the man
-	var lead: Vector3 = to + c.vel * t * lerpf(0.25, 1.0, dq) * randf_range(0.7, 1.3)
-	# nobody aims a slide perfectly: a poor defender can be well off
-	lead = lead.rotated(Vector3.UP, randf_range(-1.0, 1.0) * lerpf(0.4, 0.1, dq))
+	var lead: Vector3 = to + c.vel * t * lerpf(0.25, 1.0, dq) * randf_range(0.55, 1.45)
+	# nobody aims a slide perfectly: a poor defender can be well off and slides past the ball altogether
+	lead = lead.rotated(Vector3.UP, randf_range(-1.0, 1.0) * lerpf(0.55, 0.2, dq))
 	_slide_go(o, lead.normalized())
 	stats["cslide"] = int(stats.get("cslide", 0)) + 1
 	return true
@@ -6567,10 +6575,37 @@ func _slides() -> void:
 		elif c.team != p.team and not c.hands() and protect_t <= 0.0 and set_piece == "":
 			var front: float = c.fwd().dot((p.position - c.position).normalized())
 			var pd: float = p.position.distance_to(c.position)
-			var sreach: float = 1.15 + (p.dfn - 60) * 0.004
+			var hum_s: bool = _hum_of(p) != null
+			# your own slide gets the ball when it gets there; a computer man's boot has to meet it more squarely
+			var sreach: float = (1.15 if hum_s else 0.8) + (p.dfn - 60) * 0.004
 			if bd < sreach:
 				p.slide_live = false
-				if front > -0.45:
+				if front > -0.45 and hum_s:
+					# Yours: reach the ball from the front or side and it is won. Only a man in the middle of a trick
+					# can get a toe to it first and it runs loose.
+					stats["hslide"] = int(stats.get("hslide", 0)) + 1
+					if c.skill_t >= 0.0:
+						var dv2: Vector3 = ball.position - p.position
+						dv2.y = 0.0
+						ball_owner = null
+						ball_vel = (dv2.normalized() * 0.6 + p.slide_dir * 0.4).normalized() * 5.5
+						ball_last = p
+						ball_ignore = c
+						ignore_t = 0.25
+						c.vel *= 0.5
+						p.stun = 0.8
+						snd("touch")
+					else:
+						c.stun = 0.6
+						c.start_fall(0.6)
+						stats["tackles"] += 1
+						snd("win")
+						fx("shake", 0.3)
+						fx("vib", 40)
+						p.stun = 0.3
+						_give(p)
+						protect_t = 0.7
+				elif front > -0.45:
 					# Reaching the ball is not winning it: how cleanly the boot meets it, the tackler's defending
 					# against the dribbler's skill, the angle, and a dribbler mid-trick rides it.
 					var sq2: float = _slide_q(p, c, bd, sreach, front)
@@ -6586,7 +6621,7 @@ func _slides() -> void:
 						p.stun = 0.3
 						_give(p)
 						protect_t = 0.7
-					elif sq2 >= 0.34:
+					elif sq2 >= 0.42:
 						# a toe on it: the ball squirts away and it is anyone's
 						stats["sloose"] = int(stats.get("sloose", 0)) + 1
 						var dv: Vector3 = ball.position - p.position
@@ -6611,7 +6646,7 @@ func _slides() -> void:
 							_ab_pop(c, "tryl")
 				else:
 					_foul(p, c)
-			elif pd < 0.75:
+			elif pd < (0.75 if _hum_of(p) != null else 0.6):
 				# missed the ball and took the man
 				p.slide_live = false
 				_foul(p, c, true)
@@ -6661,10 +6696,17 @@ func _tq(p, c) -> float:
 	return 0.14 + (1.0 - dt2 / reach) * 0.3 + expo * 0.38 - shield * (0.35 + 0.3 * clampf((c.phy - 40) / 55.0, 0.0, 1.0)) + ang + setk - lunge * 0.3 + duel - (0.3 if c.skill_t >= 0.0 else 0.0) + abk
 
 # The foot goes in: won clean, knocked loose between the two, or missed. Returns true when the ball changed hands or went loose.
-func _poke(p, c) -> bool:
-	var q := _tq(p, c)
+func _poke(p, c, qadj := 0.0) -> bool:
+	var q := _tq(p, c) + qadj
 	stats["pq"] = int(stats.get("pq", 0)) + 1
-	if q >= 0.5:
+	# Your own foot in is trusted: a decent moment wins it. A computer man has to get it right, and when
+	# he gets it nearly right it is mostly a clean miss, not a lucky toe that knocks it loose every time.
+	var hum_p: bool = _hum_of(p) != null
+	var win_q: float = 0.4 if hum_p else 0.44
+	var nick_q: float = 0.26 if hum_p else 0.39
+	var sk_: String = ("h" if hum_p else "c") + ("pk_win" if q >= win_q else ("pk_nick" if q >= nick_q else "pk_miss"))
+	stats[sk_] = int(stats.get(sk_, 0)) + 1
+	if q >= win_q:
 		c.stun = 0.4
 		c.vel *= 0.3
 		stats["tackles"] += 1
@@ -6674,7 +6716,7 @@ func _poke(p, c) -> bool:
 		_give(p)
 		protect_t = 0.7
 		return true
-	if q >= 0.36:
+	if q >= nick_q:
 		# a toe on it: it squirts loose and whoever reacts first has it
 		var dv: Vector3 = ball.position - p.position
 		dv.y = 0.0
@@ -6699,10 +6741,34 @@ func _poke(p, c) -> bool:
 	stats["pmiss"] = int(stats.get("pmiss", 0)) + 1
 	return false
 
+var def_dbg := OS.get_cmdline_user_args().has("--defdbg")
+var def_m := [0, 0.0, 0, 0] # frames, sum back-line speed, frames with a defender within 4 m, frames with no defender goal side
+
 func _tackles(dt: float) -> void:
 	var c = ball_owner
 	if c == null or c.hands() or protect_t > 0.0:
 		return
+	if def_dbg and _hum_of(c) != null:
+		# how the back line deals with a man running at goal: do they move, close him down, stay goal side?
+		var og5 := Vector3(-HL * side(1 - c.team), 0, 0)
+		var cg: float = c.position.distance_to(og5)
+		if cg < 35.0:
+			def_m[0] += 1
+			var spd := 0.0
+			var n := 0
+			var close := false
+			var gside := false
+			for o in teams[1 - c.team]:
+				if o.role == "DF":
+					spd += o.vel.length()
+					n += 1
+				if o.role != "GK" and o.position.distance_to(c.position) < 4.0:
+					close = true
+				if o.role != "GK" and o.position.distance_to(og5) < cg - 1.0:
+					gside = true
+			def_m[1] += spd / maxf(n, 1)
+			def_m[2] += 1 if close else 0
+			def_m[3] += 0 if gside else 1
 	# a sharp turn wrong-foots anyone who was about to step in
 	var cv: Vector3 = c.vel
 	if cv.length() > 3.0:
@@ -6736,7 +6802,26 @@ func _tackles(dt: float) -> void:
 				if front < -0.5 and d < 1.15 and c.vel.length() >= 2.0:
 					_foul(o, c)
 					return
-				if _poke(o, c):
+				# did his foot land where the ball is?
+				var dq4: float = clampf((o.dfn - 40) / 50.0, 0.0, 1.0)
+				var md: float = Vector2(o.tk_aim.x - ball.position.x, o.tk_aim.z - ball.position.z).length()
+				if md > lerpf(0.55, 0.7, dq4):
+					# a clean miss you can see: the foot goes through where the ball was and he stumbles past
+					var lv: Vector3 = o.tk_aim - o.position
+					lv.y = 0.0
+					if lv.length() > 0.1:
+						o.vel = lv.normalized() * 6.0
+					o.stun = lerpf(0.75, 0.5, dq4)
+					stats["cwhiff"] = int(stats.get("cwhiff", 0)) + 1
+					if def_dbg:
+						print("WHIFF at ", snappedf(real_t, 0.01))
+						if shot_path != "" and shot_at > real_t + 2.0:
+							# test picture of the miss: --shot with --at far ahead, taken just after the first whiff
+							shot_at = real_t + float(OS.get_environment("WHIFF_DT") if OS.get_environment("WHIFF_DT") != "" else "0.2")
+					if c.has_ab("tryl"):
+						_ab_pop(c, "tryl")
+					continue
+				if _poke(o, c, -md * 0.3):
 					return
 			continue
 		# only the man who steps in makes a tackle; anyone else only if you run right into him
@@ -6781,6 +6866,14 @@ func _tackles(dt: float) -> void:
 				o.press_t = 0.0
 				o.commit_t = 0.15
 				o.start_kick(0.25)
+				if cpu_man:
+					# He sticks his foot where he thinks the ball will be when it lands. A good defender reads the
+					# run well; a poor one goes where it is now, or guesses. Change pace or direction and he hits grass.
+					var lead_k: float = lerpf(0.35, 0.95, dq2) * randf_range(0.75, 1.2)
+					var err_r: float = lerpf(0.5, 0.12, dq2) * randf() + (0.25 if rush else 0.0)
+					var ea: float = randf() * TAU
+					o.tk_aim = ball.position + c.vel * 0.2 * lead_k + Vector3(cos(ea), 0, sin(ea)) * err_r
+					o.tk_aim.y = 0.0
 		else:
 			o.press_t = maxf(o.press_t - dt * 2.0, 0.0)
 
@@ -7123,11 +7216,34 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		u = minf(u, maxf(off_line[t] - 0.8, 0.0))
 		hurry = u - p.position.x * s > 5.0
 	elif p.role == "DF":
-		u = clampf(u, -46.0, 14.0)
+		# Without the ball the back four hold a line instead of running back to the six-yard box: they stay
+		# around the edge of the box while the ball is out in front, and drop off with it, a few metres goal
+		# side, as it comes at them. Close to goal they squeeze in towards the ball.
+		var dl: float = minf(-35.5 + (p.home.x - 0.17) * 20.0, bu - 7.0)
+		u = clampf(maxf(u, dl), -47.0, 14.0)
+		if not loose and ball_owner.team != t:
+			u = maxf(minf(u, ball_owner.position.x * s - 2.5), -50.5)
+		var near_k: float = clampf((-bu - 15.0) / 25.0, 0.0, 1.0)
+		z = p.home.y * s * lerpf(21.0, 14.0, near_k) + ball.position.z * lerpf(0.42, 0.6, near_k)
 	else:
 		u = clampf(u, -40.0, 47.0)
 	z = clampf(z, -HW + 1.5, HW - 1.5)
 	var spot := Vector3(u * s, 0, z)
+	if not ours and not loose and set_piece == "" and p != chaser[t] and p != second[t] and (p.role == "DF" or p.role == "MF"):
+		var c4 = ball_owner
+		var og4 := Vector3(-HL * s, 0, 0)
+		var cu: float = c4.position.x * s
+		var dc4: float = p.position.distance_to(c4.position)
+		if p.position.x * s > cu + 0.5 and dc4 < (30.0 if p.role == "DF" else 13.0) and absf(p.position.z - c4.position.z) < 22.0:
+			# Beaten, or caught up the pitch: turn and sprint back to get goal side of him again,
+			# each man to his own lane so they do not all run to the same spot.
+			var gsd: Vector3 = (og4 - c4.position).normalized()
+			var rec: Vector3 = c4.position + c4.vel * 0.5 + gsd * clampf(c4.position.distance_to(og4) * 0.25, 3.0, 8.0)
+			rec.z = lerpf(rec.z, spot.z, 0.45)
+			return _run_to(p, rec, p.top_speed)
+		if p.role == "DF" and c4.position.distance_to(og4) < 40.0 and p.vel.length() < p.top_speed * 0.75:
+			# on his toes and watching the ball, not standing there looking at nothing
+			p.jock = true
 	p.think_t -= tdt
 	if ours and set_piece == "":
 		var c2 = ball_owner
@@ -7203,8 +7319,10 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 			tb.y = 0.0
 			# goal side and a touch towards the ball, so a pass to him can be cut out
 			var mp: Vector3 = mk.position + gs2 * 1.9 + tb.normalized() * 0.7
-			spot = spot.lerp(mp, 0.7 if p.role != "DF" else 0.6)
-			return _run_to(p, spot, p.top_speed * 0.92)
+			# a man running in behind the line is tracked all the way, at full speed
+			var behind: bool = mk.position.x * s < p.position.x * s + 1.0 and mk.vel.dot(gs2) > 2.0
+			spot = spot.lerp(mp, 0.9 if behind else (0.7 if p.role != "DF" else 0.6))
+			return _run_to(p, spot, p.top_speed * (1.0 if behind else 0.92))
 	return _run_to(p, spot, p.top_speed * (1.0 if hurry else 0.88))
 
 # how long the ball takes to cover dx along the pitch length; in the air it slows with the drag
