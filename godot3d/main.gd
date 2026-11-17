@@ -7184,6 +7184,8 @@ func _process(dt: float) -> void:
 		if not paused:
 			p.animate(dt * anim_rate)
 		p.set_ring(false, Color.WHITE, false)
+	if ref != null:
+		ref.set_top(top)
 	if not paused and screen == "match":
 		_ref_tick(dt)
 		if ref != null:
@@ -7935,6 +7937,15 @@ func _ref_make() -> void:
 	ref.build(Color(0.08, 0.08, 0.09), Color(0.06, 0.06, 0.06), Color(0.06, 0.06, 0.06), Color(0.85, 0.66, 0.5), Color(0.15, 0.1, 0.08), Color(0.05, 0.05, 0.05))
 	add_child(ref)
 	ref.position = Vector3(0, 0, -12)
+	# seen from above: a black disc with a yellow rim and no number, so he never looks like a player
+	if ref.dot != null:
+		var rim: MeshInstance3D = ref.dot.get_child(0)
+		var rm := StandardMaterial3D.new()
+		rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		rm.albedo_color = Color(1.0, 0.86, 0.15)
+		rim.material_override = rm
+		ref.dot_num.text = ""
+		ref.dot.scale = Vector3.ONE * 0.8
 
 # he keeps up with play from a diagonal, about 12 m away, and looks at the ball
 func _ref_tick(dt: float) -> void:
