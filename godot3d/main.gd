@@ -168,6 +168,7 @@ var so_t := 0.0
 var so_win := -1
 var so_last := false
 var car_goals := []
+var y_tab := 0 # youth page: 0 scouts, 1 reports, 2 academy
 var cal_m := 0 # the calendar shows this many months after the month of your next match
 var sim_res := {} # the last simulated match, for its screen
 var adv_info := {} # the days between two matches: dates and news
@@ -722,6 +723,22 @@ func _ready() -> void:
 						hub_tab = {"teamc": "team", "clubc": "club"}.get(ht, ht)
 				if ht == "play_on":
 					hub_tab = "play"
+			if menu_arg in ["ytest0", "ytest1", "ytest2"]:
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				car.scout_hire(1)
+				car.scout_send(0)
+				for r9 in 5:
+					if car.cup_due():
+						car.cup_finish(2, 1, true)
+					var ln9: Array = car.finish_match(1, 0, [])
+					for l9 in ln9:
+						if str(l9).begins_with("SCOUT") or str(l9).begins_with("ACAD"):
+							print("YLINE ", l9)
+				car.youth_sign(0)
+				y_tab = int(menu_arg.substr(5))
+				menu_arg = "youth"
 			if menu_arg in ["caltest", "simtest", "advtest", "csettest", "calhome"]:
 				carc.new_career(carc.weakest(3), false)
 				carc.set_mode("simple")
@@ -2009,8 +2026,34 @@ func _car_info() -> Dictionary:
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "",
-		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info,
+		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(),
 	}
+
+# Scouting and the academy for the hud.
+func _youth_info() -> Dictionary:
+	if bool(car.d.get("cupmode", false)):
+		return {}
+	var sc := []
+	for x in car.scouts():
+		var e: Dictionary = x
+		if e.is_empty():
+			sc.append({})
+		else:
+			sc.append({"n": str(e["n"]), "st": int(e["st"]), "away": int(e.get("left", 0)), "rg": str(Career.REGIONS[int(e["rg"])][0]) if int(e.get("rg", -1)) >= 0 else "",
+				"pick": str(Career.REGIONS[int(e.get("pick", 0))][0])})
+	var row := func(pl: Dictionary) -> Dictionary:
+		return {"n": str(pl["n"]).capitalize(), "age": int(pl["age"]), "pos": str(pl["pos"]), "olo": int(pl["olo"]), "ohi": int(pl["ohi"]), "plo": int(pl["plo"]), "phi": int(pl["phi"]),
+			"rg": str(Career.REGIONS[clampi(int(pl.get("rg", 0)), 0, Career.REGIONS.size() - 1)][0]), "fee": int(pl.get("fee", 0)), "exp": int(pl.get("exp", 0)), "ab": _ab_rows(Career.ab_of(pl)), "known": bool(pl.get("known", false))}
+	var pr := []
+	for pl in car.prospects():
+		pr.append(row.call(pl))
+	var ac := []
+	for pl in car.academy():
+		ac.append(row.call(pl))
+	var hire := []
+	for x in car.scouts():
+		hire.append(car.scout_cost(1 if (x as Dictionary).is_empty() else int(x["st"]) + 1))
+	return {"scouts": sc, "pros": pr, "acad": ac, "tab": y_tab, "hire": hire, "amax": Career.ACAD_MAX, "sq": (car.d["squad"] as Array).size(), "sqmax": Career.SQUAD_MAX, "yf": car.fac("youth")}
 
 # The season's calendar for the hud: every match with its date, opponent and result.
 func _cal_info() -> Array:
@@ -2430,6 +2473,34 @@ func _action(act: String, arg = null) -> void:
 			hud.refresh(_menu_info())
 		"c_sim":
 			_sim_mine()
+		"youth":
+			car_msg = ""
+			hud.show_menu("youth", _menu_info())
+		"y_tab":
+			y_tab = int(arg)
+			car_msg = ""
+			hud.refresh(_menu_info())
+		"y_pick":
+			car.scout_pick(int(arg))
+			hud.refresh(_menu_info())
+		"y_send":
+			car_msg = car.scout_send(int(arg))
+			hud.refresh(_menu_info())
+		"y_hire":
+			car_msg = car.scout_hire(int(arg))
+			hud.refresh(_menu_info())
+		"y_sign":
+			car_msg = car.youth_sign(int(arg))
+			hud.refresh(_menu_info())
+		"y_drop":
+			car.youth_drop(int(arg))
+			hud.refresh(_menu_info())
+		"y_prom":
+			car_msg = car.youth_promote(int(arg))
+			hud.refresh(_menu_info())
+		"y_rel":
+			car.youth_release(int(arg))
+			hud.refresh(_menu_info())
 		"adv_done":
 			adv_info = {}
 			_show_hub()

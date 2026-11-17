@@ -517,11 +517,13 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 			lines.append("%s  +1 TP" % str(pl["n"]).to_upper())
 		if int(pl["xp"]) > 100:
 			pl["xp"] = 100
-	# the youth academy sends a talent up twice a season
+	# the youth academy brings a local talent in twice a season; the scouts report every round
 	if int(d["round"]) == rounds_total() / 2 or season_over():
-		var yn := youth_arrives(rng)
+		var yn := youth_local(rng)
 		if yn != "":
 			lines.append(yn)
+	_scout_tick(rng, lines)
+	_acad_tick(rng, lines)
 	if season_over():
 		var pos := rank_of(me)
 		var n := ids().size()
@@ -1653,6 +1655,217 @@ func cup_after() -> int:
 func cup_after_r(cr: int) -> int:
 	var r := clampi(cr, 0, cup_rounds() - 1)
 	return int(round(rounds_total() * (r + 1.0) / (cup_rounds() + 1.0)))
+
+# ---------------------------------------------------------------- scouting and the youth academy
+# As in FIFA: youth scouts go to a country and come back with young players whose real level is hidden.
+# You see a range ("can reach 74-86"); a better scout gives a narrower one, and it narrows while the boy is in
+# your academy. Now and then a scout finds a wonderkid. You sign the ones you like into the academy, where they
+# grow, and promote them to the squad when they are ready.
+const REGIONS := [["England", 0.0, 1.0], ["Denmark", -1.0, 0.9], ["Spain", 2.0, 1.1], ["Brazil", 3.0, 1.4], ["Netherlands", 1.0, 1.0], ["Germany", 1.0, 0.9], ["France", 2.0, 1.1], ["Argentina", 2.5, 1.3]]
+const SCOUT_NAMES := ["Pete Harlow", "Jens Mogensen", "Rui Alves", "Marta Diaz", "Tom Becker", "Ole Krag", "Sam Okafor", "Luis Pardo"]
+const ACAD_MAX := 6
+const PROS_MAX := 8
+const SCOUT_ROUNDS := 4
+
+func scouts() -> Array:
+	if not d.has("scouts"):
+		d["scouts"] = [{"n": SCOUT_NAMES[int(d["club"]) % SCOUT_NAMES.size()], "st": 2, "rg": -1, "left": 0, "pick": 0}, {}]
+	return d["scouts"]
+
+func scout_cost(stars: int) -> int:
+	return 40 * stars
+
+# hire a scout in an empty place, or swap the scout for one with one more star
+func scout_hire(slot: int) -> String:
+	var sc: Array = scouts()
+	if slot < 0 or slot >= sc.size():
+		return ""
+	var cur: Dictionary = sc[slot]
+	var st: int = 1 if cur.is_empty() else int(cur["st"]) + 1
+	if st > 5:
+		return "HE IS THE BEST THERE IS"
+	if not cur.is_empty() and int(cur.get("left", 0)) > 0:
+		return "HE IS AWAY ON A TRIP"
+	var cost := scout_cost(st)
+	if int(d["coins"]) < cost:
+		return "NOT ENOUGH MONEY: A %d-STAR SCOUT COSTS %s" % [st, money(cost)]
+	d["coins"] = int(d["coins"]) - cost
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	sc[slot] = {"n": SCOUT_NAMES[rng.randi() % SCOUT_NAMES.size()], "st": st, "rg": -1, "left": 0, "pick": int(cur.get("pick", 0))}
+	save()
+	return "%s (%d STARS) JOINS YOUR STAFF" % [str(sc[slot]["n"]).to_upper(), st]
+
+func scout_pick(slot: int) -> void:
+	var sc: Dictionary = scouts()[slot]
+	if sc.is_empty() or int(sc.get("left", 0)) > 0:
+		return
+	sc["pick"] = (int(sc.get("pick", 0)) + 1) % REGIONS.size()
+	save()
+
+func scout_send(slot: int) -> String:
+	var sc: Dictionary = scouts()[slot]
+	if sc.is_empty() or int(sc.get("left", 0)) > 0:
+		return ""
+	sc["rg"] = int(sc.get("pick", 0))
+	sc["left"] = SCOUT_ROUNDS
+	save()
+	return "%s IS OFF TO %s FOR %d MATCHES" % [str(sc["n"]).to_upper(), str(REGIONS[int(sc["rg"])][0]).to_upper(), SCOUT_ROUNDS]
+
+func prospects() -> Array:
+	if not d.has("pros"):
+		d["pros"] = []
+	return d["pros"]
+
+func academy() -> Array:
+	if not d.has("acad"):
+		d["acad"] = []
+	return d["acad"]
+
+func _free_name(rng: RandomNumberGenerator) -> String:
+	var taken := {}
+	for l in [d["squad"], d.get("market", []), prospects(), academy()]:
+		for pl in l:
+			taken[str(pl["n"])] = true
+	var pool := []
+	for n in names:
+		if not taken.has(str(n)):
+			pool.append(n)
+	if pool.is_empty():
+		return str(names[rng.randi() % names.size()]) if not names.is_empty() else "KID"
+	return str(pool[rng.randi() % pool.size()])
+
+# a young player: real level and potential, and what your scout thinks they are (a range)
+func _youth(rng: RandomNumberGenerator, rg: int, stars: int) -> Dictionary:
+	var R: Array = REGIONS[clampi(rg, 0, REGIONS.size() - 1)]
+	var role: String = ["GK", "DF", "DF", "MF", "MF", "FW", "FW"][rng.randi() % 7]
+	var base: Array = ROLE_BASE[role]
+	var q := -20 + rng.randi_range(-3, 4)
+	var pl := {"n": _free_name(rng), "num": 0, "pos": role, "age": rng.randi_range(15, 17), "xp": 0, "g": 0, "apps": 0,
+		"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
+		"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "rg": rg}
+	# a better scout finds better boys, and some countries have more of them
+	var pot := 62.0 + stars * 2.5 + float(R[1]) + rng.randfn(0.0, 6.0 * float(R[2]))
+	var wonder := rng.randf() < 0.02 + stars * 0.015
+	if wonder:
+		pot = rng.randf_range(86.0, 94.0)
+	pl["pot"] = clampi(int(round(pot)), ovr_of(pl) + 6, 95)
+	if rng.randf() < 0.15 + stars * 0.04:
+		pl["ab"] = ab_roll(role, 70, rng).slice(0, 1)
+	# what the scout reports: the wider, the worse the scout
+	var w := (6 - stars) * 2 + 2
+	var lo := int(pl["pot"]) - rng.randi_range(0, w)
+	pl["plo"] = clampi(lo, ovr_of(pl) + 2, 95)
+	pl["phi"] = clampi(lo + w + rng.randi_range(0, 2), int(pl["pot"]), 97)
+	var ow := maxi(1, 5 - stars)
+	pl["olo"] = ovr_of(pl) - rng.randi_range(0, ow)
+	pl["ohi"] = int(pl["olo"]) + ow + 1
+	pl["exp"] = 8 # rounds before another club signs him
+	pl["fee"] = maxi(10, 8 + (int(pl["phi"]) - 60) * 2)
+	return pl
+
+func _scout_tick(rng: RandomNumberGenerator, lines: Array) -> void:
+	var pr: Array = prospects()
+	for p in pr:
+		p["exp"] = int(p["exp"]) - 1
+	var gone := pr.filter(func(p): return int(p["exp"]) <= 0)
+	if not gone.is_empty():
+		lines.append("SCOUTING: ANOTHER CLUB SIGNED %s" % str(gone[0]["n"]).to_upper())
+	d["pros"] = pr.filter(func(p): return int(p["exp"]) > 0)
+	for sc in scouts():
+		if sc.is_empty() or int(sc.get("left", 0)) <= 0:
+			continue
+		sc["left"] = int(sc["left"]) - 1
+		if rng.randf() < 0.55 + int(sc["st"]) * 0.07 or int(sc["left"]) == 0:
+			var yp := _youth(rng, int(sc["rg"]), int(sc["st"]))
+			prospects().append(yp)
+			while prospects().size() > PROS_MAX:
+				prospects().pop_front()
+			lines.append("SCOUT REPORT: %s (%d, %s) IN %s, CAN REACH %d-%d" % [str(yp["n"]).to_upper(), int(yp["age"]), str(yp["pos"]), str(REGIONS[int(yp["rg"])][0]).to_upper(), int(yp["plo"]), int(yp["phi"])])
+		if int(sc["left"]) == 0:
+			sc["rg"] = -1
+
+func youth_sign(i: int) -> String:
+	var pr: Array = prospects()
+	if i < 0 or i >= pr.size():
+		return ""
+	if academy().size() >= ACAD_MAX:
+		return "THE ACADEMY IS FULL (%d): PROMOTE OR RELEASE A BOY FIRST" % ACAD_MAX
+	var pl: Dictionary = pr[i]
+	var fee := int(pl["fee"])
+	if int(d["coins"]) < fee:
+		return "NOT ENOUGH MONEY: HE COSTS %s" % money(fee)
+	d["coins"] = int(d["coins"]) - fee
+	pr.remove_at(i)
+	pl.erase("exp")
+	# in your own academy you see his level at once; the potential still takes time
+	pl["olo"] = ovr_of(pl)
+	pl["ohi"] = ovr_of(pl)
+	academy().append(pl)
+	save()
+	return "%s JOINS YOUR ACADEMY" % str(pl["n"]).to_upper()
+
+func youth_drop(i: int) -> void:
+	if i >= 0 and i < prospects().size():
+		prospects().remove_at(i)
+		save()
+
+# the boys grow in the academy, and you learn more about them each round
+func _acad_tick(rng: RandomNumberGenerator, lines: Array) -> void:
+	for pl in academy():
+		if rng.randf() < 0.45 + 0.05 * fac("youth") and ovr_of(pl) < int(pl["pot"]) - 4:
+			var k: String = _grow_key(pl, rng)
+			pl[k] = mini(int(pl[k]) + 1, 95)
+		if int(pl["plo"]) < int(pl["pot"]):
+			pl["plo"] = int(pl["plo"]) + 1
+		if int(pl["phi"]) > int(pl["pot"]):
+			pl["phi"] = int(pl["phi"]) - 1
+		pl["olo"] = ovr_of(pl)
+		pl["ohi"] = ovr_of(pl)
+		if int(pl["plo"]) == int(pl["phi"]) and not pl.get("known", false):
+			pl["known"] = true
+			lines.append("ACADEMY: NOW WE KNOW, %s CAN REACH %d" % [str(pl["n"]).to_upper(), int(pl["pot"])])
+
+func youth_promote(i: int) -> String:
+	var ac: Array = academy()
+	if i < 0 or i >= ac.size():
+		return ""
+	if (d["squad"] as Array).size() >= SQUAD_MAX:
+		return "NO ROOM IN THE SQUAD (%d): SELL SOMEONE FIRST" % SQUAD_MAX
+	var pl: Dictionary = ac[i]
+	ac.remove_at(i)
+	for k in ["plo", "phi", "olo", "ohi", "rg", "fee", "known"]:
+		pl.erase(k)
+	var used := []
+	for s2 in d["squad"]:
+		used.append(int(s2["num"]))
+	for n in range(20, 99):
+		if not used.has(n):
+			pl["num"] = n
+			break
+	if eur:
+		pl["wk"] = 1
+		pl["ct"] = 3
+	d["squad"].append(pl)
+	save()
+	return "%s IS PROMOTED TO THE SQUAD" % str(pl["n"]).to_upper()
+
+func youth_release(i: int) -> void:
+	if i >= 0 and i < academy().size():
+		academy().remove_at(i)
+		save()
+
+# the academy's own local talent (twice a season): a better youth facility, a better boy
+func youth_local(rng: RandomNumberGenerator) -> String:
+	if academy().size() >= ACAD_MAX:
+		return ""
+	var ctry := str(league()["c"])
+	var pl := _youth(rng, 1 if ctry == "DENMARK" else 0, 1 + fac("youth"))
+	pl.erase("exp")
+	pl["olo"] = ovr_of(pl)
+	pl["ohi"] = ovr_of(pl)
+	academy().append(pl)
+	return "ACADEMY: A LOCAL TALENT, %s (%d, %s), CAN REACH %d-%d" % [str(pl["n"]).to_upper(), int(pl["age"]), str(pl["pos"]), int(pl["plo"]), int(pl["phi"])]
 
 # ---------------------------------------------------------------- the calendar
 # The season has dates, like a real one: league matches at the weekend from early August, a cup tie in the

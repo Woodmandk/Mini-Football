@@ -2469,6 +2469,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			menu.add_child(_back("tab", "office"))
 		"simres":
 			_sim_page(info, w, h, items, anim)
+		"youth":
+			_youth_page(info, w, h, items)
 		"adv":
 			_adv_page(info, w, h, anim)
 		"how":
@@ -2670,6 +2672,134 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 	if anim:
 		for it in items:
 			_slide_in(it[0], it[1], it[2])
+
+# ---------------------------------------------------------------- scouting and the youth academy
+func _youth_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var y: Dictionary = c.get("yth", {})
+	_title("Youth academy", "Scouts find young players. Their real level is hidden: a better scout tells you more.")
+	menu.add_child(_back("tab", "club"))
+	if y.is_empty():
+		return
+	var tab := int(y.get("tab", 0))
+	var pr: Array = y.get("pros", [])
+	var ac: Array = y.get("acad", [])
+	var names3 := ["Scouts", "Reports (%d)" % pr.size(), "Academy (%d/%d)" % [ac.size(), int(y.get("amax", 6))]]
+	var tw := 220.0
+	var tx := w * 0.5 - (tw * 3 + 20) * 0.5
+	for k in 3:
+		menu.add_child(_btn(names3[k].to_upper(), "y_tab", k, "primary" if k == tab else "alt", Vector2(tx + k * (tw + 10), 100), Vector2(tw, 46), 18))
+	var y0 := 160.0
+	var msg := str(c.get("msg", ""))
+	if msg != "":
+		var ml := _label(msg, 18, GOLD, font3)
+		ml.position = Vector2(24, h - 34)
+		ml.size = Vector2(w - 48, 26)
+		ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		menu.add_child(ml)
+	if tab == 0:
+		var sc: Array = y.get("scouts", [])
+		var hire: Array = y.get("hire", [])
+		var cw := (w - 48 - 16) * 0.5
+		for i in sc.size():
+			var e: Dictionary = sc[i]
+			var x := 24.0 + i * (cw + 16)
+			var pn := _card_panel(Vector2(x, y0), Vector2(cw, h - y0 - 44))
+			items.append([pn, Vector2(0, 40), 0.05 * i])
+			if e.is_empty():
+				var el := _label("No scout here yet", 24, MUT)
+				el.position = Vector2(22, 20)
+				pn.add_child(el)
+				var eh := _label("Hire a 1-star scout and send him abroad.", 19, MUT, font3)
+				eh.position = Vector2(22, 58)
+				pn.add_child(eh)
+				menu.add_child(_btn("HIRE A SCOUT  ·  %s" % _m(int(hire[i])), "y_hire", i, "primary", Vector2(x + 20, h - 44 - 76), Vector2(cw - 40, 56), 20))
+				continue
+			var nl := _label(str(e["n"]), 26, CHALK)
+			nl.position = Vector2(22, 16)
+			pn.add_child(nl)
+			var stl := _label("★".repeat(int(e["st"])) + "☆".repeat(5 - int(e["st"])), 24, GOLD, font3)
+			stl.position = Vector2(cw - 160, 18)
+			stl.size = Vector2(140, 30)
+			stl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			pn.add_child(stl)
+			var away := int(e["away"])
+			var st_t := ("In %s: back in %d match%s" % [str(e["rg"]), away, "" if away == 1 else "es"]) if away > 0 else "At home, ready to travel"
+			var sl := _label(st_t, 20, GREEN if away > 0 else MUT, font3)
+			sl.position = Vector2(22, 56)
+			pn.add_child(sl)
+			var hint := _label("A better scout finds better boys and sees their potential more clearly. Brazil and Argentina have the biggest talents, and the biggest surprises.", 18, MUT, font3)
+			hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+			hint.position = Vector2(22, 92)
+			hint.size = Vector2(cw - 44, 80)
+			pn.add_child(hint)
+			if away == 0:
+				menu.add_child(_btn("Country: %s  ›" % str(e["pick"]), "y_pick", i, "alt", Vector2(x + 20, h - 44 - 146), Vector2(cw - 40, 54), 20))
+				var hw := (cw - 50) * 0.5
+				menu.add_child(_btn("SEND", "y_send", i, "primary", Vector2(x + 20, h - 44 - 80), Vector2(hw, 58), 22))
+				menu.add_child(_btn("%d STARS  ·  %s" % [int(e["st"]) + 1, _m(int(hire[i]))] if int(e["st"]) < 5 else "THE BEST", "y_hire", i, "alt" if int(e["st"]) < 5 else "off", Vector2(x + 30 + hw, h - 44 - 80), Vector2(hw, 58), 17))
+		return
+	var rows: Array = pr if tab == 1 else ac
+	if rows.is_empty():
+		var el2 := _label("No reports yet: send a scout abroad. He reports after every match." if tab == 1 else "The academy is empty. Sign boys from the reports, and the youth facility sends a local talent twice a season.", 22, MUT, font3)
+		el2.autowrap_mode = TextServer.AUTOWRAP_WORD
+		el2.position = Vector2(80, y0 + 60)
+		el2.size = Vector2(w - 160, 100)
+		el2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		menu.add_child(el2)
+		return
+	var sc2 := ScrollContainer.new()
+	sc2.position = Vector2(24, y0)
+	sc2.size = Vector2(w - 48, h - y0 - 40)
+	sc2.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	menu.add_child(sc2)
+	var box := Control.new()
+	var rh := 70.0
+	box.custom_minimum_size = Vector2(w - 60, rows.size() * (rh + 8))
+	sc2.add_child(box)
+	for i in rows.size():
+		var r: Dictionary = rows[i]
+		var ry := i * (rh + 8)
+		var pn2 := Panel.new()
+		pn2.add_theme_stylebox_override("panel", _box(Color(S1.r, S1.g, S1.b, 0.95), 12, GOLD if int(r["phi"]) >= 86 else LINE))
+		pn2.position = Vector2(0, ry)
+		pn2.size = Vector2(w - 60, rh)
+		pn2.mouse_filter = Control.MOUSE_FILTER_PASS
+		box.add_child(pn2)
+		var n1 := _label("%s  %s" % [r["pos"], r["n"]], 22, CHALK)
+		n1.position = Vector2(18, 8)
+		n1.size = Vector2(300, 30)
+		n1.clip_text = true
+		pn2.add_child(n1)
+		var ab3: Array = r.get("ab", [])
+		var sub := "Age %d  ·  %s" % [int(r["age"]), r["rg"]] + (("  ·  " + str(ab3[0][1]).capitalize()) if not ab3.is_empty() else "")
+		if tab == 1:
+			sub += "  ·  gone in %d" % int(r["exp"])
+		var n2 := _label(sub, 17, MUT, font3)
+		n2.position = Vector2(18, 40)
+		n2.size = Vector2(320, 24)
+		n2.clip_text = true
+		pn2.add_child(n2)
+		var ov := _label(("Rating %d" % int(r["olo"])) if int(r["olo"]) == int(r["ohi"]) else ("Rating %d-%d" % [int(r["olo"]), int(r["ohi"])]), 20, CHALK, font3)
+		ov.position = Vector2(340, 22)
+		pn2.add_child(ov)
+		var known := int(r["plo"]) == int(r["phi"])
+		var pt := ("Can reach %d" % int(r["phi"])) if known else ("Can reach %d-%d" % [int(r["plo"]), int(r["phi"])])
+		var pl2 := _label(pt, 22, GOLD if int(r["phi"]) >= 86 else GREEN, font3)
+		pl2.position = Vector2(500, 20)
+		pn2.add_child(pl2)
+		if int(r["phi"]) >= 86:
+			var wk := _label("Wonderkid?" if not known else "Wonderkid", 17, GOLD, font3)
+			wk.position = Vector2(500, 46)
+			pn2.add_child(wk)
+		var bx := w - 60 - 330.0
+		if tab == 1:
+			box.add_child(_btn("SIGN  ·  %s" % _m(int(r["fee"])), "y_sign", i, "primary", Vector2(bx, ry + 10), Vector2(200, rh - 20), 18))
+			box.add_child(_btn("NO", "y_drop", i, "ghost", Vector2(bx + 210, ry + 10), Vector2(110, rh - 20), 18))
+		else:
+			var full := int(y.get("sq", 0)) >= int(y.get("sqmax", 19))
+			box.add_child(_btn("PROMOTE", "y_prom", i, "alt" if full else "primary", Vector2(bx, ry + 10), Vector2(200, rh - 20), 18))
+			box.add_child(_btn("RELEASE", "y_rel", i, "ghost", Vector2(bx + 210, ry + 10), Vector2(110, rh - 20), 18))
 
 # ---------------------------------------------------------------- the career's calendar, a simulated match, the days between matches
 const MONTHS3 := ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
@@ -3810,7 +3940,7 @@ func _tab_club(info: Dictionary, w: float, y0: float, ch: float, items: Array) -
 	_tiles([
 		["Buildings", ft if ft != "" else "Stadium, training, youth", "c_club", "build", GREEN],
 		["Transfers", "%d players for sale" % (c.get("market", []) as Array).size(), "c_market", "swap"],
-		(["The table", "%s of %d" % [_ord(int(c.get("rank", 1))).to_lower(), int(c.get("n", 20))], "c_table", "table"] if incar else ["Name and kit", "Your club's colours", "own", "kit"]),
+		(["Youth academy", "Scouts, reports and your boys", "youth", "me", GOLD] if incar else ["Name and kit", "Your club's colours", "own", "kit"]),
 	], 24, y0, w - 48, top_h, 3, items)
 	var ip := _card_panel(Vector2(24, y0 + top_h + 14), Vector2(w - 48, ch - top_h - 14))
 	var i2 := _label("A bigger stadium brings %s at home. A better training ground makes players grow faster." % _mw(), 21, MUT, font3)
