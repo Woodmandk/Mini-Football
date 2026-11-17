@@ -436,6 +436,9 @@ func _book(a: int, b: int, ga: int, gb: int) -> void:
 		tb["d"] = int(tb["d"]) + 1
 		ta["pts"] = int(ta["pts"]) + 1
 		tb["pts"] = int(tb["pts"]) + 1
+	# the last five results, newest last: W, D or L
+	ta["fm"] = (str(ta.get("fm", "")) + ("W" if ga > gb else ("L" if ga < gb else "D"))).right(5)
+	tb["fm"] = (str(tb.get("fm", "")) + ("W" if gb > ga else ("L" if gb < ga else "D"))).right(5)
 
 # Books your result, plays the rest of the round, pays out coins and grows the players who played.
 # Returns lines for the full-time screen.
@@ -825,7 +828,7 @@ func buy(i: int) -> String:
 		return "Your squad is full. Sell a player from the bench first."
 	if int(d["coins"]) < price:
 		return "You need %s more." % money(price - int(d["coins"]))
-	if eur:
+	if wages_on():
 		# a free agent with a fee for his rights: first he has to agree a contract
 		talk_sign(pl, price, -1, i)
 		return ""
@@ -1778,7 +1781,7 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	if amount >= ask or (neg.has(key) and amount >= int(neg[key])):
 		neg.erase(key)
 		d["neg"] = neg
-		if eur:
+		if wages_on():
 			# the clubs agree on the fee: now the player himself has to say yes to a contract
 			talk_sign(pl, amount, c, i)
 			save()
@@ -1850,6 +1853,10 @@ static func wage_text(k: int) -> String:
 	if k >= 1000:
 		return "€%sM" % String.num(k / 1000.0, 1).trim_suffix(".0")
 	return "€%dK" % k
+
+# Wages and contracts are part of a FULL career only; a simple career just buys, sells and plays.
+func wages_on() -> bool:
+	return eur and full()
 
 func wages() -> int:
 	var t := 0
@@ -2024,7 +2031,7 @@ func talk_offer() -> String:
 # The season ends: every contract has one season less. Who has none left goes on a free.
 func _contracts_end() -> Array:
 	var gone := []
-	if not eur or not d.has("wb"):
+	if not wages_on() or not d.has("wb"):
 		return gone
 	var sq: Array = d["squad"]
 	for pl in sq:

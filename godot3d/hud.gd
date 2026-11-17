@@ -810,37 +810,114 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 			menu.add_child(bk0)
 		"table":
 			var c7: Dictionary = info.get("car", {})
-			_title(str(c7.get("lgname", "THE LEAGUE")), "Top %d go up.   Bottom %d go down." % [int(c7.get("up", 0)), int(c7.get("down", 0))] if int(c7.get("up", 0)) > 0 and int(c7.get("down", 0)) > 0 else ("The champions win the league.   Bottom %d go down." % int(c7.get("down", 0)) if int(c7.get("down", 0)) > 0 else "Top %d go up." % int(c7.get("up", 0))))
-			var c2: Dictionary = info.get("car", {})
-			var rows2: Array = c2.get("table", [])
-			var tw2 := minf(w - 120.0, 860.0)
+			var up7 := int(c7.get("up", 0))
+			var dn7 := int(c7.get("down", 0))
+			var rows2: Array = c7.get("table", [])
+			_title(str(c7.get("lgname", "THE LEAGUE")), "")
+			# a key for the coloured edges: who goes up, who goes down
+			var keys7 := []
+			if up7 > 0:
+				keys7.append([GREEN, "TOP %d GO UP" % up7])
+			else:
+				keys7.append([GOLD, "1ST WINS THE LEAGUE"])
+			if dn7 > 0:
+				keys7.append([Color(0.92, 0.3, 0.3), "BOTTOM %d GO DOWN" % dn7])
+			var kx7 := w * 0.5 - 200.0 * keys7.size() * 0.5
+			for kk in keys7:
+				var kc := ColorRect.new()
+				kc.color = kk[0]
+				kc.position = Vector2(kx7, 72)
+				kc.size = Vector2(6, 20)
+				menu.add_child(kc)
+				var kl := _label(str(kk[1]), 16, Color(1, 1, 1, 0.8), font2)
+				kl.position = Vector2(kx7 + 14, 69)
+				menu.add_child(kl)
+				kx7 += 200.0
+			var tw2 := minf(w - 64.0, 1000.0)
 			var tx := (w - tw2) * 0.5
-			var rh2 := minf(46.0, (h - 110.0) / (rows2.size() + 1.0))
-			var cols2 := [0.0, 0.07, 0.52, 0.60, 0.68, 0.76, 0.85, 0.93]
-			var heads := ["#", "CLUB", "P", "W", "D", "L", "GD", "PTS"]
+			var rh2 := 48.0
+			# columns: place, club, played, won, drawn, lost, goal difference, points, form (last five)
+			var cols2 := [0.0, 0.06, 0.45, 0.51, 0.57, 0.63, 0.69, 0.765, 0.84]
+			var heads := ["#", "CLUB", "P", "W", "D", "L", "GD", "PTS", "FORM"]
+			var hb7 := Panel.new()
+			hb7.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.7), 8))
+			hb7.position = Vector2(tx, 96)
+			hb7.size = Vector2(tw2, 26)
+			hb7.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			menu.add_child(hb7)
 			for ci2 in heads.size():
-				var hl := _label(heads[ci2], 15, Color(1, 1, 1, 0.65), font2)
-				hl.position = Vector2(tx + 16 + cols2[ci2] * tw2, 76)
+				var hl := _label(heads[ci2], 15, Color(1, 1, 1, 0.6), font2)
+				hl.position = Vector2(tx + 18 + cols2[ci2] * tw2, 100)
 				menu.add_child(hl)
-			for ri in rows2.size():
+			var sc7 := ScrollContainer.new()
+			sc7.position = Vector2(tx, 126)
+			sc7.size = Vector2(tw2, h - 132.0)
+			sc7.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			sc7.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+			menu.add_child(sc7)
+			var box7 := Control.new()
+			box7.custom_minimum_size = Vector2(tw2, rows2.size() * rh2)
+			box7.mouse_filter = Control.MOUSE_FILTER_PASS
+			sc7.add_child(box7)
+			var mine7 := 0
+			var n7 := rows2.size()
+			for ri in n7:
 				var r: Array = rows2[ri]
+				var me7 := bool(r[8])
+				if me7:
+					mine7 = ri
 				var rp := Panel.new()
-				rp.add_theme_stylebox_override("panel", _box(Color(0.16, 0.2, 0.12, 0.95) if bool(r[8]) else Color(DARK.r, DARK.g, DARK.b, 0.82), 10, GOLD if bool(r[8]) else Color(0, 0, 0, 0)))
-				rp.position = Vector2(tx, 100 + ri * rh2)
-				rp.size = Vector2(tw2, rh2 - 5)
-				rp.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				menu.add_child(rp)
-				items.append([rp, Vector2(0, 30), 0.03 * ri])
+				rp.add_theme_stylebox_override("panel", _box(Color(0.16, 0.2, 0.12, 0.96) if me7 else Color(DARK.r, DARK.g, DARK.b, 0.84), 10, GOLD if me7 else Color(0, 0, 0, 0)))
+				rp.position = Vector2(0, ri * rh2)
+				rp.size = Vector2(tw2, rh2 - 6)
+				rp.mouse_filter = Control.MOUSE_FILTER_PASS
+				box7.add_child(rp)
+				# the zone edge: up (green) or the title (gold), down (red)
+				var zc := Color(0, 0, 0, 0)
+				if up7 > 0 and ri < up7:
+					zc = GREEN
+				elif up7 == 0 and ri == 0:
+					zc = GOLD
+				elif dn7 > 0 and ri >= n7 - dn7:
+					zc = Color(0.92, 0.3, 0.3)
+				if zc.a > 0.0:
+					var ze := ColorRect.new()
+					ze.color = zc
+					ze.position = Vector2(0, 6)
+					ze.size = Vector2(5, rh2 - 18)
+					ze.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					rp.add_child(ze)
 				var chip3 := ColorRect.new()
 				chip3.color = _seen(Color(str(r[9])))
-				chip3.position = Vector2(cols2[1] * tw2 - 2, 8)
-				chip3.size = Vector2(8, rh2 - 21)
+				chip3.position = Vector2(cols2[1] * tw2 + 4, 10)
+				chip3.size = Vector2(8, rh2 - 26)
+				chip3.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				rp.add_child(chip3)
 				var vals := [str(r[0]), str(r[1]), str(r[2]), str(r[3]), str(r[4]), str(r[5]), ("+" if int(r[6]) > 0 else "") + str(r[6]), str(r[7])]
 				for ci3 in vals.size():
-					var vl := _label(vals[ci3], 19 if ci3 in [1, 7] else 17, GOLD if bool(r[8]) and ci3 in [1, 7] else Color.WHITE, font if ci3 in [0, 1, 7] else font2)
-					vl.position = Vector2(16 + cols2[ci3] * tw2, (rh2 - 5) * 0.5 - 14)
+					var vl := _label(vals[ci3], 20 if ci3 in [1, 7] else 18, GOLD if me7 and ci3 in [1, 7] else Color.WHITE, font if ci3 in [0, 1, 7] else font2)
+					vl.position = Vector2(18 + cols2[ci3] * tw2 + (12 if ci3 == 1 else 0), (rh2 - 6) * 0.5 - 14)
+					vl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					rp.add_child(vl)
+				# form: the last five results as small squares, newest on the right
+				var fm7 := str(r[10]) if r.size() > 10 else ""
+				for fi in fm7.length():
+					var ch7 := fm7[fi]
+					var fb := Panel.new()
+					fb.add_theme_stylebox_override("panel", _box(GREEN if ch7 == "W" else (Color(0.92, 0.3, 0.3) if ch7 == "L" else Color(0.55, 0.58, 0.6)), 5))
+					fb.position = Vector2(18 + cols2[8] * tw2 + fi * 26.0, (rh2 - 6) * 0.5 - 11)
+					fb.size = Vector2(22, 22)
+					fb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					rp.add_child(fb)
+					var fl := _label(ch7, 14, Color(0.05, 0.08, 0.06), font)
+					fl.position = Vector2(0, 0)
+					fl.size = Vector2(22, 22)
+					fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					fl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+					fb.add_child(fl)
+			# open with your own club in view
+			var vis7 := sc7.size.y
+			sc7.set_deferred("scroll_vertical", int(clampf(mine7 * rh2 - vis7 * 0.5 + rh2 * 0.5, 0.0, maxf(n7 * rh2 - vis7, 0.0))))
 			var bk2 := _btn("<  BACK", "career", null, "ghost", Vector2(16, 14), Vector2(130, 48), 18)
 			menu.add_child(bk2)
 		"car_start":
@@ -1410,10 +1487,12 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 					"A grade and a bonus when the season ends",
 					"The cup is part of the season",
 					"No sacking: the board only grumbles",
+					"No wages or contracts: just buy, sell and play",
 				]],
 				["full", "FULL CAREER", "Like a real manager", [
 					"Everything in the simple career",
 					"The board CAN SACK YOU. Then you take a job at another club",
+					"Wages and a wage budget, contract talks, contracts that run out",
 				]],
 			]
 			for i0 in 2:
@@ -1775,7 +1854,9 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				dn.position = Vector2(16, 8)
 				dp.add_child(dn)
 				var eur3 := bool(c3.get("eur", false))
-				var dd := _label(("%s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)   ·   %s A WEEK   ·   %s" % [str(sp2["pos"]), int(sp2["age"]), int(sp2["ovr"]), int(sp2["pot"]), Career.wage_text(int(sp2.get("wk", 0))), "LAST SEASON OF HIS CONTRACT" if int(sp2.get("ct", 1)) <= 1 else "CONTRACT: %d SEASONS" % int(sp2.get("ct", 1))]) if eur3 else ("%s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)   ·   %d GOALS" % [str(sp2["pos"]), int(sp2["age"]), int(sp2["ovr"]), int(sp2["pot"]), int(sp2["g"])]), 13, (GOLD if eur3 and int(sp2.get("ct", 1)) <= 1 else Color(1, 1, 1, 0.75)), font2)
+				# wages and contracts: only in a FULL career
+				var wg3 := bool(c3.get("wg", eur3))
+				var dd := _label(("%s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)   ·   %s A WEEK   ·   %s" % [str(sp2["pos"]), int(sp2["age"]), int(sp2["ovr"]), int(sp2["pot"]), Career.wage_text(int(sp2.get("wk", 0))), "LAST SEASON OF HIS CONTRACT" if int(sp2.get("ct", 1)) <= 1 else "CONTRACT: %d SEASONS" % int(sp2.get("ct", 1))]) if wg3 else ("%s   ·   AGE %d   ·   RATING %d  (CAN REACH %d)   ·   %d GOALS" % [str(sp2["pos"]), int(sp2["age"]), int(sp2["ovr"]), int(sp2["pot"]), int(sp2["g"])]), 13, (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else Color(1, 1, 1, 0.75)), font2)
 				dd.position = Vector2(16, 44)
 				dp.add_child(dd)
 				var sn := ["PACE", "SHOOTING", "PASSING", "DEFENDING"]
@@ -1839,8 +1920,12 @@ func _build_menu(n: String, info: Dictionary, anim: bool) -> void:
 				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) + int(sp2.get("tp", 0)) < int(sp2["pot"])
 				var on_bench: bool = not (xi.has(sel) or xi.has(float(sel)))
 				var tw3 := (bw3 - 32) * (0.6 if on_bench else 1.0)
+				if eur3 and not wg3:
+					# a simple career: no contracts, so only selling (from the bench)
+					tw3 = -8.0
 				var trb := _btn(("NEW CONTRACT  ›" if int(sp2.get("ct", 1)) > 1 else "RENEW HIS CONTRACT  ›") if eur3 else "BUY 1 TP   (%s)" % _m(int(sp2["cost"])), "ct_open" if eur3 else "c_train", null, "primary" if (can or eur3) else "off", Vector2(bx3 + 16, dy + dp.size.y - 62), Vector2(tw3, 48), 17)
-				menu.add_child(trb)
+				if tw3 > 0.0:
+					menu.add_child(trb)
 				if on_bench:
 					var sure2: bool = int(c3.get("sell_sure", -1)) == sel
 					var slb := _btn("SURE? TAP AGAIN" if sure2 else "SELL  (%s)" % _mp(int(sp2["sell"])), "c_sell", null, "ghost", Vector2(bx3 + 16 + tw3 + 8, dy + dp.size.y - 62), Vector2(bw3 - 32 - tw3 - 8, 48), 14)
@@ -2108,7 +2193,7 @@ Tap a player to see him. A yellow mark means he is out of position.", 15, Color(
 				var n5 := _label(str(mp["n"]), 20, Color.WHITE)
 				n5.position = Vector2(0.04 * tw5, cy5 - 24)
 				rp5.add_child(n5)
-				var p5 := _label({"GK": "GOALKEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}[str(mp["pos"])] + (("   ·   WANTS ABOUT %s A WEEK" % Career.wage_text(int(round(int(mp.get("wk", 1)) * 1.2)))) if bool(c5.get("eur", false)) else ""), 12, pcol5.get(str(mp["pos"]), Color.WHITE), font2)
+				var p5 := _label({"GK": "GOALKEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}[str(mp["pos"])] + (("   ·   WANTS ABOUT %s A WEEK" % Career.wage_text(int(round(int(mp.get("wk", 1)) * 1.2)))) if bool(c5.get("wg", c5.get("eur", false))) else ""), 12, pcol5.get(str(mp["pos"]), Color.WHITE), font2)
 				p5.position = Vector2(0.04 * tw5, cy5 + 2)
 				rp5.add_child(p5)
 				var vals5 := [[str(mp["age"]), 0.27, 18, Color(1, 1, 1, 0.85)], [str(mp["ovr"]), 0.35, 26, GOLD], [str(mp["pot"]), 0.44, 20, GREEN.lightened(0.3)],
@@ -2826,7 +2911,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			var bv8 := _label(_mp(int(c.get("coins", 0))), 40, Color.WHITE)
 			bv8.position = Vector2(18, 30)
 			bp8.add_child(bv8)
-			if bool(c.get("eur", false)):
+			if bool(c.get("wg", c.get("eur", false))):
 				# the wage budget next to it, and money moved between the two
 				var wl8 := _label("WAGES A WEEK", 14, GOLD, font2)
 				wl8.position = Vector2(300, 10)

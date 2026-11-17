@@ -178,6 +178,9 @@ var subs_left := 3
 var sub_sel := -1
 var sub_off := []
 var sub_played := []
+var sub_bench := [[], []] # each side's bench for this match: player dicts (career men carry "sq", their squad index)
+var sub_left2 := [3, 3]
+var sub_used := [[], []] # bench places already brought on
 const CAMS := ["TV", "TOP", "CLOSE"]
 const N_F := 11 # numbers per player in a packed frame
 
@@ -482,10 +485,10 @@ func _ready() -> void:
 				cup_on = true
 				_set_clubs(int(car.d["club"]), car.cup_opp(), true)
 		_begin_match(demo and OS.get_cmdline_user_args().has("--intro"))
-		if car_test and menu_arg in ["subs", "pause"]:
+		if menu_arg in ["subs", "pause"]:
 			for p in players:
 				p.fit = randf_range(0.4, 1.0)
-			_substitute(9, 12)
+			_substitute(9, 0)
 			sub_sel = 7
 			print("SUBTEST ", teams[0][9].pname, " num=", teams[0][9].num, " left=", subs_left, " played=", sub_played)
 			hud.show_menu(menu_arg, _menu_info())
@@ -713,6 +716,10 @@ func _ready() -> void:
 				_own_start()
 			if menu_arg == "pack":
 				pack_res = {"n": "NORDIN", "pos": "FW", "age": 21, "pot": 84, "ovr": 77, "st": [80, 79, 66, 41]}
+			if menu_arg == "table" and OS.get_cmdline_user_args().has("--rounds"):
+				# a few rounds played, so the table has form
+				for r7 in 7:
+					car.finish_match(r7 % 3, (r7 * 2) % 3, [])
 			if menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad"):
 				_action("career")
 			if menu_arg == "start_club":
@@ -809,6 +816,7 @@ func _ready() -> void:
 				# the career's money: wages, contracts, talks, buildings from the board
 				start_li = 1
 				_start_mine()
+				car.d["mode"] = "full"
 				print("ECO wages=", car.wages(), " wb=", car.wb(), " fac=", car.d.get("fac", {}), " coins=", car.money(int(car.d["coins"])))
 				var bi := 13
 				car.talk_renew(bi)
@@ -927,6 +935,31 @@ func _ready() -> void:
 				else:
 					hub_tab = "team"
 					menu_arg = "main"
+			if menu_arg == "simpletest":
+				# a SIMPLE career: no contract talks, nobody leaves when a contract runs out
+				start_li = 1
+				_start_mine()
+				car.d["mode"] = "simple"
+				car.d["coins"] = 99999
+				var n0 := (car.d["squad"] as Array).size()
+				var m0: String = car.buy(0)
+				print("SIMPLE buy: '", m0, "' talk=", not car.talk().is_empty(), " squad ", n0, " -> ", (car.d["squad"] as Array).size(), " wg=", _car_info()["wg"])
+				var g8 := 0
+				while not car.season_over() and g8 < 200:
+					car.finish_match(1, 0, [], [])
+					g8 += 1
+				print("SIMPLE season 0 rounds ", g8)
+				var n1 := (car.d["squad"] as Array).size()
+				for k9 in 4:
+					car.next_season()
+					var g9 := 0
+					while not car.season_over() and g9 < 200:
+						car.finish_match(1, 0, [], [])
+						g9 += 1
+					print("SIMPLE season ", k9, " rounds ", g9, " squad ", (car.d["squad"] as Array).size())
+				print("SIMPLE after 4 seasons squad ", n1, " -> ", (car.d["squad"] as Array).size())
+				get_tree().quit()
+				return
 			if menu_arg == "rectest":
 				# the Profile record counts every match you play (here: a quick match won 2-1, then lost 0-3 as the guest)
 				print("REC before ", _rec())
@@ -939,6 +972,13 @@ func _ready() -> void:
 				score = [3, 0]
 				_full_time()
 				print("REC after loss as team 1 ", _rec(), " shown=", _menu_info()["pstats"])
+				net.role = "host"
+				humans[0].team = 0
+				score = [1, 0]
+				var cc0 := int(car_main.d["coins"])
+				_full_time()
+				print("FRIEND win lines=", car_lines.slice(0, 3), " coins ", cc0, " -> ", int(car_main.d["coins"]))
+				net.role = ""
 				get_tree().quit()
 				return
 			if menu_arg == "fttest":
@@ -1687,7 +1727,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": career_on and net.role != "guest" and screen == "match", "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
@@ -1737,37 +1777,113 @@ func _ab_pick_info() -> Dictionary:
 	return {"slot": ab_slot, "n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "price": car.ab_price(pl, ab_slot), "swap": ab_slot < have.size(),
 		"cur": Career.ABIL[have[ab_slot]][0] if ab_slot < have.size() else "", "opts": opts}
 
-# The substitution screen: who is on the pitch and how tired, and who is on the bench.
+# Your side in this match (the guest plays team 1 against the host; together you are both team 0).
+func _my_side() -> int:
+	for h in humans:
+		if h.local:
+			return h.team
+	return 0
+
+# The substitution screen: who is on the pitch and how tired, and who is on the bench. Every match has a bench.
 func _subs_info() -> Dictionary:
-	if not career_on or teams[0].size() < 11:
+	var t := _my_side()
+	if teams[t].size() < 11 or (sub_bench[t] as Array).is_empty():
 		return {}
 	var on := []
-	var on_sq := []
-	for p in teams[0]:
+	for p in teams[t]:
 		on.append({"slot": p.idx, "n": p.pname.to_upper(), "num": p.num, "role": p.role, "ovr": p.ovr, "fit": p.fit, "off": p.off})
-		on_sq.append(p.sq)
 	var bench := []
-	for i in (car.d["squad"] as Array).size():
-		if on_sq.has(i) or sub_off.has(i):
+	var bl: Array = sub_bench[t]
+	for i in bl.size():
+		if (sub_used[t] as Array).has(i):
 			continue
-		var pl: Dictionary = car.d["squad"][i]
+		var pl: Dictionary = bl[i]
 		bench.append({"sq": i, "n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl)})
-	return {"left": subs_left, "on": on, "bench": bench, "sel": sub_sel}
+	return {"left": int(sub_left2[t]), "on": on, "bench": bench, "sel": sub_sel}
+
+# The benches for this match (host or alone): the career squad, your own club's squad, or five men of the club.
+func _make_benches() -> void:
+	sub_bench = [[], []]
+	sub_left2 = [3, 3]
+	sub_used = [[], []]
+	for t in 2:
+		var bl := []
+		if career_on and t == 0:
+			for i in (car.d["squad"] as Array).size():
+				if not (car.d["xi"] as Array).has(i) and not (car.d["xi"] as Array).has(float(i)):
+					var pl: Dictionary = (car.d["squad"][i] as Dictionary).duplicate()
+					pl["sq"] = i
+					bl.append(pl)
+		elif (rk_on or ft_on) and (tov[t] as Dictionary).get("bench", []) is Array and not ((tov[t] as Dictionary).get("bench", []) as Array).is_empty():
+			for e in (tov[t] as Dictionary)["bench"]:
+				if e is Dictionary and e.has("n") and e.has("pos"):
+					bl.append(e)
+		else:
+			bl = _gen_bench(t)
+		sub_bench[t] = bl.slice(0, 9)
+
+# five substitutes for a club without a squad: a keeper and one or two of each line, a little under the eleven
+func _gen_bench(t: int) -> Array:
+	if teams[t].size() < 11:
+		return []
+	var avg := 0.0
+	var used := []
+	var taken := []
+	for p in teams[t]:
+		avg += p.ovr
+		used.append(p.num)
+		taken.append(p.pname)
+	avg /= teams[t].size()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = clubs[t] * 7919 + 13
+	var out := []
+	var num := 12
+	for role in ["GK", "DF", "MF", "MF", "FW"]:
+		var base: Array = Career.ROLE_BASE[role]
+		var q := int(round(avg)) - 72 - 3 + rng.randi_range(-2, 2)
+		var nm: String = SURNAMES[rng.randi() % SURNAMES.size()]
+		var tries := 0
+		while taken.has(nm) and tries < 20:
+			nm = SURNAMES[rng.randi() % SURNAMES.size()]
+			tries += 1
+		taken.append(nm)
+		while used.has(num):
+			num += 1
+		used.append(num)
+		out.append({"n": nm, "num": num, "pos": role, "pac": clampi(int(base[0]) + q, 30, 95), "sho": clampi(int(base[1]) + q, 25, 95),
+			"pas": clampi(int(base[2]) + q, 30, 95), "dfn": clampi(int(base[3]) + q, 25, 95), "ab": []})
+	return out
+
+# The career's own bookkeeping still uses this (who played, who came off).
+func _substitute(slot: int, b: int) -> void:
+	var t := _my_side()
+	if net.role == "guest":
+		net.send({"_": "subq", "t": t, "slot": slot, "b": b})
+		return
+	_sub_do(t, slot, b)
 
 # Bring a bench player on for the man in this place. He takes over the place with fresh legs.
-func _substitute(slot: int, sq_i: int) -> void:
-	if subs_left <= 0 or slot < 0 or slot >= teams[0].size() or sub_off.has(sq_i):
+func _sub_do(t: int, slot: int, b: int) -> void:
+	if t < 0 or t > 1 or int(sub_left2[t]) <= 0 or slot < 0 or slot >= teams[t].size():
 		return
-	var p = teams[0][slot]
+	var bl: Array = sub_bench[t]
+	if b < 0 or b >= bl.size() or (sub_used[t] as Array).has(b):
+		return
+	var p = teams[t][slot]
 	if p.off:
 		return
-	var pl: Dictionary = car.d["squad"][sq_i]
+	var pl: Dictionary = bl[b]
 	var old_name: String = p.pname
-	sub_off.append(p.sq)
-	if not sub_played.has(sq_i):
-		sub_played.append(sq_i)
-	var off_pos: int = (-6 if str(pl["pos"]) != p.role else 0) + car.mood_off(pl)
-	p.sq = sq_i
+	(sub_used[t] as Array).append(b)
+	var mo := 0
+	if pl.has("sq") and career_on and t == 0:
+		var sq_i := int(pl["sq"])
+		sub_off.append(p.sq)
+		if not sub_played.has(sq_i):
+			sub_played.append(sq_i)
+		p.sq = sq_i
+		mo = car.mood_off(car.d["squad"][sq_i])
+	var off_pos: int = (-6 if str(pl["pos"]) != p.role else 0) + mo
 	p.pname = str(pl["n"])
 	p.set_num(int(pl["num"]))
 	p.pac = int(pl["pac"]) + off_pos
@@ -1775,13 +1891,21 @@ func _substitute(slot: int, sq_i: int) -> void:
 	p.pas = int(pl["pas"]) + off_pos
 	p.dfn = int(pl["dfn"]) + off_pos
 	p.ovr = Career.ovr_of(pl) + off_pos
-	p.ab = Career.ab_of(pl)
+	p.ab = Career.ab_of(pl) if pl.has("ab") else []
 	_derive(p)
 	p.fit = 1.0
-	subs_left -= 1
+	sub_left2[t] = int(sub_left2[t]) - 1
+	subs_left = int(sub_left2[0])
+	if net.role == "host":
+		net.send({"_": "subd", "t": t, "slot": slot, "b": b})
+	_sub_show(old_name, p.pname)
+
+func _sub_show(old_name: String, new_name: String) -> void:
 	snd("whistle")
-	fx("say", "Substitution. %s comes on for %s." % [p.pname, old_name])
-	hud.toast("%s ON  ·  %s OFF" % [p.pname.to_upper(), old_name.to_upper()])
+	fx("say", "Substitution. %s comes on for %s." % [new_name, old_name])
+	hud.toast("%s ON  ·  %s OFF" % [new_name.to_upper(), old_name.to_upper()])
+	if hud.menu_name == "subs":
+		hud.refresh(_menu_info())
 
 func _fac_info() -> Array:
 	var out := []
@@ -1821,7 +1945,7 @@ func _car_info() -> Dictionary:
 	for i in ord.size():
 		var c: int = ord[i]
 		var t: Dictionary = d["table"][str(c)]
-		rows.append([i + 1, CLUBS[c]["n"], int(t["p"]), int(t["w"]), int(t["d"]), int(t["l"]), int(t["gf"]) - int(t["ga"]), int(t["pts"]), c == me_c, CLUBS[c]["k"][0]])
+		rows.append([i + 1, CLUBS[c]["n"], int(t["p"]), int(t["w"]), int(t["d"]), int(t["l"]), int(t["gf"]) - int(t["ga"]), int(t["pts"]), c == me_c, CLUBS[c]["k"][0], str(t.get("fm", ""))])
 	var last := []
 	for r in d["last"]:
 		last.append("%s  %d - %d  %s" % [CLUBS[int(r[0])]["s"], int(r[2]), int(r[3]), CLUBS[int(r[1])]["s"]])
@@ -1848,7 +1972,7 @@ func _car_info() -> Dictionary:
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 		"ab_pick": _ab_pick_info(), "board": _board_info(), "cup_due": car.cup_due(), "cup_after": car.cup_after(), "mode": car.mode(),
 		"sacked": car.d.has("sacked"), "on": car.on(),
-		"eur": car.eur, "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
+		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 	}
 
@@ -2753,7 +2877,7 @@ func _action(act: String, arg = null) -> void:
 					paused = true
 				hud.show_menu("pause", _menu_info())
 		"subs":
-			if career_on and net.role != "guest":
+			if screen == "match" and not _subs_info().is_empty():
 				sub_sel = -1
 				hud.show_menu("subs", _menu_info())
 		"sub_pick":
@@ -2831,8 +2955,17 @@ func _rk_team(c = null) -> Dictionary:
 	for x in c.d["xi"]:
 		var pl: Dictionary = c.d["squad"][int(x)]
 		xi.append({"n": str(pl["n"]), "num": int(pl["num"]), "pos": str(pl["pos"]), "pac": int(pl["pac"]), "sho": int(pl["sho"]), "pas": int(pl["pas"]), "dfn": int(pl["dfn"]), "ab": Career.ab_of(pl)})
+	# the bench too: up to seven men who are not in the eleven, so you can make changes in the match
+	var bench := []
+	for i in (c.d["squad"] as Array).size():
+		if bench.size() >= 7:
+			break
+		if (c.d["xi"] as Array).has(i) or (c.d["xi"] as Array).has(float(i)):
+			continue
+		var bp: Dictionary = c.d["squad"][i]
+		bench.append({"n": str(bp["n"]), "num": int(bp["num"]), "pos": str(bp["pos"]), "pac": int(bp["pac"]), "sho": int(bp["sho"]), "pas": int(bp["pas"]), "dfn": int(bp["dfn"]), "ab": Career.ab_of(bp)})
 	return {"n": str(cl["n"]), "s": str(cl["s"]), "k": (cl["k"] as Array).duplicate(), "a": (cl.get("a", cl["k"]) as Array).duplicate(), "f": c.form(), "lay": c.lay(),
-		"xi": xi, "rp": rk.rp(), "rn": str(rk.now()["n"]), "ov": int(round(c.my_strength()))}
+		"xi": xi, "bench": bench, "rp": rk.rp(), "rn": str(rk.now()["n"]), "ov": int(round(c.my_strength()))}
 
 # ---- a friend's room: each of you can bring your own club, with your own eleven, formation and spots
 func _has_own() -> bool:
@@ -3163,6 +3296,38 @@ func _net_poll() -> void:
 						hud.refresh(_menu_info())
 			"ready":
 				hud.refresh(_menu_info())
+			"bn":
+				# the benches for this match, from the host
+				var bb = m.get("b", [])
+				if net.role == "guest" and bb is Array and bb.size() == 2 and bb[0] is Array and bb[1] is Array:
+					sub_bench = bb
+					sub_left2 = [3, 3]
+					sub_used = [[], []]
+			"subq":
+				# the friend makes a substitution in his side: the host does it and tells both phones
+				if net.role == "host" and screen == "match":
+					var st := int(m.get("t", -1))
+					var ok_t := false
+					for hm in humans:
+						if not hm.local and hm.team == st:
+							ok_t = true
+					if ok_t:
+						_sub_do(st, int(m.get("slot", -1)), int(m.get("b", -1)))
+			"subd":
+				# the host made a substitution: the same man on this phone
+				if net.role == "guest":
+					var dt9 := int(m.get("t", -1))
+					var ds := int(m.get("slot", -1))
+					var db := int(m.get("b", -1))
+					if dt9 >= 0 and dt9 < 2 and ds >= 0 and ds < teams[dt9].size() and db >= 0 and db < (sub_bench[dt9] as Array).size():
+						var dp = teams[dt9][ds]
+						var dpl: Dictionary = sub_bench[dt9][db]
+						var on9: String = dp.pname
+						dp.pname = str(dpl["n"])
+						dp.set_num(int(dpl["num"]))
+						(sub_used[dt9] as Array).append(db)
+						sub_left2[dt9] = int(sub_left2[dt9]) - 1
+						_sub_show(on9, dp.pname)
 			"club":
 				if net.role == "host":
 					guest_club = clampi(int(m.get("id", 1)), 0, CLUBS.size() - 1)
@@ -3326,6 +3491,14 @@ func _begin_match(with_intro: bool) -> void:
 	if career_on:
 		for x in car.d["xi"]:
 			sub_played.append(int(x))
+	sub_bench = [[], []]
+	sub_left2 = [3, 3]
+	sub_used = [[], []]
+	if net.role != "guest":
+		_make_benches()
+		if net.role == "host":
+			# the friend's phone shows the benches too (and asks the host to make its changes)
+			net.send({"_": "bn", "b": sub_bench})
 	for p in players:
 		p.fit = 1.0
 	test_t = Time.get_ticks_msec() / 1000.0
@@ -4861,8 +5034,27 @@ func _full_time() -> void:
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		_car_coins(true)
 		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1], car_lines[1]] + ([str(car.d["note"])] if car.season_over() else [])]
+	elif net.role != "":
+		car_lines = _friend_reward()
 	_rec_add(ti0 >= 0 and int(car.stats().get("titles", 0)) > ti0)
 	hud.show_menu("full", _menu_info())
+
+# A match in a friend's room pays your own club a little, on both phones: a few coins and XP for your eleven.
+# No form or energy is used. (A career played together pays through the career instead.)
+const FRIEND_COINS := [20, 10, 5] # win, draw, loss
+func _friend_reward() -> Array:
+	if not car_main.has_save():
+		return []
+	var mt := 0
+	for h in humans:
+		if h.local:
+			mt = h.team
+			break
+	var w := _winner()
+	var k := 1 if w < 0 else (0 if w == mt else 2)
+	var lines: Array = car_main.coop_reward(FRIEND_COINS[k], k == 0)
+	car_main.save()
+	return lines
 
 # Your record on the Profile tab: every match you play counts, in every mode, on both phones.
 func _rec() -> Dictionary:
@@ -5722,7 +5914,13 @@ func _slide_tackle(h) -> void:
 		var lead: Vector3 = to + (c.vel * 0.18 if c != null else Vector3(ball_vel.x, 0, ball_vel.z) * 0.18)
 		dirs = lead.normalized()
 		me_p.yaw = atan2(-dirs.x, -dirs.z)
+	_slide_go(me_p, dirs)
+
+func _slide_go(me_p, dirs: Vector3) -> void:
 	# like the 2D game: a fast burst along the grass, more than twice his running speed, about six metres
+	if me_p.tackle_t < 0.0:
+		me_p.start_tackle()
+	me_p.yaw = atan2(-dirs.x, -dirs.z)
 	me_p.slide_dir = dirs
 	me_p.vel = dirs * SLIDE_V
 	me_p.slide_live = true
@@ -5730,6 +5928,52 @@ func _slide_tackle(h) -> void:
 	me_p.stun = SLIDE_T + 0.3
 	snd("slide")
 	fx("dust", [me_p.position.x, me_p.position.z])
+
+# A computer defender goes to ground, like a real one: only when the ball is out of the runner's feet
+# (a long touch at speed), he comes from the front or the side, the ball is within a slide, and the moment
+# has lasted his reaction time. A good defender waits for that moment; a poor one goes early or from a bad
+# angle. What the slide meets decides it (_slides): the ball is won, the man from behind is a foul. No dice.
+func _cpu_slide(o, c, dt: float) -> bool:
+	o.slide_cd -= dt
+	if o.slide_cd > 0.0 or o.tackle_t >= 0.0 or o.stun > 0.0 or state != "play" or set_piece != "":
+		o.slide_w = 0.0
+		return false
+	var cs: float = c.vel.length()
+	var to: Vector3 = ball.position - o.position
+	to.y = 0.0
+	var bd: float = to.length()
+	var front: float = c.fwd().dot((o.position - c.position).normalized())
+	var dq: float = clampf((o.dfn - 40) / 50.0, 0.0, 1.0)
+	# at speed the ball runs a step ahead of him (out of his feet); slow, it is tucked in and a slide only finds the man.
+	# A good defender waits for a runner at full tilt and a clean angle; a poor one also goes in early or from a worse angle.
+	var need_sp: float = lerpf(0.5, 0.72, dq)
+	var need_front: float = lerpf(-0.45, -0.15, dq)
+	var ok: bool = cs > c.top_speed * need_sp and c.skill_t < 0.0 and bd > 1.7 and bd < 3.9 and front > need_front and ball.position.y < 0.5
+	# not in his own box: a slide there is a penalty if it goes wrong (only the very best dare)
+	var own_x := -HL * side(o.team)
+	if ok and absf(ball.position.x - own_x) < 16.5 and absf(ball.position.z) < 20.16 and dq < 0.8:
+		ok = false
+	# only one man of a team on the grass at a time
+	if ok:
+		for m in teams[o.team]:
+			if m != o and m.slide_live:
+				ok = false
+				break
+	if not ok:
+		o.slide_w = maxf(o.slide_w - dt * 2.0, 0.0)
+		return false
+	o.slide_w += dt
+	if o.slide_w < lerpf(0.32, 0.18, dq) * (_cpu(o.team)["need"] / 0.5):
+		return false
+	o.slide_w = 0.0
+	o.slide_cd = 6.0
+	# aim where the ball will be when he gets there
+	var t: float = bd / (SLIDE_V * 0.6)
+	# a good defender reads where the ball is going; a poor one slides at where it is now and arrives behind it, into the man
+	var lead: Vector3 = to + c.vel * t * lerpf(0.25, 1.0, dq)
+	_slide_go(o, lead.normalized())
+	stats["cslide"] = int(stats.get("cslide", 0)) + 1
+	return true
 
 func _slides() -> void:
 	for p in players:
@@ -5870,6 +6114,8 @@ func _tackles(dt: float) -> void:
 			# shielding only works on the move: a man who stands still gets robbed
 			d = minf(d, o.position.distance_to(c.position) - 0.1)
 		var front: float = c.fwd().dot((o.position - c.position).normalized())
+		if o.commit_t < 0.0 and _cpu_slide(o, c, dt):
+			continue
 		if o.commit_t >= 0.0:
 			# the tackle is already on its way: it lands a moment later, wherever the carrier has turned by then
 			o.commit_t -= dt
@@ -5897,6 +6143,9 @@ func _tackles(dt: float) -> void:
 				need = 0.6
 			elif not stepping:
 				need *= 1.4
+			else:
+				# he has decided to step in: now it is only his reaction time
+				need *= 0.55
 			need *= lerpf(1.15, 0.88, clampf((o.dfn - 40) / 45.0, 0.0, 1.0))
 			if o.press_t > need - 0.15:
 				o.press_t = 0.0
@@ -6611,6 +6860,8 @@ func _guest_frame(dt: float) -> void:
 		if state == "full" and prev != "full":
 			if rk_on:
 				_rk_finish()
+			elif not career_on and not co_got and snap.get("co") == null:
+				car_lines = _friend_reward()
 			_rec_add(false)
 			hud.show_menu("full", _menu_info())
 		elif state != "full" and prev == "full":
