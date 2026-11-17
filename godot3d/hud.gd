@@ -2527,6 +2527,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			_sim_page(info, w, h, items, anim)
 		"youth":
 			_youth_page(info, w, h, items)
+		"pro_start":
+			_pro_start_page(info, w, h, items)
 		"inbox":
 			_inbox_page(info, w, h, items)
 		"scorers":
@@ -3458,6 +3460,8 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var tabs := [["play", "Play", "play"], ["team", "Team", "team"], ["club", "Club", "club"], ["shop", "Shop", "shop"], ["profile", "Me", "me"]]
 	if incar:
 		tabs = [["career", "Home", "play"], ["team", "Squad", "team"], ["transfers", "Transfers", "swap"], ["club", "Club", "club"], ["office", "Office", "office"]]
+		if not (info.get("pro", {}) as Dictionary).is_empty():
+			tabs = [["career", "Home", "play"], ["pro", "Player", "me"], ["league", "League", "table"], ["office", "Office", "office"]]
 	var ty := 74.0
 	var th := minf(84.0, (h - ty - 10.0) / 5.0)
 	for i in tabs.size():
@@ -3486,7 +3490,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	menu = box
 	w -= RAIL_W
 	# header: the place's name, one chip of facts, your money (and in the career the way out)
-	var names := {"play": "Play", "team": "Squad" if incar else "Team", "club": "Club", "shop": "Shop", "profile": "Me", "career": str(c.get("name", "Career")).capitalize(), "transfers": "Transfers", "office": "Office"}
+	var names := {"pro": "My player", "league": "League", "play": "Play", "team": "Squad" if incar else "Team", "club": "Club", "shop": "Shop", "profile": "Me", "career": str(c.get("name", "Career")).capitalize(), "transfers": "Transfers", "office": "Office"}
 	var ttl := _label(str(names.get(tab, "")), 34, CHALK)
 	ttl.position = Vector2(24, 10)
 	menu.add_child(ttl)
@@ -3498,7 +3502,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 		chip_t = "%s  ·  round %d of %d  ·  %s" % [str(c.get("lgname", "")).capitalize(), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))).to_lower()]
 	else:
 		chip_t = "%s  ·  rating %d" % [str(c.get("name", "")).capitalize(), int(c.get("str", 0))]
-	var money := _label(_mp(int(c.get("coins", 0))), 30, GOLD)
+	var money := _label(_mp(int(c.get("coins", 0))) if (info.get("pro", {}) as Dictionary).is_empty() else "", 30, GOLD)
 	money.size = Vector2(260, 40)
 	money.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var rx := w - 20.0
@@ -3567,6 +3571,10 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 			_tab_transfers(info, w, y0, ch, items)
 		"office":
 			_tab_office(info, w, y0, ch, items)
+		"pro":
+			_tab_pro(info, w, y0, ch, items)
+		"league":
+			_tab_league(info, w, y0, ch, items)
 		"team":
 			_tab_team(info, w, y0, ch, items)
 		"club":
@@ -3655,26 +3663,27 @@ func _tab_play(info: Dictionary, w: float, y0: float, ch: float, items: Array) -
 	_pulse(go)
 	# the four other ways to play: icon, name, one line of what is going on
 	var tw := (w - 48.0 - hw - 2 * gap) * 0.5
-	var tl := (ch - gap) * 0.5
+	var tl := (ch - 2 * gap) / 3.0
 	var defs := [
 		["Career", car_s, "c_home" if on else "c_start", GREEN, "ladder"],
-		["The cup", cs, "cupm", GOLD, "cup"],
+		["Player career", str(info.get("pro_tile", "")), "p_home", Color(0.62, 0.45, 0.95), "me"],
 		["Ranked", "%s  ·  %d pts" % [_rk_name(str(rki.get("n", ""))), int(rki.get("rp", 0))], "online", Color(str(rki.get("c", "e8954a"))), "shield"],
+		["The cup", cs, "cupm", GOLD, "cup"],
 		["With a friend", "Together or against", "friend", Color(0.36, 0.6, 1.0), "duo"],
 	]
-	for i in 4:
+	for i in 5:
 		var pos := Vector2(24 + hw + gap + (i % 2) * (tw + gap), y0 + (i / 2) * (tl + gap))
-		var sz := Vector2(tw, tl)
+		var sz := Vector2(tw if i < 4 else tw * 2 + gap, tl)
 		var b := _card(str(defs[i][2]), null, pos, sz, defs[i][3])
 		menu.add_child(b)
 		items.append([b, Vector2(0, 40), 0.05 + 0.04 * i])
 		if i == 2:
-			_rk_badge(b, Vector2(20, 16), 46.0, rki)
+			_rk_badge(b, Vector2(16, 12), 36.0, rki)
 		else:
-			var ic := _icon(str(defs[i][4]), 44, CHALK)
-			ic.position = Vector2(22, 18)
+			var ic := _icon(str(defs[i][4]), 34, CHALK)
+			ic.position = Vector2(18, 14)
 			b.add_child(ic)
-		_card_text(b, str(defs[i][0]), str(defs[i][1]), sz, 30)
+		_card_text(b, str(defs[i][0]), str(defs[i][1]), sz, 24)
 
 # "BRONZE III" -> "Bronze III"
 func _rk_name(n: String) -> String:
@@ -3707,7 +3716,12 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		if bool(c.get("sacked", false)):
 			nt.text = "The board has sacked you. Three clubs want you as their manager."
 			nt.add_theme_color_override("font_color", Color(0.95, 0.4, 0.35))
+		var pro_o: Dictionary = info.get("pro", {})
+		if not pro_o.is_empty():
+			nt.text = "Season over. %d matches, %d goals, %d assists, average rating %.1f." % [int(pro_o["ss"]["apps"]), int(pro_o["ss"]["g"]), int(pro_o["ss"]["a"]), float(pro_o["avg"])] + (("\nYou move to %s." % str(pro_o["offer"])) if str(pro_o["offer"]) != "" else "")
 		var ns := _btn("THE BOARD'S VERDICT", "c_review", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(lw - 40, bh), 30)
+		if not pro_o.is_empty():
+			ns = _btn("NEXT SEASON", "c_next", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(lw - 40, bh), 30)
 		menu.add_child(ns)
 		items.append([ns, Vector2(0, 60), 0.1])
 	else:
@@ -3759,7 +3773,19 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		# simulate works together too: the manager's tap simulates on both phones, the friend's tap asks him
 		var can_sim := not bool(c.get("sacked", false))
 		var pw := (lw - 40) * (0.64 if can_sim else 1.0)
-		var pm := _btn(_co_play_text(info, "PLAY EUROPE" if edue else ("PLAY CUP MATCH" if cdue else "PLAY MATCH")), "c_play", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(pw, bh), 30 if can_sim else 32)
+		var ptx := "PLAY EUROPE" if edue else ("PLAY CUP MATCH" if cdue else "PLAY MATCH")
+		var pro_i: Dictionary = info.get("pro", {})
+		if not pro_i.is_empty():
+			var st_on := str(pro_i.get("next", "")) == "start"
+			ptx = "PLAY" if st_on else "WATCH FROM THE BENCH"
+			var sl := _label(("You start, as %s" % str(pro_i["pos"])) if st_on else ("Injured: you miss this one" if bool(pro_i.get("inj", false)) else "The manager has you on the bench"), 20, GREEN if st_on else MUT, font3)
+			sl.position = Vector2(22, 48)
+			sl.size = Vector2(lw - 44, 26)
+			card.add_child(sl)
+			if not st_on:
+				can_sim = false
+				pw = lw - 40
+		var pm := _btn(_co_play_text(info, ptx), "c_play", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(pw, bh), 30 if can_sim else 32)
 		menu.add_child(pm)
 		items.append([pm, Vector2(0, 60), 0.1])
 		if can_sim:
@@ -3808,13 +3834,16 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	var together := not bool(info.get("assist", false)) or not wd0.is_empty()
 	var each := (left_h - gap * (2 if together else 1)) / (3.0 if together else 2.0)
 	var bc := int(bd.get("conf", 50))
-	var bb := _card("c_board", null, Vector2(rx, yy), Vector2(rw, each))
+	var pro_r: Dictionary = info.get("pro", {})
+	if not pro_r.is_empty():
+		bc = int(pro_r["trust"])
+	var bb := _card("tab" if not pro_r.is_empty() else "c_board", "pro" if not pro_r.is_empty() else null, Vector2(rx, yy), Vector2(rw, each))
 	menu.add_child(bb)
 	items.append([bb, Vector2(80, 0), 0.04])
-	var bl := _label("Board", 22, CHALK, font3)
+	var bl := _label("Manager's trust" if not pro_r.is_empty() else "Board", 22, CHALK, font3)
 	bl.position = Vector2(20, 10)
 	bb.add_child(bl)
-	var bm := _label("%s %d" % [str(bd.get("mood", "")).capitalize(), bc], 22, _conf_col(bc), font3)
+	var bm := _label(("%d" % bc) if not pro_r.is_empty() else "%s %d" % [str(bd.get("mood", "")).capitalize(), bc], 22, _conf_col(bc), font3)
 	bm.position = Vector2(rw - 220, 10)
 	bm.size = Vector2(200, 28)
 	bm.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -3986,6 +4015,14 @@ func _tab_transfers(info: Dictionary, w: float, y0: float, ch: float, items: Arr
 
 func _tab_office(info: Dictionary, w: float, y0: float, ch: float, items: Array) -> void:
 	var c: Dictionary = info.get("car", {})
+	if not (info.get("pro", {}) as Dictionary).is_empty():
+		_tiles([
+			["Inbox", "Offers and news", "inbox", "mail", GOLD],
+			["Calendar", ("Next: " + str(c.get("ndate", ""))) if str(c.get("ndate", "")) != "" else "The season", "cal", "cal", Color(0.36, 0.6, 1.0)],
+			["Match settings", "%s  ·  %s" % [["Easy", "Normal", "Hard"][clampi(int(c.get("cdiff", 1)), 0, 2)], ["3 min", "5 min", "8 min"][clampi(int(c.get("clen", 1)), 0, 2)]], "cset", "sliders"],
+			["New player", "Start a new player career", "p_new", "plus"],
+		], 24, y0, w - 48, ch, 2, items)
+		return
 	var bd: Dictionary = c.get("board", {})
 	var cp: Dictionary = c.get("cup", {})
 	_tiles([
@@ -5080,3 +5117,214 @@ func _eu_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 					sc.size = Vector2(24, 22)
 					sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 					pn2.add_child(sc)
+
+# ---------------------------------------------------------------- the player career
+func _tab_league(info: Dictionary, w: float, y0: float, ch: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var cp: Dictionary = c.get("cup", {})
+	var eu: Dictionary = c.get("eu", {})
+	var defs := [
+		["The table", "%s  ·  %s" % [str(c.get("lgname", "")).capitalize(), _ord(int(c.get("rank", 1))).to_lower()], "c_table", "table", GREEN],
+		["Top scorers", "Who has the most goals", "scorers", "play"],
+		["The cup", str(cp.get("cname", "The cup")).capitalize(), "cup", "cup", GOLD],
+		["Trophy cabinet", "Trophies, awards and records", "cab", "cup"],
+	]
+	if not eu.is_empty():
+		defs.append(["Champions Cup", "Europe's big cup", "eu", "cup", EUBLUE])
+	defs.append(["Calendar", ("Next: " + str(c.get("ndate", ""))) if str(c.get("ndate", "")) != "" else "The season", "cal", "cal"])
+	_tiles(defs, 24, y0, w - 48, ch, 3, items)
+
+func _pro_bar(parent: Control, pos: Vector2, wd: float, v: float, col: Color) -> void:
+	var bg := ColorRect.new()
+	bg.color = Color(1, 1, 1, 0.1)
+	bg.position = pos
+	bg.size = Vector2(wd, 10)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(bg)
+	var fg := ColorRect.new()
+	fg.color = col
+	fg.position = pos
+	fg.size = Vector2(wd * clampf(v, 0.0, 1.0), 10)
+	fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(fg)
+
+func _tab_pro(info: Dictionary, w: float, y0: float, ch: float, items: Array) -> void:
+	var p: Dictionary = info.get("pro", {})
+	if p.is_empty():
+		return
+	var gap := 14.0
+	var lw := (w - 48.0 - gap) * 0.48
+	var lp := _card_panel(Vector2(24, y0), Vector2(lw, ch))
+	items.append([lp, Vector2(-60, 0), 0.0])
+	var ov := _label(str(int(p["ovr"])), 64, GOLD)
+	ov.position = Vector2(22, 4)
+	lp.add_child(ov)
+	var nm := _label(str(p["n"]).capitalize(), 30, CHALK)
+	nm.position = Vector2(118, 12)
+	nm.clip_text = true
+	nm.size = Vector2(lw - 140, 38)
+	lp.add_child(nm)
+	var pnm: String = {"DF": "Defender", "MF": "Midfielder", "FW": "Forward"}.get(str(p["pos"]), str(p["pos"]))
+	var meta := _label("%s  ·  %d  ·  can reach %d" % [pnm, int(p["age"]), int(p["pot"])], 19, MUT, font3)
+	meta.position = Vector2(118, 52)
+	meta.size = Vector2(lw - 140, 26)
+	meta.clip_text = true
+	lp.add_child(meta)
+	var fl := _label("Form %s  ·  Fitness %d%%  ·  %s" % [Career.form_name(int(p["fm"])).to_lower(), int(p["cond"]), str(p["club"])], 19, MUT, font3)
+	fl.position = Vector2(22, 92)
+	fl.size = Vector2(lw - 44, 26)
+	fl.clip_text = true
+	lp.add_child(fl)
+	var tp := int(p["tp"])
+	var sn := ["Pace", "Shooting", "Passing", "Defending"]
+	var st: Array = p["st"]
+	var sy := 132.0
+	var rowh := minf(58.0, (ch - sy - 120.0) / 4.0)
+	for i in 4:
+		var y := sy + i * rowh
+		var lb := _label("%s  %d" % [sn[i], int(st[i])], 21, CHALK, font3)
+		lb.position = Vector2(22, y)
+		lp.add_child(lb)
+		_pro_bar(lp, Vector2(22, y + 30), lw - 44 - (64 if tp > 0 else 0), int(st[i]) / 99.0, GREEN if int(st[i]) >= 70 else GOLD)
+		if tp > 0:
+			var pb := _btn("+", "p_spend", i, "primary", Vector2(24 + lw - 22 - 54, y0 + y + 4), Vector2(50, 42), 26)
+			menu.add_child(pb)
+	var xy := sy + 4 * rowh + 6
+	var xl := _label(("%d skill point%s to spend: tap +" % [tp, "" if tp == 1 else "s"]) if tp > 0 else "Play well to earn skill points", 19, GOLD if tp > 0 else MUT, font3)
+	xl.position = Vector2(22, xy)
+	xl.size = Vector2(lw - 44, 26)
+	lp.add_child(xl)
+	_pro_bar(lp, Vector2(22, xy + 30), lw - 44, int(p["pxp"]) / 100.0, Color(0.62, 0.45, 0.95))
+	if str(p.get("msg", "")) != "":
+		var ml := _label(str(p["msg"]), 18, GOLD, font3)
+		ml.position = Vector2(22, ch - 34)
+		ml.size = Vector2(lw - 44, 26)
+		ml.clip_text = true
+		lp.add_child(ml)
+	# right: the manager, the season, the goals
+	var rx := 24.0 + lw + gap
+	var rw := w - rx - 24.0
+	var th := 92.0
+	var tc := _card_panel(Vector2(rx, y0), Vector2(rw, th))
+	items.append([tc, Vector2(80, 0), 0.04])
+	var tr := int(p["trust"])
+	var tl := _label("Manager's trust", 22, CHALK, font3)
+	tl.position = Vector2(20, 12)
+	tc.add_child(tl)
+	var tv := _label("%d" % tr, 22, _conf_col(tr), font3)
+	tv.position = Vector2(rw - 120, 12)
+	tv.size = Vector2(100, 28)
+	tv.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	tc.add_child(tv)
+	_pro_bar(tc, Vector2(20, 48), rw - 40, tr / 100.0, _conf_col(tr))
+	var tx := _label("He picks the team: good ratings make him trust you", 16, MUT, font3)
+	tx.position = Vector2(20, 64)
+	tx.size = Vector2(rw - 40, 22)
+	tx.clip_text = true
+	tc.add_child(tx)
+	var ss: Dictionary = p["ss"]
+	var sy2 := y0 + th + gap
+	var sh := 104.0
+	var sc := _card_panel(Vector2(rx, sy2), Vector2(rw, sh))
+	items.append([sc, Vector2(80, 0), 0.08])
+	var cells := [["Matches", str(int(ss["apps"]))], ["Goals", str(int(ss["g"]))], ["Assists", str(int(ss["a"]))], ["Rating", "%.1f" % float(p["avg"]) if int(ss["apps"]) > 0 else "-"]]
+	var cw := (rw - 20) / 4.0
+	for i in 4:
+		var v := _label(str(cells[i][1]), 34, CHALK)
+		v.position = Vector2(10 + i * cw, 10)
+		v.size = Vector2(cw, 40)
+		v.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sc.add_child(v)
+		var k := _label(str(cells[i][0]), 17, MUT, font3)
+		k.position = Vector2(10 + i * cw, 52)
+		k.size = Vector2(cw, 22)
+		k.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		sc.add_child(k)
+	var rl: Array = p.get("rt", [])
+	var rtx := "Last ratings:  " + ("  ".join(rl.slice(maxi(rl.size() - 6, 0)).map(func(x): return "%.1f" % float(x))) if not rl.is_empty() else "none yet")
+	var rlt := _label(rtx, 17, MUT, font3)
+	rlt.position = Vector2(14, 76)
+	rlt.size = Vector2(rw - 28, 22)
+	rlt.clip_text = true
+	sc.add_child(rlt)
+	var oy := sy2 + sh + gap
+	var oh := y0 + ch - oy
+	var oc := _card_panel(Vector2(rx, oy), Vector2(rw, oh))
+	items.append([oc, Vector2(80, 0), 0.12])
+	var ot := _label("This season's goals", 21, CHALK, font3)
+	ot.position = Vector2(20, 10)
+	oc.add_child(ot)
+	var obj: Array = p.get("obj", [])
+	for i in obj.size():
+		var o: Array = obj[i]
+		var done := bool(o[3])
+		var vt := ("%.1f" % float(o[1])) if float(o[2]) < 20.0 and float(o[2]) != floor(float(o[2])) else str(int(o[1]))
+		var ol := _label(("Done:  " if done else "") + "%s  (%s)" % [str(o[0]), vt], 19, GREEN if done else CHALK, font3)
+		ol.position = Vector2(20, 42 + i * 30)
+		ol.size = Vector2(rw - 40, 26)
+		ol.clip_text = true
+		oc.add_child(ol)
+	if str(p.get("offer", "")) != "":
+		var of := _label("You join %s when the season ends" % str(p["offer"]), 19, GOLD, font3)
+		of.position = Vector2(20, oh - 34)
+		of.size = Vector2(rw - 40, 26)
+		of.clip_text = true
+		oc.add_child(of)
+
+
+# a new player career: your name, your position and the club you start at
+func _pro_start_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var pn: Dictionary = info.get("pro_new", {})
+	_title("Player career", "Be one player. Start at a small club and earn your place in the team.")
+	menu.add_child(_back("tab", "play"))
+	var y0 := 104.0
+	var lw := 340.0
+	var nb := _btn("NAME:  " + (str(pn.get("n", "")) if str(pn.get("n", "")) != "" else "tap to choose"), "p_name", null, "alt", Vector2(24, y0), Vector2(lw, 60), 20)
+	menu.add_child(nb)
+	var pl := _label("Your position", 20, MUT, font3)
+	pl.position = Vector2(24, y0 + 76)
+	menu.add_child(pl)
+	var poss := [["DF", "Defender"], ["MF", "Midfielder"], ["FW", "Forward"]]
+	for i in 3:
+		var on := str(pn.get("pos", "FW")) == str(poss[i][0])
+		var b := _btn(str(poss[i][1]).to_upper(), "p_pos", poss[i][0], "primary" if on else "alt", Vector2(24, y0 + 108 + i * 66), Vector2(lw, 58), 22)
+		menu.add_child(b)
+	var hint := _label("You start at 18, rated 60, and can reach 88.", 18, MUT, font3)
+	hint.position = Vector2(24, y0 + 312)
+	hint.size = Vector2(lw, 50)
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD
+	menu.add_child(hint)
+	# the clubs
+	var rx := 24.0 + lw + 24.0
+	var rw := w - rx - 24.0
+	var cl := _label("Your first club", 20, MUT, font3)
+	cl.position = Vector2(rx, y0 - 4)
+	menu.add_child(cl)
+	var picks: Array = pn.get("picks", [])
+	var gap := 12.0
+	var cw := (rw - gap) * 0.5
+	var chh := 74.0
+	for i in picks.size():
+		var pk: Dictionary = picks[i]
+		var on := int(pn.get("c", -1)) == int(pk["c"])
+		var pos := Vector2(rx + (i % 2) * (cw + gap), y0 + 26 + (i / 2) * (chh + gap))
+		var b := _btn("", "p_club", int(pk["c"]), "primary" if on else "alt", pos, Vector2(cw, chh), 18)
+		menu.add_child(b)
+		var sh := _shirt(pk["k"], 50)
+		sh.position = Vector2(12, 12)
+		b.add_child(sh)
+		var n1 := _label(str(pk["n"]), 21, Color(0.04, 0.1, 0.06) if on else CHALK, font3)
+		n1.position = Vector2(74, 10)
+		n1.size = Vector2(cw - 84, 28)
+		n1.clip_text = true
+		b.add_child(n1)
+		var n2 := _label(str(pk["lg"]), 17, Color(0.04, 0.1, 0.06) if on else MUT, font3)
+		n2.position = Vector2(74, 40)
+		n2.size = Vector2(cw - 84, 24)
+		n2.clip_text = true
+		b.add_child(n2)
+	var by := h - 86.0
+	menu.add_child(_btn("OTHER CLUBS", "p_more", null, "ghost", Vector2(rx, by), Vector2(cw, 66), 20))
+	var ok := int(pn.get("c", -1)) >= 0 and str(pn.get("n", "")) != ""
+	var gb := _btn("START" if ok else ("PICK A CLUB" if str(pn.get("n", "")) != "" else "CHOOSE A NAME"), "p_go" if ok else "p_name" if str(pn.get("n", "")) == "" else "p_more", null, "primary" if ok else "off", Vector2(rx + cw + gap, by), Vector2(cw, 66), 26)
+	menu.add_child(gb)

@@ -130,6 +130,11 @@ var ct_from := "" # where a contract talk started: back there when it ends
 var co_rdy := [false, false] # career together: the manager and the friend have tapped PLAY
 var sug_cur := {}
 var sug_prev := ""
+var proc # the player career: you are one player at a club
+var pro_sq := -1 # your man's place in the squad while you play a match as him
+var pro_node = null
+var pro_trk := {}
+var pro_new := {"pos": "FW", "c": -1, "pick": []}
 var cupc # the cup mode: a cup of its own, with your club or any club
 var cup_mode := false
 var start_kind := "" # how a new career (or cup) starts: "mine", "new", "club", "cup"
@@ -432,6 +437,11 @@ func _ready() -> void:
 	# the game always opens on the normal home screen (Daniel); the career waits, saved, until you go into it
 	in_career = false
 	car = car_main
+	proc = Career.new()
+	proc.key = "bb3d-pro"
+	proc.eur = true
+	proc.names = SURNAMES
+	proc.load_save(net.web)
 	cupc = Career.new()
 	cupc.key = "bb3d-cupmode"
 	cupc.names = SURNAMES
@@ -793,6 +803,41 @@ func _ready() -> void:
 				else:
 					hub_tab = "career" if wt == "wtest2" else "transfers"
 					menu_arg = "main"
+			if menu_arg == "prostart":
+				pro_new = {"pos": "MF", "c": -1, "pick": _pro_picks(), "n": "LARSEN"}
+				pro_new["c"] = int(pro_new["pick"][1])
+				menu_arg = "pro_start"
+			if menu_arg in ["pro0", "pro1", "pro2", "pro3", "pro4"]:
+				var pk9: Array = _pro_picks()
+				proc.new_pro(int(pk9[0]), "LARSEN", "FW")
+				_pro_enter(false)
+				print("PRO start club=", CLUBS[int(car.d["club"])]["n"], " me=", car.pro_i(), " ovr=", Career.ovr_of(car.pro_pl()), " starts=", car.pro_starts(), " xi=", car.d["xi"])
+				var nsim: int = {"pro0": 0, "pro1": 8, "pro2": 3, "pro3": 0, "pro4": 60}[menu_arg]
+				for r9 in nsim:
+					if car.season_over() and not car.cup_due() and not car.eu_due():
+						print("PRO season over: offer=", car.pro_d().get("offer"), " hist=", car.pro_d().get("hist"))
+						car.pro_next_season()
+						print("PRO new season club=", CLUBS[int(car.d["club"])]["n"], " me=", car.pro_i(), " trust=", car.pro_d()["trust"])
+						continue
+					_sim_mine()
+					print("PRO sim ", r9, " ", car_lines.slice(0, 3), " starts next=", car.pro_starts())
+				for m9 in car.inbox():
+					if str(m9["k"]) == "pjob":
+						print("PRO offer mail ", m9["t"], " ", m9["st"])
+				print("PRO tp=", car.pro_pl().get("tp", 0), " pxp=", car.pro_d()["pxp"], " avg=", car.pro_avg(), " ss=", car.pro_d()["ss"])
+				hub_tab = {"pro0": "career", "pro1": "pro", "pro2": "league", "pro3": "career", "pro4": "pro"}[menu_arg]
+				if menu_arg == "pro3":
+					# into a match as your player
+					car.pro_d()["trust"] = 100
+					seen_how = true
+					set_meta("pro_fast", true)
+					car.pro_select()
+					print("PRO before play starts=", car.pro_starts(), " in_career=", in_career, " car==proc ", car == proc, " assist=", assist)
+					_action("c_play")
+					print("PRO match pro_sq=", pro_sq, " screen=", screen)
+					menu_arg = ""
+				else:
+					menu_arg = "main"
 			if menu_arg in ["ptest0", "ptest1", "ptest2", "ptest3"]:
 				carc.new_career(carc.weakest(3), true)
 				carc.set_mode("full")
@@ -1056,7 +1101,7 @@ func _ready() -> void:
 				else:
 					_as_leave(false)
 					net.role = "host"
-					print("HOST in=", in_career, " car=carc ", car == carc)
+					print("HOST in=", in_career, " car=carc ", (car == carc or car == proc))
 					var f0: String = car.form()
 					for sg2 in [s1, s2, s3]:
 						sug_cur = sg2
@@ -1994,7 +2039,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
@@ -2200,6 +2245,38 @@ func _fac_info() -> Array:
 	return out
 
 # Everything the career screens show.
+# the player career for the hud: you, your stats, the manager's trust, your season
+func _pro_info() -> Dictionary:
+	if not car.has_save() or not car.pro():
+		return {}
+	var pl: Dictionary = car.pro_pl()
+	if pl.is_empty():
+		return {}
+	var p: Dictionary = car.pro_d()
+	var of := int(p.get("offer", -1))
+	var hist := []
+	for h9 in p.get("hist", []):
+		hist.append({"season": int(h9[0]), "club": str(CLUBS[int(h9[1])]["n"]).capitalize(), "apps": int(h9[2]), "g": int(h9[3]), "a": int(h9[4]), "avg": float(h9[5])})
+	return {"n": str(pl["n"]), "pos": str(pl["pos"]), "age": int(pl["age"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "tp": int(pl.get("tp", 0)),
+		"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "trust": int(p["trust"]), "next": "start" if car.pro_starts() else "bench",
+		"ss": p["ss"], "all": p["all"], "avg": car.pro_avg(), "avg_all": car.pro_avg(false), "rt": p.get("rt", []), "obj": car.pro_obj(), "pxp": int(p.get("pxp", 0)),
+		"offer": str(CLUBS[of]["n"]).capitalize() if of >= 0 else "", "hist": hist, "fm": Career.pform(pl), "cond": car.cond_of(pl), "inj": car.injured(pl),
+		"club": str(CLUBS[int(car.d["club"])]["n"]).capitalize(), "kit": CLUBS[int(car.d["club"])]["k"], "msg": car_msg}
+
+func _pro_new_info() -> Dictionary:
+	if (pro_new.get("pick", []) as Array).is_empty():
+		return {}
+	var picks := []
+	for c in pro_new.get("pick", []):
+		picks.append({"c": int(c), "n": str(CLUBS[int(c)]["n"]).capitalize(), "k": CLUBS[int(c)]["k"], "lg": str(ClubDB.LEAGUES[int(CLUBS[int(c)]["lg"])]["n"]).capitalize(), "r": int(CLUBS[int(c)].get("r", 0))})
+	return {"pos": str(pro_new["pos"]), "c": int(pro_new["c"]), "picks": picks, "n": str(pro_new.get("n", ""))}
+
+func _pro_tile() -> String:
+	if not proc.has_save() or not proc.pro():
+		return "Be one player. Earn your place."
+	var pl: Dictionary = proc.pro_pl()
+	return "%s  ·  %s %d" % [str(pl.get("n", "")).capitalize(), str(pl.get("pos", "")), Career.ovr_of(pl)] if not pl.is_empty() else ""
+
 func _car_info() -> Dictionary:
 	if not car.has_save():
 		return {}
@@ -2494,6 +2571,8 @@ func _result() -> String:
 	return "YOU LOSE" + pens
 
 func _to_menu(keep_net := false) -> void:
+	pro_sq = -1
+	pro_node = null
 	if rk_on and screen == "match" and state != "full" and rk_res.is_empty():
 		rk.match_result(int(rk_opp.get("rp", 0)), 0.0, -3, 0)
 		hud.toast("You left a ranked match: it counts as a loss")
@@ -2635,6 +2714,33 @@ func _cr_enter(show := true) -> void:
 	if show:
 		_show_hub()
 
+# Into the player career: the same career screens, as one player at a club.
+func _pro_enter(show := true) -> void:
+	if cup_mode:
+		_cm_leave()
+	if not in_career:
+		q_opt = [opt_diff, opt_len]
+	in_career = true
+	car = proc
+	car.pro_select()
+	_apply_own()
+	hub_tab = "career"
+	car_sel = -1
+	car_msg = ""
+	if show:
+		_show_hub()
+
+# a few clubs to choose from for a new player career: lower and middle clubs in both countries
+func _pro_picks() -> Array:
+	var lgs: Array = ClubDB.start_leagues(Career.FIRST)
+	var out := []
+	for li in [3, 5, 3, 2, 5, 4]:
+		if li < lgs.size():
+			var ids: Array = (lgs[li] as Array).duplicate()
+			ids.shuffle()
+			out.append(int(ids[0]))
+	return out
+
 func _cr_exit() -> void:
 	if in_career:
 		opt_diff = int(q_opt[0])
@@ -2761,7 +2867,10 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("", {})
 			_begin_match(true)
 		"friend":
-			if in_career and car == carc and net.role == "":
+			if in_career and car == proc:
+				hud.toast("Playing a player career together comes in the next update")
+				return
+			if in_career and (car == carc or car == proc) and net.role == "":
 				# the career together: open a room and stay in the career, the friend comes in with the code
 				_action("host")
 			elif in_career and net.role == "host":
@@ -2771,7 +2880,7 @@ func _action(act: String, arg = null) -> void:
 		"career":
 			car_msg = ""
 			car_sure = false
-			if adv_from > -99 and in_career and car == carc and not assist and net.role == "":
+			if adv_from > -99 and in_career and (car == carc or car == proc) and not assist and net.role == "":
 				var f := adv_from
 				adv_from = -99
 				if car.next_day() > f:
@@ -2905,7 +3014,7 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_play":
-			if net.role == "host" and net.connected and in_career and car == carc:
+			if net.role == "host" and net.connected and in_career and (car == carc or car == proc):
 				# together: the match starts when both have tapped PLAY
 				co_rdy[0] = not co_rdy[0]
 				_co_ready_send()
@@ -2914,6 +3023,16 @@ func _action(act: String, arg = null) -> void:
 				else:
 					hud.refresh(_menu_info())
 				return
+			pro_sq = -1
+			pro_node = null
+			if car.pro() and not car.season_over() or (car.pro() and (car.cup_due() or car.eu_due())):
+				car.pro_select()
+				if not car.pro_starts():
+					# on the bench: the match is played without you (you may come on)
+					_sim_mine()
+					return
+				pro_sq = car.pro_i()
+				pro_trk = {"pas": 0, "pok": 0, "lost": 0, "won": 0, "sh": 0, "g": 0, "a": 0, "tch": 0, "last": null, "prev": null}
 			if car.cup_due():
 				_action("cup_play")
 			elif car.eu_due():
@@ -2933,7 +3052,9 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_next":
-			if not car.d.has("sacked"):
+			if car.pro():
+				car.pro_next_season()
+			elif not car.d.has("sacked"):
 				car.next_season()
 			_show_hub()
 		"c_review":
@@ -2948,6 +3069,47 @@ func _action(act: String, arg = null) -> void:
 			_show_hub()
 		"c_board":
 			hud.show_menu("board", _menu_info())
+		"p_home":
+			if proc.has_save() and proc.pro():
+				_pro_enter()
+			else:
+				pro_new = {"pos": "FW", "c": -1, "pick": _pro_picks()}
+				hud.show_menu("pro_start", _menu_info())
+		"p_new":
+			pro_new = {"pos": "FW", "c": -1, "pick": _pro_picks()}
+			hud.show_menu("pro_start", _menu_info())
+		"p_pos":
+			pro_new["pos"] = str(arg)
+			hud.refresh(_menu_info())
+		"p_club":
+			pro_new["c"] = int(arg)
+			hud.refresh(_menu_info())
+		"p_more":
+			pro_new["pick"] = _pro_picks()
+			pro_new["c"] = -1
+			hud.refresh(_menu_info())
+		"p_name":
+			var nn2 := ""
+			if net.web:
+				var res2 = JavaScriptBridge.eval("(function(){var r=prompt('Your player\'s name', %s);return r===null?'':String(r)})()" % JSON.stringify(str(pro_new.get("n", ""))), true)
+				nn2 = str(res2) if res2 != null else ""
+			else:
+				nn2 = "LARSEN"
+			var cl2 := ""
+			for ch in nn2.to_upper().strip_edges():
+				if (ch >= "A" and ch <= "Z") or ch == " " or ch in ["Æ", "Ø", "Å", "-"]:
+					cl2 += ch
+			cl2 = cl2.strip_edges().substr(0, 12)
+			if cl2.length() >= 2:
+				pro_new["n"] = cl2
+			hud.refresh(_menu_info())
+		"p_go":
+			if int(pro_new["c"]) >= 0:
+				proc.new_pro(int(pro_new["c"]), str(pro_new.get("n", "ROOKIE")), str(pro_new["pos"]))
+				_pro_enter()
+		"p_spend":
+			car_msg = car.pro_spend(int(arg))
+			hud.refresh(_menu_info())
 		"c_home":
 			if carc.has_save() and carc.on():
 				_cr_enter()
@@ -3343,7 +3505,7 @@ func _action(act: String, arg = null) -> void:
 			else:
 				hud.show_menu(teams_from, _menu_info())
 		"host":
-			if in_career and carc.has_save() and car == carc:
+			if in_career and carc.has_save() and (car == carc or car == proc):
 				# a room made from inside the career: the friend comes into the career with you
 				opt_mode = "coop"
 				opt_car = true
@@ -3932,7 +4094,7 @@ func _net_poll() -> void:
 					if assist:
 						hud.show_menu("simres", _menu_info())
 			"sug":
-				if net.role == "host" and in_career and car == carc:
+				if net.role == "host" and in_career and (car == carc or car == proc):
 					sugs.append(m)
 					if sugs.size() > 6:
 						sugs.pop_front()
@@ -4208,6 +4370,12 @@ func _goal(team: int) -> void:
 	tst[team]["g"].append("%s %d'" % [scorer.pname.to_upper(), int(clock / 60.0) + 1])
 	if career_on and scorer.team == 0 and scorer.sq >= 0 and not _quiet():
 		car_goals.append(scorer.sq)
+		if pro_sq >= 0:
+			var pm9 = _pro_man()
+			if scorer == pm9:
+				pro_trk["g"] = int(pro_trk.get("g", 0)) + 1
+			elif pm9 != null and pro_trk.get("prev") == pm9 and pro_trk.get("last") == scorer:
+				pro_trk["a"] = int(pro_trk.get("a", 0)) + 1
 	for p in players:
 		p.recv = false
 		p.mood_t = 0.0
@@ -4586,6 +4754,8 @@ func _nearest_human(t: int, pos: Vector3):
 	return best
 
 func _assign_defenders(t: int, force: bool) -> void:
+	if pro_sq >= 0 and t == 0 and _pro_man() != null and not _pro_man().off:
+		return
 	var hs := []
 	for h in humans:
 		if h.team == t and (force or h.switch_cool <= 0.0):
@@ -4631,7 +4801,81 @@ func _assign_defenders(t: int, force: bool) -> void:
 		h.switch_cool = 0.7
 		top.remove_at(bi)
 
+# ---- the player career: your thumb stays on your man, and the match keeps a few numbers on him
+func _pro_man():
+	if pro_node != null and is_instance_valid(pro_node):
+		return pro_node
+	for p in teams[0]:
+		if p.sq == pro_sq:
+			pro_node = p
+			return p
+	return null
+
+func _pro_play(_dt: float) -> void:
+	var pm = _pro_man()
+	if pm == null or pm.off:
+		return
+	if has_meta("pro_fast"):
+		# test: check the lock now and then, and jump to the last seconds
+		if Engine.get_physics_frames() % 120 == 0:
+			print("PROLOCK ctrl_is_me=", humans[0].ctrl == pm, " owner=", players.find(ball_owner), " trk=", pro_trk.get("pok"), "/", pro_trk.get("lost"), "/", pro_trk.get("tch"))
+		if state_t > 6.0 and not get_meta("pro_jumped", false):
+			set_meta("pro_jumped", true)
+			half = 2
+			clock = 5385.0
+	for h in humans:
+		if h.team == pm.team and h.local:
+			if h.ctrl != pm:
+				h.ctrl = pm
+			break
+	pro_trk["call"] = float(pro_trk.get("call", 0.0)) - _dt
+	if float(pro_trk["call"]) > 0.0 and ball_owner != null and ball_owner.team == pm.team and ball_owner != pm and set_piece == "" and ball_owner.role != "GK":
+		pro_trk["call"] = 0.0
+		_pass(ball_owner, pm, ball_owner.position.distance_to(pm.position) > 24.0)
+	# who touched it last: passes, balls won and lost
+	var bl = ball_owner if ball_owner != null else null
+	if bl != null and bl != pro_trk.get("last"):
+		var was = pro_trk.get("last")
+		if was == pm:
+			if bl.team == pm.team:
+				pro_trk["pok"] = int(pro_trk["pok"]) + 1
+			else:
+				pro_trk["lost"] = int(pro_trk["lost"]) + 1
+		if bl == pm:
+			pro_trk["tch"] = int(pro_trk["tch"]) + 1
+			if was != null and was.team != pm.team:
+				pro_trk["won"] = int(pro_trk["won"]) + 1
+		pro_trk["prev"] = was
+		pro_trk["last"] = bl
+
+# as a player the club's money and the board are not yours: those lines go
+func _pro_lines(ls: Array) -> Array:
+	return ls.filter(func(x): return not str(x).begins_with("+") and not str(x).begins_with("THE BOARD") and not "COINS" in str(x))
+
+# your rating for the match, 3 to 10, from what you did and how it went
+func _pro_rating() -> float:
+	var pm = _pro_man()
+	var pos: String = str(car.pro_pl().get("pos", "MF"))
+	var r := 6.0
+	r += 1.1 * int(pro_trk.get("g", 0)) + 0.8 * int(pro_trk.get("a", 0))
+	r += 0.07 * int(pro_trk.get("pok", 0)) - 0.18 * int(pro_trk.get("lost", 0)) + 0.22 * int(pro_trk.get("won", 0))
+	r += 0.12 * int(pro_trk.get("sh", 0))
+	r += 0.4 if score[0] > score[1] else (-0.4 if score[0] < score[1] else 0.0)
+	if pos == "DF":
+		r += 0.5 if score[1] == 0 else -0.15 * score[1]
+	if int(pro_trk.get("tch", 0)) < 3:
+		r -= 0.5 # hardly in the game
+	if pm != null and pm.off:
+		r -= 1.0 # sent off
+	return clampf(r, 3.0, 10.0)
+
 func _switch(h) -> void:
+	if pro_sq >= 0 and h.team == 0 and _pro_man() != null and not _pro_man().off:
+		# a player career: no switching. The button asks for the ball instead.
+		h.ctrl = _pro_man()
+		if ball_owner != null and ball_owner.team == 0 and ball_owner != h.ctrl:
+			pro_trk["call"] = 1.2
+		return
 	# SWITCH walks through the three players nearest the ball, never one your partner is playing
 	var c := []
 	for p in teams[h.team]:
@@ -4658,6 +4902,8 @@ func _switch(h) -> void:
 
 # the other side plays a pass: put a defender who can get to the receiver under a thumb, like FIFA's auto switch
 func _switch_for_pass(t: int, m) -> void:
+	if pro_sq >= 0 and t == 0:
+		return
 	var own_goal := Vector3(-HL * side(t), 0, 0)
 	var spot: Vector3 = m.position + (own_goal - m.position).normalized() * 2.0
 	var best = null
@@ -4932,6 +5178,8 @@ func _play(dt: float) -> void:
 		ignore_t = 1.0
 		ball_ignore = teams[1][0]
 		teams[1][0].stun = 2.0
+	if pro_sq >= 0:
+		_pro_play(dt)
 	# --- human buttons
 	for h in humans:
 		h.switch_cool -= dt
@@ -5587,12 +5835,12 @@ func _full_time() -> void:
 		_rk_finish()
 	elif career_on and eu_on:
 		car_lines = car.eu_finish(score[0], score[1], _winner() == 0)
-		adv_from = car.today() if car == carc and in_career else -99
+		adv_from = car.today() if (car == carc or car == proc) and in_career else -99
 		co_pay = [car.last_coins, _winner() == 0, ([car_lines[1]] if car_lines.size() > 1 else [])]
 		_car_coins(false)
 	elif career_on and cup_on:
 		car_lines = car.cup_finish(score[0], score[1], _winner() == 0)
-		adv_from = car.today() if car == carc and in_career else -99
+		adv_from = car.today() if (car == carc or car == proc) and in_career else -99
 		if cup_mode:
 			# no board in the cup mode
 			car_lines = car_lines.filter(func(x): return not str(x).begins_with("THE BOARD"))
@@ -5604,12 +5852,21 @@ func _full_time() -> void:
 		_car_coins(false)
 	elif career_on:
 		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
-		adv_from = car.today() if car == carc and in_career else -99
+		adv_from = car.today() if (car == carc or car == proc) and in_career else -99
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		_car_coins(true)
 		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1], car_lines[1]] + ([str(car.d["note"])] if car.season_over() else [])]
 	elif net.role != "":
 		car_lines = _friend_reward()
+	if career_on and pro_sq >= 0 and car.pro():
+		var pl9: Array = car.pro_after(_pro_rating(), int(pro_trk.get("g", 0)), int(pro_trk.get("a", 0)), true, true)
+		car_lines = pl9 + _pro_lines(car_lines)
+		if has_meta("pro_fast"):
+			print("PRO full time lines=", car_lines.slice(0, 4))
+		car.pro_select()
+		car.save()
+		pro_sq = -1
+		pro_node = null
 	_rec_add(ti0 >= 0 and int(car.stats().get("titles", 0)) > ti0)
 	hud.show_menu("full", _menu_info())
 
@@ -6319,6 +6576,8 @@ func _human_aim(h, dir3: Vector3) -> float:
 	return (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * 0.74
 
 func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
+	if pro_sq >= 0 and p == _pro_man():
+		pro_trk["sh"] = int(pro_trk.get("sh", 0)) + 1
 	var s := side(p.team)
 	var from := ball.position
 	var d := Vector2(HL * s - from.x, aim_z - from.z).length()
@@ -8221,7 +8480,7 @@ func _sug_answer(yes: bool) -> void:
 		return
 	var res := ""
 	var ok := false
-	if yes and in_career and car == carc:
+	if yes and in_career and (car == carc or car == proc):
 		var ui: Dictionary = s.get("ui", {}) if s.get("ui", {}) is Dictionary else {}
 		var keep := [car_sel, car_sell, ab_slot, scout_c, scout_i, scout_res, car_msg]
 		car_sel = int(ui.get("sel", -1))
@@ -8260,7 +8519,7 @@ func _sug_answer(yes: bool) -> void:
 const CAR_COINS := {"w": 5, "d": 2, "l": 1, "title": 300, "up": 150, "cup": 250}
 
 func _car_coins(league: bool) -> void:
-	if car != carc or cup_mode or not in_career:
+	if (car != carc and car != proc) or cup_mode or not in_career:
 		return
 	var n := 0
 	var why := []
@@ -8313,13 +8572,13 @@ func _co_back(tell: bool) -> void:
 # ---------------------------------------------------------------- the career's own calendar, simulated matches and the days between
 # A career match uses the career's own level and length (Office > Match settings).
 func _car_opts() -> void:
-	if in_career and car == carc:
+	if in_career and (car == carc or car == proc):
 		opt_diff = int(car.d.get("diff", 1))
 		opt_len = int(car.d.get("len", 1))
 
 # Simulate your next match instead of playing it: the score comes from the two squads' strength.
 func _sim_mine() -> void:
-	if not in_career or car != carc or assist or net.role == "guest" or car.d.has("sacked"):
+	if not in_career or (car != carc and car != proc) or assist or net.role == "guest" or car.d.has("sacked"):
 		return
 	var cupt: bool = car.cup_due()
 	var eut: bool = not cupt and car.eu_due()
@@ -8330,6 +8589,29 @@ func _sim_mine() -> void:
 	if opp < 0:
 		return
 	var r: Array = car.sim_match(opp, home)
+	# the player career: did you play, and how well?
+	var pro_l: Array = []
+	if car.pro():
+		var me9: int = car.pro_i()
+		var st9: bool = car.pro_starts()
+		var on9: bool = st9 or randf() < 0.25 + int(car.pro_d().get("trust", 50)) * 0.004
+		var g9 := 0
+		for x9 in r[2]:
+			if int(x9) == me9:
+				g9 += 1
+		if not st9:
+			# a man on the bench can only score if he comes on, and then only now and then
+			var r2: Array = []
+			for x9 in r[2]:
+				if int(x9) != me9:
+					r2.append(x9)
+			r[2] = r2
+			g9 = 0
+			if on9 and randf() < 0.12:
+				g9 = 1
+		var res9: float = 0.4 if int(r[0]) > int(r[1]) else (-0.4 if int(r[0]) < int(r[1]) else 0.0)
+		var rt9: float = 6.1 + (Career.ovr_of(car.pro_pl()) - car.my_strength()) * 0.05 + randf_range(-0.6, 0.8) + res9 + g9 * 1.0 - (0.3 if not st9 else 0.0)
+		pro_l = car.pro_after(rt9, g9, 1 if randf() < 0.12 and on9 else 0, on9, st9)
 	var keep := [score.duplicate(), so_win]
 	score = [int(r[0]), int(r[1])]
 	so_win = -1
@@ -8350,6 +8632,10 @@ func _sim_mine() -> void:
 		car_lines = car.finish_match(score[0], score[1], r[2], [])
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		_car_coins(true)
+	if car.pro():
+		car_lines = pro_l + _pro_lines(car_lines)
+		car.pro_select()
+		car.save()
 	adv_from = car.today()
 	var me_c := int(car.d["club"])
 	var a := me_c if home else opp
