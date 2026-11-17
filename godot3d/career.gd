@@ -288,6 +288,7 @@ func new_career(c: int, own := false, slen := "full") -> void:
 	cup_new()
 	board()
 	market_refresh()
+	world_tick([])
 	save()
 
 func _new_season() -> void:
@@ -550,6 +551,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	_fac_tick(lines)
 	if eur:
 		_after_match(played if not played.is_empty() else d["xi"], mine > theirs, lines, rng)
+	world_tick(lines)
 	save()
 	return lines
 
@@ -604,6 +606,8 @@ func next_season() -> void:
 			d["wb"] = maxi(wages(), int(round(int(d["wb"]) * 0.85)))
 	if not gone.is_empty():
 		d["note"] = "CONTRACTS RAN OUT: %s LEFT ON A FREE." % ", ".join(PackedStringArray(gone))
+	d["wlast"] = -999
+	world_tick([])
 	save()
 
 # The end of the season everywhere else: every other league plays its season in a blink.
@@ -833,6 +837,8 @@ func buy(i: int) -> String:
 		return ""
 	var pl: Dictionary = m[i]
 	var price := value(pl)
+	if window_msg() != "":
+		return window_msg()
 	if (d["squad"] as Array).size() >= SQUAD_MAX:
 		return "Your squad is full. Sell a player from the bench first."
 	if int(d["coins"]) < price:
@@ -872,12 +878,21 @@ func sell(i: int) -> String:
 			return "Move him to the bench before you sell him."
 	if sq.size() <= SQUAD_MIN:
 		return "You need at least %d players." % SQUAD_MIN
+	var shut := window_msg()
+	if shut != "":
+		return shut
 	var pl: Dictionary = sq[i]
 	# a club at his level in your country buys him and he plays for them from now on
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var buyer := _buyer_for(pl, rng)
 	var got := int(round(sell_value(pl) * rng.randf_range(1.0, 1.25) / 5.0)) * 5
+	return _sell_to(i, buyer, got)
+
+# He goes to club `buyer` (-1 = abroad) for `got`; he takes the place of their weakest man in his position.
+func _sell_to(i: int, buyer: int, got: int) -> String:
+	var sq: Array = d["squad"]
+	var pl: Dictionary = sq[i]
 	d["coins"] = int(d["coins"]) + got
 	sq.remove_at(i)
 	if buyer >= 0:
@@ -1153,6 +1168,7 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		var rng3 := RandomNumberGenerator.new()
 		rng3.randomize()
 		_after_match(d["xi"], won, lines, rng3)
+	world_tick(lines)
 	save()
 	return lines
 
@@ -2152,6 +2168,8 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	var sq := cpu_squad(c)
 	if i < 0 or i >= sq.size():
 		return {"ok": false, "msg": ""}
+	if window_msg() != "":
+		return {"ok": false, "msg": window_msg()}
 	if (d["squad"] as Array).size() >= SQUAD_MAX:
 		return {"ok": false, "msg": "Your squad is full. Sell a player first."}
 	if int(d["coins"]) < amount:
@@ -2645,3 +2663,340 @@ func _decline(pl: Dictionary) -> void:
 		var key: String = "pac" if rng.randf() < 0.5 else STAT_KEYS[rng.randi() % 4]
 		pl[key] = maxi(int(pl[key]) - 1, 20)
 	pl["pot"] = mini(int(pl["pot"]), ovr_of(pl))
+
+
+# ---------------------------------------------------------------- a world that lives
+# Transfer windows: summer (until 1 September) and winter (January, to 2 February). In a FULL career you can
+# only deal with clubs while one is open; a SIMPLE career never shuts the market. Either way the other clubs
+# trade with each other in the windows, clubs bid for your men, and it all lands in your inbox.
+const INBOX_MAX := 40
+const DEALS_MAX := 60
+
+func _day_at(y: int, m: int, dd: int) -> int:
+	var u := int(Time.get_unix_time_from_datetime_dict({"year": y, "month": m, "day": dd, "hour": 12}))
+	return int(round((u - _day0()) / 86400.0))
+
+# [[first day, last day (deadline day), name], ...] for this season
+func _windows() -> Array:
+	var y := 2026 + int(d.get("season", 1)) - 1
+	return [[-90, _day_at(y, 9, 1), "Summer window"], [_day_at(y + 1, 1, 1), _day_at(y + 1, 2, 2), "Winter window"]]
+
+func windows_on() -> bool:
+	return full() and not bool(d.get("cupmode", false))
+
+# {open, name, close (deadline day), deadline (this is your last stop before it shuts)} or {open: false, opens}
+# where you stand in the world: the eve of your next match (the days up to it have gone by on the calendar)
+func now() -> int:
+	var nd := next_day()
+	return nd if nd >= 0 else today()
+
+func window() -> Dictionary:
+	var t := now()
+	for wv in _windows():
+		if t >= int(wv[0]) and t <= int(wv[1]):
+			return {"open": true, "name": str(wv[2]), "close": int(wv[1]), "deadline": int(wv[1]) - t <= 6, "ctext": date_text(int(wv[1]), true)}
+	for wv in _windows():
+		if int(wv[0]) > t:
+			return {"open": false, "opens": int(wv[0]), "otext": date_text(int(wv[0]), true), "name": str(wv[2])}
+	return {"open": false, "opens": -1, "otext": "the summer", "name": "Summer window"}
+
+# "" when you may deal with other clubs now, else why not
+func window_msg() -> String:
+	if not windows_on():
+		return ""
+	var wn := window()
+	if bool(wn["open"]):
+		return ""
+	return "The transfer window is shut. It opens on %s." % str(wn["otext"])
+
+func inbox() -> Array:
+	return d.get("inbox", [])
+
+func unread() -> int:
+	var n := 0
+	for m in inbox():
+		if not bool(m.get("rd", false)):
+			n += 1
+	return n
+
+func _mail(k: String, t: String, b: String, ex := {}) -> Dictionary:
+	var m := {"id": int(d.get("mid", 0)) + 1, "day": now(), "k": k, "t": t, "b": b, "rd": false}
+	d["mid"] = int(m["id"])
+	m.merge(ex)
+	var ib: Array = inbox()
+	ib.push_front(m)
+	while ib.size() > INBOX_MAX:
+		ib.pop_back()
+	d["inbox"] = ib
+	return m
+
+func mail(id: int) -> Dictionary:
+	for m in inbox():
+		if int(m["id"]) == id:
+			return m
+	return {}
+
+func mail_read(id: int) -> void:
+	var m := mail(id)
+	if not m.is_empty() and not bool(m.get("rd", false)):
+		m["rd"] = true
+		save()
+
+func deals() -> Array:
+	return d.get("deals", [])
+
+func _country_clubs() -> Array:
+	var out := []
+	var ctry := str(league()["c"])
+	for li in ClubDB.LEAGUES.size():
+		if str(ClubDB.LEAGUES[li]["c"]) != ctry:
+			continue
+		for c in ids(li):
+			if int(c) != int(d["club"]):
+				out.append(int(c))
+	return out
+
+# The days from today to your next match go by: the other clubs trade, the window opens or shuts, bids come in.
+func world_tick(lines: Array) -> void:
+	if ro or bool(d.get("cupmode", false)) or not d.has("leagues"):
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var t := now()
+	var from := int(d.get("wlast", -999))
+	if from > t:
+		from = t - 7
+	d["wlast"] = t
+	var wins := _windows()
+	for wv in wins:
+		var o := int(wv[0])
+		var c := int(wv[1])
+		# it shut since the last stop
+		if from >= o and from <= c and t > c:
+			var nn := 0
+			for x in deals():
+				if int(x[0]) >= o and int(x[0]) <= c:
+					nn += 1
+			_mail("window", "The %s has shut" % str(wv[2]).to_lower(), "%d deals between the clubs in your country. The next window opens on %s." % [nn, str(window().get("otext", "the summer"))])
+			lines.append("THE TRANSFER WINDOW HAS SHUT")
+		# it opened since the last stop (or the season has just begun)
+		if t >= o and t <= c and (from < o or from > c):
+			_mail("window", "The %s is open" % str(wv[2]).to_lower(), "Clubs can buy and sell until %s. Deadline day is the last day." % date_text(c, true))
+		# the clubs traded in the days that went by (a flurry on deadline day)
+		var a := maxi(maxi(from + 1, t - 10), o)
+		var b := mini(t, c)
+		if a <= b:
+			var n := 1 if rng.randf() < 0.6 else 2
+			var dl := c >= a and c <= b
+			if dl:
+				n += rng.randi_range(3, 5)
+			var got := []
+			for k in n:
+				var on_dl := dl and k >= n - 4
+				var x := _cpu_deal(rng, c if on_dl else rng.randi_range(a, b))
+				if not x.is_empty():
+					got.append(x)
+			_deal_mail(got)
+	# bids for your men: only while a window is open for you
+	var wn := window()
+	for m in inbox():
+		if str(m["k"]) == "bid" and str(m.get("st", "")) == "open":
+			m["left"] = int(m.get("left", 2)) - 1
+			if not bool(wn["open"]) or int(m["left"]) < 0 or _sq_find(str(m["pn"])) < 0:
+				m["st"] = "gone"
+	if bool(wn["open"]):
+		if bool(wn["deadline"]) and int(d.get("dlw", -1)) != int(wn["close"]):
+			d["dlw"] = int(wn["close"])
+			_mail("deadline", "Deadline day is coming", "The window shuts on %s, before your next match. Anything you want to do, do it now." % str(wn["ctext"]))
+			lines.append("DEADLINE DAY: THE WINDOW SHUTS BEFORE YOUR NEXT MATCH")
+		var ch := 0.25 + (0.4 if bool(wn["deadline"]) else 0.0)
+		if today() < 0:
+			ch = 0.0 # the first days of a new career: let the man settle in
+		if rng.randf() < ch:
+			_cpu_bid(rng, lines)
+
+func _deal_mail(got: Array) -> void:
+	if got.is_empty():
+		return
+	var mine := ids()
+	var rows := []
+	var near := false
+	for x in got:
+		rows.append(deal_text(x))
+		if mine.has(int(x[5])) or mine.has(int(x[6])):
+			near = true
+	var head := deal_text(got[0])
+	_mail("deal", ("Transfer news: %d deals" % got.size()) if got.size() > 1 else head, "\n".join(PackedStringArray(rows)), {"near": near})
+
+# [day, name, pos, ovr, age, from, to, fee]
+func deal_text(x: Array) -> String:
+	return "%s sign %s (%s, %d) from %s for %s" % [str(W[int(x[6])]["n"]).capitalize(), str(x[1]).capitalize(), str(x[2]), int(x[3]), str(W[int(x[5])]["n"]).capitalize(), money(int(x[7]))]
+
+# a young man for the place a club just sold
+func _fill_in(c: int, role: String, num: int, rng: RandomNumberGenerator) -> Dictionary:
+	var base: Array = ROLE_BASE[role]
+	var q := rating(c) - 76
+	var nw := {"n": names[rng.randi() % names.size()], "num": num, "pos": role, "age": rng.randi_range(18, 23), "xp": 0, "g": 0, "apps": 0,
+		"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
+		"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "ab": []}
+	nw["pot"] = clampi(ovr_of(nw) + rng.randi_range(4, 12), ovr_of(nw), 94)
+	return nw
+
+# A bigger club in your country buys the best man of a smaller one.
+func _cpu_deal(rng: RandomNumberGenerator, day: int) -> Array:
+	var cl := _country_clubs()
+	if cl.size() < 4:
+		return []
+	for tries in 14:
+		var buyer: int = cl[rng.randi() % cl.size()]
+		var rb := rating(buyer)
+		var sellers := []
+		for x in cl:
+			if rating(x) < rb and rating(x) >= rb - 12:
+				sellers.append(x)
+		if sellers.is_empty():
+			continue
+		var seller: int = sellers[rng.randi() % sellers.size()]
+		var ssq: Array = cpu_squad(seller).duplicate(true)
+		var bsq: Array = cpu_squad(buyer).duplicate(true)
+		var top := range(ssq.size())
+		top.sort_custom(func(p, q): return ovr_of(ssq[p]) > ovr_of(ssq[q]))
+		var i: int = top[rng.randi() % mini(4, top.size())]
+		var pl: Dictionary = ssq[i]
+		if str(pl["pos"]) == "GK" and rng.randf() < 0.7:
+			continue
+		var j := -1
+		for k in bsq.size():
+			if str(bsq[k]["pos"]) == str(pl["pos"]) and (j < 0 or ovr_of(bsq[k]) < ovr_of(bsq[j])):
+				j = k
+		if j < 0 or ovr_of(pl) <= ovr_of(bsq[j]):
+			continue
+		var fee := int(round(value(pl) * rng.randf_range(1.05, 1.5) / 5.0)) * 5
+		var moved: Dictionary = pl.duplicate(true)
+		moved["num"] = int(bsq[j]["num"])
+		bsq[j] = moved
+		ssq[i] = _fill_in(seller, str(pl["pos"]), int(pl["num"]), rng)
+		_set_cpu_squad(buyer, bsq)
+		_set_cpu_squad(seller, ssq)
+		var x := [day, str(pl["n"]), str(pl["pos"]), ovr_of(pl), int(pl["age"]), seller, buyer, fee]
+		var dl: Array = deals()
+		dl.push_front(x)
+		while dl.size() > DEALS_MAX:
+			dl.pop_back()
+		d["deals"] = dl
+		return x
+	return []
+
+func _sq_find(pn: String) -> int:
+	var sq: Array = d["squad"]
+	for i in sq.size():
+		if str(sq[i]["n"]) == pn:
+			return i
+	return -1
+
+# A club wants one of your men: good men, young men with a future, and above all anyone who asked to leave.
+func _cpu_bid(rng: RandomNumberGenerator, lines: Array) -> void:
+	var sq: Array = d["squad"]
+	if sq.size() <= SQUAD_MIN:
+		return
+	var open := []
+	for m in inbox():
+		if str(m["k"]) == "bid" and str(m.get("st", "")) == "open":
+			open.append(str(m["pn"]))
+	var best := -1
+	var bw := -1.0
+	for i in sq.size():
+		var pl: Dictionary = sq[i]
+		if open.has(str(pl["n"])):
+			continue
+		var wv := value(pl) * rng.randf_range(0.5, 1.5) * (2.5 if pl.has("tr") else 1.0)
+		if wv > bw:
+			bw = wv
+			best = i
+	if best < 0:
+		return
+	var pl: Dictionary = sq[best]
+	var o := ovr_of(pl)
+	var cand := []
+	for c in _country_clubs():
+		if rating(c) >= maxi(o - 3, int(my_strength()) - 2) and rating(c) <= maxi(o, int(my_strength())) + 8:
+			cand.append(c)
+	if cand.is_empty():
+		return
+	var c: int = cand[rng.randi() % cand.size()]
+	var amt := int(round(value(pl) * rng.randf_range(0.8, 1.25) / 5.0)) * 5
+	_mail("bid", "%s bid for %s" % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize()],
+		"%s want %s (%s, %d, age %d) and offer %s. The offer stands for two matches." % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize(), str(pl["pos"]), o, int(pl["age"]), money(amt)],
+		{"c": c, "pn": str(pl["n"]), "amt": amt, "st": "open", "left": 1, "cnt": 0})
+	lines.append("%s HAVE BID %s FOR %s" % [str(W[c]["n"]), money(amt), str(pl["n"]).to_upper()])
+
+# You answer a bid: "acc" sell, "rej" say no, "more" ask for more (once). Returns what happened.
+func bid_answer(id: int, what: String) -> String:
+	var m := mail(id)
+	if m.is_empty() or str(m.get("st", "")) != "open":
+		return ""
+	m["rd"] = true
+	var i := _sq_find(str(m["pn"]))
+	if i < 0:
+		m["st"] = "gone"
+		save()
+		return "He is not at the club any more."
+	var pl: Dictionary = d["squad"][i]
+	var c := int(m["c"])
+	var amt := int(m["amt"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	if what == "acc":
+		if (d["squad"] as Array).size() <= SQUAD_MIN:
+			return "You need at least %d players." % SQUAD_MIN
+		_out_of_xi(i)
+		m["st"] = "acc"
+		var r := _sell_to(i, c, amt)
+		_mail("info", "Deal done", r.capitalize())
+		return r
+	if what == "rej":
+		m["st"] = "rej"
+		if rating(c) > int(my_strength()) + 2 and full():
+			# a bigger club wanted him: he is not happy you said no
+			pl["mo"] = clampi(int(pl.get("mo", 65)) - 12, 5, 100)
+			save()
+			return "%s is upset: he wanted the move to %s." % [str(pl["n"]).capitalize(), str(W[c]["n"]).capitalize()]
+		save()
+		return "You turned the bid down."
+	if what == "more":
+		if int(m.get("cnt", 0)) >= 1:
+			return "They will not go higher."
+		m["cnt"] = 1
+		var ch := 0.7 if amt < value(pl) * 1.1 else 0.4
+		if rng.randf() < ch:
+			m["amt"] = int(round(amt * rng.randf_range(1.1, 1.25) / 5.0)) * 5
+			save()
+			return "%s raise the bid to %s." % [str(W[c]["n"]).capitalize(), money(int(m["amt"]))]
+		m["st"] = "gone"
+		save()
+		return "%s walk away." % str(W[c]["n"]).capitalize()
+	return ""
+
+# take a man out of the eleven: the best one on the bench in his position (or any outfield man) takes his place
+func _out_of_xi(i: int) -> void:
+	var xi: Array = d["xi"]
+	var at := -1
+	for k in xi.size():
+		if int(xi[k]) == i:
+			at = k
+	if at < 0:
+		return
+	var sq: Array = d["squad"]
+	var pos := str(sq[i]["pos"])
+	var best := -1
+	for pass_n in 2:
+		for j in sq.size():
+			if j == i or xi.has(j) or (pass_n == 0 and str(sq[j]["pos"]) != pos) or (pass_n == 1 and str(sq[j]["pos"]) == "GK"):
+				continue
+			if best < 0 or ovr_of(sq[j]) > ovr_of(sq[best]):
+				best = j
+		if best >= 0:
+			break
+	if best >= 0:
+		xi[at] = best
+	d["xi"] = xi

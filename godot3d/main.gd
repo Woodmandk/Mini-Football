@@ -169,6 +169,7 @@ var so_win := -1
 var so_last := false
 var car_goals := []
 var y_tab := 0 # youth page: 0 scouts, 1 reports, 2 academy
+var mail_sel := -1 # the inbox: the open mail's id
 var cal_m := 0 # the calendar shows this many months after the month of your next match
 var sim_res := {} # the last simulated match, for its screen
 var adv_info := {} # the days between two matches: dates and news
@@ -739,6 +740,57 @@ func _ready() -> void:
 				car.youth_sign(0)
 				y_tab = int(menu_arg.substr(5))
 				menu_arg = "youth"
+			if menu_arg in ["wtest0", "wtest1", "wtest2", "wtest3", "wtest4"]:
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				var wl := []
+				for r9 in 3:
+					if car.cup_due():
+						car.cup_finish(2, 1, true)
+					wl = car.finish_match(1, 0, [])
+				for l9 in wl:
+					print("WLINE ", l9)
+				var rng9 := RandomNumberGenerator.new()
+				rng9.randomize()
+				car._cpu_bid(rng9, wl)
+				print("WIN ", car.window(), " deals=", car.deals().size(), " inbox=", car.inbox().size(), " unread=", car.unread())
+				for m9 in car.inbox():
+					print("MAIL ", m9["k"], " | ", m9["t"], " | ", m9["b"])
+				var wt := menu_arg
+				if wt == "wtest0":
+					mail_sel = int(car.inbox()[0]["id"])
+					car.mail_read(mail_sel)
+					menu_arg = "inbox"
+				elif wt == "wtest1":
+					var bids := []
+					for m9 in car.inbox():
+						if str(m9["k"]) == "bid" and str(m9["st"]) == "open":
+							bids.append(int(m9["id"]))
+					var n0: int = (car.d["squad"] as Array).size()
+					var c0: int = int(car.d["coins"])
+					if bids.size() >= 1:
+						print("BIDANS more ", car.bid_answer(bids[0], "more"))
+						print("BIDANS acc ", car.bid_answer(bids[0], "acc"))
+					if bids.size() >= 2:
+						print("BIDANS rej ", car.bid_answer(bids[1], "rej"))
+					print("BIDANS squad ", n0, " -> ", (car.d["squad"] as Array).size(), " coins ", c0, " -> ", car.d["coins"], " xi ", car.d["xi"])
+					menu_arg = "tnews"
+				elif wt == "wtest4":
+					# deadline day: play on until the last stop before 1 September, then answer a bid
+					for r8 in 20:
+						if bool(car.window().get("deadline", false)) or not bool(car.window().get("open", false)):
+							break
+						if car.cup_due():
+							car.cup_finish(2, 1, true)
+						car.finish_match(1, 0, [])
+					print("DL ", car.window(), " today ", car.date_text(car.today()))
+					adv_from = car.today()
+					_adv_show(adv_from)
+					menu_arg = "adv"
+				else:
+					hub_tab = "career" if wt == "wtest2" else "transfers"
+					menu_arg = "main"
 			if menu_arg in ["caltest", "simtest", "advtest", "csettest", "calhome"]:
 				carc.new_career(carc.weakest(3), false)
 				carc.set_mode("simple")
@@ -2026,8 +2078,35 @@ func _car_info() -> Dictionary:
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "",
-		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(),
+		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(),
 	}
+
+# The living world for the hud: the transfer window, your inbox and the deals between the clubs.
+func _live_info() -> Dictionary:
+	if bool(car.d.get("cupmode", false)) or not car.d.has("leagues"):
+		return {}
+	var ib := []
+	for m in car.inbox():
+		var e: Dictionary = (m as Dictionary).duplicate()
+		e["date"] = car.date_text(int(m["day"]))
+		if str(m["k"]) == "bid":
+			var i: int = car._sq_find(str(m["pn"]))
+			e["cn"] = str(CLUBS[int(m["c"])]["n"]).capitalize()
+			e["ck"] = CLUBS[int(m["c"])]["k"]
+			e["amt_t"] = car.money(int(m["amt"]))
+			if i >= 0:
+				var pl: Dictionary = car.d["squad"][i]
+				e["val_t"] = car.money(Career.value(pl))
+				e["ovr"] = Career.ovr_of(pl)
+				e["pos"] = str(pl["pos"])
+				e["xi"] = (car.d["xi"] as Array).has(i)
+		ib.append(e)
+	var dl := []
+	for x in car.deals():
+		dl.append({"date": car.date_text(int(x[0])), "n": str(x[1]).capitalize(), "pos": str(x[2]), "ovr": int(x[3]), "age": int(x[4]),
+			"from": str(CLUBS[int(x[5])]["n"]).capitalize(), "to": str(CLUBS[int(x[6])]["n"]).capitalize(), "kt": CLUBS[int(x[6])]["k"], "fee": car.money(int(x[7])),
+			"near": car.ids().has(int(x[5])) or car.ids().has(int(x[6]))})
+	return {"win": car.window(), "won": car.windows_on(), "inbox": ib, "unread": car.unread(), "sel": mail_sel, "deals": dl}
 
 # Scouting and the academy for the hud.
 func _youth_info() -> Dictionary:
@@ -2476,6 +2555,22 @@ func _action(act: String, arg = null) -> void:
 		"youth":
 			car_msg = ""
 			hud.show_menu("youth", _menu_info())
+		"inbox":
+			car_msg = ""
+			if mail_sel < 0 and not car.inbox().is_empty():
+				mail_sel = int(car.inbox()[0]["id"])
+			car.mail_read(mail_sel)
+			hud.show_menu("inbox", _menu_info())
+		"mail":
+			car_msg = ""
+			mail_sel = int(arg)
+			car.mail_read(mail_sel)
+			hud.refresh(_menu_info())
+		"bid_acc", "bid_rej", "bid_more":
+			car_msg = car.bid_answer(int(arg), {"bid_acc": "acc", "bid_rej": "rej", "bid_more": "more"}[act])
+			hud.refresh(_menu_info())
+		"tnews":
+			hud.show_menu("tnews", _menu_info())
 		"y_tab":
 			y_tab = int(arg)
 			car_msg = ""
@@ -7951,7 +8046,7 @@ func _adv_show(from: int) -> void:
 		var close := mini(absi(ra - my_r), absi(rb - my_r))
 		near.append([mini(close, mini(ra, rb) + 1), "%s %d - %d %s" % [str(CLUBS[aa]["n"]).capitalize(), int(r[2]), int(r[3]), str(CLUBS[bb]["n"]).capitalize()]])
 	near.sort_custom(func(x, y): return int(x[0]) < int(y[0]))
-	for k in mini(3, near.size()):
+	for k in mini(2, near.size()):
 		news.append(["result", str(near[k][1])])
 	if not car.season_over() or car.cup_due():
 		var lead: int = int(ord[0])
@@ -7975,14 +8070,32 @@ func _adv_show(from: int) -> void:
 				break
 		if big != "":
 			news.append(["cup", big])
+	# the world: deals between the clubs in these days, bids for your men, the window
+	var nd_deal := 0
+	var dl_day := -1
+	for wv in car._windows():
+		if int(wv[1]) > from and int(wv[1]) <= to:
+			dl_day = int(wv[1])
+	for m in car.inbox():
+		if int(m["day"]) == car.now() and str(m["k"]) in ["deadline", "window"]:
+			news.append(["window", str(m["t"])])
+	for x in car.deals():
+		if int(x[0]) > from and int(x[0]) <= to and nd_deal < 2:
+			news.append(["deal", ("Deadline day: " if int(x[0]) == dl_day else "") + car.deal_text(x)])
+			nd_deal += 1
+	for m in car.inbox():
+		if int(m["day"]) == car.now() and str(m["k"]) == "bid":
+			news.append(["bid", str(m["t"])])
 	var mk: Array = car.market()
-	if not mk.is_empty():
+	if not mk.is_empty() and news.size() < 5:
 		var best: Dictionary = mk[0]
 		for pl in mk:
 			if Career.ovr_of(pl) > Career.ovr_of(best):
 				best = pl
 		news.append(["market", "Transfer list: %s (%s, %d) is the best of %d new players" % [str(best["n"]).capitalize(), str(best["pos"]), Career.ovr_of(best), mk.size()]])
-	news.append(["board", "The board: %s (%d)" % [str(Career.mood_of(car.conf())).capitalize(), car.conf()]])
+	if news.size() < 6:
+		news.append(["board", "The board: %s (%d)" % [str(Career.mood_of(car.conf())).capitalize(), car.conf()]])
+	news = news.slice(0, 6)
 	var nxt := ""
 	if car.cup_due():
 		var co: int = car.cup_opp()
