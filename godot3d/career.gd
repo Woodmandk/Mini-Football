@@ -302,7 +302,8 @@ func _new_season() -> void:
 		for i in n / 2:
 			var a: int = ids[i]
 			var b: int = ids[n - 1 - i]
-			rd.append([a, b] if (r + i) % 2 == 0 else [b, a])
+			# home and away take turns (the circle method's own pattern: at most one break in a row)
+			rd.append([a, b] if ((i % 2 == 0) if i > 0 else (r % 2 == 0)) else [b, a])
 		rounds.append(rd)
 		ids.insert(1, ids.pop_back())
 	var back := []
@@ -318,6 +319,8 @@ func _new_season() -> void:
 	d["table"] = table
 	d["round"] = 0
 	d["last"] = []
+	d["myres"] = {}
+	d["day"] = -4 # pre-season: a few days before the first match
 
 func rounds_total() -> int:
 	return (d["fix"] as Array).size()
@@ -467,6 +470,10 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		_book(a, b, ga, gb)
 		last.append([a, b, ga, gb])
 	d["last"] = last
+	if not d.has("myres"):
+		d["myres"] = {}
+	d["myres"][str(int(d["round"]))] = [mine, theirs]
+	d["day"] = lg_day(int(d["round"]))
 	d["round"] = int(d["round"]) + 1
 	var stt: Dictionary = stats()
 	stt["p"] = int(stt["p"]) + 1
@@ -1101,6 +1108,8 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var lines := []
 	# a level tie was settled by the shootout
 	var won: bool = mine > theirs or (mine == theirs and won_tie)
+	if not bool(d.get("cupmode", false)):
+		d["day"] = cup_day(r)
 	_cup_round(mine, theirs, won_tie)
 	var stt: Dictionary = stats()
 	var nm := cup_names()
@@ -1639,8 +1648,168 @@ func cup_due() -> bool:
 
 # the league round after which this cup round is played: the rounds are spread evenly through the season
 func cup_after() -> int:
-	var r := clampi(int(cup()["r"]), 0, cup_rounds() - 1)
+	return cup_after_r(int(cup()["r"]))
+
+func cup_after_r(cr: int) -> int:
+	var r := clampi(cr, 0, cup_rounds() - 1)
 	return int(round(rounds_total() * (r + 1.0) / (cup_rounds() + 1.0)))
+
+# ---------------------------------------------------------------- the calendar
+# The season has dates, like a real one: league matches at the weekend from early August, a cup tie in the
+# middle of the week after its league round. Days count from the first match day (day 0).
+const MONTHS := ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
+const WDAYS := ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+# The league's match days: Saturdays from early August, and when a league has more rounds than weekends a
+# Tuesday round now and then (never in a week with a cup tie). A short season plays every other weekend.
+var _dcache := []
+var _dkey := ""
+
+func _lg_days() -> Array:
+	var n := rounds_total()
+	var cr_n := cup_rounds() if d.has("cup") else 0
+	var key := "%d/%d" % [n, cr_n]
+	if key == _dkey:
+		return _dcache
+	var cup_a := {}
+	for cr in cr_n:
+		cup_a[cup_after_r(cr) - 1] = true
+	var step_w := 2 if n <= 20 else 1
+	var extra := maxi(0, n - 40)
+	var every := maxi(1, int(40.0 / maxf(extra, 1.0)))
+	var out := []
+	var w := 0
+	while out.size() < n:
+		var r := out.size()
+		out.append(w * 7 * step_w)
+		if extra > 0 and out.size() < n and w % every == 1 % every and not cup_a.has(r) and not cup_a.has(r + 1):
+			out.append(w * 7 * step_w + 3)
+			extra -= 1
+		w += 1
+	_dcache = out
+	_dkey = key
+	return out
+
+func lg_day(r: int) -> int:
+	var ds := _lg_days()
+	if ds.is_empty():
+		return 0
+	if r < ds.size():
+		return int(ds[maxi(r, 0)])
+	return int(ds[ds.size() - 1]) + 7 * (r - ds.size() + 1)
+
+# a cup tie: the Wednesday after its league round
+func cup_day(cr: int) -> int:
+	return lg_day(maxi(cup_after_r(cr) - 1, 0)) + 4
+
+# the first match day: the first Saturday from the 8th of August, one year on for each season
+func _day0() -> int:
+	var u := int(Time.get_unix_time_from_datetime_dict({"year": 2026 + int(d.get("season", 1)) - 1, "month": 8, "day": 8, "hour": 12}))
+	var wd := int(Time.get_datetime_dict_from_unix_time(u)["weekday"])
+	return u + ((6 - wd + 7) % 7) * 86400
+
+# a day as {y, m (1-12), d, wd (0 = Sunday)}
+func date_of(day: int) -> Dictionary:
+	var t := Time.get_datetime_dict_from_unix_time(_day0() + day * 86400)
+	return {"y": int(t["year"]), "m": int(t["month"]), "d": int(t["day"]), "wd": int(t["weekday"])}
+
+func date_text(day: int, long := false) -> String:
+	var t := date_of(day)
+	if long:
+		return "%s %d %s" % [WDAYS[int(t["wd"])], int(t["d"]), MONTHS[int(t["m"]) - 1]]
+	return "%s %d %s" % [WDAYS[int(t["wd"])], int(t["d"]), MONTHS[int(t["m"]) - 1].substr(0, 3)]
+
+# today: the day of the last match you played (or a few days before the season)
+func today() -> int:
+	return int(d.get("day", -4))
+
+# Every match of your season, in date order: league rounds and your cup ties.
+# {day, kind "lg"/"cup", opp (-1 = not known yet), home, res [mine, theirs] or [], name, next}
+func calendar() -> Array:
+	var out := []
+	var me := int(d["club"])
+	var fx: Array = d.get("fix", [])
+	var mr: Dictionary = d.get("myres", {})
+	for r in fx.size():
+		var opp := -1
+		var home := true
+		for m in fx[r]:
+			if int(m[0]) == me:
+				opp = int(m[1])
+			elif int(m[1]) == me:
+				opp = int(m[0])
+				home = false
+		var res: Array = mr.get(str(r), [])
+		out.append({"day": lg_day(r), "kind": "lg", "opp": opp, "home": home, "res": res, "played": r < int(d["round"]), "name": "Round %d" % (r + 1), "next": false})
+	if not bool(d.get("cupmode", false)) and d.has("cup"):
+		var cp: Dictionary = cup()
+		var nm := cup_names()
+		var lg_log: Array = cp.get("log", [])
+		for cr in nm.size():
+			if cr == 0 and int(cp.get("r0", 0)) == 1:
+				continue # a bye
+			var e := {"day": cup_day(cr), "kind": "cup", "opp": -1, "home": true, "res": [], "played": false, "name": str(nm[cr]).capitalize(), "next": false}
+			if cr < lg_log.size():
+				var found := false
+				for t in lg_log[cr]:
+					if int(t[0]) == me or int(t[1]) == me:
+						var a_me := int(t[0]) == me
+						e["opp"] = int(t[1]) if a_me else int(t[0])
+						e["res"] = [int(t[2]) if a_me else int(t[3]), int(t[3]) if a_me else int(t[2])]
+						e["played"] = true
+						found = true
+				if not found:
+					continue
+			elif cr == int(cp["r"]) and not cup_over():
+				e["opp"] = cup_opp()
+			elif cup_over():
+				continue
+			out.append(e)
+	out.sort_custom(func(a, b): return int(a["day"]) < int(b["day"]))
+	for e in out:
+		if not bool(e["played"]):
+			e["next"] = true
+			break
+	return out
+
+# the day of your next match, or -1 when the season is over
+func next_day() -> int:
+	if cup_due():
+		return maxi(cup_day(int(cup()["r"])), today() + 1)
+	if season_over():
+		return -1
+	return lg_day(int(d["round"]))
+
+# A match you do not play yourself: the score from the two clubs' strength, with a little home edge.
+# [mine, theirs, scorers (squad indices), minutes of the goals [[minute, 0 = you / 1 = them, scorer name]]]
+func sim_match(opp: int, home: bool) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var df := (my_strength() - _strength(opp)) / 14.0 + (0.12 if home else -0.12)
+	var mine := _poisson(rng, 1.35 * exp(df) + 0.1)
+	var theirs := _poisson(rng, 1.35 * exp(-df))
+	var pool := []
+	for i in d["xi"]:
+		var pl: Dictionary = d["squad"][int(i)]
+		var wgt: int = {"FW": 6, "MF": 3, "DF": 1}.get(str(pl["pos"]), 0)
+		for k in wgt:
+			pool.append(int(i))
+	var scorers := []
+	var goals := []
+	for g in mine:
+		var who: int = pool[rng.randi() % pool.size()] if not pool.is_empty() else -1
+		if who >= 0:
+			scorers.append(who)
+		goals.append([rng.randi_range(2, 90), 0, str(d["squad"][who]["n"]) if who >= 0 else ""])
+	for g in theirs:
+		goals.append([rng.randi_range(2, 90), 1, ""])
+	goals.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+	return [mine, theirs, scorers, goals]
+
+# match settings for the career's own matches: level 0-2, length 0-2
+func set_cfg(k: String, v: int) -> void:
+	d[k] = clampi(v, 0, 2)
+	save()
 
 # ---------------------------------------------------------------- old saves
 # A career from before the world of leagues: your club joins the English league of its old division, in the

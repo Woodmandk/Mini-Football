@@ -168,6 +168,11 @@ var so_t := 0.0
 var so_win := -1
 var so_last := false
 var car_goals := []
+var cal_m := 0 # the calendar shows this many months after the month of your next match
+var sim_res := {} # the last simulated match, for its screen
+var adv_info := {} # the days between two matches: dates and news
+var adv_from := -99 # the day of the match just played: CONTINUE shows the days going by from here
+var q_opt := [1, 1] # the quick-match level and length, kept while the career uses its own
 var car_lines := []
 var car_sel := -1
 var car_msg := ""
@@ -257,6 +262,11 @@ var state := "play"
 var state_t := 0.0
 var kick_team := 0
 var dead_info := {}
+# The referee: runs with play, and books a man at the next stop (after advantage too), card held up for all to see.
+var ref = null
+var ref_card := [] # [player, "y"] waiting for the next stop in play
+var book_p = null
+var book_t := -1.0
 var scorer = null
 var paused := false
 var opt_diff := 1
@@ -712,6 +722,30 @@ func _ready() -> void:
 						hub_tab = {"teamc": "team", "clubc": "club"}.get(ht, ht)
 				if ht == "play_on":
 					hub_tab = "play"
+			if menu_arg in ["caltest", "simtest", "advtest", "csettest", "calhome"]:
+				carc.new_career(carc.weakest(3), false)
+				carc.set_mode("simple")
+				_cr_enter(false)
+				for r9 in 4:
+					if car.cup_due():
+						car.cup_finish(2, 1, true)
+					car.finish_match(r9 % 3, 1, [])
+				var ma := menu_arg
+				menu_arg = "main"
+				hub_tab = "career"
+				if ma == "caltest":
+					menu_arg = "cal"
+				elif ma == "simtest":
+					_sim_mine()
+					menu_arg = "simres"
+					print("SIMTEST ", sim_res.get("mine"), "-", sim_res.get("theirs"), " goals=", sim_res.get("goals"), " day=", car.today(), " next=", car.next_day())
+				elif ma == "advtest":
+					_sim_mine()
+					_adv_show(adv_from)
+					menu_arg = "adv"
+				elif ma == "csettest":
+					car.set_cfg("diff", 2)
+					menu_arg = "cset"
 			if menu_arg == "myclub":
 				_own_start()
 			if menu_arg == "pack":
@@ -1974,7 +2008,25 @@ func _car_info() -> Dictionary:
 		"sacked": car.d.has("sacked"), "on": car.on(),
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
+		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "",
+		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info,
 	}
+
+# The season's calendar for the hud: every match with its date, opponent and result.
+func _cal_info() -> Array:
+	if bool(car.d.get("cupmode", false)) or not car.d.has("fix"):
+		return []
+	if not car.d.has("day") and int(car.d.get("round", 0)) > 0:
+		# a career from before the calendar: today is the last round played
+		car.d["day"] = car.lg_day(int(car.d["round"]) - 1)
+	var out := []
+	for e in car.calendar():
+		var o := int(e["opp"])
+		var dt: Dictionary = car.date_of(int(e["day"]))
+		out.append({"day": int(e["day"]), "y": int(dt["y"]), "m": int(dt["m"]), "d": int(dt["d"]), "wd": int(dt["wd"]), "kind": str(e["kind"]), "name": str(e["name"]),
+			"opp": CLUBS[o]["n"] if o >= 0 else "", "os": CLUBS[o]["s"] if o >= 0 else "?", "ok": CLUBS[o]["k"] if o >= 0 else ["888888"], "home": bool(e["home"]),
+			"res": e["res"], "played": bool(e["played"]), "next": bool(e["next"]), "date": car.date_text(int(e["day"]))})
+	return out
 
 func _board_info() -> Dictionary:
 	var b: Dictionary = car.board()
@@ -2202,6 +2254,8 @@ func _incar_save() -> void:
 func _cr_enter(show := true) -> void:
 	if cup_mode:
 		_cm_leave()
+	if not in_career:
+		q_opt = [opt_diff, opt_len]
 	in_career = true
 	car = carc
 	_incar_save()
@@ -2215,6 +2269,9 @@ func _cr_enter(show := true) -> void:
 		_show_hub()
 
 func _cr_exit() -> void:
+	if in_career:
+		opt_diff = int(q_opt[0])
+		opt_len = int(q_opt[1])
 	in_career = false
 	car = car_main
 	_incar_save()
@@ -2347,10 +2404,35 @@ func _action(act: String, arg = null) -> void:
 		"career":
 			car_msg = ""
 			car_sure = false
+			if adv_from > -99 and in_career and car == carc and not assist and net.role == "":
+				var f := adv_from
+				adv_from = -99
+				if car.next_day() > f:
+					if screen == "match":
+						_to_menu()
+					_adv_show(f)
+					return
+			adv_from = -99
 			if screen == "match":
 				_to_menu()
 			else:
 				_show_hub()
+		"cal":
+			cal_m = 0 if arg == null else cal_m + int(arg)
+			hud.show_menu("cal", _menu_info())
+		"cset":
+			hud.show_menu("cset", _menu_info())
+		"cfg_diff":
+			car.set_cfg("diff", int(arg))
+			hud.refresh(_menu_info())
+		"cfg_len":
+			car.set_cfg("len", int(arg))
+			hud.refresh(_menu_info())
+		"c_sim":
+			_sim_mine()
+		"adv_done":
+			adv_info = {}
+			_show_hub()
 		"tab":
 			hub_tab = str(arg)
 			car_msg = ""
@@ -2383,6 +2465,7 @@ func _action(act: String, arg = null) -> void:
 				me = 0
 				view_flip = 1.0
 				_set_clubs(int(car.d["club"]), car.cup_opp(), true)
+				_car_opts()
 				screen = "match"
 				hud.show_menu("", {})
 				_begin_match(true)
@@ -2407,6 +2490,7 @@ func _action(act: String, arg = null) -> void:
 				me = 0
 				view_flip = 1.0
 				_set_clubs(int(car.d["club"]), car.next_match()[0], true)
+				_car_opts()
 				screen = "match"
 				hud.show_menu("", {})
 				_begin_match(true)
@@ -3594,6 +3678,19 @@ func _first_on(team: int, order: Array):
 	return teams[team][1]
 
 func _kickoff(team: int) -> void:
+	for rc in ref_card:
+		var bp = rc[0]
+		if bp != null and is_instance_valid(bp) and not bp.off:
+			bp.yellow += 1
+			if bp.yellow >= 2:
+				bp.off = true
+				_send_off(bp)
+			if not _quiet():
+				_banner("RED CARD" if bp.off else "YELLOW CARD", Color(0.95, 0.2, 0.2) if bp.off else Color(1.0, 0.9, 0.2), 1.3, "%d  %s" % [bp.num, bp.pname.to_upper()], 56)
+	ref_card.clear()
+	book_t = -1.0
+	if ref != null:
+		ref.card_up = 0
 	_formation(team, true)
 	pen_wait = false
 	Engine.time_scale = 1.0
@@ -3931,12 +4028,17 @@ func _foul(by, on, man_first := false) -> void:
 	var rear: bool = on.fwd().dot((on.position - by.position).normalized()) > 0.5
 	var slid: bool = by.tackle_t >= 0.0
 	if (slid and rear and man_first) or (not slid and closing > (5.5 if in_box else 7.0)) or nf >= 3:
-		by.yellow += 1
-		stats["cards"] += 1
-		card = "YELLOW CARD"
-		if by.yellow >= 2:
-			card = "RED CARD"
-			by.off = true
+		# the card comes at the next stop in play: the referee walks over and shows it
+		var due := 0
+		for rc in ref_card:
+			if rc[0] == by:
+				due += 1
+		if due == 0:
+			ref_card.append([by, "y"])
+			stats["cards"] += 1
+			card = "YELLOW CARD"
+			if by.yellow + 1 >= 2:
+				card = "RED CARD"
 	# advantage, as in the 2D game: the fouled side still has the ball, so the referee lets them play on.
 	# A red card or a penalty always stops the game.
 	var o = ball_owner
@@ -3948,7 +4050,7 @@ func _foul(by, on, man_first := false) -> void:
 		protect_t = maxf(protect_t, 0.6)
 		snd("thud")
 		if not _quiet():
-			_banner("ADVANTAGE", Color(1, 1, 1), 0.9, card, 44)
+			_banner("ADVANTAGE", Color(1, 1, 1), 0.9, "", 44)
 			fx("say", "The referee lets play go on. Advantage!")
 			fx("vib", 60)
 		return
@@ -3961,22 +4063,18 @@ func _foul(by, on, man_first := false) -> void:
 	if not _quiet():
 		var who := "%d  %s" % [by.num, by.pname.to_upper()]
 		if in_box:
-			_banner("PENALTY!", Color(1.0, 0.86, 0.2), 1.6, (card + "   " + who) if card != "" else "", 96)
+			_banner("PENALTY!", Color(1.0, 0.86, 0.2), 1.6, "", 96)
 			fx("say", "Penalty!")
 			snd("ooh")
-		elif card == "RED CARD":
-			_banner("RED CARD", Color(0.95, 0.2, 0.2), 1.6, who, 84)
-			fx("say", "He is sent off!")
-			snd("ooh")
-		elif card != "":
-			_banner("YELLOW CARD", Color(1.0, 0.9, 0.2), 1.4, who, 72)
 		else:
 			_banner("FOUL", Color(1, 1, 1), 1.0, "", 60)
+			if card != "":
+				fx("say", "That is a booking, surely.")
 		fx("shake", 0.35)
 		fx("vib", 80)
 	ball_owner = null
 	ball_vel = Vector3.ZERO
-	_out("pen" if in_box else "fk", pos, on.team, 2.0 if (in_box or card != "") else 1.4)
+	_out("pen" if in_box else "fk", pos, on.team, 2.0 if in_box else 1.4)
 
 func _offside(p) -> void:
 	stats["offsides"] += 1
@@ -4274,7 +4372,8 @@ func _tick(dt: float) -> void:
 		"dead":
 			_idle_players(dt)
 			_ball_free(dt)
-			if state_t > float(dead_info.get("wait", 0.9)):
+			_booking(dt)
+			if state_t > float(dead_info.get("wait", 0.9)) and book_t < 0.0:
 				_restart()
 		"half":
 			_idle_players(dt)
@@ -4340,6 +4439,10 @@ func _play(dt: float) -> void:
 			_out("pen", Vector3.ZERO, 0 if force_kind == "pen0" else 1, 2.0)
 		elif force_kind == "so":
 			_so_start()
+		elif force_kind == "book":
+			# test: a booking at a free kick
+			ref_card.append([teams[1][4], "y"])
+			_out("fk", Vector3(-10, 0, 6), 0, 1.4)
 		elif force_kind == "et":
 			# test: jump to the end of normal time with the score level
 			score = [1, 1]
@@ -5020,6 +5123,7 @@ func _full_time() -> void:
 		_rk_finish()
 	elif career_on and cup_on:
 		car_lines = car.cup_finish(score[0], score[1], _winner() == 0)
+		adv_from = car.today() if car == carc and in_career else -99
 		if cup_mode:
 			# no board in the cup mode
 			car_lines = car_lines.filter(func(x): return not str(x).begins_with("THE BOARD"))
@@ -5031,6 +5135,7 @@ func _full_time() -> void:
 		_car_coins(false)
 	elif career_on:
 		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
+		adv_from = car.today() if car == carc and in_career else -99
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		_car_coins(true)
 		co_pay = [car.last_coins, score[0] > score[1], [car_lines[car_lines.size() - 1], car_lines[1]] + ([str(car.d["note"])] if car.season_over() else [])]
@@ -5970,7 +6075,9 @@ func _cpu_slide(o, c, dt: float) -> bool:
 	# aim where the ball will be when he gets there
 	var t: float = bd / (SLIDE_V * 0.6)
 	# a good defender reads where the ball is going; a poor one slides at where it is now and arrives behind it, into the man
-	var lead: Vector3 = to + c.vel * t * lerpf(0.25, 1.0, dq)
+	var lead: Vector3 = to + c.vel * t * lerpf(0.25, 1.0, dq) * randf_range(0.7, 1.3)
+	# nobody aims a slide perfectly: a poor defender can be well off
+	lead = lead.rotated(Vector3.UP, randf_range(-1.0, 1.0) * lerpf(0.4, 0.1, dq))
 	_slide_go(o, lead.normalized())
 	stats["cslide"] = int(stats.get("cslide", 0)) + 1
 	return true
@@ -6001,24 +6108,69 @@ func _slides() -> void:
 		elif c.team != p.team and not c.hands() and protect_t <= 0.0 and set_piece == "":
 			var front: float = c.fwd().dot((p.position - c.position).normalized())
 			var pd: float = p.position.distance_to(c.position)
-			if bd < 1.15 + (p.dfn - 60) * 0.004:
+			var sreach: float = 1.15 + (p.dfn - 60) * 0.004
+			if bd < sreach:
 				p.slide_live = false
 				if front > -0.45:
-					c.stun = 0.6
-					c.start_fall(0.6)
-					stats["tackles"] += 1
-					snd("win")
-					fx("shake", 0.3)
-					fx("vib", 40)
-					p.stun = 0.3
-					_give(p)
-					protect_t = 0.7
+					# Reaching the ball is not winning it: how cleanly the boot meets it, the tackler's defending
+					# against the dribbler's skill, the angle, and a dribbler mid-trick rides it.
+					var sq2: float = _slide_q(p, c, bd, sreach, front)
+					stats["sq"] = int(stats.get("sq", 0)) + 1
+					if sq2 >= 0.5:
+						c.stun = 0.6
+						c.start_fall(0.6)
+						stats["tackles"] += 1
+						stats["swin"] = int(stats.get("swin", 0)) + 1
+						snd("win")
+						fx("shake", 0.3)
+						fx("vib", 40)
+						p.stun = 0.3
+						_give(p)
+						protect_t = 0.7
+					elif sq2 >= 0.34:
+						# a toe on it: the ball squirts away and it is anyone's
+						stats["sloose"] = int(stats.get("sloose", 0)) + 1
+						var dv: Vector3 = ball.position - p.position
+						dv.y = 0.0
+						ball_owner = null
+						ball_vel = (dv.normalized() * 0.6 + p.slide_dir * 0.4).normalized() * 5.5
+						ball_last = p
+						ball_ignore = c
+						ignore_t = 0.25
+						c.vel *= 0.5
+						c.stun = maxf(c.stun, 0.2)
+						p.stun = 1.0
+						snd("touch")
+					else:
+						# he rides it: the slide goes past and the man is away
+						stats["smiss"] = int(stats.get("smiss", 0)) + 1
+						c.stun = maxf(c.stun, 0.1)
+						c.vel *= 0.85
+						p.stun = 1.2
+						p.vel *= 0.4
+						if c.has_ab("tryl"):
+							_ab_pop(c, "tryl")
 				else:
 					_foul(p, c)
 			elif pd < 0.75:
 				# missed the ball and took the man
 				p.slide_live = false
 				_foul(p, c, true)
+
+# A slide that reaches the ball: how well it is won (0.5+ clean, 0.34+ knocked loose, less = he rides it).
+func _slide_q(p, c, bd: float, sreach: float, front: float) -> float:
+	# how square the boot meets it: the ball's distance from the line of the slide
+	var rel: Vector3 = ball.position - p.position
+	rel.y = 0.0
+	var perp: float = (rel - p.slide_dir * rel.dot(p.slide_dir)).length()
+	var clean: float = 1.0 - clampf(perp / 0.9, 0.0, 1.0)
+	var cdr: float = clampf((c.ovr - 40) / 55.0, 0.0, 1.0)
+	var duel: float = (clampf((p.dfn - 40) / 55.0, 0.0, 1.0) - (cdr * 0.7 + clampf((c.pac - 40) / 55.0, 0.0, 1.0) * 0.3)) * 0.45
+	var side_on: float = 0.08 if absf(front) < 0.55 else 0.0
+	var abk := (0.08 if p.has_ab("mur") else 0.0) - (0.1 if c.has_ab("tryl") else 0.0)
+	if OS.get_cmdline_user_args().has("--sqdbg"):
+		print("SQ clean=%.2f duel=%.2f side=%.2f sk=%d" % [clean, duel, side_on, 1 if c.skill_t >= 0.0 else 0])
+	return 0.32 + clean * 0.45 + duel + side_on + abk - (0.35 if c.skill_t >= 0.0 else 0.0)
 
 # How good the moment is for a foot in, the 2D game's rule (no dice): how close the foot is to the ball,
 # whether the ball is out of his feet (sprinting) or tucked in (slow, turning), whether his body is between
@@ -6136,9 +6288,28 @@ func _tackles(dt: float) -> void:
 		var still: bool = c.vel.length() < 2.0
 		# a clever defender waits until the ball is out of your feet; a poor one goes in early
 		var want_q: float = 0.42 - (1.0 - clampf((o.dfn - 40) / 45.0, 0.0, 1.0)) * 0.2
-		if d < reach + 0.25 and (still or front > (0.0 if stepping else 0.3)) and _tq(o, c) >= want_q:
+		# Nobody sees the perfect moment: each man reads it with an error that a better defender keeps small.
+		# A poor defender also tends to think it is on when it is not (he dives in), and sometimes just goes.
+		var dq2: float = clampf((o.dfn - 40) / 50.0, 0.0, 1.0)
+		var cpu_man: bool = _hum_of(o) == null
+		if cpu_man:
+			o.tq_t -= dt
+			if o.tq_t <= 0.0:
+				o.tq_t = randf_range(0.35, 0.8)
+				o.tq_err = randf_range(-1.0, 1.0) * lerpf(0.24, 0.07, dq2) + lerpf(0.1, 0.0, dq2)
+		var seen_q: float = _tq(o, c) + (o.tq_err if cpu_man else 0.0)
+		var rush := false
+		if cpu_man and stepping and d < reach + 0.5 and front > 0.2 and not still:
+			o.rush_t += dt * lerpf(0.9, 0.08, dq2) * randf()
+			if o.rush_t > 1.0:
+				rush = true
+				o.rush_t = 0.0
+		if rush or (d < reach + 0.25 and (still or front > (0.0 if stepping else 0.3)) and seen_q >= want_q):
 			o.press_t += dt
 			var need: float = _cpu(o.team)["need"]
+			if cpu_man:
+				# and his reactions are not a machine's: a little quicker or slower each time
+				need *= randf_range(0.8, 1.35)
 			if _team_human(o.team):
 				need = 0.6
 			elif not stepping:
@@ -6147,7 +6318,7 @@ func _tackles(dt: float) -> void:
 				# he has decided to step in: now it is only his reaction time
 				need *= 0.55
 			need *= lerpf(1.15, 0.88, clampf((o.dfn - 40) / 45.0, 0.0, 1.0))
-			if o.press_t > need - 0.15:
+			if rush or o.press_t > need - 0.15:
 				o.press_t = 0.0
 				o.commit_t = 0.15
 				o.start_kick(0.25)
@@ -6808,7 +6979,7 @@ func _send_snap() -> void:
 		ch.append(snappedf(h.meter, 0.01))
 	net.send({
 		"_": "s", "st": state, "t": snappedf(state_t, 0.01), "sc": score, "ck": int(clock), "so": [so_g[0], so_g[1], so_win], "p": _pack(),
-		"h": hc, "c": ch, "e": out_ev, "sr": players.find(scorer), "rp": hud.replay_on,
+		"h": hc, "c": ch, "e": out_ev, "sr": players.find(scorer), "rp": hud.replay_on, "rf": [snappedf(ref.position.x, 0.01), snappedf(ref.position.z, 0.01), snappedf(ref.yaw, 0.01), ref.card_up, snappedf(ref.vel.x, 0.1), snappedf(ref.vel.z, 0.1), players.find(book_p) if book_t >= 0.0 else -1] if ref != null else [],
 		"ts": tst if state == "full" else null, "co": co_pay if (state == "full" and career_on) else null, "sm": snappedf(humans[1].stam, 0.02) if humans.size() > 1 else 1.0,
 	})
 	out_ev = []
@@ -6834,6 +7005,16 @@ func _guest_frame(dt: float) -> void:
 		anim_rate = 0.55 if state == "replay" else 1.0
 		var si := int(snap.get("sr", -1))
 		scorer = players[si] if si >= 0 else null
+		var rf: Array = snap.get("rf", [])
+		if rf.size() >= 7:
+			_ref_make()
+			ref.position = Vector3(float(rf[0]), 0, float(rf[1]))
+			ref.yaw = float(rf[2])
+			ref.card_up = int(rf[3])
+			ref.vel = Vector3(float(rf[4]), 0, float(rf[5]))
+			var bi := int(rf[6])
+			book_p = players[bi] if bi >= 0 and bi < players.size() else null
+			book_t = 1.0 if book_p != null else -1.0
 		var hc: Array = snap["h"]
 		for i in humans.size():
 			var ci := int(hc[i]) if i < hc.size() else -1
@@ -6934,7 +7115,7 @@ func _process(dt: float) -> void:
 		_spin_ball(ball_vel, dt * anim_rate)
 	var loose: bool = ball_owner == null
 	# seen from above everything is further away: the ball and the men are drawn bigger (the play itself is the same)
-	var top: bool = cam_mode == 1
+	var top: bool = cam_mode == 1 and not (state == "dead" and book_t >= 0.0 and book_p != null)
 	var bs := 1.0
 	if top:
 		bs = 3.4 * (1.0 + clampf(ball.position.y - BALL_R, 0.0, 12.0) * 0.07)
@@ -7003,6 +7184,12 @@ func _process(dt: float) -> void:
 		if not paused:
 			p.animate(dt * anim_rate)
 		p.set_ring(false, Color.WHITE, false)
+	if not paused and screen == "match":
+		_ref_tick(dt)
+		if ref != null:
+			ref.animate(dt * anim_rate)
+	elif ref != null:
+		ref.visible = false
 	if show_rings:
 		for i in humans.size():
 			var h = humans[i]
@@ -7126,6 +7313,18 @@ func _camera(dt: float) -> void:
 		want_look = Vector3(f.x * 0.35, 0, f.z * 0.35)
 		want_fov = 44.0
 		k = 2.0
+	elif state == "dead" and book_t >= 0.0 and book_p != null and is_instance_valid(book_p) and ref != null:
+		# the booking, close up from the side: the referee, the card, the man
+		var mid: Vector3 = (ref.position + book_p.position) * 0.5
+		var ax: Vector3 = book_p.position - ref.position
+		ax.y = 0.0
+		var nrm := Vector3(-ax.z, 0, ax.x).normalized() if ax.length() > 0.1 else Vector3(0, 0, 1)
+		if nrm.z * view_flip < 0.0:
+			nrm = -nrm
+		want_look = mid + Vector3(0, 1.5, 0)
+		want_pos = mid + nrm * 6.5 + Vector3(0, 2.0, 0)
+		want_fov = 40.0
+		k = 3.0
 	elif state == "intro" and real_t - intro_t0 < 3.5:
 		var it := real_t - intro_t0
 		want_look = Vector3(-14.0 + it * 4.0, 1.0, 0)
@@ -7612,3 +7811,213 @@ func _co_back(tell: bool) -> void:
 		_as_open()
 	else:
 		hud.show_menu("lobby", _menu_info())
+
+
+# ---------------------------------------------------------------- the career's own calendar, simulated matches and the days between
+# A career match uses the career's own level and length (Office > Match settings).
+func _car_opts() -> void:
+	if in_career and car == carc:
+		opt_diff = int(car.d.get("diff", 1))
+		opt_len = int(car.d.get("len", 1))
+
+# Simulate your next match instead of playing it: the score comes from the two squads' strength.
+func _sim_mine() -> void:
+	if not in_career or car != carc or assist or net.role != "" or car.d.has("sacked"):
+		return
+	var cupt: bool = car.cup_due()
+	if not cupt and car.season_over():
+		return
+	var opp: int = car.cup_opp() if cupt else int(car.next_match()[0])
+	var home: bool = true if cupt else bool(car.next_match()[1])
+	if opp < 0:
+		return
+	var r: Array = car.sim_match(opp, home)
+	var keep := [score.duplicate(), so_win]
+	score = [int(r[0]), int(r[1])]
+	so_win = -1
+	var pens := ""
+	if cupt and score[0] == score[1]:
+		var df: float = (car.my_strength() - car.rating(opp)) / 40.0
+		so_win = 0 if randf() < clampf(0.5 + df, 0.2, 0.8) else 1
+		pens = "Won on penalties" if so_win == 0 else "Lost on penalties"
+	var date: String = car.date_text(car.next_day(), true)
+	var what: String = (car.cup_name().capitalize() + ", " + car.cup_round_name().capitalize()) if cupt else (car.league_name().capitalize() + ", round %d" % (int(car.d["round"]) + 1))
+	if cupt:
+		car_lines = car.cup_finish(score[0], score[1], so_win == 0)
+		_car_coins(false)
+	else:
+		car_lines = car.finish_match(score[0], score[1], r[2], [])
+		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
+		_car_coins(true)
+	adv_from = car.today()
+	var me_c := int(car.d["club"])
+	var a := me_c if home else opp
+	var b := opp if home else me_c
+	sim_res = {"a": CLUBS[a]["n"], "b": CLUBS[b]["n"], "ka": CLUBS[a]["k"], "kb": CLUBS[b]["k"], "home": home, "goals": r[3], "mine": score[0], "theirs": score[1],
+		"pens": pens, "date": date, "what": what, "lines": car_lines.duplicate()}
+	score = keep[0]
+	so_win = int(keep[1])
+	hud.show_menu("simres", _menu_info())
+
+# The days between two matches go by on a calendar page, with the news of those days.
+func _adv_show(from: int) -> void:
+	var to: int = car.next_day()
+	var me_c := int(car.d["club"])
+	var news := []
+	# results around you in the league
+	var ord: Array = car.order()
+	var my_r: int = car.rank_of(me_c)
+	var near := []
+	for r in car.d.get("last", []):
+		var aa := int(r[0])
+		var bb := int(r[1])
+		if aa == me_c or bb == me_c:
+			continue
+		var ra: int = car.rank_of(aa)
+		var rb: int = car.rank_of(bb)
+		var close := mini(absi(ra - my_r), absi(rb - my_r))
+		near.append([mini(close, mini(ra, rb) + 1), "%s %d - %d %s" % [str(CLUBS[aa]["n"]).capitalize(), int(r[2]), int(r[3]), str(CLUBS[bb]["n"]).capitalize()]])
+	near.sort_custom(func(x, y): return int(x[0]) < int(y[0]))
+	for k in mini(3, near.size()):
+		news.append(["result", str(near[k][1])])
+	if not car.season_over() or car.cup_due():
+		var lead: int = int(ord[0])
+		var pts_me: int = int(car.d["table"][str(me_c)]["pts"])
+		if lead == me_c:
+			var sec: int = int(ord[1]) if ord.size() > 1 else lead
+			news.append(["table", "You are top of %s, %d points clear" % [car.league_name(), pts_me - int(car.d["table"][str(sec)]["pts"])]])
+		else:
+			news.append(["table", "You are %s, %d points behind %s" % [Career.ordinal(my_r).to_lower(), int(car.d["table"][str(lead)]["pts"]) - pts_me, str(CLUBS[lead]["n"]).capitalize()]])
+	var cp: Dictionary = car.cup()
+	var lg_log: Array = cp.get("log", [])
+	if not lg_log.is_empty():
+		var big := ""
+		for t in lg_log[lg_log.size() - 1]:
+			var ga := int(t[2])
+			var gb := int(t[3])
+			var wn := int(t[0]) if ga > gb else int(t[1])
+			var ls := int(t[1]) if ga > gb else int(t[0])
+			if wn != me_c and ls != me_c and car.rating(ls) - car.rating(wn) >= 6:
+				big = "Cup shock: %s knock out %s" % [str(CLUBS[wn]["n"]).capitalize(), str(CLUBS[ls]["n"]).capitalize()]
+				break
+		if big != "":
+			news.append(["cup", big])
+	var mk: Array = car.market()
+	if not mk.is_empty():
+		var best: Dictionary = mk[0]
+		for pl in mk:
+			if Career.ovr_of(pl) > Career.ovr_of(best):
+				best = pl
+		news.append(["market", "Transfer list: %s (%s, %d) is the best of %d new players" % [str(best["n"]).capitalize(), str(best["pos"]), Career.ovr_of(best), mk.size()]])
+	news.append(["board", "The board: %s (%d)" % [str(Career.mood_of(car.conf())).capitalize(), car.conf()]])
+	var nxt := ""
+	if car.cup_due():
+		var co: int = car.cup_opp()
+		nxt = "%s, %s v %s" % [car.cup_name().capitalize(), car.cup_round_name().capitalize(), str(CLUBS[co]["n"]).capitalize() if co >= 0 else "?"]
+	elif not car.season_over():
+		var nm: Array = car.next_match()
+		nxt = "League v %s, %s" % [str(CLUBS[int(nm[0])]["n"]).capitalize(), "home" if bool(nm[1]) else "away"]
+	var days := []
+	for dd in range(from, to + 1):
+		var t: Dictionary = car.date_of(dd)
+		days.append([int(t["d"]), Career.WDAYS[int(t["wd"])], Career.MONTHS[int(t["m"]) - 1]])
+	adv_info = {"days": days, "news": news, "next": nxt, "ndate": car.date_text(to, true)}
+	hud.show_menu("adv", _menu_info())
+
+
+# ---------------------------------------------------------------- the referee
+func _ref_make() -> void:
+	if ref != null:
+		return
+	ref = PlayerS.new()
+	ref.role = "MF"
+	ref.num = 0
+	ref.build(Color(0.08, 0.08, 0.09), Color(0.06, 0.06, 0.06), Color(0.06, 0.06, 0.06), Color(0.85, 0.66, 0.5), Color(0.15, 0.1, 0.08), Color(0.05, 0.05, 0.05))
+	add_child(ref)
+	ref.position = Vector3(0, 0, -12)
+
+# he keeps up with play from a diagonal, about 12 m away, and looks at the ball
+func _ref_tick(dt: float) -> void:
+	_ref_make()
+	ref.visible = screen == "match" and state != "intro"
+	if net.role == "guest":
+		ref.position += ref.vel * dt
+		return
+	if book_t >= 0.0:
+		return
+	var f := ball.position
+	var want := Vector3(f.x - signf(f.x + 0.01) * 6.0, 0, f.z + (-9.0 if f.z > 0.0 else 9.0))
+	want.x = clampf(want.x, -HL + 4.0, HL - 4.0)
+	want.z = clampf(want.z, -HW + 3.0, HW - 3.0)
+	var to: Vector3 = want - ref.position
+	to.y = 0.0
+	var sp := clampf(to.length() * 0.9, 0.0, 6.8)
+	var vw: Vector3 = to.normalized() * sp if to.length() > 0.3 else Vector3.ZERO
+	ref.vel = ref.vel.move_toward(vw, 14.0 * dt)
+	ref.position += ref.vel * dt
+	var lk: Vector3 = f - ref.position
+	lk.y = 0.0
+	if lk.length() > 0.5:
+		ref.yaw = lerp_angle(ref.yaw, atan2(-lk.x, -lk.z), clampf(dt * 6.0, 0.0, 1.0))
+
+# At a stop in play the referee goes to the man, the card goes up, the game waits for it.
+func _booking(dt: float) -> void:
+	if ref_card.is_empty() and book_t < 0.0:
+		return
+	_ref_make()
+	if book_t < 0.0:
+		var rc: Array = ref_card[0]
+		book_p = rc[0]
+		if book_p == null or not is_instance_valid(book_p) or book_p.off:
+			ref_card.pop_front()
+			return
+		book_t = 0.0
+		ref.card_up = 0
+		if OS.get_cmdline_user_args().has("--force=book"):
+			print("BOOK start at real_t=", real_t)
+		# from far away he comes closer at once, then jogs in for the last bit
+		var away: Vector3 = ref.position - book_p.position
+		away.y = 0.0
+		if away.length() > 12.0:
+			ref.position = book_p.position + away.normalized() * 9.0
+		dead_info["wait"] = maxf(float(dead_info.get("wait", 0.9)), state_t + 3.4)
+	book_t += dt
+	var p = book_p
+	if p == null or not is_instance_valid(p):
+		book_t = -1.0
+		ref_card.pop_front()
+		return
+	var spot: Vector3 = p.position + (ref.position - p.position).normalized() * 1.7
+	spot.y = 0.0
+	var to: Vector3 = spot - ref.position
+	to.y = 0.0
+	if to.length() > 0.2 and book_t < 1.2:
+		ref.vel = ref.vel.move_toward(to.normalized() * minf(6.5, to.length() * 3.0), 18.0 * dt)
+	else:
+		ref.vel = ref.vel.move_toward(Vector3.ZERO, 18.0 * dt)
+	ref.position += ref.vel * dt
+	var lk: Vector3 = p.position - ref.position
+	lk.y = 0.0
+	if lk.length() > 0.1:
+		ref.yaw = lerp_angle(ref.yaw, atan2(-lk.x, -lk.z), clampf(dt * 8.0, 0.0, 1.0))
+		p.face(-lk, 6.0, dt)
+	p.vel = p.vel.move_toward(Vector3.ZERO, 10.0 * dt)
+	if book_t >= 1.2 and ref.card_up == 0:
+		p.yellow += 1
+		var red: bool = p.yellow >= 2
+		ref.card_up = 2 if red else 1
+		if red:
+			p.off = true
+		if not _quiet():
+			var who := "%d  %s" % [p.num, p.pname.to_upper()]
+			_banner("RED CARD" if red else "YELLOW CARD", Color(0.95, 0.2, 0.2) if red else Color(1.0, 0.9, 0.2), 1.5, who, 56)
+			fx("say", "A second yellow, and he is off!" if red else "The referee books him.")
+			snd("ooh" if red else "whistle")
+			fx("vib", 60)
+	if book_t >= 2.9:
+		ref.card_up = 0
+		book_t = -1.0
+		book_p = null
+		ref_card.pop_front()
+		if not ref_card.is_empty():
+			dead_info["wait"] = maxf(float(dead_info.get("wait", 0.9)), state_t + 0.2)
