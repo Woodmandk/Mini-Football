@@ -838,6 +838,45 @@ func _ready() -> void:
 						pro_new = {"pos": "MF", "n": "SCHALDE", "pick": []}
 					print("COPRO guest pro info keys=", _pro_info().keys().slice(0, 5), " n=", _pro_info().get("n", ""))
 					menu_arg = "main"
+			if menu_arg.begins_with("rv-"):
+				# review: the same career page alone (s), as the manager with the friend in the room (h), and on the friend's phone (g)
+				var rp: PackedStringArray = menu_arg.split("-")
+				var rwho := rp[1]
+				var rtg := rp[3]
+				seen_how = true
+				if rp[2] == "p":
+					var pkr: Array = _pro_picks()
+					proc.new_pro(int(pkr[0]), "LARSEN", "FW")
+					_pro_enter(false)
+					if rwho != "s":
+						proc.add_pro2("SCHALDE", "MF")
+				else:
+					carc.new_career(carc.weakest(3), true)
+					carc.set_mode("full")
+					_cr_enter(false)
+				for rr in 3:
+					_sim_mine()
+				var rsrc = proc if rp[2] == "p" else carc
+				if rwho == "h":
+					net.role = "host"
+					net.connected = true
+					room = "KQWX"
+					opt_car = true
+				elif rwho == "g":
+					carv.d = rsrc.d.duplicate(true)
+					net.role = "guest"
+					net.connected = true
+					_action("as_open")
+				menu_arg = "main"
+				if rtg.begins_with("a."):
+					for ra in rtg.substr(2).split("."):
+						var rab := ra.split("=")
+						_action(rab[0], int(rab[1]) if rab.size() > 1 else null)
+					menu_arg = hud.menu_name
+				else:
+					hub_tab = rtg
+					_show_hub()
+				print("REVIEW ", rwho, " ", rp[2], " ", rtg, " -> ", hud.menu_name, " assist=", assist)
 			if menu_arg == "prostart":
 				pro_new = {"pos": "MF", "c": -1, "pick": _pro_picks(), "n": "LARSEN"}
 				pro_new["c"] = int(pro_new["pick"][1])
@@ -2300,8 +2339,27 @@ func _pro_info() -> Dictionary:
 		"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "trust": int(p["trust"]), "next": "start" if car.pro_starts(pk) else "bench",
 		"ss": p["ss"], "all": p["all"], "avg": car.pro_avg(true, pk), "avg_all": car.pro_avg(false, pk), "rt": p.get("rt", []), "obj": car.pro_obj(pk), "pxp": int(p.get("pxp", 0)),
 		"together": car.pro2(), "mate": str(car.pro_pl("pro2" if pk == "pro" else "pro").get("n", "")).capitalize(),
+		"lv": car.pro_lv(pk), "need": car.pro_need(pk), "drill": car.pro_drill(pk), "dp": car.pro_dp(pk), "ab": Career.ab_of(pl).map(func(a): return str(Career.ABIL[a][0]).capitalize()),
+		"cost": [Career.pro_cost(int(pl["pac"])), Career.pro_cost(int(pl["sho"])), Career.pro_cost(int(pl["pas"])), Career.pro_cost(int(pl["dfn"]))], "top": Career.ovr_of(pl) >= int(pl["pot"]),
+		"abl": _pro_ab_list(pl),
 		"offer": str(CLUBS[of]["n"]).capitalize() if of >= 0 else "", "hist": hist, "fm": Career.pform(pl), "cond": car.cond_of(pl), "inj": car.injured(pl),
 		"club": str(CLUBS[int(car.d["club"])]["n"]).capitalize(), "kit": CLUBS[int(car.d["club"])]["k"], "msg": car_msg}
+
+# the skills your player can buy with points
+func _pro_ab_list(pl: Dictionary) -> Array:
+	var have := Career.ab_of(pl)
+	var out := []
+	var cost: int = Career.PRO_AB_PTS[mini(have.size(), 1)]
+	for k in Career.ab_for(str(pl["pos"])):
+		var why := ""
+		if have.has(k):
+			why = "yours"
+		elif have.size() >= 2:
+			why = "full"
+		elif have.size() == 1 and Career.ovr_of(pl) < Career.AB_SLOT2:
+			why = "rating %d" % Career.AB_SLOT2
+		out.append({"k": k, "n": str(Career.ABIL[k][0]).capitalize(), "t": str(Career.ABIL[k][1]), "cost": cost, "why": why, "ok": why == "" and int(pl.get("tp", 0)) >= cost})
+	return out
 
 func _pro_new_info() -> Dictionary:
 	if (pro_new.get("pick", []) as Array).is_empty():
@@ -2874,7 +2932,8 @@ func _show_hub(pick := true) -> void:
 	car_sel = -1
 	car_sell = -1
 	if in_career or assist:
-		if not (hub_tab in ["career", "team", "transfers", "club", "office"]):
+		var okt: Array = ["career", "pro", "league", "office"] if car.pro() else ["career", "team", "transfers", "club", "office"]
+		if not (hub_tab in okt):
 			hub_tab = "career"
 	elif hub_tab in ["career", "transfers", "office"]:
 		hub_tab = "play"
@@ -3129,7 +3188,7 @@ func _action(act: String, arg = null) -> void:
 		"p_name":
 			var nn2 := ""
 			if net.web:
-				var res2 = JavaScriptBridge.eval("(function(){var r=prompt('Your player\'s name', %s);return r===null?'':String(r)})()" % JSON.stringify(str(pro_new.get("n", ""))), true)
+				var res2 = JavaScriptBridge.eval("(function(){var r=prompt('Your player name', %s);return r===null?'':String(r)})()" % JSON.stringify(str(pro_new.get("n", ""))), true)
 				nn2 = str(res2) if res2 != null else ""
 			else:
 				nn2 = "LARSEN"
@@ -3146,8 +3205,23 @@ func _action(act: String, arg = null) -> void:
 				proc.new_pro(int(pro_new["c"]), str(pro_new.get("n", "ROOKIE")), str(pro_new["pos"]))
 				_pro_enter()
 		"p_spend":
-			car_msg = car.pro_spend(int(arg))
+			car_msg = car.pro_spend(int(arg), "pro2" if assist else "pro")
 			hud.refresh(_menu_info())
+		"p_drill":
+			car.pro_set_drill(int(arg), "pro2" if assist else "pro")
+			car_msg = ""
+			hud.refresh(_menu_info())
+		"p_skills":
+			car_msg = ""
+			hud.show_menu("pro_ab", _menu_info())
+		"p_learn":
+			car_msg = car.pro_learn(str(arg), "pro2" if assist else "pro")
+			if car_msg.begins_with("YOU LEARNED"):
+				au["blip2"].play()
+				hub_tab = "pro"
+				_show_hub()
+			else:
+				hud.refresh(_menu_info())
 		"p2_make":
 			# the friend makes his own player: the manager's phone puts him in the squad
 			if str(pro_new.get("n", "")) != "":
@@ -3388,6 +3462,10 @@ func _action(act: String, arg = null) -> void:
 			car.talk_set("w" if act == "ct_w" else "y", int(arg))
 			hud.refresh(_menu_info())
 		"ct_go":
+			if arg is Array and (arg as Array).size() >= 3:
+				# the assistant's contract offer: the same talk, with his numbers
+				car.talk_renew(int(arg[0]))
+				car.talk_force(int(arg[1]), int(arg[2]))
 			car_msg = car.talk_offer()
 			if car.talk().is_empty():
 				# the talk is over: back to where it started, with the answer
@@ -4148,6 +4226,13 @@ func _net_poll() -> void:
 			"psp":
 				if net.role == "host" and in_career and car == proc and car.pro2():
 					car.pro_spend(int(m.get("si", 0)), "pro2")
+					cv_last = 0
+			"pdev":
+				if net.role == "host" and in_career and car == proc and car.pro2():
+					if str(m.get("a", "")) == "p_drill":
+						car.pro_set_drill(int(m.get("x", 0)), "pro2")
+					elif str(m.get("a", "")) == "p_learn":
+						car.pro_learn(str(m.get("x", "")), "pro2")
 					cv_last = 0
 			"simr":
 				if net.role == "guest" and m.get("d") is Dictionary:
@@ -8379,9 +8464,10 @@ func _bot_inputs(dt: float) -> void:
 # to the manager as a suggestion, and the manager says yes or no.
 const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
-	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back"]
+	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
-	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim"]
+	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
+	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go"]
 
 func _cv_tick(dt: float) -> void:
 	var src = proc if car == proc else carc
@@ -8466,9 +8552,21 @@ func _as_take(act: String, arg) -> bool:
 		# your own player's points are yours to spend
 		net.send({"_": "psp", "si": int(arg)})
 		au["blip2"].play()
-		return true
-	if act in ["p_pos", "p_name", "p2_make"]:
 		return false
+	if act in ["p_drill", "p_learn"]:
+		# your own player's training and skills are yours too: the manager's phone does the same for your man
+		net.send({"_": "pdev", "a": act, "x": arg})
+		return false
+	if act in ["p_pos", "p_name", "p2_make", "p_skills"]:
+		return false
+	if act == "ct_go":
+		var tk: Dictionary = car.talk()
+		if tk.is_empty() or str(tk.get("kind", "")) != "renew":
+			return true
+		_as_suggest("ct_go", [int(tk["i"]), int(tk["offer"]), int(tk["yrs"])])
+		car.talk_end()
+		hud.show_menu("squad", _menu_info())
+		return true
 	if act in AS_SUG:
 		_as_suggest(act, arg)
 		return true
@@ -8514,6 +8612,29 @@ func _sug_text(act: String, arg) -> String:
 			return "ANSWER: %s" % str(mo[int(ma[1])][0]).to_upper()
 		"c_rest":
 			return "REST THE TIRED PLAYERS"
+		"cfg_diff":
+			return "PLAY THE MATCHES ON %s" % ["EASY", "NORMAL", "HARD"][clampi(int(arg), 0, 2)]
+		"cfg_len":
+			return "MAKE THE MATCHES %s" % ["3 MIN", "5 MIN", "8 MIN"][clampi(int(arg), 0, 2)]
+		"c_wb":
+			return "MOVE MONEY TO THE WAGE BUDGET" if str(arg) == "up" else "MOVE WAGE MONEY TO TRANSFERS"
+		"y_hire":
+			return "HIRE OR UPGRADE YOUTH SCOUT %d" % ((int(arg) if arg != null else 0) + 1)
+		"y_drop":
+			return "SAY NO TO YOUTH TALENT %d" % ((int(arg) if arg != null else 0) + 1)
+		"c_job":
+			var jo: Array = car.offers()
+			var ji := int(arg) if arg != null else -1
+			if ji < 0 or ji >= jo.size():
+				return ""
+			return "TAKE THE JOB AT %s" % str(jo[ji]["n"]).to_upper()
+		"c_next":
+			return "START THE NEXT SEASON" if car.season_over() else ""
+		"ct_go":
+			var ca: Array = arg if arg is Array else []
+			if ca.size() < 3 or int(ca[0]) < 0 or int(ca[0]) >= (car.d["squad"] as Array).size():
+				return ""
+			return "NEW CONTRACT FOR %s: %s A WEEK FOR %d SEASONS" % [_pn(int(ca[0])), Career.wage_text(int(ca[1])), int(ca[2])]
 		"c_sim":
 			return "SIMULATE THE NEXT MATCH"
 		"y_sign", "y_prom", "y_rel", "y_send":

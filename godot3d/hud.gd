@@ -1952,7 +1952,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				if int(sp2.get("cond", -1)) >= 0:
 					fit_t = ("Injured: " + str(sp2.get("injt", ""))) if bool(sp2.get("inj", false)) else "Fitness %d%%" % int(sp2["cond"])
 				var hurt := bool(sp2.get("inj", false))
-				var dd := _label(fit_t if hurt else meta, 20, Color(0.95, 0.45, 0.4) if hurt else (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT), font3)
+				var dd := _label(_trim(fit_t if hurt else meta, font3, 20, bw3 - 130), 20, Color(0.95, 0.45, 0.4) if hurt else (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT), font3)
 				if fit_t != "" and not hurt:
 					var ftl := _label(fit_t, 20, _fit_col(int(sp2["cond"])), font3)
 					ftl.position = Vector2(bw3 - 250, 16)
@@ -2529,6 +2529,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			_youth_page(info, w, h, items)
 		"pro_start":
 			_pro_start_page(info, w, h, items)
+		"pro_ab":
+			_pro_ab_page(info, w, h, items)
 		"inbox":
 			_inbox_page(info, w, h, items)
 		"scorers":
@@ -3496,12 +3498,8 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	menu.add_child(ttl)
 	var tx := 24.0 + font.get_string_size(ttl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x + 16.0
 	var chip_t := ""
-	if assist and not (info.get("pro", {}) as Dictionary).is_empty():
-		chip_t = "Player career together"
-	elif assist:
-		chip_t = "Assistant manager: your changes become suggestions"
-	elif incar:
-		chip_t = "%s  ·  round %d of %d  ·  %s" % [str(c.get("lgname", "")).capitalize(), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))).to_lower()]
+	if incar:
+		chip_t = ("Together  ·  " if assist else "") + "%s  ·  round %d of %d  ·  %s" % [str(c.get("lgname", "")).capitalize(), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))).to_lower()]
 	else:
 		chip_t = "%s  ·  rating %d" % [str(c.get("name", "")).capitalize(), int(c.get("str", 0))]
 	var money := _label(_mp(int(c.get("coins", 0))) if (info.get("pro", {}) as Dictionary).is_empty() else "", 30, GOLD)
@@ -3544,7 +3542,7 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var room := rx - mw - 20.0 - tx
 	if room > 120.0:
 		var chip := Label.new()
-		chip.text = chip_t
+		chip.text = _trim(chip_t, font3, 19, room - 34.0)
 		chip.add_theme_font_override("font", font3)
 		chip.add_theme_font_size_override("font_size", 19)
 		chip.add_theme_color_override("font_color", CHALK)
@@ -3918,7 +3916,7 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 					break
 		elif not ib.is_empty():
 			it2 = "Inbox: " + str(ib[0]["t"])
-		var ilt := _label(it2, 21, col2, font3)
+		var ilt := _label(_trim(it2, font3, 21, rw - 92 - (44 if un > 0 else 0)), 21, col2, font3)
 		ilt.position = Vector2(64, each * 0.5 - 14)
 		ilt.clip_text = true
 		ilt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -4041,7 +4039,7 @@ func _tab_office(info: Dictionary, w: float, y0: float, ch: float, items: Array)
 		["The board", "Confidence %d: %s" % [int(bd.get("conf", 50)), str(bd.get("mood", "")).to_lower()], "c_board", "board", GOLD],
 		["The table", "%s  ·  %s" % [str(c.get("lgname", "")).capitalize(), _ord(int(c.get("rank", 1))).to_lower()], "c_table", "table"],
 		["The cup", str(cp.get("cname", "The cup")).capitalize(), "cup", "cup"],
-		["Play together", "Your friend joins on his phone", "friend", "duo", Color(0.36, 0.6, 1.0)],
+		["Play together", ("Together now" if bool(info.get("assist", false)) or bool(info.get("co_conn", false)) else "Your friend joins on his phone"), "friend", "duo", Color(0.36, 0.6, 1.0)],
 		["Calendar", ("Next: " + str(c.get("ndate", ""))) if str(c.get("ndate", "")) != "" else "The season", "cal", "cal", Color(0.36, 0.6, 1.0)],
 		["Match settings", "%s  ·  %s" % [["Easy", "Normal", "Hard"][clampi(int(c.get("cdiff", 1)), 0, 2)], ["3 min", "5 min", "8 min"][clampi(int(c.get("clen", 1)), 0, 2)]], "cset", "sliders"],
 		["Career: " + ("full" if str(c.get("mode", "")) == "full" else "simple"), "Can the board sack you?", "cmode", "office"],
@@ -5211,29 +5209,58 @@ func _tab_pro(info: Dictionary, w: float, y0: float, ch: float, items: Array) ->
 	var tp := int(p["tp"])
 	var sn := ["Pace", "Shooting", "Passing", "Defending"]
 	var st: Array = p["st"]
-	var sy := 132.0
-	var rowh := minf(58.0, (ch - sy - 120.0) / 4.0)
+	var cost: Array = p.get("cost", [1, 1, 1, 1])
+	var dp: Array = p.get("dp", [0, 0, 0, 0])
+	var drill := int(p.get("drill", -1))
+	var top := bool(p.get("top", false))
+	var sy := 126.0
+	var rowh := minf(56.0, (ch - sy - 128.0) / 4.0)
 	for i in 4:
 		var y := sy + i * rowh
 		var lb := _label("%s  %d" % [sn[i], int(st[i])], 21, CHALK, font3)
 		lb.position = Vector2(22, y)
 		lp.add_child(lb)
-		_pro_bar(lp, Vector2(22, y + 30), lw - 44 - (64 if tp > 0 else 0), int(st[i]) / 99.0, GREEN if int(st[i]) >= 70 else GOLD)
-		if tp > 0:
-			var pb := _btn("+", "p_spend", i, "primary", Vector2(24 + lw - 22 - 54, y0 + y + 4), Vector2(50, 42), 26)
-			menu.add_child(pb)
-	var xy := sy + 4 * rowh + 6
-	var xl := _label(("%d skill point%s to spend: tap +" % [tp, "" if tp == 1 else "s"]) if tp > 0 else "Play well to earn skill points", 19, GOLD if tp > 0 else MUT, font3)
-	xl.position = Vector2(22, xy)
-	xl.size = Vector2(lw - 44, 26)
-	lp.add_child(xl)
-	_pro_bar(lp, Vector2(22, xy + 30), lw - 44, int(p["pxp"]) / 100.0, Color(0.62, 0.45, 0.95))
+		var bw := lw - 44 - 172
+		_pro_bar(lp, Vector2(22, y + 30), bw, int(st[i]) / 99.0, GREEN if int(st[i]) >= 70 else GOLD)
+		if i == drill:
+			# the drill you train: its bar fills after every match
+			_pro_bar(lp, Vector2(22, y + 40), bw, int(dp[i]) / 100.0, Color(0.62, 0.45, 0.95))
+		var on := i == drill
+		var trb := _btn("TRAINING" if on else "TRAIN", "p_drill", i, "alt" if on else "ghost", Vector2(24 + lw - 22 - 166, y0 + y + 4), Vector2(104, 40), 15)
+		if on:
+			trb.add_theme_color_override("font_color", Color(0.78, 0.66, 1.0))
+		menu.add_child(trb)
+		var can := tp >= int(cost[i]) and not top and int(st[i]) < 97
+		var pb := _btn("+%d" % int(cost[i]) if tp > 0 else "+", "p_spend", i, "primary" if can else "off", Vector2(24 + lw - 22 - 56, y0 + y + 4), Vector2(54, 40), 18)
+		menu.add_child(pb)
+	var xy := sy + 4 * rowh + 4
+	var need := maxi(int(p.get("need", 100)), 1)
+	var lvl := _label("Level %d" % int(p.get("lv", 1)), 21, CHALK, font3)
+	lvl.position = Vector2(22, xy)
+	lp.add_child(lvl)
+	var xpl := _label("%d / %d XP" % [int(p["pxp"]), need], 17, MUT, font3)
+	xpl.position = Vector2(lw - 22 - 200, xy + 2)
+	xpl.size = Vector2(200, 24)
+	xpl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lp.add_child(xpl)
+	_pro_bar(lp, Vector2(22, xy + 30), lw - 44, int(p["pxp"]) / float(need), Color(0.62, 0.45, 0.95))
+	var hint := ""
 	if str(p.get("msg", "")) != "":
-		var ml := _label(str(p["msg"]), 18, GOLD, font3)
-		ml.position = Vector2(22, ch - 34)
-		ml.size = Vector2(lw - 44, 26)
-		ml.clip_text = true
-		lp.add_child(ml)
+		hint = str(p["msg"])
+	elif top:
+		hint = "You are at your best. Train and play to keep it."
+	elif tp > 0:
+		hint = "%d skill point%s: tap + (costs more above 70 and 80)" % [tp, "" if tp == 1 else "s"]
+	else:
+		hint = "Play well, score and reach your goals for XP. A level gives %d points." % 2
+	var xl := _label(_trim(hint, font3, 18, lw - 44), 18, GOLD if (tp > 0 or str(p.get("msg", "")) != "") else MUT, font3)
+	xl.position = Vector2(22, xy + 42)
+	xl.size = Vector2(lw - 44, 24)
+	lp.add_child(xl)
+	var abn: Array = p.get("ab", [])
+	var abt := "Skills: " + (", ".join(PackedStringArray(abn)) if not abn.is_empty() else "none yet")
+	var sb := _btn(_trim(abt, font3, 18, lw - 44 - 40), "p_skills", null, "ghost", Vector2(46, y0 + xy + 72), Vector2(lw - 44, 44), 18)
+	menu.add_child(sb)
 	# right: the manager, the season, the goals
 	var rx := 24.0 + lw + gap
 	var rw := w - rx - 24.0
@@ -5304,6 +5331,45 @@ func _tab_pro(info: Dictionary, w: float, y0: float, ch: float, items: Array) ->
 		of.clip_text = true
 		oc.add_child(of)
 
+
+# your player's skills: bought with skill points, two at most, the second from rating 70
+func _pro_ab_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var p: Dictionary = info.get("pro", {})
+	_title("Your skills", "Spend skill points on what makes you special. Two at most, the second opens at rating 70.")
+	menu.add_child(_back("tab", "pro"))
+	var tpl := _label("%d skill point%s" % [int(p.get("tp", 0)), "" if int(p.get("tp", 0)) == 1 else "s"], 26, GOLD)
+	tpl.position = Vector2(w - 300, 14)
+	tpl.size = Vector2(276, 34)
+	tpl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	menu.add_child(tpl)
+	var lst: Array = p.get("abl", [])
+	var y0 := 104.0
+	var cols := 2
+	var gap := 12.0
+	var cw := (w - 48 - gap) / cols
+	var rows := int(ceil(lst.size() / float(cols)))
+	var rh := minf(96.0, (h - y0 - 56 - gap * (rows - 1)) / maxf(rows, 1))
+	for i in lst.size():
+		var a: Dictionary = lst[i]
+		var x := 24.0 + (i % cols) * (cw + gap)
+		var y := y0 + (i / cols) * (rh + gap)
+		var pn := _card_panel(Vector2(x, y), Vector2(cw, rh))
+		items.append([pn, Vector2(0, 30), 0.03 * i])
+		var nl := _label(str(a["n"]), 22, GOLD if str(a["why"]) == "yours" else CHALK, font3)
+		nl.position = Vector2(18, 10)
+		pn.add_child(nl)
+		var tl := _label(_trim(str(a["t"]), font3, 17, cw - 190), 17, MUT, font3)
+		tl.position = Vector2(18, 42)
+		tl.size = Vector2(cw - 190, 24)
+		pn.add_child(tl)
+		var why := str(a["why"])
+		var bt := "YOURS" if why == "yours" else ("TWO ALREADY" if why == "full" else (why.to_upper() if why != "" else "%d POINTS" % int(a["cost"])))
+		menu.add_child(_btn(bt, "p_learn", str(a["k"]), "primary" if bool(a["ok"]) else "off", Vector2(x + cw - 160, y + rh * 0.5 - 24), Vector2(144, 48), 17))
+	if str(p.get("msg", "")) != "":
+		var ml := _label(str(p["msg"]), 19, GOLD, font3)
+		ml.position = Vector2(24, h - 44)
+		ml.size = Vector2(w - 48, 26)
+		menu.add_child(ml)
 
 # a new player career: your name, your position and the club you start at
 func _pro_start_page(info: Dictionary, w: float, h: float, items: Array) -> void:
