@@ -1791,6 +1791,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					_pulse(pb8)
 			var bk8 := _back("cm_back" if cm8 else "career", null)
 			menu.add_child(bk8)
+			if not cm8 and not ((info.get("car", {}) as Dictionary).get("eu", {}) as Dictionary).is_empty():
+				menu.add_child(_btn("CHAMPIONS CUP  ›", "eu", null, "alt", Vector2(w - 250, 14), Vector2(226, 44), 17))
 			if cm8:
 				menu.add_child(_btn("THE TEAM", "cm_team", null, "alt", Vector2(w - 200, 14), Vector2(170, 48), 18))
 		"squad":
@@ -2518,6 +2520,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			_inbox_page(info, w, h, items)
 		"scorers":
 			_scorers_page(info, w, h, items)
+		"eu":
+			_eu_page(info, w, h, items)
 		"cab":
 			_cab_page(info, w, h, items)
 		"tnews":
@@ -2924,7 +2928,7 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		var bg := Color(S1.r, S1.g, S1.b, 0.9)
 		var bc := LINE
 		if not e.is_empty():
-			bg = Color(0.16, 0.14, 0.05, 0.95) if str(e["kind"]) == "cup" else S2
+			bg = Color(0.16, 0.14, 0.05, 0.95) if str(e["kind"]) == "cup" else (Color(0.06, 0.1, 0.2, 0.95) if str(e["kind"]) == "eu" else S2)
 			if bool(e["next"]):
 				bc = GOLD
 		var cell := Panel.new()
@@ -2964,8 +2968,8 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 			rl.size = Vector2(cw - 12, 20)
 			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			cell.add_child(rl)
-		elif str(e["kind"]) == "cup":
-			var ci := _icon("cup", 18, GOLD)
+		elif str(e["kind"]) in ["cup", "eu"]:
+			var ci := _icon("cup", 18, GOLD if str(e["kind"]) == "cup" else EUBLUE)
 			ci.position = Vector2(cw - 28, 4)
 			cell.add_child(ci)
 	# the right column: what comes next
@@ -2981,7 +2985,7 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	for e in cal:
 		if bool(e["played"]) or shown >= 6:
 			continue
-		var l1 := _label(str(e["date"]) + "  ·  " + ("Cup, " + str(e["name"]).to_lower() if str(e["kind"]) == "cup" else ("Home" if bool(e["home"]) else "Away")), 17, GOLD if bool(e["next"]) else MUT, font3)
+		var l1 := _label(str(e["date"]) + "  ·  " + ("Cup, " + str(e["name"]).to_lower() if str(e["kind"]) == "cup" else (("Europe, " + str(e["name"]).to_lower()) if str(e["kind"]) == "eu" else ("Home" if bool(e["home"]) else "Away"))), 17, GOLD if bool(e["next"]) else MUT, font3)
 		l1.position = Vector2(18, y2)
 		l1.clip_text = true
 		l1.size = Vector2(rw - 36, 22)
@@ -3238,6 +3242,7 @@ func _panel(pos: Vector2, sz: Vector2, a := 0.86) -> Panel:
 # money, and big cards with at most one short line each. One green button per screen: the thing you came for.
 const RAIL_W := 112.0
 const S1 := Color(0.082, 0.188, 0.122)
+const EUBLUE := Color(0.42, 0.66, 1.0)
 const S2 := Color(0.114, 0.239, 0.161)
 const CHALK := Color(0.918, 0.949, 0.925)
 const MUT := Color(0.576, 0.671, 0.616)
@@ -3697,8 +3702,15 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	else:
 		var cdue := bool(c.get("cup_due", false))
 		var cpn: Dictionary = c.get("cup", {})
+		var edue := not cdue and bool(c.get("eu_due", false))
+		var what := ("The cup, " + str(cpn.get("name", "")).to_lower()) if cdue else ("League, " + ("home" if bool(c.get("home", true)) else "away"))
+		if edue:
+			# a European night: the card shows the Champions Cup opponent the same way
+			cpn = c.get("eu", {})
+			cdue = true
+			what = "Champions Cup, %s" % str(cpn.get("rname", "")).capitalize()
 		var dtx := str(c.get("ndate", ""))
-		var nx := _label((dtx + "  ·  " if dtx != "" else "") + (("The cup, " + str(cpn.get("name", "")).to_lower()) if cdue else ("League, " + ("home" if bool(c.get("home", true)) else "away"))), 22, GOLD, font3)
+		var nx := _label((dtx + "  ·  " if dtx != "" else "") + what, 22, EUBLUE if edue else GOLD, font3)
 		nx.position = Vector2(22, 16)
 		nx.clip_text = true
 		nx.size = Vector2(lw - 80, 30)
@@ -3735,7 +3747,7 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		card.add_child(vv)
 		var can_sim := not bool(info.get("assist", false)) and str(info.get("co_room", "")) == "" and not bool(c.get("sacked", false))
 		var pw := (lw - 40) * (0.64 if can_sim else 1.0)
-		var pm := _btn(_co_play_text(info, "PLAY CUP MATCH" if cdue else "PLAY MATCH"), "c_play", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(pw, bh), 30 if can_sim else 32)
+		var pm := _btn(_co_play_text(info, "PLAY EUROPE" if edue else ("PLAY CUP MATCH" if cdue else "PLAY MATCH")), "c_play", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(pw, bh), 30 if can_sim else 32)
 		menu.add_child(pm)
 		items.append([pm, Vector2(0, 60), 0.1])
 		if can_sim:
@@ -3805,10 +3817,21 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	bb.add_child(bf)
 	var cpi: Dictionary = c.get("cup", {})
 	var cps := "You won it!" if bool(cpi.get("won", false)) else ("You are out" if bool(cpi.get("out", false)) else ("%s v %s: next!" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", "")).capitalize()] if bool(c.get("cup_due", false)) else "%s v %s, after round %d" % [str(cpi.get("name", "")).capitalize(), str(cpi.get("opp", "")).capitalize(), int(c.get("cup_after", 0))]))
-	var cb := _card("cup", null, Vector2(rx, yy + each + gap), Vector2(rw, each))
+	var eui: Dictionary = c.get("eu", {})
+	var show_eu := not eui.is_empty() and (bool(c.get("eu_due", false)) or bool(cpi.get("won", false)) or bool(cpi.get("out", false)))
+	if show_eu:
+		if bool(eui.get("won", false)):
+			cps = "Champions of Europe!"
+		elif bool(eui.get("done", false)):
+			cps = "Champions Cup: %s won it" % str(eui.get("win", ""))
+		elif bool(eui.get("out", false)):
+			cps = "Champions Cup: you are out"
+		else:
+			cps = "Champions Cup v %s, %s" % [str(eui.get("opp", "?")).capitalize(), str(eui.get("day", ""))]
+	var cb := _card("eu" if show_eu else "cup", null, Vector2(rx, yy + each + gap), Vector2(rw, each))
 	menu.add_child(cb)
 	items.append([cb, Vector2(80, 0), 0.08])
-	var ci := _icon("cup", 34, GOLD)
+	var ci := _icon("cup", 34, EUBLUE if show_eu else GOLD)
 	ci.position = Vector2(18, each * 0.5 - 17)
 	cb.add_child(ci)
 	var ct := _label(cps, 21, CHALK, font3)
@@ -4910,3 +4933,106 @@ func _cab_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		var l2 := _label(_trim(str(r[1]), font3, 20, cw - 32), 20, MUT if none else CHALK, font3)
 		l2.position = Vector2(16, 26)
 		pn3.add_child(l2)
+
+
+# ---------------------------------------------------------------- the Champions Cup
+func _eu_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var e: Dictionary = c.get("eu", {})
+	var sub := ""
+	if bool(e.get("won", false)):
+		sub = "You won it: champions of Europe!"
+	elif bool(e.get("done", false)):
+		sub = "%s won it this season" % str(e.get("win", ""))
+	elif bool(e.get("out", false)):
+		sub = "You are out. The cup goes on without you."
+	elif e.has("opp"):
+		sub = "Next: %s v %s, %s" % [str(e.get("rname", "")).capitalize(), str(e["opp"]).capitalize(), str(e.get("day", ""))]
+	_title("The Champions Cup", sub)
+	menu.add_child(_back("career", null))
+	if e.is_empty():
+		return
+	var y0 := 100.0
+	var rounds: Array = e.get("rounds", [])
+	if int(e.get("md", 0)) < 6 or rounds.is_empty():
+		# the eight groups, four on each row
+		var groups: Array = e.get("groups", [])
+		var gw := (w - 48 - 3 * 12) / 4.0
+		var gh := (h - y0 - 20 - 12) / 2.0
+		for g in groups.size():
+			var gx := 24.0 + (g % 4) * (gw + 12)
+			var gy := y0 + (g / 4) * (gh + 12)
+			var rows: Array = groups[g]
+			var mine_g := false
+			for r in rows:
+				if bool(r[4]):
+					mine_g = true
+			var pn := Panel.new()
+			pn.add_theme_stylebox_override("panel", _box(Color(S1.r, S1.g, S1.b, 0.94), 12, EUBLUE if mine_g else LINE))
+			pn.position = Vector2(gx, gy)
+			pn.size = Vector2(gw, gh)
+			pn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			menu.add_child(pn)
+			items.append([pn, Vector2(0, 30), 0.03 * g])
+			var gl := _label("Group " + "ABCDEFGH"[g], 18, EUBLUE if mine_g else MUT, font3)
+			gl.position = Vector2(12, 6)
+			pn.add_child(gl)
+			var ph := _label("P   PTS", 16, MUT, font3)
+			ph.position = Vector2(gw - 84, 8)
+			pn.add_child(ph)
+			var rh := (gh - 36) / 4.0
+			for k in rows.size():
+				var r: Array = rows[k]
+				var ry := 32.0 + k * rh
+				if k == 2:
+					var ln := ColorRect.new()
+					ln.color = Color(1, 1, 1, 0.12)
+					ln.position = Vector2(10, ry - 2)
+					ln.size = Vector2(gw - 20, 1)
+					pn.add_child(ln)
+				var col := GOLD if bool(r[4]) else CHALK
+				var sh := _shirt(r[5], 20)
+				sh.position = Vector2(10, ry + rh * 0.5 - 10)
+				pn.add_child(sh)
+				var nl := _label(_trim(str(r[0]), font3, 17, gw - 130), 17, col, font3)
+				nl.position = Vector2(36, ry + rh * 0.5 - 12)
+				pn.add_child(nl)
+				var pl := _label("%d" % int(r[1]), 17, MUT, font3)
+				pl.position = Vector2(gw - 84, ry + rh * 0.5 - 12)
+				pn.add_child(pl)
+				var pt := _label("%d" % int(r[3]), 18, col, font3)
+				pt.position = Vector2(gw - 52, ry + rh * 0.5 - 12)
+				pt.size = Vector2(36, 24)
+				pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				pn.add_child(pt)
+		return
+	# the knockout rounds, left to right
+	var cw := (w - 48 - 3 * 12) / 4.0
+	for k in rounds.size():
+		var rd: Dictionary = rounds[k]
+		var x := 24.0 + k * (cw + 12)
+		var now := bool(rd.get("now", false))
+		var hl := _label(str(rd["name"]).capitalize(), 18, EUBLUE if now else MUT, font3)
+		hl.position = Vector2(x + 4, y0)
+		menu.add_child(hl)
+		var ties: Array = rd["ties"]
+		var th := minf(56.0, (h - y0 - 40 - ties.size() * 6) / maxf(ties.size(), 1))
+		for i in ties.size():
+			var t: Array = ties[i]
+			var ty := y0 + 30 + i * (th + 6)
+			var pn2 := Panel.new()
+			pn2.add_theme_stylebox_override("panel", _box(Color(S1.r, S1.g, S1.b, 0.94), 10, GOLD if bool(t[4]) else LINE))
+			pn2.position = Vector2(x, ty)
+			pn2.size = Vector2(cw, th)
+			pn2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			menu.add_child(pn2)
+			for side in 2:
+				var nm := _label(_trim(str(t[side]), font3, 16, cw - 50), 16, GOLD if bool(t[4]) else CHALK, font3)
+				nm.position = Vector2(10, 4 + side * (th * 0.5 - 2))
+				pn2.add_child(nm)
+				if int(t[2]) >= 0:
+					var sc := _label(str(int(t[2 + side])), 17, CHALK, font3)
+					sc.position = Vector2(cw - 34, 4 + side * (th * 0.5 - 2))
+					sc.size = Vector2(24, 22)
+					sc.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+					pn2.add_child(sc)
