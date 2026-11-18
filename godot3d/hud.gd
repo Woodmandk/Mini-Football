@@ -4456,10 +4456,8 @@ func _input(e: InputEvent) -> void:
 	elif e is InputEventScreenDrag:
 		if _ids.has(e.index) and _ids[e.index] in ["pass", "thru"] and hi_btn == "" and lab_a == "SHOOT":
 			# slide the thumb up from PASS or THROUGH: the ball goes high
-			# a clear, deliberate slide (not the thumb drifting while it holds the button): the through ball and
-			# the pass stay on the grass unless you really mean it
 			var sd: Vector2 = _starts.get(e.index, e.position) - e.position
-			if sd.y > 64.0 and sd.y > absf(sd.x) * 1.5:
+			if sd.y > 30.0:
 				hi_btn = _ids[e.index]
 				ev.append("hi")
 		if e.index == _stick_id:
