@@ -60,6 +60,7 @@ const STICK_R := 62.0
 const SPRINT_R := 1.42
 const GREEN := Color(0.2, 0.78, 0.38)
 const GOLD := Color(1.0, 0.84, 0.25)
+const WRONG := Color(1.0, 0.55, 0.18) # a man out of position
 const DARK := Color(0.04, 0.08, 0.06)
 const RankC := preload("res://rank.gd")
 const Career := preload("res://career.gd")
@@ -331,7 +332,7 @@ func _fit_col(c: int) -> Color:
 	return GREEN if c >= 80 else (GOLD if c >= 60 else Color(0.92, 0.35, 0.3))
 
 # One squad player as a button: position stripe, name, rating.
-func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dictionary, chosen: bool, wrong: bool) -> Button:
+func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dictionary, chosen: bool, wrong_at: String) -> Button:
 	var nm := str(pl["n"])
 	if nm.length() > 9:
 		nm = nm.substr(0, 9)
@@ -349,9 +350,13 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 	n1.clip_text = true
 	n1.size = Vector2(sz.x - 22, 24)
 	b.add_child(n1)
-	var n2 := _label("%s  %d" % [str(pl["pos"]), int(pl["ovr"])], 17, GOLD if chosen else Color(1, 1, 1, 0.75), font3)
+	# his own position, and where he stands when that is another place (orange: he plays out of position)
+	var n2 := _label(("%s › %s  %d" % [str(pl["pos"]), wrong_at, int(pl["ovr"])]) if wrong_at != "" else ("%s  %d" % [str(pl["pos"]), int(pl["ovr"])]), 17, WRONG if wrong_at != "" else (GOLD if chosen else Color(1, 1, 1, 0.75)), font3)
 	n2.position = Vector2(18, sz.y - 24)
 	b.add_child(n2)
+	if wrong_at != "" and not chosen:
+		for st in ["normal", "hover", "focus", "pressed", "disabled"]:
+			b.add_theme_stylebox_override(st, _box(Color(0.12, 0.08, 0.04, 0.95), 10, WRONG))
 	if int(pl.get("tp", 0)) > 0:
 		var tpd := _label("TP", 11, Color(0.05, 0.08, 0.02))
 		tpd.add_theme_stylebox_override("normal", _box(GOLD, 6))
@@ -391,13 +396,6 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 		tlb.size = Vector2(22, 15)
 		tlb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.add_child(tlb)
-	if wrong:
-		var wr := ColorRect.new()
-		wr.color = Color(1.0, 0.85, 0.1)
-		wr.position = Vector2(sz.x - 14, 6)
-		wr.size = Vector2(8, 8)
-		wr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_child(wr)
 	return b
 
 # A button in a club's colours: the name, with a kit stripe on the left.
@@ -1945,7 +1943,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			for si2 in xi.size():
 				var pl: Dictionary = sqd[int(xi[si2])]
 				tp[si2].y = clampf(tp[si2].y, py + 12.0, py + ph - 12.0 - 46.0)
-				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]) and not (pl.get("pos2", []) as Array).has(str(form[si2][0])))
+				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) if str(form[si2][0]) != str(pl["pos"]) and not (pl.get("pos2", []) as Array).has(str(form[si2][0])) else "")
 				menu.add_child(pb)
 				ctx["plates"].append([pb, int(xi[si2]), si2])
 				_drag_plate(pb, int(xi[si2]), si2, ctx)
@@ -1963,7 +1961,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				for qi in sqd.size():
 					if xi.has(qi) or xi.has(float(qi)):
 						continue
-					var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), bench_y + (bn / bcols) * 58), Vector2(bw3 / bcols - 8, 52), pcol, false, false)
+					var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), bench_y + (bn / bcols) * 58), Vector2(bw3 / bcols - 8, 52), pcol, false, "")
 					menu.add_child(bb)
 					ctx["plates"].append([bb, qi, -1])
 					_drag_plate(bb, qi, -1, ctx)
@@ -1996,11 +1994,16 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					meta += "  ·  %d goals" % int(sp2["g"])
 				if eur3 and sp2.has("fm"):
 					meta = "Form %s  ·  " % Career.form_name(int(sp2["fm"])).to_lower() + meta
+				var sr3 := str(sp2.get("sr", ""))
+				var wrong3 := sr3 != "" and sr3 != str(sp2["pos"]) and not (sp2.get("pos2", []) as Array).has(sr3)
+				if wrong3:
+					# out of position: where he stands and what it costs him, first on the line
+					meta = "Out of position: plays %s, %d on every stat  ·  " % [{"GK": "in goal", "DF": "in defence", "MF": "in midfield", "FW": "up front"}.get(sr3, sr3), int(sp2.get("po", 0))] + meta
 				var fit_t := ""
 				if int(sp2.get("cond", -1)) >= 0:
 					fit_t = ("Injured: " + str(sp2.get("injt", ""))) if bool(sp2.get("inj", false)) else "Fitness %d%%" % int(sp2["cond"])
 				var hurt := bool(sp2.get("inj", false))
-				var dd := _label(_trim(fit_t if hurt else meta, font3, 20, bw3 - 130), 20, Color(0.95, 0.45, 0.4) if hurt else (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT), font3)
+				var dd := _label(_trim(fit_t if hurt else meta, font3, 20, bw3 - 130), 20, Color(0.95, 0.45, 0.4) if hurt else (WRONG if wrong3 else (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT)), font3)
 				if fit_t != "" and not hurt:
 					var ftl := _label(fit_t, 20, _fit_col(int(sp2["cond"])), font3)
 					ftl.position = Vector2(bw3 - 250, 16)
@@ -2138,7 +2141,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					menu.add_child(slb)
 			else:
 				var fit_on := not sqd.is_empty() and int((sqd[0] as Dictionary).get("cond", -1)) >= 0
-				var hint2 := _label("Tap a player to see him.\nDrag a player to move him, or onto a team mate to swap.\nA yellow dot: he plays out of position." + ("\nThe bar under a name: his fitness. A red cross: injured." if fit_on else ""), 20, MUT, font3)
+				var hint2 := _label("Tap a player to see him.\nDrag a player to move him, or onto a team mate to swap.\nOrange DF › FW: a defender playing up front (out of position)." + ("\nThe bar under a name: his fitness. A red cross: injured." if fit_on else ""), 20, MUT, font3)
 				hint2.position = Vector2(18, 14)
 				hint2.autowrap_mode = TextServer.AUTOWRAP_WORD
 				hint2.size = Vector2(bw3 - 36, dp.size.y - 28 - (96 if fit_on else 0))

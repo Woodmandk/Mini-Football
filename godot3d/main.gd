@@ -1075,6 +1075,12 @@ func _ready() -> void:
 				for rr in 3:
 					_sim_mine()
 				var rsrc = proc if rp[2] == "p" else carc
+				if OS.get_environment("RVOOP") != "" and rp[2] == "m":
+					# a forward in defence and a defender up front: out of position on purpose
+					var xo: Array = carc.d["xi"]
+					var t0 = xo[2]
+					xo[2] = xo[9]
+					xo[9] = t0
 				if OS.get_environment("RVNAT") != "" and rp[2] == "m":
 					carc.nat_take(int(OS.get_environment("RVNAT")))
 				if rwho == "h":
@@ -2786,6 +2792,13 @@ func _car_info() -> Dictionary:
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
 			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"), "pos2": Career.pos2_of(pl), "rt": str(pl.get("rt", "")), "rtp": int(Career.rt_prog(pl, str(pl.get("rt", "")))), "rto": Career.rt_options(pl).size() > 1,
 			"cond": car.cond_of(pl) if car.eur else -1, "inj": car.injured(pl) if car.eur else false, "injt": car.inj_text(pl) if car.eur and car.injured(pl) else ""})
+	# where each man of the eleven plays now, and what it costs him when that is not his own place
+	var sr0: Array = car.slot_roles()
+	for k0 in mini((d["xi"] as Array).size(), sr0.size()):
+		var xi0 := int(d["xi"][k0])
+		if xi0 < squad.size():
+			squad[xi0]["sr"] = str(sr0[k0])
+			squad[xi0]["po"] = Career.pos_off(d["squad"][xi0], str(sr0[k0]))
 	var tp_all := 0
 	for pl in d["squad"]:
 		tp_all += int(pl.get("tp", 0))
