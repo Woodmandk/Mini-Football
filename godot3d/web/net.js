@@ -257,3 +257,121 @@ window.bbApp = (function () {
     update: function () { location.replace(location.pathname + '?u=' + Date.now()); }
   };
 })();
+// Online friends and the leaderboard card, on the same small database as the 2D game (Firebase, plain web calls).
+// /pl/<id> your public card, /code/<6 digits> -> id, /fr/<id>/<from> "someone added you", /inv/<id> the latest match invite.
+// Godot reads everything through bbFr.state() (a JSON string) and calls the rest.
+window.bbFr = (function () {
+  var FB = 'https://banebold-default-rtdb.europe-west1.firebasedatabase.app/';
+  try { var mq = /[?&]fb=([^&]+)/.exec(location.search); if (mq) FB = decodeURIComponent(mq[1]); } catch (e) {}
+  var ON_MS = 3 * 60000, INV_MS = 4 * 60000;
+  var me = '', card = null, off = false, msg = '', live = {}, inv = null, toasts = [], seen = '', busy = false, ticks = 0, rm = '';
+  function get(k, d) { try { var v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? d : v; } catch (e) { return d; } }
+  function put(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  var F = get('bb3d-friends', {}); if (typeof F !== 'object' || Array.isArray(F)) F = {};
+  var code = String(get('bb3d-fcode', '') || '');
+  var okId = function (s) { return typeof s === 'string' && /^[a-z0-9]{6,20}$/.test(s); };
+  var nm = function (v) { return String(v || '').replace(/[^\p{L}\p{N} .'&_-]/gu, '').trim().slice(0, 14); };
+  var num = function (v) { return Math.max(0, Math.min(99999, Number(v) | 0)); };
+  function call(m, p, body, q) {
+    return fetch(FB + p + '.json' + (q || ''), { method: m, headers: body !== undefined ? { 'Content-Type': 'application/json' } : {}, body: body !== undefined ? JSON.stringify(body) : undefined })
+      .then(function (r) {
+        if (r.status === 401 || r.status === 403) { off = true; throw new Error('off'); }
+        if (!r.ok) throw new Error('http');
+        off = false; return r.json();
+      });
+  }
+  function clean(id, o) {
+    if (!o || typeof o !== 'object') return null;
+    return { id: id, n: nm(o.n) || 'Coach', c: nm(o.c), rp11: num(o.rp11), w: num(o.w), d: num(o.d), l: num(o.l), ov: Math.min(99, num(o.ov)), on: Number(o.on) || 0, s: o.s ? 1 : 0 };
+  }
+  function publish() {
+    if (!okId(me) || !card || off) return Promise.resolve();
+    var c = Object.assign({}, card, { code: code, t: Date.now(), on: Date.now() });
+    return call('PUT', 'pl/' + me, c).catch(function () {});
+  }
+  function ensureCode() {
+    if (code || !okId(me) || off) return Promise.resolve();
+    var k = 0;
+    function tryOne() {
+      if (k++ > 6) return Promise.resolve();
+      var c = String(100000 + Math.floor(Math.random() * 900000));
+      return call('GET', 'code/' + c).then(function (have) {
+        if (have) return tryOne();
+        return call('PUT', 'code/' + c, me).then(function () { code = c; put('bb3d-fcode', c); return publish(); });
+      }).catch(function () {});
+    }
+    return tryOne();
+  }
+  function refresh() {
+    var ids = Object.keys(F).filter(okId).slice(0, 30);
+    return Promise.all(ids.map(function (id) { return call('GET', 'pl/' + id).then(function (o) { var c = clean(id, o); if (c) { live[id] = c; if (F[id]) { F[id].n = c.n; } } }).catch(function () {}); }))
+      .then(function () { put('bb3d-friends', F); });
+  }
+  function poll() {
+    if (!okId(me) || off) return Promise.resolve();
+    return call('GET', 'fr/' + me).then(function (req) {
+      if (req && typeof req === 'object') {
+        var news = [];
+        Object.keys(req).slice(0, 20).forEach(function (id) {
+          if (!okId(id) || id === me) return;
+          var n = nm(req[id] && req[id].n) || 'A friend';
+          if (!F[id]) news.push(n);
+          F[id] = Object.assign(F[id] || {}, { n: (F[id] && F[id].n) || n, at: Date.now() });
+          call('DELETE', 'fr/' + me + '/' + id).catch(function () {});
+        });
+        put('bb3d-friends', F);
+        if (news.length) { toasts.push(news.join(', ') + ' added you as a friend'); refresh(); }
+      }
+      return call('GET', 'inv/' + me);
+    }).then(function (v) {
+      if (v && typeof v === 'object' && /^\d{4}$/.test(String(v.c)) && Date.now() - (Number(v.t) || 0) < INV_MS) {
+        var key = v.c + ':' + v.t;
+        if (key !== seen) { seen = key; inv = { n: nm(v.n) || 'A friend', c: String(v.c) }; }
+      }
+    }).catch(function () {});
+  }
+  function when(c) {
+    if (!c || !c.on) return { on: false, t: 'Not seen online yet' };
+    var a = Date.now() - c.on;
+    if (a < ON_MS) return { on: true, t: c.s ? 'In a match' : 'Online now' };
+    var m = a / 60000;
+    return { on: false, t: 'Seen ' + (m < 60 ? Math.round(m) + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago') };
+  }
+  return {
+    // Godot tells us who you are and what your card says (every 20 s and after a ranked match)
+    setMe: function (id, cardJson) { if (okId(id)) me = id; try { card = JSON.parse(cardJson); } catch (e) {} },
+    tick: function () { if (off) return; publish(); poll(); if (++ticks % 3 === 0) refresh(); },
+    open: function () { msg = ''; rm = ''; off = false; publish().then(ensureCode).then(poll).then(refresh); },
+    add: function (c) {
+      c = String(c || '').replace(/\D/g, '');
+      if (c.length !== 6) { msg = 'A friend code has 6 digits.'; return; }
+      if (c === code) { msg = 'That is your own code.'; return; }
+      msg = 'Looking...';
+      call('GET', 'code/' + c).then(function (id) {
+        if (!okId(id)) { msg = 'No one has that code. Check it and try again.'; return; }
+        if (F[id]) { msg = (F[id].n || 'They') + ' is already your friend.'; return; }
+        return call('GET', 'pl/' + id).then(function (o) {
+          var cd = clean(id, o); F[id] = { n: cd ? cd.n : 'Friend', at: Date.now() }; if (cd) live[id] = cd; put('bb3d-friends', F);
+          return call('PUT', 'fr/' + id + '/' + me, { n: nm(card && card.n) || 'Coach', t: Date.now() });
+        }).then(function () { msg = ''; toasts.push(F[id].n + ' is now your friend'); });
+      }).catch(function () { msg = off ? 'Online friends are not switched on yet.' : 'Could not reach the server. Check the connection.'; });
+    },
+    remove: function (id) { if (rm !== id) { rm = id; return; } rm = ''; delete F[id]; delete live[id]; put('bb3d-friends', F); },
+    invite: function (id, room) {
+      var n = (F[id] && F[id].n) || 'your friend';
+      return call('PUT', 'inv/' + id, { f: me, n: nm(card && card.n) || 'Coach', c: String(room), t: Date.now() })
+        .then(function () { toasts.push('Invite sent to ' + n); }).catch(function () { toasts.push('Could not send the invite. Send ' + n + ' the code ' + room); });
+    },
+    inviteDone: function () { inv = null; if (okId(me)) call('DELETE', 'inv/' + me).catch(function () {}); },
+    ids: function () { return JSON.stringify(Object.keys(F)); },
+    base: function () { return FB; },
+    state: function () {
+      var rows = Object.keys(F).map(function (id) {
+        var c = live[id], w = when(c);
+        return { id: id, n: (c && c.n) || F[id].n || 'Friend', club: c ? c.c : '', rp: c ? c.rp11 : 0, on: w.on, s: c ? c.s : 0, t: w.t, rm: rm === id, last: c ? c.on : 0 };
+      });
+      rows.sort(function (a, b) { return (b.on - a.on) || (b.last - a.last) || (b.rp - a.rp); });
+      return JSON.stringify({ off: off, code: code, msg: msg, fr: rows, inv: inv, toast: toasts.shift() || '' });
+    }
+  };
+})();
