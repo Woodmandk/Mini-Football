@@ -2140,8 +2140,12 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					for ti in xi:
 						var tpl2: Dictionary = sqd[int(ti)]
 						if int(tpl2.get("cond", 100)) < 75 and not bool(tpl2.get("inj", false)):
-							tired.append("%s %d%%" % [str(tpl2["n"]).capitalize(), int(tpl2["cond"])])
-					var trt := ("Tired in your eleven: " + ", ".join(tired) + ". Bring a fresher man in to rest one.") if not tired.is_empty() else "Your eleven is fit."
+							tired.append([int(tpl2["cond"]), str(tpl2["n"]).capitalize()])
+					tired.sort()
+					var tnm := []
+					for tz in mini(tired.size(), 3):
+						tnm.append("%s %d%%" % [tired[tz][1], tired[tz][0]])
+					var trt := ("Tired in your eleven: " + ", ".join(tnm) + ((" and %d more" % (tired.size() - 3)) if tired.size() > 3 else "") + ".\nRest a man by bringing a fresher one in.") if not tired.is_empty() else "Your eleven is fit."
 					var trl := _label(trt, 19, GOLD if not tired.is_empty() else MUT, font3)
 					trl.position = Vector2(18, dp.size.y - 92)
 					trl.autowrap_mode = TextServer.AUTOWRAP_WORD

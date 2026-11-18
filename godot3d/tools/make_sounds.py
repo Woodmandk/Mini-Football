@@ -189,7 +189,7 @@ def crowd_bed(sec, density, shout_k, excite, name):
 	f = freqs(n)
 	# a broad, smooth hum with no peaks in it (peaks are what made it sound hollow, like a cave)
 	lf = np.log(np.maximum(f, 20.0) / (550.0 + 250.0 * excite))
-	mass = ffilt(rng.standard_normal(n), hp(f, 140, 1) * lp(f, 2200 + 1800 * excite, 1) * (0.35 + np.exp(-lf ** 2 / 1.2)) / np.sqrt(np.maximum(f, 20.0) / 200.0))
+	mass = ffilt(rng.standard_normal(n), hp(f, 140, 1) * lp(f, 900 + 700 * excite, 3) * (0.35 + np.exp(-lf ** 2 / 1.2)) / np.sqrt(np.maximum(f, 20.0) / 200.0))
 	mass /= np.std(mass) + 1e-9
 	# a few claps and the odd finger whistle
 	claps = np.zeros(n)
@@ -208,9 +208,10 @@ def crowd_bed(sec, density, shout_k, excite, name):
 		s = np.sin(2 * np.pi * np.cumsum(fw) / SR) * env_adsr(ln, 0.04, 0.12) * rng.uniform(0.1, 0.25)
 		idx = (rng.integers(0, n) + np.arange(ln)) % n
 		whis[idx] += s
-	mix = v * 0.9 + mass * (0.9 - 0.3 * excite) + claps / (np.std(claps) + 1e-9) * 0.12 + whis * 0.6
+	mix = v * 0.9 + mass * (0.45 - 0.15 * excite) + claps / (np.std(claps) + 1e-9) * 0.12 + whis * 0.6
 	mix *= loop_mod(n, 0.14 + 0.1 * excite, [1, 2, 3, 5])
 	# no reverb on the bed: in an open ground the crowd is all round you, not echoing
+	mix = ffilt(mix, lp(f, 3200 + 800 * excite, 3))
 	save(name, norm(mix, 0.7))
 
 # ---------------------------------------------------------------- the chant (looping)
