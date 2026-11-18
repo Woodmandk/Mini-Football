@@ -1125,11 +1125,11 @@ func _ready() -> void:
 				car.mail_read(mail_sel)
 				menu_arg = "inbox"
 			if menu_arg in ["etest0", "etest1", "etest2", "etest3", "etest4"]:
-				var top0: int = int(ClubDB.start_leagues(Career.FIRST)[0][1])
+				var top0: int = int(ClubDB.start_leagues(Career.FIRST)[0][int(OS.get_environment("ETI")) if OS.get_environment("ETI") != "" else 1])
 				carc.new_career(top0, false)
 				carc.set_mode("full")
 				_cr_enter(false)
-				print("EU in: ", not car.eu().is_empty(), " group ", car.eu().get("gl", "-"), " md0 after round ", car.eu_after(0), " day ", car.date_text(car.eu_day(0)))
+				print("EU in: ", not car.eu().is_empty(), " ", car.eu_name() if not car.eu().is_empty() else "", " group ", car.eu().get("gl", "-"), " md0 after round ", car.eu_after(0), " day ", car.date_text(car.eu_day(0)))
 				var et := menu_arg
 				var stop_md: int = {"etest0": 0, "etest1": 3, "etest2": 8, "etest3": 2, "etest4": 99}[et]
 				var guard := 0
@@ -1703,6 +1703,21 @@ func _ready() -> void:
 				_cr_enter(false)
 				car.d["coins"] = 99999
 				car.d["wb"] = 9999
+				# who would come to a Division 4 club: per league, how many say no
+				print("NO my strength ", car.my_strength())
+				for li9 in 6:
+					var nno := 0
+					var nall := 0
+					var ex9 := ""
+					for c9 in car.ids(li9):
+						var cs9: Array = car.cpu_squad(int(c9))
+						for j9 in cs9.size():
+							nall += 1
+							var r9: String = car.refuses(cs9[j9], int(c9))
+							if r9 != "":
+								nno += 1
+								ex9 = "%s %d: %s" % [str(cs9[j9]["n"]), Career.ovr_of(cs9[j9]), r9]
+					print("NO league ", li9, " ", nno, "/", nall, " e.g. ", ex9)
 				var c0: int = car.ids()[1] if car.ids()[0] == int(car.d["club"]) else car.ids()[0]
 				var n0: int = (car.d["squad"] as Array).size()
 				# a swap: my man 5 + money for their man 3 (simple path: no contract talk)
@@ -2713,7 +2728,7 @@ func _car_info() -> Dictionary:
 		tp_all += int(pl.get("tp", 0))
 	var mk := []
 	for pl in car.market():
-		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl), "wk": Career.wage_of(pl)})
+		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl), "wk": Career.wage_of(pl), "no": car.refuses(pl, -1, true)})
 	var roles := _my_form(car.form(), car.lay())
 	return {
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
@@ -2735,7 +2750,7 @@ func _eu_info() -> Dictionary:
 	if e.is_empty() or bool(car.d.get("cupmode", false)):
 		return {}
 	var me_c := int(car.d["club"])
-	var out := {"name": Career.EU_NAME, "md": int(e["md"]), "out": bool(e.get("out", false)), "done": bool(e.get("done", false)), "won": bool(e.get("won", false)),
+	var out := {"name": car.eu_name(), "k": car.eu_k(), "md": int(e["md"]), "out": bool(e.get("out", false)), "done": bool(e.get("done", false)), "won": bool(e.get("won", false)),
 		"win": str(CLUBS[int(e["win"])]["n"]).capitalize() if int(e.get("win", -1)) >= 0 else "", "gl": str(e.get("gl", "A")), "rname": car.eu_round_name() if not bool(e.get("done", false)) else "",
 		"day": car.date_text(car.eu_day(mini(int(e["md"]), 9)), true)}
 	if car.eu_due_ever():
@@ -2923,7 +2938,7 @@ func _scout_info() -> Dictionary:
 		for i in cs.size():
 			var pl: Dictionary = cs[i]
 			sq.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "age": int(pl["age"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]),
-				"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "ask": car.ask_price(scout_c, i), "ab": _ab_rows(Career.ab_of(pl)), "rc": car.cpu_clause(scout_c, i)})
+				"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "ask": car.ask_price(scout_c, i), "ab": _ab_rows(Career.ab_of(pl)), "rc": car.cpu_clause(scout_c, i), "no": car.refuses(pl, scout_c, true)})
 	return {"li": scout_li, "c": scout_c, "i": scout_i, "cn": CLUBS[scout_c]["n"] if scout_c >= 0 else "", "ck": CLUBS[scout_c]["k"] if scout_c >= 0 else [],
 		"cr": car.rating(scout_c) if scout_c >= 0 else 0, "clg": car.league_name(car.league_of(scout_c)) if scout_c >= 0 else "", "sq": sq, "res": scout_res, "sw": _swap_info()}
 
@@ -9672,7 +9687,7 @@ func _sim_mine() -> void:
 		so_win = 0 if randf() < clampf(0.5 + df, 0.2, 0.8) else 1
 		pens = "Won on penalties" if so_win == 0 else "Lost on penalties"
 	var date: String = car.date_text(car.next_day(), true)
-	var what: String = (car.cup_name().capitalize() + ", " + car.cup_round_name().capitalize()) if cupt else ((Career.EU_NAME.capitalize() + ", " + car.eu_round_name().capitalize()) if eut else (car.league_name().capitalize() + ", round %d" % (int(car.d["round"]) + 1)))
+	var what: String = (car.cup_name().capitalize() + ", " + car.cup_round_name().capitalize()) if cupt else ((car.eu_name().capitalize() + ", " + car.eu_round_name().capitalize()) if eut else (car.league_name().capitalize() + ", round %d" % (int(car.d["round"]) + 1)))
 	if cupt:
 		car_lines = car.cup_finish(score[0], score[1], so_win == 0)
 		_car_coins(false)
@@ -9905,7 +9920,7 @@ func _adv_show(from: int, to := -99) -> void:
 		if car.cup_due():
 			nxt_t = "%s, %s" % [car.cup_name().capitalize(), car.cup_round_name().capitalize()]
 		elif car.eu_due():
-			nxt_t = Career.EU_NAME.capitalize()
+			nxt_t = car.eu_name().capitalize()
 		elif car.nat_due():
 			nxt_t = "%s v %s" % [Career.nat_name(int(car.nat()["n"])).capitalize(), Career.nat_name(int(car.nat_opp()[0])).capitalize()]
 		elif not car.season_over():
@@ -9930,7 +9945,7 @@ func _adv_show(from: int, to := -99) -> void:
 		nxt = "%s, %s v %s" % [car.cup_name().capitalize(), car.cup_round_name().capitalize(), str(CLUBS[co]["n"]).capitalize() if co >= 0 else "?"]
 	elif car.eu_due():
 		var eo2: Array = car.eu_opp()
-		nxt = "%s v %s, %s" % [Career.EU_NAME.capitalize(), str(CLUBS[int(eo2[0])]["n"]).capitalize() if int(eo2[0]) >= 0 else "?", "home" if bool(eo2[1]) else "away"]
+		nxt = "%s v %s, %s" % [car.eu_name().capitalize(), str(CLUBS[int(eo2[0])]["n"]).capitalize() if int(eo2[0]) >= 0 else "?", "home" if bool(eo2[1]) else "away"]
 	elif car.nat_due():
 		var no2: Array = car.nat_opp()
 		nxt = "%s v %s, %s" % [Career.nat_name(int(car.nat()["n"])).capitalize(), Career.nat_name(int(no2[0])).capitalize(), str(no2[2]).capitalize()]

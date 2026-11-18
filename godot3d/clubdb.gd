@@ -95,6 +95,20 @@ const FOREIGN := [
 	["LISBON EAGLES", "LIE", "e20e0e", "ffffff", "e20e0e", 80, 4, "PORTUGAL"], ["LISBON LIONS", "LIL", "008057", "1c1c1c", "008057", 79, 0, "PORTUGAL"],
 	["PORTO DRAGONS", "POD", "00428c", "00428c", "00428c", 79, 4, "PORTUGAL"], ["EINDHOVEN LIGHTS", "EIL", "ed1c24", "1c1c1c", "1c1c1c", 79, 0, "NETHERLANDS"],
 	["AMSTERDAM LANCERS", "AML", "ffffff", "ffffff", "ffffff", 78, 0, "NETHERLANDS"], ["ROTTERDAM PORT", "ROP", "ffffff", "1c1c1c", "1c1c1c", 76, 0, "NETHERLANDS"],
+	# the second level of Europe: the clubs of the Euro Trophy
+	["SAN SEBASTIAN WAVES", "SSW", "0067b1", "ffffff", "0067b1", 74, 0, "SPAIN"], ["SEVILLE GREENS", "SEG", "00954c", "ffffff", "00954c", 73, 1, "SPAIN"],
+	["FLORENCE LILIES", "FLL", "5b2b82", "ffffff", "5b2b82", 75, 0, "ITALY"], ["ROME EAGLES", "ROE", "87d8f7", "ffffff", "87d8f7", 74, 1, "ITALY"],
+	["BOLOGNA TOWERS", "BOT", "a21c26", "1a2f48", "1a2f48", 72, 2, "ITALY"], ["TURIN BULLS", "TUB", "8a1e03", "ffffff", "8a1e03", 70, 4, "ITALY"],
+	["FRANKFURT EAGLES", "FRE", "e1000f", "1c1c1c", "1c1c1c", 75, 1, "GERMANY"], ["STUTTGART STAGS", "STS", "ffffff", "ffffff", "e32219", 74, 0, "GERMANY"],
+	["WOLFSBURG WOLVES", "WOW", "65b32e", "ffffff", "65b32e", 72, 4, "GERMANY"], ["FREIBURG FOREST", "FRF", "1c1c1c", "1c1c1c", "e2001a", 71, 1, "GERMANY"],
+	["LYON LIONS", "LYL", "ffffff", "ffffff", "da0812", 75, 0, "FRANCE"], ["NICE EAGLES", "NIE", "c8102e", "1c1c1c", "1c1c1c", 73, 1, "FRANCE"],
+	["LENS MINERS", "LEM", "fff200", "e30613", "e30613", 72, 4, "FRANCE"], ["RENNES REDS", "RER", "e13327", "1c1c1c", "1c1c1c", 71, 0, "FRANCE"],
+	["GLASGOW HOOPS", "GLH", "018749", "ffffff", "ffffff", 74, 0, "SCOTLAND"], ["GLASGOW BLUES", "GLB", "1b458f", "ffffff", "1c1c1c", 73, 4, "SCOTLAND"],
+	["BRUGES BLUES", "BRB", "0072ce", "1c1c1c", "1c1c1c", 73, 0, "BELGIUM"], ["BRUSSELS PURPLE", "BRP", "4f2d7f", "ffffff", "4f2d7f", 71, 1, "BELGIUM"],
+	["ISTANBUL LIONS", "ISL", "a90432", "fdb912", "a90432", 74, 0, "TURKEY"], ["ISTANBUL CANARIES", "ISC", "fff200", "002b7f", "002b7f", 73, 4, "TURKEY"],
+	["PIRAEUS REDS", "PIR", "e30613", "ffffff", "e30613", 71, 0, "GREECE"], ["SALZBURG BULLS", "SAB", "ffffff", "e2001a", "ffffff", 73, 2, "AUSTRIA"],
+	["BODO LIGHTS", "BOL", "fff200", "1c1c1c", "fff200", 69, 0, "NORWAY"], ["PRAGUE SLAVS", "PRS", "e30613", "ffffff", "e30613", 70, 1, "CZECHIA"],
+	["ZAGREB BLUES", "ZAB", "0057a8", "ffffff", "0057a8", 70, 0, "CROATIA"], ["BELGRADE STARS", "BES", "e30613", "ffffff", "e30613", 70, 4, "SERBIA"],
 ]
 
 # every club as {n, s, k, a, r, f, lg}: the quick-match clubs first, then the career clubs in league order, then Europe (lg -1)
