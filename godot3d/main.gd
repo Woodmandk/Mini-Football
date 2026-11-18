@@ -157,6 +157,7 @@ var lb_state := ""
 var career_on := false
 var cup_on := false
 var eu_on := false # a Champions Cup match in the career
+var nat_on := false # your national team's match (the career is set aside while it is played)
 var opt_cup := false
 var golden := false
 var pen_shot := false
@@ -177,6 +178,7 @@ var car_goals := []
 var y_tab := 0 # youth page: 0 scouts, 1 reports, 2 academy
 var mail_sel := -1 # the inbox: the open mail's id
 var cab_tab := 0 # trophy cabinet: 0 trophies, 1 awards, 2 records
+var nat_tab := 0 # national team page: 0 squad, 1 group, 2 the job
 var cal_m := 0 # the calendar shows this many months after the month of your next match
 var sim_res := {} # the last simulated match, for its screen
 var adv_info := {} # the days between two matches: dates and news
@@ -1010,6 +1012,8 @@ func _ready() -> void:
 				for rr in 3:
 					_sim_mine()
 				var rsrc = proc if rp[2] == "p" else carc
+				if OS.get_environment("RVNAT") != "" and rp[2] == "m":
+					carc.nat_take(int(OS.get_environment("RVNAT")))
 				if rwho == "h":
 					net.role = "host"
 					net.connected = true
@@ -1683,6 +1687,32 @@ func _ready() -> void:
 				else:
 					menu_arg = "main"
 					hub_tab = "career"
+			if menu_arg == "natseason":
+				# two seasons with a national job: every match simulated, the days advanced
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				car.nat_take(int(OS.get_environment("NATN")) if OS.get_environment("NATN") != "" else 0)
+				print("NAT squad=", car.nat_squad().size(), " xi=", car.nat_xi().size(), " str=", snappedf(car.nat_str(int(car.nat()["n"])), 0.1), " grp=", car.nat_q()["grp"], " afters=", range(10).map(func(i): return car.nat_after(i)), " mine=", range(10).map(func(i): return not car._nat_mine_q(i).is_empty()))
+				var nn := 0
+				for it in 300:
+					if car.season_over() and not car.cup_due() and not car.eu_due() and not car.nat_due():
+						print("NAT season end ", car.d["season"], " hist=", car.nat().get("hist"), " st=", car.nat().get("st"), " ok=", car.nat().get("ok"))
+						if int(car.d["season"]) >= 2:
+							break
+						car.next_season()
+						print("NAT new season q=", car.nat_q().get("grp"), " t=", car.nat_t().is_empty())
+						continue
+					while car.now() < car.next_day():
+						car.advance()
+					var nd: bool = car.nat_due() and not car.cup_due() and not car.eu_due()
+					var d0: int = car.next_day()
+					_sim_mine()
+					if nd:
+						nn += 1
+						print("NAT match ", nn, " ", car.date_text(d0), " ", sim_res.get("what"), " ", sim_res.get("a"), " ", sim_res.get("mine"), "-", sim_res.get("theirs"), " ", sim_res.get("b"), " lines=", (sim_res.get("lines", []) as Array).slice(0, 3), " today=", car.today(), " next=", car.next_day(), " round=", car.d["round"])
+				get_tree().quit()
+				return
 			if menu_arg == "advseason":
 				# a whole season a day at a time: advance to match day, simulate, again
 				carc.new_career(carc.weakest(3), true)
@@ -2309,7 +2339,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on or nat_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
@@ -2614,7 +2644,7 @@ func _car_info() -> Dictionary:
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 else 0,
-		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(),
+		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(), "nat_due": car.nat_due(), "natm": _natm_info(), "natp": _nat_info(),
 	}
 
 # The Champions Cup for the hud: your next European match, the groups and the knockout rounds.
@@ -2760,6 +2790,11 @@ func _cal_info() -> Array:
 	for e in car.calendar():
 		var o := int(e["opp"])
 		var dt: Dictionary = car.date_of(int(e["day"]))
+		if str(e["kind"]) == "nat":
+			out.append({"day": int(e["day"]), "y": int(dt["y"]), "m": int(dt["m"]), "d": int(dt["d"]), "wd": int(dt["wd"]), "kind": "nat", "name": str(e["name"]),
+				"opp": Career.nat_name(o) if o >= 0 else "", "os": str(Career.NATIONS[o][1]) if o >= 0 else "?", "ok": Career.nat_kit(o) if o >= 0 else ["888888"], "home": bool(e["home"]),
+				"res": e["res"], "played": bool(e["played"]), "next": bool(e["next"]), "date": car.date_text(int(e["day"]))})
+			continue
 		out.append({"day": int(e["day"]), "y": int(dt["y"]), "m": int(dt["m"]), "d": int(dt["d"]), "wd": int(dt["wd"]), "kind": str(e["kind"]), "name": str(e["name"]),
 			"opp": CLUBS[o]["n"] if o >= 0 else "", "os": CLUBS[o]["s"] if o >= 0 else "?", "ok": CLUBS[o]["k"] if o >= 0 else ["888888"], "home": bool(e["home"]),
 			"res": e["res"], "played": bool(e["played"]), "next": bool(e["next"]), "date": car.date_text(int(e["day"]))})
@@ -2883,6 +2918,7 @@ func _to_menu(keep_net := false) -> void:
 	career_on = false
 	cup_on = false
 	eu_on = false
+	nat_on = false
 	Engine.time_scale = 1.0
 	paused = false
 	screen = "menu"
@@ -3208,7 +3244,7 @@ func _action(act: String, arg = null) -> void:
 			_sim_mine()
 		"c_adv":
 			# FIFA's ADVANCE: day by day to the next news or to match day
-			if in_career and (car == carc or car == proc) and (not car.season_over() or car.cup_due() or car.eu_due()):
+			if in_career and (car == carc or car == proc) and (not car.season_over() or car.cup_due() or car.eu_due() or car.nat_due()):
 				var af: int = car.advance()
 				_adv_show(af, car.now())
 		"youth":
@@ -3306,6 +3342,55 @@ func _action(act: String, arg = null) -> void:
 				_begin_match(true)
 		"eu":
 			hud.show_menu("eu", _menu_info())
+		"dbgnat":
+			# review hooks only: take a national job, and play on to its next match
+			if " ".join(OS.get_cmdline_user_args()).contains("--menu="):
+				if not car.nat_job():
+					car.nat_take(0 if arg == null else int(arg))
+		"dbgft":
+			if " ".join(OS.get_cmdline_user_args()).contains("--menu=") and screen == "match":
+				score = [2, 1]
+				_full_time()
+		"dbgnatdue":
+			if " ".join(OS.get_cmdline_user_args()).contains("--menu="):
+				var gq := 0
+				while not car.nat_due() and gq < 60:
+					while car.now() < car.next_day():
+						car.advance()
+					_sim_mine()
+					gq += 1
+				while car.now() < car.next_day():
+					car.advance()
+				_show_hub()
+		"nat_play":
+			if car.nat_due() and int(car.nat_opp()[0]) >= 0:
+				car.go_match()
+				_nat_setup()
+				humans = [Human.new()]
+				me = 0
+				view_flip = 1.0
+				_car_opts()
+				screen = "match"
+				hud.show_menu("", {})
+				_begin_match(true)
+		"nat":
+			hud.show_menu("nat", _menu_info())
+		"nat_tab":
+			nat_tab = int(arg) if arg != null else 0
+			hud.show_menu("nat", _menu_info())
+		"nat_pick":
+			var npm: String = car.nat_pick(str(arg))
+			if npm != "":
+				hud.toast(npm)
+			hud.refresh(_menu_info())
+		"nat_auto":
+			car.nat_call_auto()
+			car.save()
+			hud.toast("The best 23 are called up")
+			hud.refresh(_menu_info())
+		"nat_quit":
+			car.nat_quit()
+			_show_hub()
 		"cup_play":
 			if car.cup_due() and car.cup_opp() >= 0:
 				car.go_match()
@@ -3345,6 +3430,8 @@ func _action(act: String, arg = null) -> void:
 				_action("cup_play")
 			elif car.eu_due():
 				_action("eu_play")
+			elif car.nat_due():
+				_action("nat_play")
 			elif car.d.has("sacked"):
 				hud.show_menu("review", _menu_info())
 			elif not car.season_over():
@@ -3360,6 +3447,10 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_next":
+			if not car.pro() and car.nat_due():
+				hud.toast("The %s comes first" % str(car.nat_t().get("name", "tournament")).to_lower())
+				_show_hub()
+				return
 			if car.pro():
 				car.pro_next_season()
 			elif not car.d.has("sacked"):
@@ -4224,7 +4315,12 @@ func _host_start() -> void:
 		pro_sq2 = car.pro_i("pro2")
 	cup_on = career_on and car.cup_due()
 	eu_on = career_on and not cup_on and car.eu_due()
-	if eu_on:
+	if career_on and not cup_on and not eu_on and not car.pro() and car.nat_due():
+		# the national team together: both countries go over the wire like a friend's room
+		_nat_setup()
+		for p in teams[0]:
+			sq.append([p.pname, p.num])
+	elif eu_on:
 		cup_on = car.eu_ko()
 		_set_clubs(int(car.d["club"]), int(car.eu_opp()[0]), true)
 		for p in teams[0]:
@@ -4565,6 +4661,8 @@ func _begin_match(with_intro: bool) -> void:
 	tac_t = [[2, 1, 1], [2, 1, 1]]
 	if career_on and in_career and car.has_save() and car.d.has("leagues") and not car.pro():
 		tac_t = [car.tac(), car.cpu_tac(car._next_opp())]
+	if nat_on:
+		tac_t = [car.tac(), [2, 1, 1]]
 	if autotest:
 		for ti in 2:
 			var te := OS.get_environment("TACT%d" % ti)
@@ -6261,6 +6359,10 @@ func _full_time() -> void:
 		fx("excite", 0.6)
 	if rk_on:
 		_rk_finish()
+	elif nat_on:
+		car_lines = car.nat_finish(score[0], score[1], _winner() == 0)
+		adv_from = car.today()
+		co_pay = [0, _winner() == 0, car_lines.slice(0, 2)]
 	elif career_on and eu_on:
 		car_lines = car.eu_finish(score[0], score[1], _winner() == 0)
 		adv_from = car.today() if (car == carc or car == proc) and in_career else -99
@@ -8990,10 +9092,10 @@ func _bot_inputs(dt: float) -> void:
 # to the manager as a suggestion, and the manager says yes or no.
 const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
-	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac"]
+	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac", "nat", "nat_tab"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
 	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_adv", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
-	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go", "tac_set"]
+	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go", "tac_set", "nat_pick", "nat_auto", "nat_quit", "nat_play"]
 
 func _cv_tick(dt: float) -> void:
 	var src = proc if car == proc else carc
@@ -9144,6 +9246,17 @@ func _sug_text(act: String, arg) -> String:
 			return "ANSWER: %s" % str(mo[int(ma[1])][0]).to_upper()
 		"c_rest":
 			return "REST THE TIRED PLAYERS"
+		"nat_pick":
+			var pk := str(arg)
+			var nin: bool = car.nat().get("sq", []).has(pk)
+			for pl in car.nat_pool(int(car.nat().get("n", 0))) if car.nat_job() else []:
+				if str(pl["key"]) == pk:
+					return ("SEND %s HOME" if nin else "CALL UP %s") % str(pl["n"]).to_upper()
+			return ""
+		"nat_auto":
+			return "CALL UP THE BEST 23" if car.nat_job() else ""
+		"nat_quit":
+			return "LEAVE THE NATIONAL TEAM" if car.nat_job() else ""
 		"tac_set":
 			var tg: Array = arg if arg is Array else []
 			if tg.size() < 2 or int(tg[0]) < 0 or int(tg[0]) > 2:
@@ -9348,6 +9461,10 @@ func _car_opts() -> void:
 
 # Simulate your next match instead of playing it: the score comes from the two squads' strength.
 func _sim_mine() -> void:
+	if in_career and car == carc and not assist and net.role != "guest" and not car.cup_due() and not car.eu_due() and car.nat_due():
+		# the country plays (even when the club has let you go)
+		_sim_nat()
+		return
 	if not in_career or (car != carc and car != proc) or assist or net.role == "guest" or car.d.has("sacked"):
 		return
 	var cupt: bool = car.cup_due()
@@ -9434,6 +9551,133 @@ func _sim_mine() -> void:
 		cv_last = 0
 	hud.show_menu("simres", _menu_info())
 
+# Your national team's match, simulated: the same result page as a club match.
+func _sim_nat() -> void:
+	car.go_match()
+	var o: Array = car.nat_opp()
+	var me_n := int(car.nat()["n"])
+	var opp := int(o[0])
+	if opp < 0:
+		return
+	var r: Array = car.nat_sim()
+	var keep := [score.duplicate(), so_win]
+	score = [int(r[0]), int(r[1])]
+	so_win = -1
+	var pens := ""
+	if car.nat_ko() and score[0] == score[1]:
+		so_win = 0 if randf() < clampf(0.5 + (car.nat_str(me_n) - car.nat_str(opp)) / 40.0, 0.2, 0.8) else 1
+		pens = "Won on penalties" if so_win == 0 else "Lost on penalties"
+	var date: String = car.date_text(car.next_day(), true)
+	var what: String = "%s, %s" % [(str(car.nat_t().get("name", "")) if not car.nat_t().is_empty() else "Qualifiers").capitalize(), str(o[2]).capitalize()]
+	var xi: Array = car.nat_xi()
+	var shooters := []
+	for pl in xi:
+		for k in {"FW": 5, "MF": 2, "DF": 1}.get(str(pl["pos"]), 0):
+			shooters.append(str(pl["n"]))
+	var goals := []
+	for g in score[0]:
+		goals.append([randi_range(2, 90), 0, shooters[randi() % shooters.size()] if not shooters.is_empty() else ""])
+	for g in score[1]:
+		goals.append([randi_range(2, 90), 1, ""])
+	goals.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
+	car_lines = car.nat_finish(score[0], score[1], so_win == 0)
+	var home := bool(o[1])
+	var ta := me_n if home else opp
+	var tb := opp if home else me_n
+	sim_res = {"a": Career.nat_name(ta), "b": Career.nat_name(tb), "ka": Career.nat_kit(ta), "kb": Career.nat_kit(tb), "home": home, "goals": goals, "mine": score[0], "theirs": score[1],
+		"pens": pens, "date": date, "what": what, "lines": car_lines.duplicate(), "lines2": []}
+	score = keep[0]
+	so_win = int(keep[1])
+	adv_from = car.today()
+	if net.role == "host" and net.connected:
+		net.send({"_": "simr", "d": sim_res, "co": [0, int(sim_res.get("mine", 0)) > int(sim_res.get("theirs", 0))]})
+		cv_last = 0
+	hud.show_menu("simres", _menu_info())
+
+func _nat_setup() -> void:
+	career_on = false
+	eu_on = false
+	nat_on = true
+	cup_on = car.nat_ko()
+	var o: Array = car.nat_opp()
+	tov = [car.nat_team(int(car.nat()["n"])), car.nat_team(int(o[0]))]
+	ft_on = true
+	_apply_own()
+	_set_clubs(RKI, RKI + 1, true)
+
+# the next national match for the home card
+func _natm_info() -> Dictionary:
+	if not car.has_save() or not car.nat_job():
+		return {}
+	var nj: Dictionary = car.nat()
+	var me_n := int(nj["n"])
+	var out := {"me": Career.nat_name(me_n), "kit": Career.nat_kit(me_n), "ok": int(nj.get("ok", 50))}
+	if car.nat_due():
+		var o: Array = car.nat_opp()
+		out["opp"] = Career.nat_name(int(o[0])) if int(o[0]) >= 0 else ""
+		out["opp_kit"] = Career.nat_kit(int(o[0])) if int(o[0]) >= 0 else ["888888"]
+		if _cdist(Color(str(out["kit"][0])), Color(str(out["opp_kit"][0]))) < 0.5:
+			# the same colours: the away side wears its second kit, as in the match
+			var ak := "1c1c20" if Color(str(out["opp_kit"][0])).get_luminance() > 0.6 else "f4f4f4"
+			out["opp_kit"] = [ak, str(out["opp_kit"][0]), ak]
+		out["home"] = bool(o[1])
+		out["rname"] = str(o[2])
+		out["tname"] = str(car.nat_t().get("name", "QUALIFIERS")) if not car.nat_t().is_empty() else "QUALIFIERS"
+		out["sub"] = ["Your %d men" % (nj.get("sq", []) as Array).size(), "Rated %d" % int(round(car.nat_str(int(o[0]))))]
+	return out
+
+# the national team page: the squad you called up, the men you could call up, the group and the job
+func _nat_info() -> Dictionary:
+	if not car.has_save() or not car.d.has("leagues") or car.pro():
+		return {}
+	if not car.nat_job():
+		return {"job": false, "off": int(car.d.get("natoff", 0)) == int(car.d.get("season", 1)), "cap": car._nat_cap()}
+	var nj: Dictionary = car.nat()
+	var me_n := int(nj["n"])
+	var sq: Array = car.nat_squad()
+	var xi: Array = car.nat_xi(sq)
+	var keys := []
+	for pl in sq:
+		keys.append(str(pl["key"]))
+	var row := func(pl: Dictionary) -> Dictionary:
+		return {"key": str(pl["key"]), "n": str(pl["n"]).capitalize(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "age": int(pl.get("age", 25)), "mine": pl.has("mine"),
+			"xi": xi.has(pl), "in": keys.has(str(pl["key"])), "inj": car.injured(pl), "num": int(pl.get("num", 0))}
+	var rows := []
+	for pl in sq:
+		rows.append(row.call(pl))
+	var others := []
+	var pool: Array = car.nat_pool(me_n)
+	pool.sort_custom(func(a, b): return Career.ovr_of(a) > Career.ovr_of(b))
+	for pl in pool:
+		if not keys.has(str(pl["key"])):
+			others.append(row.call(pl))
+	var grp := []
+	var gname := ""
+	var t: Dictionary = car.nat_t()
+	var tab: Dictionary = {}
+	var members := []
+	if not t.is_empty():
+		tab = t["tab"]
+		members = t["grp"][int(t["gi"])]
+		gname = "%s, group %s" % [str(t["name"]).capitalize(), "ABCD"[int(t["gi"])]]
+	elif not car.nat_q().is_empty():
+		tab = car.nat_q()["tab"]
+		members = car.nat_q()["grp"]
+		gname = "Qualifying group"
+	for n in Career._nat_order(tab, members) if not members.is_empty() else []:
+		var r: Dictionary = tab[str(n)]
+		grp.append({"n": Career.nat_name(int(n)).capitalize(), "k": Career.nat_kit(int(n)), "p": int(r["p"]), "w": int(r["w"]), "d": int(r["d"]), "l": int(r["l"]), "gd": int(r["gf"]) - int(r["ga"]), "pts": int(r["pts"]), "me": int(n) == me_n})
+	var res := []
+	for e in car._nat_cal():
+		res.append({"date": car.date_text(int(e["day"])), "opp": Career.nat_name(int(e["opp"])).capitalize() if int(e["opp"]) >= 0 else "?", "name": str(e["name"]), "res": e["res"], "home": bool(e["home"]), "played": bool(e["played"])})
+	var ko := []
+	if not t.is_empty() and int(t["md"]) >= 3 and not bool(t.get("out", false)):
+		for m in t.get("ko", []):
+			ko.append("%s v %s" % [Career.nat_name(int(m[0])).capitalize(), Career.nat_name(int(m[1])).capitalize()])
+	return {"job": true, "n": Career.nat_name(me_n), "kit": Career.nat_kit(me_n), "ok": int(nj.get("ok", 50)), "st": nj.get("st", {}), "hist": nj.get("hist", []), "since": int(nj.get("since", 1)),
+		"sq": rows, "pool": others.slice(0, 30), "nsq": rows.size(), "nmine": rows.filter(func(x): return bool(x["mine"])).size(), "rating": int(round(car.nat_str(me_n))),
+		"grp": grp, "gname": gname, "fix": res, "ko": ko, "tab": nat_tab, "tname": car.tour_name(), "due": car.nat_due()}
+
 # The days between two matches go by on a calendar page, with the news of those days.
 func _adv_show(from: int, to := -99) -> void:
 	var step := to != -99
@@ -9510,6 +9754,8 @@ func _adv_show(from: int, to := -99) -> void:
 			nxt_t = "%s, %s" % [car.cup_name().capitalize(), car.cup_round_name().capitalize()]
 		elif car.eu_due():
 			nxt_t = Career.EU_NAME.capitalize()
+		elif car.nat_due():
+			nxt_t = "%s v %s" % [Career.nat_name(int(car.nat()["n"])).capitalize(), Career.nat_name(int(car.nat_opp()[0])).capitalize()]
 		elif not car.season_over():
 			nxt_t = "League v %s" % str(CLUBS[int(car.next_match()[0])]["n"]).capitalize()
 		# a day at a time: what happened, and how the squad feels after training
@@ -9533,6 +9779,9 @@ func _adv_show(from: int, to := -99) -> void:
 	elif car.eu_due():
 		var eo2: Array = car.eu_opp()
 		nxt = "%s v %s, %s" % [Career.EU_NAME.capitalize(), str(CLUBS[int(eo2[0])]["n"]).capitalize() if int(eo2[0]) >= 0 else "?", "home" if bool(eo2[1]) else "away"]
+	elif car.nat_due():
+		var no2: Array = car.nat_opp()
+		nxt = "%s v %s, %s" % [Career.nat_name(int(car.nat()["n"])).capitalize(), Career.nat_name(int(no2[0])).capitalize(), str(no2[2]).capitalize()]
 	elif not car.season_over():
 		var nm: Array = car.next_match()
 		nxt = "League v %s, %s" % [str(CLUBS[int(nm[0])]["n"]).capitalize(), "home" if bool(nm[1]) else "away"]
