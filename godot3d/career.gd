@@ -4696,6 +4696,9 @@ func pro_select(k := "pro", force := false) -> void:
 	var me := pro_i(k)
 	if me < 0:
 		return
+	if int(pro_d(k).get("bn", 0)) >= 2 and not injured(d["squad"][me]):
+		# Never the bench for good (Daniel): after two matches without a start the manager gives you your chance
+		force = true
 	var other := pro_i("pro2" if k == "pro" else "pro")
 	var xi: Array = d["xi"]
 	var pl: Dictionary = d["squad"][me]
@@ -4761,6 +4764,8 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro
 		return lines
 	var ss: Dictionary = p["ss"]
 	var al: Dictionary = p["all"]
+	# matches in a row without a start: after two the manager starts him (pro_select)
+	p["bn"] = 0 if started else int(p.get("bn", 0)) + 1
 	if played:
 		rt = clampf(rt, 3.0, 10.0)
 		ss["apps"] = int(ss["apps"]) + 1
@@ -4778,7 +4783,7 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro
 		while rl.size() > 10:
 			rl.pop_front()
 		# the manager's trust: a good match lifts it, a bad one costs, more for a man who started
-		var dt := (rt - (6.3 if started else 5.9)) * (3.5 if started else 4.0)
+		var dt := (rt - (6.3 if started else 5.6)) * (3.5 if started else 4.0)
 		p["trust"] = clampi(int(round(int(p["trust"]) + dt)), 0, 100)
 		pl["fm"] = clampi(int(round(pform(pl) * 0.6 + (rt - 3.0) / 7.0 * 100.0 * 0.4)), 5, 99)
 		# experience: for playing, more for a good match, goals and assists
@@ -4786,7 +4791,9 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro
 		_pro_xp(k, xg, lines)
 		lines.append("YOUR RATING %.1f%s" % [rt, ("  ·  %d GOAL%s" % [g, "" if g == 1 else "S"] if g > 0 else "") + ("  ·  %d ASSIST%s" % [a, "" if a == 1 else "S"] if a > 0 else "")])
 	else:
-		# not used: form fades, he keeps training (the club's training gives him experience)
+		# not used: form fades, he keeps training (the club's training gives him experience), and the
+		# manager sees him work: a little more trust each week
+		p["trust"] = clampi(int(p["trust"]) + 3, 0, 100)
 		lines.append("YOU DID NOT PLAY")
 		_pro_xp(k, 5, lines)
 	# the week's training: the drill you chose fills its bar, more when you sat on the bench
@@ -5019,9 +5026,9 @@ func pro_next_season() -> void:
 		pro_d(k)["ss"] = {"apps": 0, "st": 0, "g": 0, "a": 0, "rs": 0.0}
 		pro_d(k)["objd"] = []
 		_pro_goals(k)
-	pro_select("pro", pro2())
+	pro_select("pro")
 	if pro2():
-		pro_select("pro2", true)
+		pro_select("pro2")
 	save()
 
 # ---------------------------------------------------------------- the national team
