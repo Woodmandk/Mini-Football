@@ -606,6 +606,74 @@ func _ready() -> void:
 				print("GKTEST stats=", gstat, " team0 keeper goals/saves/miss=", res[0], "  team1 keeper=", res[1])
 			get_tree().quit()
 			return
+		if OS.get_cmdline_user_args().has("--thrudef"):
+			# a through ball over or through a real back line: who gets it, high and on the ground?
+			humans = [Human.new()]
+			for hi in [false, true]:
+				var won := {"9": 0, "def": 0, "gk": 0, "none": 0, "other": 0}
+				for k in 40:
+					_kickoff(0)
+					clock = 600.0
+					var rr := RandomNumberGenerator.new()
+					rr.seed = k * 17 + 1
+					var lx := rr.randf_range(12.0, 30.0)
+					var dz := [-13.0, -4.5, 4.5, 13.0]
+					for q in teams[1]:
+						q.position = Vector3(55, 0, q.position.z)
+						q.stun = 99.0
+					for di in 4:
+						var dq = teams[1][1 + di]
+						dq.position = Vector3(lx + rr.randf_range(-1.0, 1.0), 0, dz[di] + rr.randf_range(-1.5, 1.5))
+						dq.stun = 0.0
+						dq.vel = Vector3.ZERO
+					var g1 = teams[1][0]
+					g1.position = Vector3(HL - 1.0, 0, 0)
+					g1.stun = 0.0
+					for q in teams[0]:
+						q.position = Vector3(-40, 0, q.position.z)
+					var tp = teams[0][6]
+					var tm = teams[0][9]
+					tp.position = Vector3(lx - rr.randf_range(16.0, 26.0), 0, rr.randf_range(-6.0, 6.0))
+					tm.position = Vector3(lx - 1.5, 0, rr.randf_range(-8.0, 8.0))
+					tm.vel = Vector3(tm.top_speed * 0.8, 0, 0)
+					tp.yaw = atan2(-1.0, 0.0)
+					ball_owner = tp
+					ball_last = tp
+					ball.position = tp.position + Vector3(0.6, BALL_R, 0)
+					set_piece = ""
+					protect_t = 0.0
+					state = "play"
+					var th = humans[0]
+					th.ctrl = tp
+					var to: Vector3 = tm.position + Vector3(8, 0, 0) - tp.position
+					th.stick = Vector2(to.x, to.z).normalized()
+					th.evs.append("thru_down")
+					if hi:
+						th.evs.append("hi")
+					var tt := 0.0
+					var hold := rr.randf_range(0.1, 0.6)
+					while tt < hold:
+						_tick(1.0 / 60.0)
+						tt += 1.0 / 60.0
+					th.evs.append("thru_up")
+					_tick(1.0 / 60.0)
+					th.stick = Vector2(1, 0)
+					var t4 := 0.0
+					while t4 < 5.0 and state == "play" and ball_owner == null:
+						_tick(1.0 / 60.0)
+						t4 += 1.0 / 60.0
+					var key := "none"
+					if ball_owner == tm:
+						key = "9"
+					elif ball_owner != null and ball_owner.team == 1:
+						key = "gk" if ball_owner.role == "GK" else "def"
+						print("THRUDEF_LOST hi=", hi, " by=", ball_owner.idx, " at=", ball.position, " t=", snappedf(t4, 0.01), " from=", tp.position, " lx=", snappedf(lx, 0.1), " head=", ball_owner.head_t)
+					elif ball_owner != null:
+						key = "other"
+					won[key] += 1
+				print("THRUDEF hi=", hi, " ", won)
+			get_tree().quit()
+			return
 		if OS.get_cmdline_user_args().has("--thrutest"):
 			# through balls played by a human to a runner going forward: does the runner get there first?
 			humans = [Human.new()]
@@ -6636,6 +6704,7 @@ func _roll_left(v0: float, t: float) -> float:
 	return maxf((v0 + ROLL_C / ROLL_K) * exp(-ROLL_K * t) - ROLL_C / ROLL_K, 0.0)
 
 var lead_dir := Vector3.ZERO
+var loft_at := -99.0 # when the last high pass was struck (sim_t)
 var thru_rx = null
 var thru_left := 0.0
 
@@ -6781,6 +6850,8 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	var h = _hum_of(p)
 	var offs: bool = set_piece in ["", "fk", "kick"] and _is_offside(p, m)
 	_release(p, v, 2 if thrown else 0, ft, fb)
+	if lofted and not thrown:
+		loft_at = sim_t
 	if cross:
 		ball_spin = 0.0
 		ball_bs = 0.0
@@ -7565,6 +7636,10 @@ func _pickups() -> void:
 			continue
 		if shot_live and ball_last != null and p.team == ball_last.team:
 			continue
+		if b.y > 1.15 and ball_last != null and p.team != ball_last.team and not shot_live:
+			# A high pass dropping over a defender at chest height is not his: he cannot just take it down
+			# like a pass to his feet (Daniel: the high through balls were always taken). Only lower, or with his head.
+			continue
 		var d := Vector2(b.x - p.position.x, b.z - p.position.z).length()
 		# a fast ball that is not meant for you only hits you if it really hits your body
 		var rd_k: float = 1.15 if (p.has_ab("laeser") and not shot_live and ball_last != null and ball_last.team != p.team) else (0.42 if shot_live else 0.55)
@@ -7781,7 +7856,11 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 	if p.recv and loose:
 		return _run_to(p, _meet_for(p, aim), p.top_speed)
 	if loose and p == chaser[t]:
-		return _run_to(p, aim, p.top_speed * cpu["spd"])
+		var rk := 1.0
+		if ball_last != null and ball_last.team != t and ball.position.y > 1.0 and sim_t - loft_at < 0.5:
+			# a ball played over him: he first has to see it, turn and set off, the runner is already going
+			rk = 0.35
+		return _run_to(p, aim, p.top_speed * cpu["spd"] * rk)
 	if not loose and not ours and ball_owner.hands():
 		# The keeper has it in his hands: like real players, everybody drops out of the box and gives
 		# him room to throw or kick it out, nobody stands in front of him.
