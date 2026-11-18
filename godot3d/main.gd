@@ -178,6 +178,7 @@ var car_goals := []
 var y_tab := 0 # youth page: 0 scouts, 1 reports, 2 academy
 var mail_sel := -1 # the inbox: the open mail's id
 var cab_tab := 0 # trophy cabinet: 0 trophies, 1 awards, 2 records
+var scout_sw := 0 # the man of yours offered in a swap
 var nat_tab := 0 # national team page: 0 squad, 1 group, 2 the job
 var cal_m := 0 # the calendar shows this many months after the month of your next match
 var sim_res := {} # the last simulated match, for its screen
@@ -994,6 +995,7 @@ func _ready() -> void:
 			if menu_arg.begins_with("rv-"):
 				# review: the same career page alone (s), as the manager with the friend in the room (h), and on the friend's phone (g)
 				var rp: PackedStringArray = menu_arg.split("-")
+				set_meta("rv", true)
 				var rwho := rp[1]
 				var rtg := rp[3]
 				seen_how = true
@@ -1610,7 +1612,7 @@ func _ready() -> void:
 					print("STRTEST ", car.league_name(), " top club ", car.rating(ClubDB.start_leagues(Career.FIRST)[li][0]), " -> squad ", snappedf(top, 0.1), "   own club in place of ", car.rating(car.d["club"]), " -> squad ", snappedf(car.my_strength(), 0.1), " exp=", car.expected_rank(), " goal=", car.board()["obj"][0]["t"], " cup=", car.board()["obj"][1]["t"])
 				get_tree().quit()
 				return
-			if menu_arg in ["scout", "scout_sq", "bidtest"]:
+			if menu_arg in ["scout", "scout_sq", "bidtest"] and not has_meta("rv"):
 				_action("career")
 				scout_li = 0
 				if menu_arg != "scout":
@@ -1685,6 +1687,59 @@ func _ready() -> void:
 				else:
 					menu_arg = "main"
 					hub_tab = "career"
+			if menu_arg == "dealtest":
+				# smarter deals: swap, sell-on both ways, release clauses
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				car.d["coins"] = 99999
+				car.d["wb"] = 9999
+				var c0: int = car.ids()[1] if car.ids()[0] == int(car.d["club"]) else car.ids()[0]
+				var n0: int = (car.d["squad"] as Array).size()
+				# a swap: my man 5 + money for their man 3 (simple path: no contract talk)
+				car.d["mode"] = "simple"
+				var mine5: String = str(car.d["squad"][5]["n"])
+				var w5: int = car.swap_worth(c0, 3, 5)
+				var r1: Dictionary = car.bid(c0, 3, 0, {"swap": mine5})
+				print("DEAL swap worth=", w5, " ask=", car.ask_price(c0, 3), " -> ", r1, " squad ", n0, "->", (car.d["squad"] as Array).size(), " mine5 now at them=", (car.cpu_squad(c0) as Array).map(func(p): return str(p["n"])).has(mine5))
+				# buy with a sell-on for them, then sell him: they get 20%
+				var ask4: int = car.ask_price(c0, 4)
+				var r2: Dictionary = car.bid(c0, 4, int(round(ask4 * Career.SELLON_CUT / 5.0)) * 5, {"so": true})
+				var last: Dictionary = car.d["squad"][(car.d["squad"] as Array).size() - 1]
+				print("DEAL buy with sell-on: ", r2, " sob=", last.get("sob"))
+				var coins0: int = int(car.d["coins"])
+				var sr: String = car._sell_to((car.d["squad"] as Array).size() - 1, car.ids()[2], 1000)
+				print("DEAL sold him on: ", sr, " got=", int(car.d["coins"]) - coins0)
+				# sell with a sell-on, then a CPU deal moves him: we get our share
+				var rng := RandomNumberGenerator.new()
+				rng.randomize()
+				car._mail("bid", "test", "test", {"c": car.ids()[3], "pn": str(car.d["squad"][7]["n"]), "amt": 500, "st": "open", "left": 1, "cnt": 0})
+				var mid: int = int(car.d["mid"])
+				var so_n: String = str(car.d["squad"][7]["n"])
+				print("DEAL sell with sell-on: ", car.bid_answer(mid, "son"))
+				var coins1: int = int(car.d["coins"])
+				var paid := false
+				for k in 400:
+					var x: Array = car._cpu_deal(rng, 10)
+					if not x.is_empty() and str(x[1]) == so_n:
+						print("DEAL cpu deal moved him: ", x, " we got ", int(car.d["coins"]) - coins1, " mail=", car.inbox()[0]["t"])
+						paid = true
+						break
+				print("DEAL sell-on paid=", paid)
+				# a release clause of mine paid by a club
+				car.d["mode"] = "full"
+				car.d["squad"][2]["rc"] = 50
+				var fired := false
+				for k in 200:
+					var ln: Array = []
+					car._clause_tick(rng, ln)
+					if not ln.is_empty():
+						print("DEAL clause: ", ln, " ", car.inbox()[0]["t"])
+						fired = true
+						break
+				print("DEAL clause fired=", fired)
+				get_tree().quit()
+				return
 			if menu_arg == "natseason":
 				# two seasons with a national job: every match simulated, the days advanced
 				carc.new_career(carc.weakest(3), true)
@@ -2659,7 +2714,7 @@ func _car_info() -> Dictionary:
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 		"ab_pick": _ab_pick_info(), "board": _board_info(), "cup_due": car.cup_due(), "cup_after": car.cup_after(), "mode": car.mode(),
 		"sacked": car.d.has("sacked"), "on": car.on(),
-		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
+		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "talk_rc": [0, car.clause_of_talk({"rc": 1, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))}), car.clause_of_talk({"rc": 2, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))})], "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 else 0,
 		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(), "nat_due": car.nat_due(), "natm": _natm_info(), "natp": _nat_info(),
@@ -2859,9 +2914,21 @@ func _scout_info() -> Dictionary:
 		for i in cs.size():
 			var pl: Dictionary = cs[i]
 			sq.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "age": int(pl["age"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]),
-				"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "ask": car.ask_price(scout_c, i), "ab": _ab_rows(Career.ab_of(pl))})
+				"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "ask": car.ask_price(scout_c, i), "ab": _ab_rows(Career.ab_of(pl)), "rc": car.cpu_clause(scout_c, i)})
 	return {"li": scout_li, "c": scout_c, "i": scout_i, "cn": CLUBS[scout_c]["n"] if scout_c >= 0 else "", "ck": CLUBS[scout_c]["k"] if scout_c >= 0 else [],
-		"cr": car.rating(scout_c) if scout_c >= 0 else 0, "clg": car.league_name(car.league_of(scout_c)) if scout_c >= 0 else "", "sq": sq, "res": scout_res}
+		"cr": car.rating(scout_c) if scout_c >= 0 else 0, "clg": car.league_name(car.league_of(scout_c)) if scout_c >= 0 else "", "sq": sq, "res": scout_res, "sw": _swap_info()}
+
+# the swap row on a scouted player: your man, what he is worth to them, and the cash on top
+func _swap_info() -> Dictionary:
+	if scout_c < 0 or scout_i < 0 or not car.d.has("squad") or (car.d["squad"] as Array).is_empty():
+		return {}
+	var nsq: int = (car.d["squad"] as Array).size()
+	scout_sw = clampi(scout_sw, 0, nsq - 1)
+	var pl: Dictionary = car.d["squad"][scout_sw]
+	var wv: int = car.swap_worth(scout_c, scout_i, scout_sw)
+	var ask: int = car.ask_price(scout_c, scout_i)
+	return {"n": str(pl["n"]).capitalize(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "worth": wv, "cash": maxi(0, ask - wv), "ok": wv > 0, "key": str(pl["n"]),
+		"worth_t": car.money(wv), "cash_t": car.money(maxi(0, ask - wv))}
 
 func _cup_info() -> Dictionary:
 	var cp: Dictionary = car.cup()
@@ -3283,8 +3350,8 @@ func _action(act: String, arg = null) -> void:
 			car.mail_pick(int(mp2[0]), int(mp2[1]))
 			audio.play("click2")
 			hud.refresh(_menu_info())
-		"bid_acc", "bid_rej", "bid_more":
-			car_msg = car.bid_answer(int(arg), {"bid_acc": "acc", "bid_rej": "rej", "bid_more": "more"}[act])
+		"bid_acc", "bid_rej", "bid_more", "bid_son":
+			car_msg = car.bid_answer(int(arg), {"bid_acc": "acc", "bid_rej": "rej", "bid_more": "more", "bid_son": "son"}[act])
 			hud.refresh(_menu_info())
 		"tnews":
 			hud.show_menu("tnews", _menu_info())
@@ -3363,6 +3430,22 @@ func _action(act: String, arg = null) -> void:
 			if " ".join(OS.get_cmdline_user_args()).contains("--menu="):
 				if not car.nat_job():
 					car.nat_take(0 if arg == null else int(arg))
+		"dbgsc":
+			# review hooks only: open a scouted player, 0 = one with a release clause, 1 = one without
+			if " ".join(OS.get_cmdline_user_args()).contains("--menu="):
+				car.d["coins"] = 99999
+				scout_li = car.lg()
+				for c in car.ids():
+					if c == int(car.d["club"]):
+						continue
+					for i in (car.cpu_squad(c) as Array).size():
+						if (car.cpu_clause(c, i) > 0) == (int(arg) == 0 if arg != null else true):
+							scout_c = c
+							scout_i = i
+							scout_res = {}
+							scout_sw = 10
+							hud.show_menu("scout_sq", _menu_info())
+							return
 		"dbgft":
 			if " ".join(OS.get_cmdline_user_args()).contains("--menu=") and screen == "match":
 				score = [2, 1]
@@ -3641,10 +3724,23 @@ func _action(act: String, arg = null) -> void:
 			scout_i = int(arg)
 			scout_res = {}
 			hud.refresh(_menu_info())
-		"sc_bid":
+		"sc_swp":
+			# pick which of your men goes the other way in a swap
+			var nsq: int = (car.d["squad"] as Array).size()
+			if nsq > 0:
+				scout_sw = (scout_sw + (int(arg) if arg != null else 1) + nsq) % nsq
+			hud.refresh(_menu_info())
+		"sc_bid", "sc_bid_so", "sc_rc", "sc_swap":
 			if scout_c >= 0 and scout_i >= 0:
-				var amt := int(arg)
-				scout_res = car.bid(scout_c, scout_i, amt)
+				var amt := int(arg) if act in ["sc_bid", "sc_bid_so"] else 0
+				var bex := {}
+				if act == "sc_bid_so":
+					bex["so"] = true
+				elif act == "sc_rc":
+					bex["rc"] = true
+				elif act == "sc_swap":
+					bex["swap"] = str(arg)
+				scout_res = car.bid(scout_c, scout_i, amt, bex)
 				if bool(scout_res.get("talk", false)):
 					car_msg = str(scout_res.get("msg", ""))
 					ct_from = "scout_sq"
@@ -3776,6 +3872,9 @@ func _action(act: String, arg = null) -> void:
 					hud.show_menu("contract", _menu_info())
 				else:
 					hud.refresh(_menu_info())
+		"ct_rc":
+			car.talk_set("rc", int(arg) if arg != null else 1)
+			hud.refresh(_menu_info())
 		"ct_w", "ct_y":
 			car.talk_set("w" if act == "ct_w" else "y", int(arg))
 			hud.refresh(_menu_info())
@@ -3783,7 +3882,7 @@ func _action(act: String, arg = null) -> void:
 			if arg is Array and (arg as Array).size() >= 3:
 				# the assistant's contract offer: the same talk, with his numbers
 				car.talk_renew(int(arg[0]))
-				car.talk_force(int(arg[1]), int(arg[2]))
+				car.talk_force(int(arg[1]), int(arg[2]), int(arg[3]) if (arg as Array).size() > 3 else -1)
 			car_msg = car.talk_offer()
 			if car.talk().is_empty():
 				# the talk is over: back to where it started, with the answer
@@ -9122,10 +9221,10 @@ func _bot_inputs(dt: float) -> void:
 # to the manager as a suggestion, and the manager says yes or no.
 const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
-	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac", "nat", "nat_tab"]
+	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac", "nat", "nat_tab", "ct_rc", "sc_swp"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
 	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_adv", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
-	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go", "tac_set", "nat_pick", "nat_auto", "nat_quit", "nat_play"]
+	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go", "tac_set", "nat_pick", "nat_auto", "nat_quit", "nat_play", "sc_bid_so", "sc_rc", "sc_swap", "bid_son"]
 
 func _cv_tick(dt: float) -> void:
 	var src = proc if car == proc else carc
@@ -9227,7 +9326,7 @@ func _as_take(act: String, arg) -> bool:
 		var tk: Dictionary = car.talk()
 		if tk.is_empty() or str(tk.get("kind", "")) != "renew":
 			return true
-		_as_suggest("ct_go", [int(tk["i"]), int(tk["offer"]), int(tk["yrs"])])
+		_as_suggest("ct_go", [int(tk["i"]), int(tk["offer"]), int(tk["yrs"]), int(tk.get("rc", 0))])
 		car.talk_end()
 		hud.show_menu("squad", _menu_info())
 		return true
@@ -9260,10 +9359,12 @@ func _pn(i: int) -> String:
 # What a suggestion does, in words. The host's phone works it out again: if it does not say the same, it is out of date.
 func _sug_text(act: String, arg) -> String:
 	match act:
-		"bid_acc", "bid_rej", "bid_more":
+		"bid_acc", "bid_rej", "bid_more", "bid_son":
 			var bm: Dictionary = car.mail(int(arg))
 			if bm.is_empty() or str(bm.get("st", "")) != "open":
 				return ""
+			if act == "bid_son":
+				return "SELL %s WITH A %d%% SELL-ON" % [str(bm["pn"]), Career.SELLON_PCT]
 			return ("SELL %s FOR %s" if act == "bid_acc" else ("SAY NO TO THE BID FOR %s" if act == "bid_rej" else "ASK FOR MORE FOR %s")) % ([str(bm["pn"]), car.money(int(bm["amt"]))] if act == "bid_acc" else [str(bm["pn"])])
 		"mail_pick":
 			var ma: Array = arg if arg is Array else []
@@ -9368,6 +9469,18 @@ func _sug_text(act: String, arg) -> String:
 			if scout_i >= cs.size():
 				return ""
 			return "BID %s FOR %s OF %s" % [car.money(int(arg)), str(cs[scout_i]["n"]).to_upper(), str(CLUBS[scout_c]["n"])]
+		"sc_bid_so", "sc_rc", "sc_swap":
+			if scout_c < 0 or scout_i < 0:
+				return ""
+			var cs2: Array = car.cpu_squad(scout_c)
+			if scout_i >= cs2.size():
+				return ""
+			var who := str(cs2[scout_i]["n"]).to_upper()
+			if act == "sc_rc":
+				return "PAY THE RELEASE CLAUSE (%s) FOR %s" % [car.money(car.cpu_clause(scout_c, scout_i)), who]
+			if act == "sc_swap":
+				return "OFFER %s + MONEY FOR %s" % [str(arg).to_upper(), who]
+			return "BID %s WITH A %d%% SELL-ON FOR %s" % [car.money(int(arg)), Career.SELLON_PCT, who]
 	return ""
 
 # The manager's phone: one suggestion at a time, on top of whatever menu is open.
