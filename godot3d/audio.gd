@@ -7,9 +7,9 @@ extends Node
 const VAR := {"dribble": 4, "touch": 4, "pass": 4, "shot": 4, "header": 2, "bounce": 3, "thud": 2, "slide": 2, "tackle": 2, "ooh": 3}
 # name: [level dB, pitch spread, on the pitch (heard from where it happens)]
 const DEF := {
-	"dribble": [-4.0, 0.07, true], "touch": [1.5, 0.05, true], "pass": [2.7, 0.05, true], "shot": [6.4, 0.04, true],
-	"header": [2.0, 0.05, true], "bounce": [-3.0, 0.08, true], "catch": [6.0, 0.04, true], "post": [2.5, 0.015, true],
-	"net": [4.5, 0.03, true], "thud": [0.5, 0.06, true], "slide": [2.0, 0.05, true], "tackle": [0.0, 0.05, true],
+	"dribble": [-1.0, 0.07, true], "touch": [4.5, 0.05, true], "pass": [5.7, 0.05, true], "shot": [9.4, 0.04, true],
+	"header": [5.0, 0.05, true], "bounce": [0.0, 0.08, true], "catch": [9.0, 0.04, true], "post": [5.5, 0.015, true],
+	"net": [7.5, 0.03, true], "thud": [3.5, 0.06, true], "slide": [5.0, 0.05, true], "tackle": [3.0, 0.05, true],
 	"whistle": [-1.2, 0.01, false], "whistle_short": [-1.2, 0.01, false], "whistle_long": [-1.2, 0.0, false],
 	"whistle_half": [-1.2, 0.0, false], "whistle_full": [-1.2, 0.0, false],
 	"roar": [3.5, 0.0, false], "roar_away": [-1.7, 0.02, false], "ooh": [-1.5, 0.04, false], "aww": [-2.5, 0.04, false],
@@ -139,7 +139,7 @@ func play(k: String, vol := 1.0, at = null) -> void:
 		if cam != null:
 			# farther from the camera = quieter and a little duller, as from the TV gantry
 			var dist: float = cam.global_position.distance_to(at)
-			db -= clampf((dist - 18.0) * 0.12, 0.0, 8.0)
+			db -= clampf((dist - 25.0) * 0.08, 0.0, 4.0)
 		p.volume_db = db
 		p.pitch_scale = pitch
 		p.play()
@@ -202,8 +202,8 @@ func _process(sdt: float) -> void:
 	_bed_l = lerpf(_bed_l, bed_to, fade)
 	_hot_l = lerpf(_hot_l, hot_to, fade)
 	var dby := 3.0 if derby else 0.0
-	_level(bed, _bed_l, 6.5 + dby)
-	_level(hot, _hot_l, 4.0 + dby)
+	_level(bed, _bed_l, 0.0 + dby)
+	_level(hot, _hot_l, -2.0 + dby)
 	if log_on and int(t * 2.0) != int((t - dt) * 2.0):
 		print("CROWD %.1f danger=%.2f bed=%.2f hot=%.2f boost=%.2f song=%d/%.2f/%.2f" % [t, _danger_s, _bed_l, _hot_l, _boost, _song, _song_l[0], _song_l[1]])
 	# songs: when the game is calm for a while, part of the ground starts singing or clapping
@@ -227,7 +227,7 @@ func _process(sdt: float) -> void:
 	for i in 2:
 		var want := 1.0 if (i == _song and _song_t > 0.0) else 0.0
 		_song_l[i] = lerpf(_song_l[i], want, clampf(dt * (0.55 if want > 0.0 else 0.9), 0.0, 1.0))
-		_level(songs[i], _song_l[i], 0.0 if i == 0 else 2.0)
+		_level(songs[i], _song_l[i], -4.0 if i == 0 else -2.0)
 
 func _level(p: AudioStreamPlayer, l: float, top_db: float) -> void:
 	if l < 0.003:
