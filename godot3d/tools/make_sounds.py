@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Makes every match sound of Pitch Boss as .ogg files in godot3d/snd/.
+# Makes every match sound of Pitch Boss as .wav files in godot3d/snd/ (imported as QOA).
 # Nothing is recorded: crowds are thousands of synthetic voices, the ball is a struck leather shell,
 # the whistle is a pea whistle, and a stadium reverb is baked in. Run again after changing it:
 #   python3 godot3d/tools/make_sounds.py
@@ -150,8 +150,10 @@ def save(name, x, q=4):
 		w.setsampwidth(2)
 		w.setframerate(SR)
 		w.writeframes(pcm.tobytes())
-	subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tmp, "-c:a", "libvorbis", "-q:a", str(q), os.path.join(OUT, name + ".ogg")], check=True)
-	os.remove(tmp)
+	# crowds are dark anyway: 22 kHz is plenty. Godot imports these as QOA (cheap to play on a phone).
+	if name.startswith(("crowd", "chant", "claps", "roar", "clap", "ooh", "aww", "gasp", "cheer", "jeer")):
+		subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tmp, "-ar", "22050", "-c:a", "pcm_s16le", tmp + ".r.wav"], check=True)
+		os.replace(tmp + ".r.wav", tmp)
 	print("%-14s %5.1f s" % (name, len(x) / SR))
 
 def loop_mod(n, depth, periods):

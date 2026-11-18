@@ -468,6 +468,10 @@ func _ready() -> void:
 	if net.web:
 		dbg = str(JavaScriptBridge.eval("location.search", true)).contains("dbg")
 		var qs := str(JavaScriptBridge.eval("location.search", true))
+		if qs.contains("sndtest"):
+			# test: the page starts a match at once (sound checks in a browser)
+			demo = true
+			bot_mode = "solo"
 		if qs.contains("ft="):
 			test_ft = float(qs.split("ft=")[1].split("&")[0])
 		if str(JavaScriptBridge.eval("location.search", true)).contains("low"):
