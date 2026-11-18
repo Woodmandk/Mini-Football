@@ -212,6 +212,7 @@ class Human:
 	var charge := 0.0
 	var pass_hold := -1.0
 	var switch_cool := 0.0
+	var auto_hold := -1.0 # the player career: CALL held down = your man finds his own position (FIFA's hold to auto-position)
 	var pick_t := 0.0 # you picked this man yourself with SWITCH: the game leaves him under your thumb for a while
 	var local := true
 	var stam := 1.0
@@ -608,6 +609,68 @@ func _ready() -> void:
 						score = [0, 0]
 						res[t][out] += 1
 				print("GKTEST stats=", gstat, " team0 keeper goals/saves/miss=", res[0], "  team1 keeper=", res[1])
+			get_tree().quit()
+			return
+		if OS.get_cmdline_user_args().has("--autopos"):
+			# the player career: CALL held = your man positions himself
+			humans = [Human.new()]
+			var hh = humans[0]
+			_kickoff(1)
+			clock = 600.0
+			var me9 = teams[0][9]
+			hh.ctrl = me9
+			hh.psq = 0
+			hh.pnode = me9
+			me9.position = Vector3(-40, 0, 20)
+			for held in [false, true]:
+				hh.auto_hold = 1.0 if held else -1.0
+				var p0: Vector3 = me9.position
+				var tt := 0.0
+				while tt < 4.0:
+					_tick(1.0 / 60.0)
+					tt += 1.0 / 60.0
+					if held:
+						hh.auto_hold = 1.0
+					hh.ctrl = me9
+				print("AUTOPOS held=", held, " moved=", snappedf(me9.position.distance_to(p0), 0.1), " at=", me9.position, " ball=", ball.position, " state=", state)
+			get_tree().quit()
+			return
+		if OS.get_cmdline_user_args().has("--cornertest"):
+			# a human corner aimed with the stick: where does the cross come down, and who gets to it?
+			humans = [Human.new()]
+			humans[0].team = 0
+			for st in [Vector2.ZERO, Vector2(0, 1), Vector2(0, -1), Vector2(-1, 0), Vector2(0.7, 0.7)]:
+				for rep in 3:
+					_kickoff(0)
+					clock = 600.0
+					_out("corner", Vector3(HL - 0.6, 0, HW - 0.6), 0)
+					var w := 0.0
+					while not (state == "play" and set_piece == "corner" and ball_owner != null) and w < 8.0:
+						_tick(1.0 / 60.0)
+						w += 1.0 / 60.0
+					var tk = ball_owner
+					humans[0].ctrl = tk
+					humans[0].stick = st
+					var aim := _corner_aim(tk, st)
+					humans[0].evs.append("lob_down")
+					_tick(1.0 / 60.0)
+					humans[0].evs.append("lob_up")
+					_tick(1.0 / 60.0)
+					var t5 := 0.0
+					var drop := Vector3.ZERO
+					var was := ball.position.y
+					while t5 < 3.0 and ball_owner == null and state == "play":
+						_tick(1.0 / 60.0)
+						t5 += 1.0 / 60.0
+						if ball_last == tk and (drop == Vector3.ZERO or Vector2(ball.position.x - aim.x, ball.position.z - aim.z).length() < Vector2(drop.x - aim.x, drop.z - aim.z).length()):
+							drop = ball.position
+						was = ball.position.y
+					var who := "loose"
+					if ball_owner != null:
+						who = "ours" if ball_owner.team == 0 else "theirs"
+					elif ball_last != null and ball_last != tk:
+						who = ("ours" if ball_last.team == 0 else "theirs") + "-touch"
+					print("CORNERTEST stick=", st, " aim=", Vector2(snappedf(aim.x, 0.1), snappedf(aim.z, 0.1)), " nearest=", Vector3(snappedf(drop.x, 0.1), snappedf(drop.y, 0.1), snappedf(drop.z, 0.1)), " taker_human=", _hum_of(tk) != null, " -> ", who, " state=", state)
 			get_tree().quit()
 			return
 		if OS.get_cmdline_user_args().has("--thrudef"):
@@ -5200,6 +5263,35 @@ func _corner_setup(team: int, taker, pos: Vector3) -> void:
 		back += 1
 
 # Who a corner is swung in to: a man in the box, the less marked the better.
+# A corner you take yourself goes where you point: stick at rest = round the penalty spot, towards the near
+# post, the far post or back to the edge of the box. The man nearest that spot attacks it.
+var cross_spot = null
+
+func _corner_aim(p, st: Vector2) -> Vector3:
+	var s := side(p.team)
+	var gx := HL * s
+	var a := Vector3(gx - s * 8.5, 0, 0) + Vector3(st.x, 0, st.y).limit_length(1.0) * 8.0
+	a.x = clampf(a.x, minf(gx - s * 19.0, gx - s * 2.5), maxf(gx - s * 19.0, gx - s * 2.5))
+	a.z = clampf(a.z, -11.0, 11.0)
+	return a
+
+func _human_cross(h):
+	var p = h.ctrl
+	var a := _corner_aim(p, h.stick)
+	var best = null
+	var bd := 1e9
+	for m in teams[p.team]:
+		if m == p or m.off or m.role == "GK":
+			continue
+		var d: float = m.position.distance_to(a)
+		if d < bd:
+			bd = d
+			best = m
+	if best == null:
+		return _cross_target(p)
+	cross_spot = a
+	return best
+
 func _cross_target(p):
 	var s := side(p.team)
 	var best = null
@@ -5907,7 +5999,7 @@ func _play(dt: float) -> void:
 				if h.thru_hold >= 0.0 and ball_owner == h.ctrl:
 					var tpw: float = clampf(h.thru_hold / 0.6, 0.0, 1.0)
 					pass_pw = tpw
-					var mt = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(tpw, 0.01), true)
+					var mt = _human_cross(h) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(tpw, 0.01), true)
 					if mt == null and set_piece != "":
 						mt = _pass_target(h.ctrl, Vector3.ZERO, false)
 					if mt != null:
@@ -5924,7 +6016,7 @@ func _play(dt: float) -> void:
 					h.ot = 3
 					h.ot_t = 1.6
 				elif mine and set_piece in ["corner", "throw"]:
-					var cm = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false)
+					var cm = _human_cross(h) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false)
 					if cm != null:
 						_pass(h.ctrl, cm, true, set_piece == "corner")
 				elif mine:
@@ -5953,9 +6045,16 @@ func _play(dt: float) -> void:
 				elif coming:
 					h.ot = 1
 					h.ot_t = 1.6
+				elif h.psq >= 0 and _pro_man(h) != null:
+					# your own player: a tap calls for the ball, holding it lets him run his own position
+					h.auto_hold = 0.0
 				else:
 					_switch(h)
 			elif e == "pass_up":
+				if h.auto_hold >= 0.0:
+					if h.auto_hold < 0.3 and ball_owner != null and ball_owner.team == h.team and ball_owner != h.ctrl:
+						_switch(h)
+					h.auto_hold = -1.0
 				if h.pass_hold >= 0.0 and ball_owner == h.ctrl:
 					var ppw: float = clampf(h.pass_hold / 0.6, 0.0, 1.0)
 					pass_pw = ppw
@@ -5977,7 +6076,7 @@ func _play(dt: float) -> void:
 				# the high ball has its own button: the longer the hold, the further the man it looks for
 				if h.lob_hold >= 0.0 and ball_owner == h.ctrl:
 					var lpw: float = clampf(h.lob_hold / 0.6, 0.0, 1.0)
-					var ml = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(0.3 + 0.7 * lpw, 0.01))
+					var ml = _human_cross(h) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(0.3 + 0.7 * lpw, 0.01))
 					if ml == null and set_piece != "":
 						ml = _pass_target(h.ctrl, Vector3.ZERO, false)
 					if ml != null:
@@ -5999,6 +6098,8 @@ func _play(dt: float) -> void:
 			h.thru_hold = -1.0
 		if h.thru_hold >= 0.0:
 			h.thru_hold += dt
+		if h.auto_hold >= 0.0:
+			h.auto_hold += dt
 		if h.pass_hold >= 0.0:
 			h.pass_hold += dt
 		if h.lob_hold >= 0.0:
@@ -6144,6 +6245,10 @@ func _play(dt: float) -> void:
 				var ma := _meet_for(p, aim)
 				want = _run_to(p, ma, p.top_speed)
 				h.stam = clampf(h.stam + 0.16 * dt, 0.0, 1.0)
+			elif h.auto_hold >= 0.3 and ball_owner != p and set_piece == "":
+				# auto-positioning: he moves like the computer would move him (runs, support, his place in the shape)
+				want = _ai_offball(p, chaser, second, aim)
+				h.stam = clampf(h.stam + 0.1 * dt, 0.0, 1.0)
 			else:
 				var run: bool = h.sprint and not h.tired and h.stick.length() > 0.3
 				h.stam = clampf(h.stam + (-0.125 if run else 0.16) * dt, 0.0, 1.0)
@@ -7144,9 +7249,13 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		fb = 0.03
 	elif cross:
 		# whipped in to arrive at head height
-		var vc := clampf(11.0 + d * 0.32, 15.0, 22.0)
-		var tc := d / vc
-		var aim4: Vector3 = m.position + m.vel * tc * 0.5
+		var aim4: Vector3 = m.position + m.vel * (d / clampf(11.0 + d * 0.32, 15.0, 22.0)) * 0.5
+		if cross_spot is Vector3:
+			aim4 = cross_spot
+			cross_spot = null
+		var dc: float = Vector2(aim4.x - p.position.x, aim4.z - p.position.z).length()
+		var vc := clampf(11.0 + dc * 0.32, 15.0, 22.0)
+		var tc := dc / vc
 		var dir4: Vector3 = aim4 - p.position
 		dir4.y = 0.0
 		tc = dir4.length() / vc
@@ -8841,6 +8950,11 @@ func _process(dt: float) -> void:
 			if absf(lp.x) < HL and absf(lp.z) < HW:
 				land_ring.position = Vector3(lp.x, 0.05, lp.z)
 				show_ring = true
+	if not show_ring and state == "play" and set_piece == "corner" and screen == "match" and humans.size() > me and humans[me].ctrl != null and ball_owner == humans[me].ctrl:
+		# your corner: the ring shows where your cross will drop, and moves with the stick
+		var ca := _corner_aim(humans[me].ctrl, _stick() * view_flip)
+		land_ring.position = Vector3(ca.x, 0.05, ca.z)
+		show_ring = true
 	land_ring.visible = show_ring
 	var mv := 0.0
 	if humans.size() > me and humans[me].ctrl != null and state == "play" and screen == "match":
@@ -8907,7 +9021,7 @@ func _process(dt: float) -> void:
 			hud.lab_b = "PASS" if mine2 else "SWITCH"
 			if hm.psq >= 0:
 				# the player career: you are one man, so no switching. With the ball at a team mate you call for it
-				hud.lab_b = "PASS" if mine2 else ("CALL" if ours else "")
+				hud.lab_b = "PASS" if mine2 else ("AUTO" if hm.auto_hold >= 0.3 else ("CALL" if ours else "AUTO"))
 			hud.charge = hm.charge
 			hud.stam = hm.stam
 			hud.ctrl_name = ("%d  %s  %d" % [hm.ctrl.num, hm.ctrl.pname.to_upper(), hm.ctrl.ovr]) if hm.ctrl != null else ""
