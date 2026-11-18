@@ -353,6 +353,7 @@ func _new_season() -> void:
 	d["last"] = []
 	d["myres"] = {}
 	d["day"] = -4 # pre-season: a few days before the first match
+	d["cur"] = -4
 	d["gs"] = {}
 	d["mg"] = {}
 	d["mp"] = {}
@@ -519,6 +520,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		d["myres"] = {}
 	d["myres"][str(int(d["round"]))] = [mine, theirs]
 	d["day"] = lg_day(int(d["round"]))
+	d["cur"] = int(d["day"])
 	d["round"] = int(d["round"]) + 1
 	var stt: Dictionary = stats()
 	stt["p"] = int(stt["p"]) + 1
@@ -1222,6 +1224,7 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var won: bool = mine > theirs or (mine == theirs and won_tie)
 	if not bool(d.get("cupmode", false)):
 		d["day"] = cup_day(r)
+		d["cur"] = int(d["day"])
 	var copp := cup_opp()
 	_cup_round(mine, theirs, won_tie)
 	if not bool(d.get("cupmode", false)):
@@ -2839,7 +2842,40 @@ func windows_on() -> bool:
 # where you stand in the world: the eve of your next match (the days up to it have gone by on the calendar)
 func now() -> int:
 	var nd := next_day()
-	return nd if nd >= 0 else today()
+	if nd < 0:
+		return today()
+	if not d.has("cur"):
+		return nd # an old save: the eve of the next match
+	return clampi(int(d["cur"]), today(), nd)
+
+# FIFA's ADVANCE: on to the next day something happens (news, a bid, a man fit again), or to match day.
+# Returns the day you came from.
+func advance() -> int:
+	var nd := next_day()
+	var from := now()
+	if nd < 0 or from >= nd:
+		return from
+	var t := from
+	while t < nd:
+		t += 1
+		d["cur"] = t
+		var mid := int(d.get("mid", 0))
+		world_tick([], false)
+		if int(d.get("mid", 0)) != mid:
+			break
+	save()
+	return from
+
+# before a match: the days up to it go by. Returns the day you came from.
+func go_match() -> int:
+	var nd := next_day()
+	var from := now()
+	if nd < 0 or from >= nd:
+		return from
+	d["cur"] = nd
+	world_tick([], false)
+	save()
+	return from
 
 func window() -> Dictionary:
 	var t := now()
@@ -2908,7 +2944,7 @@ func _country_clubs() -> Array:
 	return out
 
 # The days from today to your next match go by: the other clubs trade, the window opens or shuts, bids come in.
-func world_tick(lines: Array) -> void:
+func world_tick(lines: Array, per_match := true) -> void:
 	if ro or bool(d.get("cupmode", false)) or not d.has("leagues"):
 		return
 	var rng := RandomNumberGenerator.new()
@@ -2937,7 +2973,11 @@ func world_tick(lines: Array) -> void:
 		var a := maxi(maxi(from + 1, t - 10), o)
 		var b := mini(t, c)
 		if a <= b:
-			var n := 1 if rng.randf() < 0.6 else 2
+			# about one deal every five days, so a day at a time gives the same world as a week at once
+			var n := 0
+			for dday in b - a + 1:
+				if rng.randf() < 0.2:
+					n += 1
 			var dl := c >= a and c <= b
 			if dl:
 				n += rng.randi_range(3, 5)
@@ -2955,8 +2995,15 @@ func world_tick(lines: Array) -> void:
 			pl.erase("inj")
 			pl.erase("injn")
 	_month_awards(lines)
-	# bids for your men: only while a window is open for you
 	var wn := window()
+	if bool(wn["open"]) and bool(wn["deadline"]) and int(d.get("dlw", -1)) != int(wn["close"]) and not pro():
+		d["dlw"] = int(wn["close"])
+		_mail("deadline", "Deadline day is coming", "The window shuts on %s. Anything you want to do, do it now." % str(wn["ctext"]))
+		lines.append("DEADLINE DAY IS COMING")
+	if not per_match:
+		# a day going by: the rest (bids, offers, the press) comes with the matches
+		return
+	# bids for your men: only while a window is open for you
 	for m in inbox():
 		if str(m["k"]) == "bid" and str(m.get("st", "")) == "open":
 			m["left"] = int(m.get("left", 2)) - 1
@@ -2971,10 +3018,6 @@ func world_tick(lines: Array) -> void:
 		_pro_offers(rng, lines)
 		return
 	if bool(wn["open"]):
-		if bool(wn["deadline"]) and int(d.get("dlw", -1)) != int(wn["close"]):
-			d["dlw"] = int(wn["close"])
-			_mail("deadline", "Deadline day is coming", "The window shuts on %s, before your next match. Anything you want to do, do it now." % str(wn["ctext"]))
-			lines.append("DEADLINE DAY: THE WINDOW SHUTS BEFORE YOUR NEXT MATCH")
 		# men on the transfer list: clubs look at them first
 		for li in _listed_free():
 			var lpl: Dictionary = d["squad"][li]
@@ -3811,6 +3854,7 @@ func eu_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var md := int(e["md"])
 	var opp := int(eu_opp()[0])
 	d["day"] = eu_day(md)
+	d["cur"] = int(d["day"])
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var lines := []
