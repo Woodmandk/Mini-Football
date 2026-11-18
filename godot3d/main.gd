@@ -212,6 +212,7 @@ class Human:
 	var charge := 0.0
 	var pass_hold := -1.0
 	var switch_cool := 0.0
+	var auto_on := false # the player career: one tap and your man finds his own position, until you take the stick or get the ball
 	var pick_t := 0.0 # you picked this man yourself with SWITCH: the game leaves him under your thumb for a while
 	var local := true
 	var stam := 1.0
@@ -475,6 +476,10 @@ func _ready() -> void:
 	if net.web:
 		dbg = str(JavaScriptBridge.eval("location.search", true)).contains("dbg")
 		var qs := str(JavaScriptBridge.eval("location.search", true))
+		if qs.contains("sndtest"):
+			# test: the page starts a match at once (sound checks in a browser)
+			demo = true
+			bot_mode = "solo"
 		if qs.contains("ft="):
 			test_ft = float(qs.split("ft=")[1].split("&")[0])
 		if str(JavaScriptBridge.eval("location.search", true)).contains("low"):
@@ -617,6 +622,68 @@ func _ready() -> void:
 						score = [0, 0]
 						res[t][out] += 1
 				print("GKTEST stats=", gstat, " team0 keeper goals/saves/miss=", res[0], "  team1 keeper=", res[1])
+			get_tree().quit()
+			return
+		if OS.get_cmdline_user_args().has("--autopos"):
+			# the player career: CALL held = your man positions himself
+			humans = [Human.new()]
+			var hh = humans[0]
+			_kickoff(1)
+			clock = 600.0
+			var me9 = teams[0][9]
+			hh.ctrl = me9
+			hh.psq = 0
+			hh.pnode = me9
+			me9.position = Vector3(-40, 0, 20)
+			for held in [false, true]:
+				hh.auto_on = held
+				var p0: Vector3 = me9.position
+				var tt := 0.0
+				while tt < 4.0:
+					_tick(1.0 / 60.0)
+					tt += 1.0 / 60.0
+					if held:
+						hh.auto_on = true
+					hh.ctrl = me9
+				print("AUTOPOS held=", held, " moved=", snappedf(me9.position.distance_to(p0), 0.1), " at=", me9.position, " ball=", ball.position, " state=", state)
+			get_tree().quit()
+			return
+		if OS.get_cmdline_user_args().has("--cornertest"):
+			# a human corner aimed with the stick: where does the cross come down, and who gets to it?
+			humans = [Human.new()]
+			humans[0].team = 0
+			for st in [Vector2.ZERO, Vector2(0, 1), Vector2(0, -1), Vector2(-1, 0), Vector2(0.7, 0.7)]:
+				for rep in 3:
+					_kickoff(0)
+					clock = 600.0
+					_out("corner", Vector3(HL - 0.6, 0, HW - 0.6), 0)
+					var w := 0.0
+					while not (state == "play" and set_piece == "corner" and ball_owner != null) and w < 8.0:
+						_tick(1.0 / 60.0)
+						w += 1.0 / 60.0
+					var tk = ball_owner
+					humans[0].ctrl = tk
+					humans[0].stick = st
+					var aim := _corner_aim(tk, st)
+					humans[0].evs.append("lob_down")
+					_tick(1.0 / 60.0)
+					humans[0].evs.append("lob_up")
+					_tick(1.0 / 60.0)
+					var t5 := 0.0
+					var drop := Vector3.ZERO
+					var was := ball.position.y
+					while t5 < 3.0 and ball_owner == null and state == "play":
+						_tick(1.0 / 60.0)
+						t5 += 1.0 / 60.0
+						if ball_last == tk and (drop == Vector3.ZERO or Vector2(ball.position.x - aim.x, ball.position.z - aim.z).length() < Vector2(drop.x - aim.x, drop.z - aim.z).length()):
+							drop = ball.position
+						was = ball.position.y
+					var who := "loose"
+					if ball_owner != null:
+						who = "ours" if ball_owner.team == 0 else "theirs"
+					elif ball_last != null and ball_last != tk:
+						who = ("ours" if ball_last.team == 0 else "theirs") + "-touch"
+					print("CORNERTEST stick=", st, " aim=", Vector2(snappedf(aim.x, 0.1), snappedf(aim.z, 0.1)), " nearest=", Vector3(snappedf(drop.x, 0.1), snappedf(drop.y, 0.1), snappedf(drop.z, 0.1)), " taker_human=", _hum_of(tk) != null, " -> ", who, " state=", state)
 			get_tree().quit()
 			return
 		if OS.get_cmdline_user_args().has("--thrudef"):
@@ -1023,6 +1090,12 @@ func _ready() -> void:
 				for rr in 3:
 					_sim_mine()
 				var rsrc = proc if rp[2] == "p" else carc
+				if OS.get_environment("RVOOP") != "" and rp[2] == "m":
+					# a forward in defence and a defender up front: out of position on purpose
+					var xo: Array = carc.d["xi"]
+					var t0 = xo[2]
+					xo[2] = xo[9]
+					xo[9] = t0
 				if OS.get_environment("RVNAT") != "" and rp[2] == "m":
 					carc.nat_take(int(OS.get_environment("RVNAT")))
 				if rwho == "h":
@@ -1136,11 +1209,11 @@ func _ready() -> void:
 				car.mail_read(mail_sel)
 				menu_arg = "inbox"
 			if menu_arg in ["etest0", "etest1", "etest2", "etest3", "etest4"]:
-				var top0: int = int(ClubDB.start_leagues(Career.FIRST)[0][1])
+				var top0: int = int(ClubDB.start_leagues(Career.FIRST)[0][int(OS.get_environment("ETI")) if OS.get_environment("ETI") != "" else 1])
 				carc.new_career(top0, false)
 				carc.set_mode("full")
 				_cr_enter(false)
-				print("EU in: ", not car.eu().is_empty(), " group ", car.eu().get("gl", "-"), " md0 after round ", car.eu_after(0), " day ", car.date_text(car.eu_day(0)))
+				print("EU in: ", not car.eu().is_empty(), " ", car.eu_name() if not car.eu().is_empty() else "", " group ", car.eu().get("gl", "-"), " md0 after round ", car.eu_after(0), " day ", car.date_text(car.eu_day(0)))
 				var et := menu_arg
 				var stop_md: int = {"etest0": 0, "etest1": 3, "etest2": 8, "etest3": 2, "etest4": 99}[et]
 				var guard := 0
@@ -1714,6 +1787,21 @@ func _ready() -> void:
 				_cr_enter(false)
 				car.d["coins"] = 99999
 				car.d["wb"] = 9999
+				# who would come to a Division 4 club: per league, how many say no
+				print("NO my strength ", car.my_strength())
+				for li9 in 6:
+					var nno := 0
+					var nall := 0
+					var ex9 := ""
+					for c9 in car.ids(li9):
+						var cs9: Array = car.cpu_squad(int(c9))
+						for j9 in cs9.size():
+							nall += 1
+							var r9: String = car.refuses(cs9[j9], int(c9))
+							if r9 != "":
+								nno += 1
+								ex9 = "%s %d: %s" % [str(cs9[j9]["n"]), Career.ovr_of(cs9[j9]), r9]
+					print("NO league ", li9, " ", nno, "/", nall, " e.g. ", ex9)
 				var c0: int = car.ids()[1] if car.ids()[0] == int(car.d["club"]) else car.ids()[0]
 				var n0: int = (car.d["squad"] as Array).size()
 				# a swap: my man 5 + money for their man 3 (simple path: no contract talk)
@@ -2752,12 +2840,19 @@ func _car_info() -> Dictionary:
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
 			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"), "pos2": Career.pos2_of(pl), "rt": str(pl.get("rt", "")), "rtp": int(Career.rt_prog(pl, str(pl.get("rt", "")))), "rto": Career.rt_options(pl).size() > 1,
 			"cond": car.cond_of(pl) if car.eur else -1, "inj": car.injured(pl) if car.eur else false, "injt": car.inj_text(pl) if car.eur and car.injured(pl) else ""})
+	# where each man of the eleven plays now, and what it costs him when that is not his own place
+	var sr0: Array = car.slot_roles()
+	for k0 in mini((d["xi"] as Array).size(), sr0.size()):
+		var xi0 := int(d["xi"][k0])
+		if xi0 < squad.size():
+			squad[xi0]["sr"] = str(sr0[k0])
+			squad[xi0]["po"] = Career.pos_off(d["squad"][xi0], str(sr0[k0]))
 	var tp_all := 0
 	for pl in d["squad"]:
 		tp_all += int(pl.get("tp", 0))
 	var mk := []
 	for pl in car.market():
-		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl), "wk": Career.wage_of(pl)})
+		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl), "wk": Career.wage_of(pl), "no": car.refuses(pl, -1, true)})
 	var roles := _my_form(car.form(), car.lay())
 	return {
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
@@ -2769,7 +2864,7 @@ func _car_info() -> Dictionary:
 		"sacked": car.d.has("sacked"), "on": car.on(),
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "talk_rc": [0, car.clause_of_talk({"rc": 1, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))}), car.clause_of_talk({"rc": 2, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))})], "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
-		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 else 0,
+		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 and not bool(car.d.get("cupmode", false)) else 0,
 		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(), "nat_due": car.nat_due(), "natm": _natm_info(), "natp": _nat_info(),
 	}
 
@@ -2779,7 +2874,7 @@ func _eu_info() -> Dictionary:
 	if e.is_empty() or bool(car.d.get("cupmode", false)):
 		return {}
 	var me_c := int(car.d["club"])
-	var out := {"name": Career.EU_NAME, "md": int(e["md"]), "out": bool(e.get("out", false)), "done": bool(e.get("done", false)), "won": bool(e.get("won", false)),
+	var out := {"name": car.eu_name(), "k": car.eu_k(), "md": int(e["md"]), "out": bool(e.get("out", false)), "done": bool(e.get("done", false)), "won": bool(e.get("won", false)),
 		"win": str(CLUBS[int(e["win"])]["n"]).capitalize() if int(e.get("win", -1)) >= 0 else "", "gl": str(e.get("gl", "A")), "rname": car.eu_round_name() if not bool(e.get("done", false)) else "",
 		"day": car.date_text(car.eu_day(mini(int(e["md"]), 9)), true)}
 	if car.eu_due_ever():
@@ -2967,7 +3062,7 @@ func _scout_info() -> Dictionary:
 		for i in cs.size():
 			var pl: Dictionary = cs[i]
 			sq.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "age": int(pl["age"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]),
-				"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "ask": car.ask_price(scout_c, i), "ab": _ab_rows(Career.ab_of(pl)), "rc": car.cpu_clause(scout_c, i)})
+				"st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "ask": car.ask_price(scout_c, i), "ab": _ab_rows(Career.ab_of(pl)), "rc": car.cpu_clause(scout_c, i), "no": car.refuses(pl, scout_c, true)})
 	return {"li": scout_li, "c": scout_c, "i": scout_i, "cn": CLUBS[scout_c]["n"] if scout_c >= 0 else "", "ck": CLUBS[scout_c]["k"] if scout_c >= 0 else [],
 		"cr": car.rating(scout_c) if scout_c >= 0 else 0, "clg": car.league_name(car.league_of(scout_c)) if scout_c >= 0 else "", "sq": sq, "res": scout_res, "sw": _swap_info()}
 
@@ -3083,6 +3178,14 @@ func _to_menu(keep_net := false) -> void:
 func _apply_own() -> void:
 	_apply_own0()
 	# the friend's phone: the host's own club looks the same here
+	if carv != null and car != carv and net.role == "guest" and carv.has_save():
+		# Playing in the host's career, this phone's own club must not sit in the host's world: it took the place
+		# of a real club here, and that club may be the very opponent (Daniel's dad saw another team).
+		if car.has_save() and car.d.has("own"):
+			var mi := int(car.d["club"])
+			var base: Array = ClubDB.clubs(CLUBS0)
+			if mi >= 0 and mi < base.size():
+				CLUBS[mi] = base[mi]
 	if carv != null and car != carv and net.role == "guest" and carv.has_save() and carv.d.has("own"):
 		var o: Dictionary = carv.d["own"]
 		var k: Array = o["k"]
@@ -3188,9 +3291,9 @@ func _pro_enter(show := true) -> void:
 		q_opt = [opt_diff, opt_len]
 	in_career = true
 	car = proc
-	car.pro_select("pro", car.pro2())
+	car.pro_select("pro")
 	if car.pro2():
-		car.pro_select("pro2", true)
+		car.pro_select("pro2")
 	_apply_own()
 	hub_tab = "career"
 	car_sel = -1
@@ -3377,6 +3480,9 @@ func _action(act: String, arg = null) -> void:
 			car.set_cfg("len", int(arg))
 			hud.refresh(_menu_info())
 		"c_sim":
+			if _not_match_day():
+				_action("c_adv")
+				return
 			_sim_mine()
 		"c_adv":
 			# FIFA's ADVANCE: day by day to the next news or to match day
@@ -3558,6 +3664,10 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_play":
+			if _not_match_day():
+				# no match before match day: the days go by first
+				_action("c_adv")
+				return
 			if net.role == "host" and net.connected and in_career and (car == carc or car == proc):
 				# together: the match starts when both have tapped PLAY
 				co_rdy[0] = not co_rdy[0]
@@ -4488,10 +4598,13 @@ func _host_start() -> void:
 		hud.refresh(_menu_info())
 		return
 	if career_on and car.pro():
-		# the player career together: the manager plays you both, each thumb on his own man
-		car.pro_select("pro", true)
+		# The player career together: the manager picks you like anyone else, so one of you can be on the
+		# bench (then that thumb plays like a normal match, switching between the others). Never both.
+		car.pro_select("pro")
 		if car.pro2():
-			car.pro_select("pro2", true)
+			car.pro_select("pro2")
+			if not car.pro_starts() and not car.pro_starts("pro2"):
+				car.pro_select("pro", true)
 		pro_sq = car.pro_i()
 		pro_sq2 = car.pro_i("pro2")
 	cup_on = career_on and car.cup_due()
@@ -4577,6 +4690,13 @@ func _guest_start(m: Dictionary) -> void:
 	me = 1
 	view_flip = 1.0 if h1.team == 0 else -1.0
 	var cl: Array = m.get("clubs", [0, 1])
+	if car.has_save() and car.d.has("own") and not ft_on and not rk_on:
+		# this phone's own club sits in place of a real club of the host's world: show that club as it is
+		var mi := int(car.d["club"])
+		if mi == int(cl[1]) or (mi == int(cl[0]) and not (carv.has_save() and carv.d.has("own") and int(carv.d["club"]) == mi)):
+			var base0: Array = ClubDB.clubs(CLUBS0)
+			if mi >= 0 and mi < base0.size():
+				CLUBS[mi] = base0[mi]
 	sq_over = m.get("sq", [])
 	sq1_over = m.get("sq1", [])
 	co_got = false
@@ -5274,6 +5394,35 @@ func _corner_setup(team: int, taker, pos: Vector3) -> void:
 		back += 1
 
 # Who a corner is swung in to: a man in the box, the less marked the better.
+# A corner you take yourself goes where you point: stick at rest = round the penalty spot, towards the near
+# post, the far post or back to the edge of the box. The man nearest that spot attacks it.
+var cross_spot = null
+
+func _corner_aim(p, st: Vector2) -> Vector3:
+	var s := side(p.team)
+	var gx := HL * s
+	var a := Vector3(gx - s * 8.5, 0, 0) + Vector3(st.x, 0, st.y).limit_length(1.0) * 8.0
+	a.x = clampf(a.x, minf(gx - s * 19.0, gx - s * 2.5), maxf(gx - s * 19.0, gx - s * 2.5))
+	a.z = clampf(a.z, -11.0, 11.0)
+	return a
+
+func _human_cross(h):
+	var p = h.ctrl
+	var a := _corner_aim(p, h.stick)
+	var best = null
+	var bd := 1e9
+	for m in teams[p.team]:
+		if m == p or m.off or m.role == "GK":
+			continue
+		var d: float = m.position.distance_to(a)
+		if d < bd:
+			bd = d
+			best = m
+	if best == null:
+		return _cross_target(p)
+	cross_spot = a
+	return best
+
 func _cross_target(p):
 	var s := side(p.team)
 	var best = null
@@ -5455,7 +5604,7 @@ func _nearest_human(t: int, pos: Vector3):
 	var best = null
 	var bd := 1e9
 	for h in humans:
-		if h.team != t:
+		if h.team != t or _locked(h):
 			continue
 		var d: float = h.ctrl.position.distance_to(pos) if h.ctrl != null else 1e6
 		if d < bd:
@@ -5463,12 +5612,14 @@ func _nearest_human(t: int, pos: Vector3):
 			best = h
 	return best
 
+# a thumb on its own man in the player career (not one on the bench) is never switched
+func _locked(h) -> bool:
+	return h.psq >= 0 and _pro_man(h) != null
+
 func _assign_defenders(t: int, force: bool) -> void:
-	if pro_sq >= 0 and t == 0:
-		return
 	var hs := []
 	for h in humans:
-		if h.team == t and (force or h.switch_cool <= 0.0):
+		if h.team == t and (force or h.switch_cool <= 0.0) and not _locked(h):
 			if h.pick_t > 0.0 and h.ctrl != null and not h.ctrl.off and h.ctrl.role != "GK":
 				continue # he picked this man himself a moment ago
 			hs.append(h)
@@ -5625,8 +5776,6 @@ func _switch(h) -> void:
 
 # the other side plays a pass: put a defender who can get to the receiver under a thumb, like FIFA's auto switch
 func _switch_for_pass(t: int, m) -> void:
-	if pro_sq >= 0 and t == 0:
-		return
 	var own_goal := Vector3(-HL * side(t), 0, 0)
 	var spot: Vector3 = m.position + (own_goal - m.position).normalized() * 2.0
 	var best = null
@@ -5643,7 +5792,7 @@ func _switch_for_pass(t: int, m) -> void:
 	var hw = null
 	var worst := 0.0
 	for h in humans:
-		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0 and h.pick_t <= 0.0:
+		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0 and h.pick_t <= 0.0 and not _locked(h):
 			# a man who stands in the path of the pass, or close to the receiver, is kept: he can win it himself
 			var ln: Vector3 = m.position - ball.position
 			ln.y = 0.0
@@ -5985,7 +6134,7 @@ func _play(dt: float) -> void:
 				if h.thru_hold >= 0.0 and ball_owner == h.ctrl:
 					var tpw: float = clampf(h.thru_hold / 0.6, 0.0, 1.0)
 					pass_pw = tpw
-					var mt = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(tpw, 0.01), true)
+					var mt = _human_cross(h) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(tpw, 0.01), true)
 					if mt == null and set_piece != "":
 						mt = _pass_target(h.ctrl, Vector3.ZERO, false)
 					if mt != null:
@@ -6002,7 +6151,7 @@ func _play(dt: float) -> void:
 					h.ot = 3
 					h.ot_t = 1.6
 				elif mine and set_piece in ["corner", "throw"]:
-					var cm = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false)
+					var cm = _human_cross(h) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false)
 					if cm != null:
 						_pass(h.ctrl, cm, true, set_piece == "corner")
 				elif mine:
@@ -6031,6 +6180,12 @@ func _play(dt: float) -> void:
 				elif coming:
 					h.ot = 1
 					h.ot_t = 1.6
+				elif h.psq >= 0 and _pro_man(h) != null:
+					# your own player: one tap and he runs his own position (Daniel: a tap, not a hold); with a team
+					# mate on the ball the same tap also calls for it, and he moves into space to get it
+					h.auto_on = true
+					if ball_owner != null and ball_owner.team == h.team and ball_owner != h.ctrl:
+						_switch(h)
 				else:
 					_switch(h)
 			elif e == "pass_up":
@@ -6055,7 +6210,7 @@ func _play(dt: float) -> void:
 				# the high ball has its own button: the longer the hold, the further the man it looks for
 				if h.lob_hold >= 0.0 and ball_owner == h.ctrl:
 					var lpw: float = clampf(h.lob_hold / 0.6, 0.0, 1.0)
-					var ml = _cross_target(h.ctrl) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(0.3 + 0.7 * lpw, 0.01))
+					var ml = _human_cross(h) if set_piece == "corner" else _pass_target(h.ctrl, dir3, false, maxf(0.3 + 0.7 * lpw, 0.01))
 					if ml == null and set_piece != "":
 						ml = _pass_target(h.ctrl, Vector3.ZERO, false)
 					if ml != null:
@@ -6077,6 +6232,8 @@ func _play(dt: float) -> void:
 			h.thru_hold = -1.0
 		if h.thru_hold >= 0.0:
 			h.thru_hold += dt
+		if h.auto_on and (ball_owner == h.ctrl or h.stick.length() > 0.3 or not _locked(h)):
+			h.auto_on = false # the ball is his, or you steer him again
 		if h.pass_hold >= 0.0:
 			h.pass_hold += dt
 		if h.lob_hold >= 0.0:
@@ -6231,6 +6388,10 @@ func _play(dt: float) -> void:
 				var ma := _meet_for(p, aim)
 				want = _run_to(p, ma, p.top_speed)
 				h.stam = clampf(h.stam + 0.16 * dt, 0.0, 1.0)
+			elif h.auto_on and ball_owner != p and set_piece == "":
+				# auto-positioning: he moves like the computer would move him (runs, support, his place in the shape)
+				want = _ai_offball(p, chaser, second, aim)
+				h.stam = clampf(h.stam + 0.1 * dt, 0.0, 1.0)
 			else:
 				var run: bool = h.sprint and not h.tired and h.stick.length() > 0.3
 				h.stam = clampf(h.stam + (-0.125 if run else 0.16) * dt, 0.0, 1.0)
@@ -6635,7 +6796,8 @@ func _full_time() -> void:
 			if h9.psq < 0:
 				continue
 			var k9 := "pro" if hi == 0 else "pro2"
-			var l9: Array = car.pro_after(_pro_rating(h9, k9), int(h9.ptrk.get("g", 0)), int(h9.ptrk.get("a", 0)), true, true, k9)
+			var on_p: bool = _pro_man(h9) != null
+			var l9: Array = car.pro_after(_pro_rating(h9, k9), int(h9.ptrk.get("g", 0)), int(h9.ptrk.get("a", 0)), on_p, on_p, k9)
 			if hi == 0:
 				pl9 = l9
 			elif co_pay.size() > 2:
@@ -6643,8 +6805,8 @@ func _full_time() -> void:
 				co_pay[2] = l9 + (co_pay[2] as Array)
 		car_lines = pl9 + _pro_lines(car_lines)
 		if car.pro2():
-			car.pro_select("pro", true)
-			car.pro_select("pro2", true)
+			car.pro_select("pro")
+			car.pro_select("pro2")
 		if has_meta("pro_fast"):
 			print("PRO full time lines=", car_lines.slice(0, 4), " pro2 lv=", car.pro_lv("pro2"), " xp=", car.pro_d("pro2").get("pxp"), " co2=", (co_pay[2] as Array).slice(0, 3) if co_pay.size() > 2 else [])
 		car.pro_select()
@@ -7235,9 +7397,13 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		fb = 0.03
 	elif cross:
 		# whipped in to arrive at head height
-		var vc := clampf(11.0 + d * 0.32, 15.0, 22.0)
-		var tc := d / vc
-		var aim4: Vector3 = m.position + m.vel * tc * 0.5
+		var aim4: Vector3 = m.position + m.vel * (d / clampf(11.0 + d * 0.32, 15.0, 22.0)) * 0.5
+		if cross_spot is Vector3:
+			aim4 = cross_spot
+			cross_spot = null
+		var dc: float = Vector2(aim4.x - p.position.x, aim4.z - p.position.z).length()
+		var vc := clampf(11.0 + dc * 0.32, 15.0, 22.0)
+		var tc := dc / vc
 		var dir4: Vector3 = aim4 - p.position
 		dir4.y = 0.0
 		tc = dir4.length() / vc
@@ -9325,6 +9491,11 @@ func _process(dt: float) -> void:
 			if absf(lp.x) < HL and absf(lp.z) < HW:
 				land_ring.position = Vector3(lp.x, 0.05, lp.z)
 				show_ring = true
+	if not show_ring and state == "play" and set_piece == "corner" and screen == "match" and humans.size() > me and humans[me].ctrl != null and ball_owner == humans[me].ctrl:
+		# your corner: the ring shows where your cross will drop, and moves with the stick
+		var ca := _corner_aim(humans[me].ctrl, _stick() * view_flip)
+		land_ring.position = Vector3(ca.x, 0.05, ca.z)
+		show_ring = true
 	land_ring.visible = show_ring
 	var mv := 0.0
 	if humans.size() > me and humans[me].ctrl != null and state == "play" and screen == "match":
@@ -9391,7 +9562,9 @@ func _process(dt: float) -> void:
 			hud.lab_b = "PASS" if mine2 else "SWITCH"
 			if hm.psq >= 0:
 				# the player career: you are one man, so no switching. With the ball at a team mate you call for it
-				hud.lab_b = "PASS" if mine2 else ("CALL" if ours else "")
+				hud.lab_b = "PASS" if mine2 else ("AUTO ON" if hm.auto_on else ("CALL" if ours else "AUTO"))
+				if _pro_man(hm) == null:
+					hud.lab_b = "PASS" if mine2 else "SWITCH" # on the bench: you help like in a normal match
 			hud.charge = hm.charge
 			hud.stam = hm.stam
 			hud.ctrl_name = ("%d  %s  %d" % [hm.ctrl.num, hm.ctrl.pname.to_upper(), hm.ctrl.ovr]) if hm.ctrl != null else ""
@@ -10130,6 +10303,15 @@ func _car_opts() -> void:
 		opt_len = int(car.d.get("len", 1))
 
 # Simulate your next match instead of playing it: the score comes from the two squads' strength.
+# a career day that is not match day yet: PLAY and SIMULATE wait, the days have to go by first
+func _not_match_day() -> bool:
+	if not in_career or (car != carc and car != proc) or assist or net.role == "guest":
+		return false
+	if bool(car.d.get("cupmode", false)):
+		return false
+	var nd: int = car.next_day()
+	return nd >= 0 and car.now() < nd
+
 func _sim_mine() -> void:
 	if in_career and car == carc and not assist and net.role != "guest" and not car.cup_due() and not car.eu_due() and car.nat_due():
 		# the country plays (even when the club has let you go)
@@ -10148,9 +10330,9 @@ func _sim_mine() -> void:
 	if opp < 0:
 		return
 	if car.pro() and car.pro2():
-		# together the manager plays you both
-		car.pro_select("pro", true)
-		car.pro_select("pro2", true)
+		# together: the manager picks you both like anyone else (never the bench for long)
+		car.pro_select("pro")
+		car.pro_select("pro2")
 	var r: Array = car.sim_match(opp, home)
 	# the player career: did you play, and how well? (together: both of you, each his own man)
 	var pro_l: Array = []
@@ -10190,7 +10372,7 @@ func _sim_mine() -> void:
 		so_win = 0 if randf() < clampf(0.5 + df, 0.2, 0.8) else 1
 		pens = "Won on penalties" if so_win == 0 else "Lost on penalties"
 	var date: String = car.date_text(car.next_day(), true)
-	var what: String = (car.cup_name().capitalize() + ", " + car.cup_round_name().capitalize()) if cupt else ((Career.EU_NAME.capitalize() + ", " + car.eu_round_name().capitalize()) if eut else (car.league_name().capitalize() + ", round %d" % (int(car.d["round"]) + 1)))
+	var what: String = (car.cup_name().capitalize() + ", " + car.cup_round_name().capitalize()) if cupt else ((car.eu_name().capitalize() + ", " + car.eu_round_name().capitalize()) if eut else (car.league_name().capitalize() + ", round %d" % (int(car.d["round"]) + 1)))
 	if cupt:
 		car_lines = car.cup_finish(score[0], score[1], so_win == 0)
 		_car_coins(false)
@@ -10203,9 +10385,9 @@ func _sim_mine() -> void:
 		_car_coins(true)
 	if car.pro():
 		car_lines = pro_l + _pro_lines(car_lines)
-		car.pro_select("pro", car.pro2())
+		car.pro_select("pro")
 		if car.pro2():
-			car.pro_select("pro2", true)
+			car.pro_select("pro2")
 		car.save()
 	adv_from = car.today()
 	var me_c := int(car.d["club"])
@@ -10423,7 +10605,7 @@ func _adv_show(from: int, to := -99) -> void:
 		if car.cup_due():
 			nxt_t = "%s, %s" % [car.cup_name().capitalize(), car.cup_round_name().capitalize()]
 		elif car.eu_due():
-			nxt_t = Career.EU_NAME.capitalize()
+			nxt_t = car.eu_name().capitalize()
 		elif car.nat_due():
 			nxt_t = "%s v %s" % [Career.nat_name(int(car.nat()["n"])).capitalize(), Career.nat_name(int(car.nat_opp()[0])).capitalize()]
 		elif not car.season_over():
@@ -10448,7 +10630,7 @@ func _adv_show(from: int, to := -99) -> void:
 		nxt = "%s, %s v %s" % [car.cup_name().capitalize(), car.cup_round_name().capitalize(), str(CLUBS[co]["n"]).capitalize() if co >= 0 else "?"]
 	elif car.eu_due():
 		var eo2: Array = car.eu_opp()
-		nxt = "%s v %s, %s" % [Career.EU_NAME.capitalize(), str(CLUBS[int(eo2[0])]["n"]).capitalize() if int(eo2[0]) >= 0 else "?", "home" if bool(eo2[1]) else "away"]
+		nxt = "%s v %s, %s" % [car.eu_name().capitalize(), str(CLUBS[int(eo2[0])]["n"]).capitalize() if int(eo2[0]) >= 0 else "?", "home" if bool(eo2[1]) else "away"]
 	elif car.nat_due():
 		var no2: Array = car.nat_opp()
 		nxt = "%s v %s, %s" % [Career.nat_name(int(car.nat()["n"])).capitalize(), Career.nat_name(int(no2[0])).capitalize(), str(no2[2]).capitalize()]

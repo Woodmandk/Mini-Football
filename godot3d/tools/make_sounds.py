@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Makes every match sound of Pitch Boss as .ogg files in godot3d/snd/.
+# Makes every match sound of Pitch Boss as .wav files in godot3d/snd/ (imported as QOA).
 # Nothing is recorded: crowds are thousands of synthetic voices, the ball is a struck leather shell,
 # the whistle is a pea whistle, and a stadium reverb is baked in. Run again after changing it:
 #   python3 godot3d/tools/make_sounds.py
@@ -56,7 +56,7 @@ def glottal(f0):
 	saw = 2.0 * (ph - np.floor(ph)) - 1.0
 	# soften the edge a little so it is a throat, not a buzzer
 	saw = saw - 0.3 * np.sin(2 * np.pi * ph)
-	return saw + 0.35 * rng.standard_normal(len(f0))
+	return saw + 0.06 * rng.standard_normal(len(f0))
 
 class Bank:
 	"""Voices are summed per vowel and per distance, then each sum is filtered once."""
@@ -150,8 +150,10 @@ def save(name, x, q=4):
 		w.setsampwidth(2)
 		w.setframerate(SR)
 		w.writeframes(pcm.tobytes())
-	subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tmp, "-c:a", "libvorbis", "-q:a", str(q), os.path.join(OUT, name + ".ogg")], check=True)
-	os.remove(tmp)
+	# crowds are dark anyway: 22 kHz is plenty. Godot imports these as QOA (cheap to play on a phone).
+	if name.startswith(("crowd", "chant", "claps", "roar", "clap", "ooh", "aww", "gasp", "cheer", "jeer")):
+		subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", tmp, "-ar", "22050", "-c:a", "pcm_s16le", tmp + ".r.wav"], check=True)
+		os.replace(tmp + ".r.wav", tmp)
 	print("%-14s %5.1f s" % (name, len(x) / SR))
 
 def loop_mod(n, depth, periods):
@@ -208,10 +210,10 @@ def crowd_bed(sec, density, shout_k, excite, name):
 		s = np.sin(2 * np.pi * np.cumsum(fw) / SR) * env_adsr(ln, 0.04, 0.12) * rng.uniform(0.1, 0.25)
 		idx = (rng.integers(0, n) + np.arange(ln)) % n
 		whis[idx] += s
-	mix = v * 0.9 + mass * (0.45 - 0.15 * excite) + claps / (np.std(claps) + 1e-9) * 0.12 + whis * 0.6
+	mix = v * 1.0 + mass * 0.0 + claps / (np.std(claps) + 1e-9) * 0.05 + whis * 0.6
 	mix *= loop_mod(n, 0.14 + 0.1 * excite, [1, 2, 3, 5])
 	# no reverb on the bed: in an open ground the crowd is all round you, not echoing
-	mix = ffilt(mix, lp(f, 3200 + 800 * excite, 3))
+	mix = ffilt(mix, lp(f, 2600 + 800 * excite, 3) * hp(f, 120, 2))
 	save(name, norm(mix, 0.7))
 
 # ---------------------------------------------------------------- the chant (looping)
@@ -325,6 +327,8 @@ def reaction(sec, n_voices, f0k, shape, vowel_p, env_fn, bright, name, wet=0.4, 
 	x /= np.std(x[: int(min(sec, 1.5) * SR)]) + 1e-9
 	t = np.arange(n) / SR
 	x *= env_fn(t)
+	# voices only: everything above ~3 kHz is just hiss once thousands of them add up
+	x = ffilt(x, lp(freqs(n), 2800 * bright ** 0.3, 3) * hp(freqs(n), 120, 2))
 	if extra is not None:
 		x += extra(n)
 	save(name, norm(reverb(x, wet=wet, rt=2.0, tail=1.8), 0.89))
@@ -531,7 +535,7 @@ def ui_sounds():
 if __name__ == "__main__":
 	only = sys.argv[1:]
 	jobs = {
-		"beds": lambda: (crowd_bed(24.0, 260, 0.05, 0.0, "crowd"), crowd_bed(20.0, 420, 0.3, 0.6, "crowd_hot")),
+		"beds": lambda: (crowd_bed(24.0, 150, 0.06, 0.0, "crowd"), crowd_bed(20.0, 300, 0.3, 0.5, "crowd_hot")),
 		"chant": lambda: (chant(), clap_rhythm()),
 		"react": crowd_one_shots,
 		"ball": ball_sounds,

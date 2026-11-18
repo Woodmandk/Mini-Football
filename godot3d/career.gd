@@ -318,7 +318,7 @@ func new_career(c: int, own := false, slen := "full") -> void:
 	cup_new()
 	board()
 	market_refresh()
-	eu_new(_eu_quals_by_rating())
+	eu_start(_eu_quals_by_rating(), _eu2_quals_by_rating())
 	world_tick([])
 	save()
 
@@ -727,6 +727,7 @@ func next_season() -> void:
 	var gone := _contracts_end()
 	var mv0 := int(d.get("move", 0))
 	var quals := _eu_quals_final()
+	var quals2 := _eu2_quals_final(bool(d.get("cup", {}).get("won", false)))
 	d["season"] = int(d["season"]) + 1
 	_move_clubs()
 	d["lg"] = league_of(int(d["club"]))
@@ -759,7 +760,7 @@ func next_season() -> void:
 			d["wb"] = maxi(wages(), int(round(int(d["wb"]) * 0.85)))
 	if not gone.is_empty():
 		d["note"] = "CONTRACTS RAN OUT: %s LEFT ON A FREE." % ", ".join(PackedStringArray(gone))
-	eu_new(quals)
+	eu_start(quals, quals2)
 	_nat_season()
 	d["wlast"] = -999
 	world_tick([])
@@ -999,6 +1000,8 @@ func buy(i: int) -> String:
 	var price := value(pl)
 	if window_msg() != "":
 		return window_msg()
+	if refuses(pl) != "":
+		return refuses(pl)
 	if (d["squad"] as Array).size() >= SQUAD_MAX:
 		return "Your squad is full. Sell a player from the bench first."
 	if int(d["coins"]) < price:
@@ -2486,12 +2489,45 @@ func ask_price(c: int, i: int) -> int:
 # You bid for player i of club c. Returns {ok, msg, counter}.
 # Deals as in FIFA: "so" leaves them a sell-on share (they take less now), "swap" puts one of your men in the deal
 # (his worth to them comes off the price), "rc" pays his release clause (no talk with the club at all).
+# ---------------------------------------------------------------- will he come? A star does not drop down
+# As in FIFA a good player looks at where he would play. He will not drop down a level (a regular in a better
+# league does not join a club in a lower one) and a star will not join a club far below his own level. A man over 30
+# is less fussy, and a club in Europe this season looks bigger.
+static func league_prestige(li: int) -> int:
+	if li < 0 or li >= ClubDB.LEAGUES.size():
+		return 1
+	return int(ClubDB.LEAGUES[li]["t"]) + (1 if str(ClubDB.LEAGUES[li]["c"]) == "DENMARK" else 0)
+
+func club_prestige(c: int) -> int:
+	if c == int(d["club"]):
+		return league_prestige(int(d.get("lg", league_of(c))))
+	return league_prestige(league_of(c)) if league_of(c) >= 0 else 1
+
+# why he says no to your club, or "" when he would come
+func refuses(pl: Dictionary, from_c := -1, short := false) -> String:
+	if bool(d.get("cupmode", false)) or not d.has("leagues") or bool(pl.get("me", false)):
+		return ""
+	var ovr := ovr_of(pl)
+	var age := int(pl.get("age", 25))
+	var in_eu := 1 if not eu().is_empty() and bool(eu().get("me", false)) and not bool(eu().get("done", false)) else 0
+	var gap := 9 + (4 if age >= 31 else 0) + 3 * in_eu + (2 if in_eu == 1 and eu_k() == 0 else 0)
+	if ovr >= my_strength() + gap:
+		return "Your club is too small for him" if short else "%s SAYS NO: %s IS NOT BIG ENOUGH FOR A PLAYER OF HIS LEVEL." % [str(pl["n"]).to_upper(), str(W[int(d["club"])]["n"])]
+	if from_c >= 0 and age < 31:
+		var drop := club_prestige(int(d["club"])) - club_prestige(from_c) - in_eu
+		if drop >= 1 and ovr >= rating(from_c) - 2:
+			return ("He won't drop down to %s" % league_name().capitalize()) if short else "%s SAYS NO: HE WILL NOT DROP DOWN TO %s." % [str(pl["n"]).to_upper(), league_name()]
+	return ""
+
 func bid(c: int, i: int, amount: int, ex := {}) -> Dictionary:
 	var sq := cpu_squad(c)
 	if i < 0 or i >= sq.size():
 		return {"ok": false, "msg": ""}
 	if window_msg() != "":
 		return {"ok": false, "msg": window_msg()}
+	var no := refuses(sq[i], c)
+	if no != "":
+		return {"ok": false, "msg": no}
 	var swap := str(ex.get("swap", ""))
 	if (d["squad"] as Array).size() >= SQUAD_MAX and swap == "":
 		return {"ok": false, "msg": "Your squad is full. Sell a player first."}
@@ -3938,6 +3974,10 @@ func _rec_season(pos: int) -> void:
 # (home and away, top two go through), then the last 16, quarter-finals, semi-finals and a final, one match each,
 # with extra time and penalties. The European nights are Tuesdays, never in a week with a domestic cup tie.
 const EU_NAME := "THE CHAMPIONS CUP"
+# Europe has two cups, as in real life: the Champions Cup for the very best, the Euro Trophy (Thursday nights) for
+# the clubs just under them. England's 5th to 7th, Denmark's 3rd to 5th and a club that won its domestic cup go there.
+const EU_NAMES := ["THE CHAMPIONS CUP", "THE EURO TROPHY"]
+const EU_PAY_K := [1.0, 0.45]
 const EU_RD := ["GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "GROUP STAGE", "LAST 16", "QUARTER-FINAL", "SEMI-FINAL", "FINAL"]
 const EU_FR := [0.10, 0.17, 0.24, 0.31, 0.38, 0.45, 0.60, 0.70, 0.80, 0.93]
 const EU_GS := [[[0, 1], [2, 3]], [[2, 0], [1, 3]], [[0, 3], [2, 1]], [[1, 0], [3, 2]], [[0, 2], [3, 1]], [[3, 0], [1, 2]]]
@@ -3945,6 +3985,13 @@ const EU_PAY := {"start": 300, "win": 50, "draw": 20, "ko": [120, 200, 320, 600]
 
 func eu() -> Dictionary:
 	return d.get("eu", {})
+
+# which of the two cups you are in this season (0 = Champions Cup, 1 = Euro Trophy)
+func eu_k() -> int:
+	return clampi(int(eu().get("k", 0)), 0, 1)
+
+func eu_name() -> String:
+	return EU_NAMES[eu_k()]
 
 func eu_round_name(md := -1) -> String:
 	var e := eu()
@@ -3967,9 +4014,9 @@ func eu_after(md: int) -> int:
 		r = mini(r + 1, n - 1)
 	return r
 
-# a Tuesday, three days after that league round
+# a Tuesday (Champions Cup) or a Thursday (Euro Trophy) after that league round
 func eu_day(md: int) -> int:
-	return lg_day(eu_after(md) - 1) + 3
+	return lg_day(eu_after(md) - 1) + (3 if eu_k() == 0 else 5)
 
 func eu_due_ever() -> bool:
 	var e := eu()
@@ -4020,18 +4067,57 @@ func _eu_quals_final() -> Array:
 	out.append_array((fin[4] as Array).slice(0, 2))
 	return out
 
+# the Euro Trophy: the next ones down, by rating at the start of a career
+func _eu2_quals_by_rating() -> Array:
+	var out := []
+	for li in [0, 4]:
+		var cl := ids(li)
+		cl.sort_custom(func(a, b): return _strength(a) > _strength(b))
+		out.append_array(cl.slice(4, 7) if li == 0 else cl.slice(2, 5))
+	return out
+
+func _eu2_quals_final(cup_won: bool) -> Array:
+	var fin: Array = d.get("final", [])
+	if fin.size() != ClubDB.LEAGUES.size():
+		return _eu2_quals_by_rating()
+	var out := []
+	out.append_array((fin[0] as Array).slice(4, 7))
+	out.append_array((fin[4] as Array).slice(2, 5))
+	# the domestic cup winner plays in Europe too, whatever league he is in
+	var me := int(d["club"])
+	if cup_won and not out.has(me) and not _eu_quals_final().has(me):
+		out[out.size() - 1] = me
+	return out
+
+# this season's European place: the Champions Cup if you qualified, else the Euro Trophy, else nothing
+func eu_start(q1: Array, q2: Array) -> void:
+	if q1.has(int(d["club"])):
+		eu_new(q1, 0)
+	else:
+		eu_new(q2, 1)
+
 # a new Champions Cup for this season; it only runs when your club is in it
-func eu_new(quals: Array) -> void:
+func eu_new(quals: Array, k := 0) -> void:
 	var me := int(d["club"])
 	if bool(d.get("cupmode", false)) or not quals.has(me):
 		d.erase("eu")
 		return
 	var all := quals.duplicate()
+	# the best of Europe play in the Champions Cup, the next ones in the Euro Trophy
+	var fo := []
 	for c in ClubDB.foreign_ids(FIRST):
-		if all.size() >= 32:
-			break
 		if c < W.size():
-			all.append(c)
+			fo.append(c)
+	fo.sort_custom(func(a, b): return int(W[a]["r"]) > int(W[b]["r"]))
+	var need := 32 - all.size()
+	for c in (fo.slice(0, need) if k == 0 else fo.slice(26, 26 + need)):
+		all.append(c)
+	if all.size() < 32:
+		for c in fo:
+			if all.size() >= 32:
+				break
+			if not all.has(c):
+				all.append(c)
 	# four pots by strength; each group gets one club from each pot, never two from the same country
 	all.sort_custom(func(a, b): return rating(a) > rating(b))
 	var grp := []
@@ -4061,9 +4147,13 @@ func eu_new(quals: Array) -> void:
 	for g in 8:
 		if (grp[g] as Array).has(me):
 			gl = "ABCDEFGH"[g]
-	d["eu"] = {"grp": grp, "gt": gt, "md": 0, "ko": [], "log": [], "out": false, "done": false, "me": true, "gl": gl, "won": false, "win": -1}
-	d["coins"] = int(d["coins"]) + int(round(EU_PAY["start"]))
-	_mail("eu", "You are in %s" % EU_NAME.capitalize(), "Your club has a place in Europe's big cup: group %s. The European nights are Tuesdays. A start bonus of %s is in your budget." % [gl, money(int(round(EU_PAY["start"])))])
+	d["eu"] = {"grp": grp, "gt": gt, "md": 0, "ko": [], "log": [], "out": false, "done": false, "me": true, "gl": gl, "won": false, "win": -1, "k": k}
+	var st0 := int(round(EU_PAY["start"] * EU_PAY_K[k]))
+	d["coins"] = int(d["coins"]) + st0
+	if k == 0:
+		_mail("eu", "You are in %s" % eu_name().capitalize(), "Your club has a place in Europe's big cup: group %s. The European nights are Tuesdays. A start bonus of %s is in your budget." % [gl, money(st0)])
+	else:
+		_mail("eu", "You are in %s" % eu_name().capitalize(), "Your club plays in Europe's second cup: group %s. The Euro Trophy nights are Thursdays. Finish in the top four of the league for the Champions Cup. A start bonus of %s is in your budget." % [gl, money(st0)])
 
 func _eu_country(c: int) -> String:
 	if W[c].has("c"):
@@ -4157,9 +4247,9 @@ func _eu_night(mine: int, theirs: int, won_tie: bool, rng: RandomNumberGenerator
 			e["ko"] = ko
 			if bool(e["me"]) and not w.has(me) and not ru.has(me):
 				e["out"] = true
-				lines.append("OUT OF %s IN THE GROUP STAGE" % EU_NAME)
+				lines.append("OUT OF %s IN THE GROUP STAGE" % eu_name())
 			elif bool(e["me"]) and not bool(e["out"]):
-				lines.append("THROUGH TO THE LAST 16 OF %s!" % EU_NAME)
+				lines.append("THROUGH TO THE LAST 16 OF %s!" % eu_name())
 				_eu_pay(0, lines)
 	else:
 		var nxt := []
@@ -4183,20 +4273,21 @@ func _eu_night(mine: int, theirs: int, won_tie: bool, rng: RandomNumberGenerator
 			if int(nxt[0]) == me:
 				e["won"] = true
 				var stt: Dictionary = stats()
-				stt["eu"] = int(stt.get("eu", 0)) + 1
+				var sk := "eu" if eu_k() == 0 else "eu2"
+				stt[sk] = int(stt.get(sk, 0)) + 1
 				d["st"] = stt
-				_honour("eu", "Won %s" % EU_NAME.capitalize())
-				lines.append("CHAMPIONS OF EUROPE! YOU WON %s!" % EU_NAME)
+				_honour("eu" if eu_k() == 0 else "eu2", "Won %s" % eu_name().capitalize())
+				lines.append(("CHAMPIONS OF EUROPE! YOU WON %s!" if eu_k() == 0 else "YOU WON %s!") % eu_name())
 				_eu_pay(3, lines)
 				_conf_add(15)
 			else:
-				_mail("eu", "%s win %s" % [str(W[int(nxt[0])]["n"]).capitalize(), EU_NAME.capitalize()], "The final is over.")
+				_mail("eu", "%s win %s" % [str(W[int(nxt[0])]["n"]).capitalize(), eu_name().capitalize()], "The final is over.")
 		else:
 			if mine >= 0 and not nxt.has(me) and bool(e["me"]) and not bool(e["out"]):
 				e["out"] = true
-				lines.append("OUT OF %s IN THE %s" % [EU_NAME, EU_RD[md]])
+				lines.append("OUT OF %s IN THE %s" % [eu_name(), EU_RD[md]])
 			elif mine >= 0 and nxt.has(me):
-				lines.append("THROUGH TO THE %s OF %s!" % [EU_RD[md + 1], EU_NAME])
+				lines.append("THROUGH TO THE %s OF %s!" % [EU_RD[md + 1], eu_name()])
 				_eu_pay(md - 5, lines)
 				_conf_add(3)
 			var ko2 := []
@@ -4206,7 +4297,7 @@ func _eu_night(mine: int, theirs: int, won_tie: bool, rng: RandomNumberGenerator
 	e["md"] = md + 1
 
 func _eu_pay(k: int, lines: Array) -> void:
-	var p := int(round(EU_PAY["ko"][clampi(k, 0, 3)]))
+	var p := int(round(EU_PAY["ko"][clampi(k, 0, 3)] * EU_PAY_K[eu_k()]))
 	d["coins"] = int(d["coins"]) + p
 	lines.append("+%s FROM EUROPE" % money(p))
 
@@ -4230,7 +4321,7 @@ func eu_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var won: bool = mine > theirs or (mine == theirs and won_tie)
 	var coins := 0
 	if md < 6:
-		coins = int(round((EU_PAY["win"] if mine > theirs else (EU_PAY["draw"] if mine == theirs else 0))))
+		coins = int(round((EU_PAY["win"] if mine > theirs else (EU_PAY["draw"] if mine == theirs else 0)) * EU_PAY_K[eu_k()]))
 	coins += board_bonus(coins)
 	d["coins"] = int(d["coins"]) + coins
 	last_coins = coins
@@ -4324,7 +4415,7 @@ func _press_tick(rng: RandomNumberGenerator, lines: Array) -> void:
 				["The fans deserve a win. We will give everything.", {"tm": 2, "fan": 1}, "The fans and the players loved it."]]}
 	elif (eu_due() and eu_ko()) or cup_due():
 		topic = "big"
-		var what := ("%s, %s" % [EU_NAME.capitalize(), eu_round_name().capitalize()]) if eu_due() else "the cup tie"
+		var what := ("%s, %s" % [eu_name().capitalize(), eu_round_name().capitalize()]) if eu_due() else "the cup tie"
 		q = {"t": "A big night: %s" % what, "b": "The press ask what your message is to the players before %s." % what,
 			"o": [["We fear nobody. We go there to win.", {"tm": 4, "bold": 1}, "Bold. Win and the board will love it; lose and they remember."],
 				["We are the underdogs. No pressure on us.", {"tm": 1, "bd": 1}, "The pressure is off the players."],
@@ -4605,6 +4696,9 @@ func pro_select(k := "pro", force := false) -> void:
 	var me := pro_i(k)
 	if me < 0:
 		return
+	if int(pro_d(k).get("bn", 0)) >= 2 and not injured(d["squad"][me]):
+		# Never the bench for good (Daniel): after two matches without a start the manager gives you your chance
+		force = true
 	var other := pro_i("pro2" if k == "pro" else "pro")
 	var xi: Array = d["xi"]
 	var pl: Dictionary = d["squad"][me]
@@ -4670,6 +4764,8 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro
 		return lines
 	var ss: Dictionary = p["ss"]
 	var al: Dictionary = p["all"]
+	# matches in a row without a start: after two the manager starts him (pro_select)
+	p["bn"] = 0 if started else int(p.get("bn", 0)) + 1
 	if played:
 		rt = clampf(rt, 3.0, 10.0)
 		ss["apps"] = int(ss["apps"]) + 1
@@ -4687,7 +4783,7 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro
 		while rl.size() > 10:
 			rl.pop_front()
 		# the manager's trust: a good match lifts it, a bad one costs, more for a man who started
-		var dt := (rt - (6.3 if started else 5.9)) * (3.5 if started else 4.0)
+		var dt := (rt - (6.3 if started else 5.6)) * (3.5 if started else 4.0)
 		p["trust"] = clampi(int(round(int(p["trust"]) + dt)), 0, 100)
 		pl["fm"] = clampi(int(round(pform(pl) * 0.6 + (rt - 3.0) / 7.0 * 100.0 * 0.4)), 5, 99)
 		# experience: for playing, more for a good match, goals and assists
@@ -4695,7 +4791,9 @@ func pro_after(rt: float, g: int, a: int, played: bool, started: bool, k := "pro
 		_pro_xp(k, xg, lines)
 		lines.append("YOUR RATING %.1f%s" % [rt, ("  ·  %d GOAL%s" % [g, "" if g == 1 else "S"] if g > 0 else "") + ("  ·  %d ASSIST%s" % [a, "" if a == 1 else "S"] if a > 0 else "")])
 	else:
-		# not used: form fades, he keeps training (the club's training gives him experience)
+		# not used: form fades, he keeps training (the club's training gives him experience), and the
+		# manager sees him work: a little more trust each week
+		p["trust"] = clampi(int(p["trust"]) + 3, 0, 100)
 		lines.append("YOU DID NOT PLAY")
 		_pro_xp(k, 5, lines)
 	# the week's training: the drill you chose fills its bar, more when you sat on the bench
@@ -4928,9 +5026,9 @@ func pro_next_season() -> void:
 		pro_d(k)["ss"] = {"apps": 0, "st": 0, "g": 0, "a": 0, "rs": 0.0}
 		pro_d(k)["objd"] = []
 		_pro_goals(k)
-	pro_select("pro", pro2())
+	pro_select("pro")
 	if pro2():
-		pro_select("pro2", true)
+		pro_select("pro2")
 	save()
 
 # ---------------------------------------------------------------- the national team

@@ -11,6 +11,10 @@ boot_splash/image="res://splash.png"
 boot_splash/fullsize=false
 boot_splash/use_filter=true
 
+[audio]
+
+driver/output_latency.web=80
+
 [display]
 window/size/viewport_width=960
 window/size/viewport_height=540
