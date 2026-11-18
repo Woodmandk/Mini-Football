@@ -2740,7 +2740,7 @@ func _car_info() -> Dictionary:
 		"sacked": car.d.has("sacked"), "on": car.on(),
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "talk_rc": [0, car.clause_of_talk({"rc": 1, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))}), car.clause_of_talk({"rc": 2, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))})], "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
-		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 else 0,
+		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 and not bool(car.d.get("cupmode", false)) else 0,
 		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(), "nat_due": car.nat_due(), "natm": _natm_info(), "natp": _nat_info(),
 	}
 
@@ -3348,6 +3348,9 @@ func _action(act: String, arg = null) -> void:
 			car.set_cfg("len", int(arg))
 			hud.refresh(_menu_info())
 		"c_sim":
+			if _not_match_day():
+				_action("c_adv")
+				return
 			_sim_mine()
 		"c_adv":
 			# FIFA's ADVANCE: day by day to the next news or to match day
@@ -3529,6 +3532,10 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("", {})
 				_begin_match(true)
 		"c_play":
+			if _not_match_day():
+				# no match before match day: the days go by first
+				_action("c_adv")
+				return
 			if net.role == "host" and net.connected and in_career and (car == carc or car == proc):
 				# together: the match starts when both have tapped PLAY
 				co_rdy[0] = not co_rdy[0]
@@ -9627,6 +9634,15 @@ func _car_opts() -> void:
 		opt_len = int(car.d.get("len", 1))
 
 # Simulate your next match instead of playing it: the score comes from the two squads' strength.
+# a career day that is not match day yet: PLAY and SIMULATE wait, the days have to go by first
+func _not_match_day() -> bool:
+	if not in_career or (car != carc and car != proc) or assist or net.role == "guest":
+		return false
+	if bool(car.d.get("cupmode", false)):
+		return false
+	var nd: int = car.next_day()
+	return nd >= 0 and car.now() < nd
+
 func _sim_mine() -> void:
 	if in_career and car == carc and not assist and net.role != "guest" and not car.cup_due() and not car.eu_due() and car.nat_due():
 		# the country plays (even when the club has let you go)
