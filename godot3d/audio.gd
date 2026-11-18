@@ -53,7 +53,7 @@ func _ready() -> void:
 		var n: int = VAR.get(k, 1)
 		var arr := []
 		for i in n:
-			var f := "res://snd/%s%s.ogg" % [k, str(i) if n > 1 else ""]
+			var f := "res://snd/%s%s.wav" % [k, str(i) if n > 1 else ""]
 			var s = load(f)
 			if s != null:
 				arr.append(s)
@@ -69,9 +69,9 @@ func _ready() -> void:
 		var p := AudioStreamPlayer.new()
 		add_child(p)
 		pool2.append(p)
-	bed = _loop("res://snd/crowd.ogg")
-	hot = _loop("res://snd/crowd_hot.ogg")
-	songs = [_loop("res://snd/chant.ogg"), _loop("res://snd/claps.ogg")]
+	bed = _loop("res://snd/crowd.wav")
+	hot = _loop("res://snd/crowd_hot.wav")
+	songs = [_loop("res://snd/chant.wav"), _loop("res://snd/claps.wav")]
 	# nothing clips when the roar, the whistle and the bed all peak together
 	if AudioServer.get_bus_effect_count(0) == 0:
 		var lim := AudioEffectHardLimiter.new()
@@ -81,8 +81,11 @@ func _ready() -> void:
 func _loop(f: String) -> AudioStreamPlayer:
 	var p := AudioStreamPlayer.new()
 	var s = load(f)
-	if s is AudioStreamOggVorbis:
-		s.loop = true
+	# plain WAV (QOA), not Ogg: Ogg is decoded on the phone's main thread and made the sound crackle
+	if s is AudioStreamWAV:
+		s.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		s.loop_begin = 0
+		s.loop_end = int(round(s.get_length() * s.mix_rate))
 	p.stream = s
 	p.volume_db = -80.0
 	add_child(p)
