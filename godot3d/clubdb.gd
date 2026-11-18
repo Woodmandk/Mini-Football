@@ -1,0 +1,148 @@
+extends RefCounted
+# The career world: England's four leagues and Denmark's two. The clubs are made up, but each one is meant to
+# remind you of a real club: its city, its colours and how strong it is. No real names, crests or players.
+# A row: name, short name, shirt, shorts, socks, rating (how good the eleven is), formation index (FORM_NAMES).
+
+const LEAGUES := [
+	{"n": "ENGLAND DIVISION 1", "c": "ENGLAND", "t": 1, "up": 0, "down": 3},
+	{"n": "ENGLAND DIVISION 2", "c": "ENGLAND", "t": 2, "up": 3, "down": 3},
+	{"n": "ENGLAND DIVISION 3", "c": "ENGLAND", "t": 3, "up": 3, "down": 4},
+	{"n": "ENGLAND DIVISION 4", "c": "ENGLAND", "t": 4, "up": 4, "down": 0},
+	{"n": "DENMARK DIVISION 1", "c": "DENMARK", "t": 1, "up": 0, "down": 2},
+	{"n": "DENMARK DIVISION 2", "c": "DENMARK", "t": 2, "up": 2, "down": 0},
+]
+
+# where every league starts; the first index in the world list is FIRST (the 8 quick-match clubs come before)
+const START := [
+	# England 1
+	[["MANCHESTER SKY", "MSK", "6cabdd", "ffffff", "6cabdd", 85, 4], ["MERSEYSIDE RED", "MER", "c8102e", "c8102e", "c8102e", 86, 0],
+	["NORTH LONDON RED", "NLR", "ef0107", "ffffff", "ffffff", 85, 0], ["WEST LONDON BLUE", "WLB", "034694", "034694", "ffffff", 82, 4],
+	["TYNESIDE STRIPES", "TYN", "1c1c1c", "1c1c1c", "1c1c1c", 80, 0], ["N. LONDON WHITE", "NLW", "ffffff", "132257", "ffffff", 79, 4],
+	["MANCHESTER RED", "MRE", "da291c", "ffffff", "1c1c1c", 79, 4], ["BIRMINGHAM CLARET", "BCL", "670e36", "ffffff", "95bfe5", 79, 4],
+	["BRIGHTON SEAGULLS", "BRS", "0057b8", "ffffff", "ffffff", 77, 4], ["TRENT REDS", "TRE", "dd0000", "ffffff", "dd0000", 77, 0],
+	["SOUTH LONDON EAGLES", "SLE", "1b458f", "1b458f", "1b458f", 76, 2], ["SOUTH COAST CHERRIES", "SCC", "da291c", "1c1c1c", "1c1c1c", 76, 4],
+	["WEST LONDON BEES", "WLE", "e30613", "1c1c1c", "e30613", 75, 0], ["THAMES WHITES", "THW", "ffffff", "1c1c1c", "ffffff", 75, 4],
+	["EAST LONDON IRONS", "ELI", "7a263a", "ffffff", "7a263a", 75, 4], ["MERSEYSIDE BLUE", "MEB", "003399", "ffffff", "003399", 74, 4],
+	["MIDLANDS WOLVES", "MWO", "fdb913", "231f20", "fdb913", 74, 2], ["YORKSHIRE WHITES", "YOW", "ffffff", "ffffff", "ffffff", 73, 0],
+	["WEARSIDE STRIPES", "WEA", "eb172b", "1c1c1c", "1c1c1c", 72, 0], ["LANCASHIRE CLARETS", "LCL", "6c1d45", "ffffff", "6c1d45", 72, 1]],
+	# England 2
+	[["LEICESTER FOXES", "LFO", "003090", "ffffff", "003090", 72, 0], ["SOUTHAMPTON SAINTS", "SSA", "d71920", "1c1c1c", "1c1c1c", 71, 0],
+	["IPSWICH BLUES", "IPB", "0044a9", "ffffff", "0044a9", 71, 4], ["SHEFFIELD BLADES", "SHB", "ee2737", "1c1c1c", "1c1c1c", 70, 2],
+	["MIDDLESBROUGH RED", "MBR", "e11b22", "ffffff", "e11b22", 70, 4], ["COVENTRY SKY", "COS", "73b3e7", "ffffff", "73b3e7", 70, 4],
+	["WEST BROM STRIPES", "WBS", "122f67", "ffffff", "ffffff", 69, 4], ["NORWICH CANARIES", "NCA", "fff200", "00a650", "fff200", 69, 0],
+	["WREXHAM DRAGONS", "WRD", "d71920", "ffffff", "d71920", 69, 1], ["BIRMINGHAM BLUE", "BBL", "0000ff", "ffffff", "ffffff", 69, 4],
+	["WATFORD HORNETS", "WAT", "fbee23", "1c1c1c", "fbee23", 68, 4], ["BRISTOL REDS", "BRR", "e21a23", "ffffff", "e21a23", 68, 0],
+	["SWANSEA SWANS", "SWA", "ffffff", "ffffff", "ffffff", 67, 4], ["STOKE POTTERS", "STP", "e03a3e", "ffffff", "ffffff", 67, 1],
+	["HULL TIGERS", "HUT", "f5a12d", "1c1c1c", "f5a12d", 67, 4], ["SOUTH LONDON LIONS", "SLL", "001d5e", "ffffff", "001d5e", 67, 1],
+	["PRESTON LILYWHITES", "PRL", "ffffff", "1c2a4f", "ffffff", 67, 2], ["DERBY RAMS", "DRA", "ffffff", "1c1c1c", "ffffff", 66, 4],
+	["WEST LONDON HOOPS", "WLH", "1d5ba4", "ffffff", "ffffff", 66, 0], ["PORTSMOUTH BLUE", "POB", "001489", "ffffff", "e4002b", 66, 4],
+	["SHEFFIELD OWLS", "SHO", "0e00f7", "1c1c1c", "ffffff", 65, 1], ["OXFORD YELLOWS", "OXY", "f8e600", "001f5b", "001f5b", 65, 4],
+	["LONDON ADDICKS", "LAD", "d4021d", "ffffff", "d4021d", 65, 1], ["BLACKBURN HALVES", "BBH", "009ee0", "ffffff", "009ee0", 66, 4]],
+	# England 3
+	[["LUTON HATTERS", "LUH", "f78f1e", "002d62", "f78f1e", 66, 2], ["CARDIFF BLUEBIRDS", "CAB", "0070b5", "0070b5", "ffffff", 65, 4],
+	["HUDDERSFIELD STRIPES", "HUS", "0e63ad", "ffffff", "ffffff", 65, 4], ["BOLTON WHITES", "BOW", "ffffff", "263c7e", "ffffff", 65, 2],
+	["READING ROYALS", "RER", "004494", "ffffff", "004494", 64, 0], ["WIGAN LATICS", "WIL", "1d59af", "ffffff", "ffffff", 64, 1],
+	["PLYMOUTH GREENS", "PLG", "005e3c", "ffffff", "005e3c", 64, 4], ["BARNSLEY TYKES", "BAT", "e2231a", "ffffff", "e2231a", 64, 1],
+	["STOCKPORT HATTERS", "STH", "1d4f9c", "ffffff", "ffffff", 64, 2], ["BIRMINGHAM GREENS", "BGR", "00a650", "1c1c1c", "00a650", 63, 0],
+	["LINCOLN IMPS", "LIM", "e32219", "1c1c1c", "e32219", 63, 1], ["WYCOMBE QUARTERS", "WYQ", "8bd3f7", "002147", "002147", 63, 1],
+	["BLACKPOOL TANGERINES", "BLT", "f68712", "ffffff", "f68712", 63, 4], ["ROTHERHAM MILLERS", "ROM", "e30613", "ffffff", "e30613", 62, 1],
+	["PETERBOROUGH POSH", "PEP", "005ba6", "ffffff", "005ba6", 62, 0], ["EAST LONDON O'S", "ELO", "e2001a", "e2001a", "e2001a", 62, 4],
+	["MANSFIELD STAGS", "MAS", "f2b31c", "0057a8", "f2b31c", 62, 1], ["BRADFORD BANTAMS", "BRB", "781f34", "f9b233", "781f34", 63, 1],
+	["DONCASTER ROVERS", "DOR", "e30613", "1c1c1c", "e30613", 62, 1], ["EXETER GRECIANS", "EXG", "e30613", "ffffff", "ffffff", 61, 2],
+	["NORTHAMPTON COBBLERS", "NOC", "7e1d36", "ffffff", "7e1d36", 61, 1], ["STEVENAGE BORO", "STB", "ffffff", "e30613", "ffffff", 61, 1],
+	["SOUTH LONDON DONS", "SLD", "1b2c5b", "fcd116", "1b2c5b", 61, 0], ["STAFFORDSHIRE VALE", "SVA", "ffffff", "1c1c1c", "ffffff", 61, 1]],
+	# England 4
+	[["MILTON KEYNES WHITE", "MKW", "ffffff", "ffffff", "ffffff", 61, 4], ["BURTON BREWERS", "BUB", "fcd116", "1c1c1c", "fcd116", 60, 1],
+	["NOTTS MAGPIES", "NOM", "1c1c1c", "ffffff", "1c1c1c", 60, 0], ["GRIMSBY MARINERS", "GRM", "1c1c1c", "1c1c1c", "e30613", 60, 1],
+	["BRISTOL GAS", "BRG", "005ba6", "ffffff", "005ba6", 60, 1], ["CHESTERFIELD SPIREITES", "CHS", "0049ad", "ffffff", "0049ad", 60, 0],
+	["SWINDON ROBINS", "SWR", "e30613", "ffffff", "e30613", 59, 1], ["SALFORD AMMIES", "SAA", "e30613", "ffffff", "e30613", 59, 0],
+	["CREWE RAILWAYMEN", "CRR", "e30613", "ffffff", "e30613", 59, 1], ["GILLINGHAM GILLS", "GIG", "0055a5", "ffffff", "0055a5", 59, 1],
+	["CAMBRIDGE AMBER", "CAA", "fcb415", "1c1c1c", "fcb415", 59, 1], ["WALSALL SADDLERS", "WAS", "e30613", "ffffff", "e30613", 59, 1],
+	["SHREWSBURY SHREWS", "SHR", "0050a0", "fcd116", "0050a0", 58, 1], ["TRANMERE WHITES", "TRW", "ffffff", "0050a0", "ffffff", 58, 1],
+	["OLDHAM LATICS", "OLL", "0050a0", "0050a0", "ffffff", 58, 1], ["FLEETWOOD COD ARMY", "FCA", "e30613", "ffffff", "e30613", 58, 3],
+	["CHELTENHAM ROBINS", "CHR", "e30613", "ffffff", "e30613", 58, 1], ["COLCHESTER U'S", "COU", "005ba6", "ffffff", "005ba6", 58, 1],
+	["CRAWLEY REDS", "CRA", "e30613", "e30613", "e30613", 58, 0], ["NEWPORT EXILES", "NEE", "f7a81b", "1c1c1c", "f7a81b", 57, 1],
+	["ACCRINGTON REDS", "ACR", "e30613", "ffffff", "e30613", 57, 1], ["BARROW BLUEBIRDS", "BAB", "ffffff", "0050a0", "ffffff", 57, 3],
+	["HARROGATE SULPHUR", "HAS", "fcd116", "1c1c1c", "fcd116", 57, 1], ["NORTH LONDON BEES", "NLB", "f5a12d", "1c1c1c", "f5a12d", 57, 1]],
+	# Denmark 1
+	[["COPENHAGEN LIONS", "COL", "ffffff", "1e3a8a", "ffffff", 74, 1], ["HERNING WOLVES", "HEW", "1c1c1c", "1c1c1c", "e30613", 74, 0],
+	["BRØNDBY YELLOW", "BRY", "fcd116", "1e3a8a", "fcd116", 71, 2], ["AARHUS WHITES", "AAW", "ffffff", "ffffff", "ffffff", 70, 4],
+	["FARUM TIGERS", "FAT", "e30613", "ffffff", "e30613", 69, 0], ["RANDERS HORSES", "RAH", "1c75bc", "ffffff", "1c75bc", 67, 1],
+	["SILKEBORG REDS", "SIR", "e30613", "ffffff", "e30613", 67, 0], ["VIBORG GREENS", "VIG", "00843d", "ffffff", "00843d", 66, 4],
+	["ODENSE STRIPES", "ODS", "1e3a8a", "ffffff", "1e3a8a", 66, 1], ["HADERSLEV BLUES", "HAB", "75b2dd", "ffffff", "75b2dd", 65, 1],
+	["VEJLE REDS", "VER", "e30613", "ffffff", "e30613", 64, 1], ["FREDERICIA REDS", "FRR", "e30613", "1c1c1c", "e30613", 63, 3]],
+	# Denmark 2
+	[["AALBORG REDS", "AAR", "e30613", "ffffff", "e30613", 64, 4], ["LYNGBY BLUES", "LYB", "1e3a8a", "ffffff", "1e3a8a", 64, 1],
+	["HORSENS YELLOW", "HOY", "fcd116", "1c1c1c", "fcd116", 61, 1], ["ESBJERG BLUES", "ESB", "1e5aa8", "ffffff", "1e5aa8", 61, 0],
+	["KOLDING WHITES", "KOW", "ffffff", "1e3a8a", "ffffff", 60, 1], ["HVIDOVRE REDS", "HVR", "e30613", "1e3a8a", "e30613", 60, 1],
+	["KØGE BLUES", "KOB", "1e3a8a", "ffffff", "1e3a8a", 59, 1], ["HOBRO YELLOW", "HOB", "fcd116", "1e3a8a", "fcd116", 59, 1],
+	["ØSTERBRO STRIPES", "OST", "ffffff", "1e3a8a", "ffffff", 58, 1], ["HILLERØD GREENS", "HIG", "00843d", "ffffff", "00843d", 57, 1],
+	["MIDDELFART BLUES", "MIB", "0050a0", "ffffff", "0050a0", 56, 1], ["AARHUS FREMAD BLACK", "AFB", "1c1c1c", "fcd116", "1c1c1c", 56, 1]],
+]
+
+# The rest of Europe: clubs that only play in the Champions Cup (no league of their own here). Made up too.
+const FOREIGN := [
+	["MADRID WHITES", "MAW", "ffffff", "ffffff", "ffffff", 88, 0, "SPAIN"], ["CATALAN STRIPES", "CAT", "a50044", "004d98", "a50044", 87, 0, "SPAIN"],
+	["MADRID STRIPES", "MAS", "cb3524", "1c2c5b", "cb3524", 83, 1, "SPAIN"], ["BASQUE LIONS", "BAL", "ee2523", "1c1c1c", "1c1c1c", 78, 1, "SPAIN"],
+	["SEVILLE WHITES", "SEW", "ffffff", "ffffff", "e30613", 77, 4, "SPAIN"], ["VALENCIA BATS", "VAB", "ffffff", "1c1c1c", "1c1c1c", 75, 1, "SPAIN"],
+	["MILAN SERPENTS", "MSE", "0068a8", "1c1c1c", "1c1c1c", 84, 2, "ITALY"], ["TURIN ZEBRAS", "TUZ", "1c1c1c", "ffffff", "ffffff", 82, 0, "ITALY"],
+	["NAPLES SKY", "NAS", "12a0d7", "ffffff", "12a0d7", 82, 0, "ITALY"], ["MILAN DEVILS", "MDE", "fb090b", "ffffff", "1c1c1c", 80, 0, "ITALY"],
+	["BERGAMO GODDESS", "BEG", "1e71b8", "1c1c1c", "1c1c1c", 80, 2, "ITALY"], ["ROME WOLVES", "ROW", "8e1f2f", "ffffff", "8e1f2f", 78, 4, "ITALY"],
+	["MUNICH REDS", "MUR", "dc052d", "dc052d", "dc052d", 88, 4, "GERMANY"], ["LEVERKUSEN LIONS", "LEL", "e32221", "1c1c1c", "1c1c1c", 84, 2, "GERMANY"],
+	["DORTMUND BEES", "DOB", "fde100", "1c1c1c", "fde100", 83, 4, "GERMANY"], ["LEIPZIG BULLS", "LEB", "ffffff", "ffffff", "dd0741", 80, 1, "GERMANY"],
+	["PARIS BLUES", "PAB", "004170", "004170", "004170", 87, 0, "FRANCE"], ["MONACO DIAMONDS", "MOD", "e51b22", "ffffff", "e51b22", 78, 4, "FRANCE"],
+	["MARSEILLE WHITES", "MAR", "ffffff", "ffffff", "2faee0", 76, 0, "FRANCE"], ["LILLE MASTIFFS", "LIM", "e01e13", "1c2c5b", "e01e13", 76, 4, "FRANCE"],
+	["LISBON EAGLES", "LIE", "e20e0e", "ffffff", "e20e0e", 80, 4, "PORTUGAL"], ["LISBON LIONS", "LIL", "008057", "1c1c1c", "008057", 79, 0, "PORTUGAL"],
+	["PORTO DRAGONS", "POD", "00428c", "00428c", "00428c", 79, 4, "PORTUGAL"], ["EINDHOVEN LIGHTS", "EIL", "ed1c24", "1c1c1c", "1c1c1c", 79, 0, "NETHERLANDS"],
+	["AMSTERDAM LANCERS", "AML", "ffffff", "ffffff", "ffffff", 78, 0, "NETHERLANDS"], ["ROTTERDAM PORT", "ROP", "ffffff", "1c1c1c", "1c1c1c", 76, 0, "NETHERLANDS"],
+	# the second level of Europe: the clubs of the Euro Trophy
+	["SAN SEBASTIAN WAVES", "SSW", "0067b1", "ffffff", "0067b1", 74, 0, "SPAIN"], ["SEVILLE GREENS", "SEG", "00954c", "ffffff", "00954c", 73, 1, "SPAIN"],
+	["FLORENCE LILIES", "FLL", "5b2b82", "ffffff", "5b2b82", 75, 0, "ITALY"], ["ROME EAGLES", "ROE", "87d8f7", "ffffff", "87d8f7", 74, 1, "ITALY"],
+	["BOLOGNA TOWERS", "BOT", "a21c26", "1a2f48", "1a2f48", 72, 2, "ITALY"], ["TURIN BULLS", "TUB", "8a1e03", "ffffff", "8a1e03", 70, 4, "ITALY"],
+	["FRANKFURT EAGLES", "FRE", "e1000f", "1c1c1c", "1c1c1c", 75, 1, "GERMANY"], ["STUTTGART STAGS", "STS", "ffffff", "ffffff", "e32219", 74, 0, "GERMANY"],
+	["WOLFSBURG WOLVES", "WOW", "65b32e", "ffffff", "65b32e", 72, 4, "GERMANY"], ["FREIBURG FOREST", "FRF", "1c1c1c", "1c1c1c", "e2001a", 71, 1, "GERMANY"],
+	["LYON LIONS", "LYL", "ffffff", "ffffff", "da0812", 75, 0, "FRANCE"], ["NICE EAGLES", "NIE", "c8102e", "1c1c1c", "1c1c1c", 73, 1, "FRANCE"],
+	["LENS MINERS", "LEM", "fff200", "e30613", "e30613", 72, 4, "FRANCE"], ["RENNES REDS", "RER", "e13327", "1c1c1c", "1c1c1c", 71, 0, "FRANCE"],
+	["GLASGOW HOOPS", "GLH", "018749", "ffffff", "ffffff", 74, 0, "SCOTLAND"], ["GLASGOW BLUES", "GLB", "1b458f", "ffffff", "1c1c1c", 73, 4, "SCOTLAND"],
+	["BRUGES BLUES", "BRB", "0072ce", "1c1c1c", "1c1c1c", 73, 0, "BELGIUM"], ["BRUSSELS PURPLE", "BRP", "4f2d7f", "ffffff", "4f2d7f", 71, 1, "BELGIUM"],
+	["ISTANBUL LIONS", "ISL", "a90432", "fdb912", "a90432", 74, 0, "TURKEY"], ["ISTANBUL CANARIES", "ISC", "fff200", "002b7f", "002b7f", 73, 4, "TURKEY"],
+	["PIRAEUS REDS", "PIR", "e30613", "ffffff", "e30613", 71, 0, "GREECE"], ["SALZBURG BULLS", "SAB", "ffffff", "e2001a", "ffffff", 73, 2, "AUSTRIA"],
+	["BODO LIGHTS", "BOL", "fff200", "1c1c1c", "fff200", 69, 0, "NORWAY"], ["PRAGUE SLAVS", "PRS", "e30613", "ffffff", "e30613", 70, 1, "CZECHIA"],
+	["ZAGREB BLUES", "ZAB", "0057a8", "ffffff", "0057a8", 70, 0, "CROATIA"], ["BELGRADE STARS", "BES", "e30613", "ffffff", "e30613", 70, 4, "SERBIA"],
+]
+
+# every club as {n, s, k, a, r, f, lg}: the quick-match clubs first, then the career clubs in league order, then Europe (lg -1)
+static func clubs(first: Array) -> Array:
+	var out := first.duplicate(true)
+	for li in START.size():
+		for row in START[li]:
+			var light: bool = Color(str(row[2])).get_luminance() > 0.6
+			var alt := "1c1c20" if light else "f4f4f4"
+			out.append({"n": row[0], "s": row[1], "k": [row[2], row[3], row[4]], "a": [alt, str(row[2]) if not light else "f4f4f4", alt], "r": int(row[5]), "f": int(row[6]), "lg": li})
+	for row in FOREIGN:
+		var light2: bool = Color(str(row[2])).get_luminance() > 0.6
+		var alt2 := "1c1c20" if light2 else "f4f4f4"
+		out.append({"n": row[0], "s": row[1], "k": [row[2], row[3], row[4]], "a": [alt2, str(row[2]) if not light2 else "f4f4f4", alt2], "r": int(row[5]), "f": int(row[6]), "lg": -1, "c": row[7]})
+	return out
+
+# the world indices of the European clubs
+static func foreign_ids(first_n: int) -> Array:
+	var i := first_n
+	for li in START.size():
+		i += (START[li] as Array).size()
+	var out := []
+	for k in FOREIGN.size():
+		out.append(i + k)
+	return out
+
+# the world indices of each league at the start
+static func start_leagues(first_n: int) -> Array:
+	var out := []
+	var i := first_n
+	for li in START.size():
+		var ids := []
+		for _r in START[li]:
+			ids.append(i)
+			i += 1
+		out.append(ids)
+	return out

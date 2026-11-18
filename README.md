@@ -1,4 +1,4 @@
-# Mini Football
+# Pitch Boss (formerly Banebold / Mini Football)
 
 Et simpelt fodboldspil i arkadestil, lavet til mobilen (hold telefonen på langs).
 
