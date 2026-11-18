@@ -1217,7 +1217,16 @@ func _ready() -> void:
 				car.d["squad"][bi9]["injn"] = "a knee injury"
 				print("FIT swap msg: ", car.swap(int(xi9[5]), bi9))
 				if menu_arg == "ftest2":
-					print("FIT rotate: ", car.rotate())
+					# retraining: he works on a new role; show what playing there costs as he learns
+					var rp9: Dictionary = car.d["squad"][int(xi9[3])]
+					rp9["rt"] = "MF"
+					for st9 in 12:
+						var ln9 := []
+						car._rt_tick(xi9, ln9)
+						print("RT ", st9, " prog ", Career.rt_prog(rp9, "MF"), " off MF ", Career.pos_off(rp9, "MF"), " off FW ", Career.pos_off(rp9, "FW"), " ", ln9)
+					rp9["rt"] = "MF"
+					rp9["rtp"] = {"MF": 42.0}
+					print("RT strength ", car.match_strength())
 				set_meta("tsel", -1 if menu_arg == "ftest0" else (int(xi9[7]) if menu_arg == "ftest1" else int(xi9[3])))
 				menu_arg = "squad9"
 			if menu_arg in ["caltest", "simtest", "advtest", "csettest", "calhome"]:
@@ -2149,7 +2158,7 @@ func _build_teams() -> void:
 			if rxi.size() == 11 and rxi[i] is Dictionary:
 				# ranked: each side plays with its own club's eleven
 				var rp: Dictionary = rxi[i]
-				var off3 := -6 if str(rp.get("pos", "")) != p.role else 0
+				var off3 := Career.pos_off(rp, p.role)
 				p.pname = str(rp.get("n", p.pname))
 				p.num = int(rp.get("num", p.num))
 				p.pac = clampi(int(rp.get("pac", 60)), 20, 99) + off3
@@ -2168,7 +2177,7 @@ func _build_teams() -> void:
 				if t == 0:
 					# your own squad: the eleven you picked, with their own numbers
 					var pl: Dictionary = car.d["squad"][int(car.d["xi"][i])]
-					var off_pos: int = (-6 if str(pl["pos"]) != p.role else 0) + car.mood_off(pl)
+					var off_pos: int = Career.pos_off(pl, p.role) + car.mood_off(pl)
 					p.sq = int(car.d["xi"][i])
 					p.pname = str(pl["n"])
 					p.pac = int(pl["pac"]) + off_pos
@@ -2183,7 +2192,7 @@ func _build_teams() -> void:
 					var cx: Dictionary = cpu_xi[i]
 					p.pname = str(cx["n"])
 					p.num = int(cx["num"])
-					var off2 := -6 if str(cx["pos"]) != p.role else 0
+					var off2 := Career.pos_off(cx, p.role)
 					p.pac = int(cx["pac"]) + off2
 					p.sho = int(cx["sho"]) + off2
 					p.pas = int(cx["pas"]) + off2
@@ -2567,7 +2576,7 @@ func _sub_do(t: int, slot: int, b: int) -> void:
 			sub_played.append(sq_i)
 		p.sq = sq_i
 		mo = car.mood_off(car.d["squad"][sq_i])
-	var off_pos: int = (-6 if str(pl["pos"]) != p.role else 0) + mo
+	var off_pos: int = Career.pos_off(car.d["squad"][int(pl["sq"])] if pl.has("sq") and career_on and t == 0 else pl, p.role) + mo
 	p.pname = str(pl["n"])
 	p.set_num(int(pl["num"]))
 	p.pac = int(pl["pac"]) + off_pos
@@ -2697,7 +2706,7 @@ func _car_info() -> Dictionary:
 		squad.append({"n": str(pl["n"]).to_upper(), "num": int(pl["num"]), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]),
 			"xp": int(pl["xp"]), "tp": int(pl.get("tp", 0)), "g": int(pl["g"]), "apps": int(pl["apps"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "cost": car.train_cost(pl), "sell": Career.sell_value(pl), "tl": Career.listed(pl), "fm": Career.pform(pl),
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
-			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"),
+			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"), "pos2": Career.pos2_of(pl), "rt": str(pl.get("rt", "")), "rtp": int(Career.rt_prog(pl, str(pl.get("rt", "")))), "rto": Career.rt_options(pl).size() > 1,
 			"cond": car.cond_of(pl) if car.eur else -1, "inj": car.injured(pl) if car.eur else false, "injt": car.inj_text(pl) if car.eur and car.injured(pl) else ""})
 	var tp_all := 0
 	for pl in d["squad"]:
@@ -3902,6 +3911,10 @@ func _action(act: String, arg = null) -> void:
 			if car_sel >= 0:
 				car.set_focus(car_sel)
 				hud.refresh(_menu_info())
+		"c_rt":
+			if car_sel >= 0:
+				car.retrain(car_sel)
+				hud.refresh(_menu_info())
 		"c_trainm":
 			hud.show_menu("training", _menu_info())
 		"c_plan":
@@ -3950,10 +3963,6 @@ func _action(act: String, arg = null) -> void:
 				car_msg = car.swap(int(ws[0]), int(ws[1]))
 				if car_msg == "":
 					audio.play("click2")
-			car_sel = -1
-			hud.refresh(_menu_info())
-		"c_rest":
-			car_msg = car.rotate()
 			car_sel = -1
 			hud.refresh(_menu_info())
 		"c_lay0":
@@ -9223,7 +9232,7 @@ const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", 
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
 	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac", "nat", "nat_tab", "ct_rc", "sc_swp"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
-	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_adv", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
+	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_adv", "c_rt", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
 	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go", "tac_set", "nat_pick", "nat_auto", "nat_quit", "nat_play", "sc_bid_so", "sc_rc", "sc_swap", "bid_son"]
 
 func _cv_tick(dt: float) -> void:
@@ -9375,8 +9384,6 @@ func _sug_text(act: String, arg) -> String:
 			if mm.is_empty() or str(mm.get("st", "")) != "open" or int(ma[1]) < 0 or int(ma[1]) >= mo.size():
 				return ""
 			return "ANSWER: %s" % str(mo[int(ma[1])][0]).to_upper()
-		"c_rest":
-			return "REST THE TIRED PLAYERS"
 		"nat_pick":
 			var pk := str(arg)
 			var nin: bool = car.nat().get("sq", []).has(pk)
@@ -9426,6 +9433,8 @@ func _sug_text(act: String, arg) -> String:
 			return {"y_sign": "SIGN YOUTH TALENT %d", "y_prom": "PROMOTE ACADEMY PLAYER %d", "y_rel": "RELEASE ACADEMY PLAYER %d", "y_send": "SEND A SCOUT (%d)"}[act] % ((int(arg) if arg != null else 0) + 1)
 		"c_focus":
 			return "CHANGE %s'S TRAINING FOCUS" % _pn(car_sel) if car_sel >= 0 else ""
+		"c_rt":
+			return "RETRAIN %s FOR A NEW POSITION" % _pn(car_sel) if car_sel >= 0 else ""
 		"c_train":
 			return "TRAIN %s" % _pn(car_sel) if car_sel >= 0 else ""
 		"c_abuy":

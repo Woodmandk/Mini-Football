@@ -235,7 +235,7 @@ func set_form(name: String, roles: Array) -> void:
 			for i in (d["squad"] as Array).size():
 				if used.has(i):
 					continue
-				if pass_n == 0 and str(d["squad"][i]["pos"]) != str(roles[s]):
+				if pass_n == 0 and not plays(d["squad"][i], str(roles[s])):
 					continue
 				if pass_n == 1 and str(d["squad"][i]["pos"]) == "GK":
 					continue
@@ -690,6 +690,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	_fac_tick(lines)
 	if eur:
 		_after_match(played if not played.is_empty() else d["xi"], mine > theirs, lines, rng)
+	_rt_tick(d["xi"], lines)
 	_fit_post(fit0, played, lines, rng)
 	world_tick(lines)
 	save()
@@ -1362,6 +1363,7 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		_after_match(d["xi"], won, lines, rng3)
 	var rng4 := RandomNumberGenerator.new()
 	rng4.randomize()
+	_rt_tick(d["xi"], lines)
 	_fit_post(fit0, [], lines, rng4)
 	world_tick(lines)
 	save()
@@ -3002,6 +3004,115 @@ static func focus_name(tf: String, pos := "") -> String:
 	var k := STAT_KEYS.find(tf)
 	return stat_name(pos, k) if k >= 0 else "AUTO"
 
+# ---------------------------------------------------------------- retraining: a man learns a new position
+# Every man has his own position (pl["pos"]) and can learn more (pl["pos2"]). Out of position he plays worse: next
+# to his own line (DF-MF, MF-FW) a little, two lines away (DF-FW) more, a keeper outside his goal (or the other way)
+# a lot. Pick a new position to work on (pl["rt"]) and he learns it in training and by playing there (pl["rtp"],
+# 0-100 for each position). The cost of playing there shrinks while he learns, and at 100 it is his.
+const RT_ROLES := ["DF", "MF", "FW"]
+const RT_NAMES := {"GK": "KEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}
+const FORM_ROLES := {"4-3-3": [4, 3, 3], "4-4-2": [4, 4, 2], "3-5-2": [3, 5, 2], "5-3-2": [5, 3, 2], "4-2-3-1": [4, 3, 3]}
+
+static func pos2_of(pl: Dictionary) -> Array:
+	var a = pl.get("pos2", [])
+	return a if a is Array else []
+
+static func plays(pl: Dictionary, role: String) -> bool:
+	return str(pl.get("pos", "")) == role or pos2_of(pl).has(role)
+
+static func rt_prog(pl: Dictionary, role: String) -> float:
+	var p = pl.get("rtp", {})
+	return float((p as Dictionary).get(role, 0.0)) if p is Dictionary else 0.0
+
+# what playing in this role costs him on every stat
+static func pos_off(pl: Dictionary, role: String) -> int:
+	if role == "" or plays(pl, role):
+		return 0
+	var own := str(pl.get("pos", "MF"))
+	if (own == "GK") != (role == "GK"):
+		return -25
+	var gap := 2
+	for r in [own] + pos2_of(pl):
+		if RT_ROLES.has(str(r)):
+			gap = mini(gap, absi(RT_ROLES.find(str(r)) - RT_ROLES.find(role)))
+	var base := -6.0 if gap <= 1 else -12.0
+	return int(round(base * (1.0 - 0.6 * clampf(rt_prog(pl, role), 0.0, 100.0) / 100.0)))
+
+# the role of each of the eleven places: the formation, with the spots you dragged men to
+func slot_roles() -> Array:
+	var c: Array = FORM_ROLES.get(form(), [4, 3, 3])
+	var out := ["GK"]
+	for k in 3:
+		for j in int(c[k]):
+			out.append(RT_ROLES[k])
+	var l := lay()
+	for s in range(1, mini(out.size(), 11)):
+		if l.has(str(s)) and l[str(s)] is Array and (l[str(s)] as Array).size() == 2:
+			out[s] = role_at(float(l[str(s)][0]))
+	return out
+
+# the positions he can work on, in the order the button goes through them ("" = nothing)
+static func rt_options(pl: Dictionary) -> Array:
+	var out := [""]
+	if str(pl.get("pos", "")) == "GK":
+		return out
+	for r in RT_ROLES:
+		if not plays(pl, r):
+			out.append(r)
+	return out
+
+func retrain(i: int) -> void:
+	var sq: Array = d["squad"]
+	if i < 0 or i >= sq.size():
+		return
+	var opts := rt_options(sq[i])
+	var cur := opts.find(str(sq[i].get("rt", "")))
+	var nx := str(opts[(maxi(cur, 0) + 1) % opts.size()])
+	if nx == "":
+		sq[i].erase("rt")
+	else:
+		sq[i]["rt"] = nx
+	save()
+
+# after a match: the men who started learn the role they played in, and what they work on in training
+func _rt_tick(xi: Array, lines: Array) -> void:
+	var sq: Array = d["squad"]
+	var roles := slot_roles()
+	var where := {}
+	for k in mini(xi.size(), roles.size()):
+		where[int(xi[k])] = str(roles[k])
+	var tk := 1.0 + 0.08 * fac("training")
+	for i in sq.size():
+		var pl: Dictionary = sq[i]
+		if str(pl.get("pos", "")) == "GK" or bool(pl.get("me", false)):
+			continue
+		var gain := {}
+		var rt := str(pl.get("rt", ""))
+		if rt != "" and not plays(pl, rt):
+			gain[rt] = 2.6 * train_k(pl) * tk
+		var w := str(where.get(i, ""))
+		if w != "" and w != "GK" and not plays(pl, w):
+			gain[w] = float(gain.get(w, 0.0)) + (4.5 if w == rt else 2.0)
+		if gain.is_empty():
+			continue
+		var rtp: Dictionary = pl.get("rtp", {}) if pl.get("rtp", {}) is Dictionary else {}
+		for r in gain:
+			var v := minf(rt_prog(pl, r) + float(gain[r]), 100.0)
+			if v >= 100.0:
+				var p2 := pos2_of(pl).duplicate()
+				p2.append(r)
+				pl["pos2"] = p2
+				rtp.erase(r)
+				if rt == r:
+					pl.erase("rt")
+				lines.append("%s CAN NOW PLAY AS A %s" % [str(pl["n"]).to_upper(), RT_NAMES[r]])
+			else:
+				rtp[r] = snappedf(v, 0.1)
+		if rtp.is_empty():
+			pl.erase("rtp")
+		else:
+			pl["rtp"] = rtp
+
 # the role each man expects, from where he stands in the squad
 func roles() -> Dictionary:
 	var sq: Array = d["squad"]
@@ -3497,11 +3608,12 @@ func _out_of_xi(i: int) -> void:
 	if at < 0:
 		return
 	var sq: Array = d["squad"]
-	var pos := str(sq[i]["pos"])
+	var sr := slot_roles()
+	var pos := str(sr[at]) if at < sr.size() else str(sq[i]["pos"])
 	var best := -1
 	for pass_n in 2:
 		for j in sq.size():
-			if j == i or xi.has(j) or injured(sq[j]) or (pass_n == 0 and str(sq[j]["pos"]) != pos) or (pass_n == 1 and str(sq[j]["pos"]) == "GK"):
+			if j == i or xi.has(j) or injured(sq[j]) or (pass_n == 0 and not plays(sq[j], pos)) or (pass_n == 1 and str(sq[j]["pos"]) == "GK"):
 				continue
 			if best < 0 or ovr_of(sq[j]) > ovr_of(sq[best]):
 				best = j
@@ -3537,9 +3649,10 @@ func inj_text(pl: Dictionary) -> String:
 # your eleven's strength with tired legs counted (for a simulated match)
 func match_strength() -> float:
 	var s := 0.0
-	for i in d["xi"]:
-		var pl: Dictionary = d["squad"][int(i)]
-		s += ovr_of(pl) * (0.86 + 0.14 * cond_of(pl) / 100.0) * (0.6 if injured(pl) else 1.0)
+	var roles := slot_roles()
+	for k in (d["xi"] as Array).size():
+		var pl: Dictionary = d["squad"][int(d["xi"][k])]
+		s += (ovr_of(pl) + pos_off(pl, str(roles[k]) if k < roles.size() else "")) * (0.86 + 0.14 * cond_of(pl) / 100.0) * (0.6 if injured(pl) else 1.0)
 	return s / 11.0
 
 # before a match: everyone's fitness as it is on the day; returns {index: fitness}
@@ -3605,36 +3718,6 @@ func _fit_post(fit0: Dictionary, played: Array, lines: Array, rng: RandomNumberG
 	for i in sq.size():
 		if injured(sq[i]) and (d["xi"] as Array).has(i):
 			_out_of_xi(i)
-
-# Rest the tired: every man in the eleven under 75 (or hurt) swaps with a fresher man in his position on the bench
-# who is not much worse. Returns what happened.
-func rotate() -> String:
-	var sq: Array = d["squad"]
-	var xi: Array = d["xi"]
-	var n := 0
-	for k in xi.size():
-		var i := int(xi[k])
-		var pl: Dictionary = sq[i]
-		var c := cond_of(pl)
-		if c >= 75 and not injured(pl):
-			continue
-		var best := -1
-		for j in sq.size():
-			if xi.has(j) or injured(sq[j]) or str(sq[j]["pos"]) != str(pl["pos"]) or cond_of(sq[j]) < c + 12:
-				continue
-			if ovr_of(sq[j]) < ovr_of(pl) - 7 and not injured(pl):
-				continue
-			if best < 0 or ovr_of(sq[j]) > ovr_of(sq[best]):
-				best = j
-		if best >= 0:
-			xi[k] = best
-			n += 1
-	d["xi"] = xi
-	save()
-	if n == 0:
-		return "Nobody to rest: the eleven is fit, or the bench has no fresher man good enough."
-	return "%d tired man rested." % n if n == 1 else "%d tired men rested." % n
-
 
 # ---------------------------------------------------------------- top scorers, awards, the trophy cabinet and records
 # Every league goal has a scorer (the computer clubs' too), so there is a real top scorers list. Each month the
@@ -4174,6 +4257,7 @@ func eu_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		_after_match(d["xi"], won, lines, rng)
 	if bool(e.get("out", false)):
 		_eu_rest(rng, [])
+	_rt_tick(d["xi"], lines)
 	_fit_post(fit0, [], lines, rng)
 	world_tick(lines)
 	save()

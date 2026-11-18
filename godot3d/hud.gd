@@ -1936,7 +1936,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			for si2 in xi.size():
 				var pl: Dictionary = sqd[int(xi[si2])]
 				tp[si2].y = clampf(tp[si2].y, py + 12.0, py + ph - 12.0 - 46.0)
-				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]))
+				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]) and not (pl.get("pos2", []) as Array).has(str(form[si2][0])))
 				menu.add_child(pb)
 				ctx["plates"].append([pb, int(xi[si2]), si2])
 				_drag_plate(pb, int(xi[si2]), si2, ctx)
@@ -2084,6 +2084,35 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 						abb.add_theme_color_override("font_color", GOLD)
 						abb.tooltip_text = str(abl[ai][2])
 					menu.add_child(abb)
+				# a new position: what else he plays, and what he is learning
+				if bool(sp2.get("rto", false)) or not (sp2.get("pos2", []) as Array).is_empty():
+					var rty := ly + 104.0
+					var p2a: Array = sp2.get("pos2", [])
+					var rt3 := str(sp2.get("rt", ""))
+					var rtx := ("Also plays %s" % ", ".join(p2a)) if not p2a.is_empty() else "Only plays %s" % str(sp2.get("pos", ""))
+					if rt3 != "":
+						rtx += "  ·  learning %s %d%%" % [rt3, int(sp2.get("rtp", 0))]
+					var rtl := _label(rtx, 19, GOLD if rt3 != "" else MUT, font3)
+					rtl.position = Vector2(18, rty)
+					rtl.size = Vector2(bw3 - 270, 26)
+					rtl.clip_text = true
+					rtl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+					dp.add_child(rtl)
+					if rt3 != "":
+						var rbg := ColorRect.new()
+						rbg.color = Color(1, 1, 1, 0.12)
+						rbg.position = Vector2(18, rty + 30)
+						rbg.size = Vector2(bw3 - 290, 5)
+						dp.add_child(rbg)
+						var rfl := ColorRect.new()
+						rfl.color = GOLD
+						rfl.position = Vector2(18, rty + 30)
+						rfl.size = Vector2((bw3 - 290) * clampf(float(sp2.get("rtp", 0)) / 100.0, 0.0, 1.0), 5)
+						dp.add_child(rfl)
+					if bool(sp2.get("rto", false)):
+						var rtb := _btn(("Retrain: %s  ›" % rt3) if rt3 != "" else "Retrain  ›", "c_rt", null, "alt", Vector2(bx3 + bw3 - 18 - 220, dy + rty - 6), Vector2(220, 38), 17)
+						rtb.add_theme_font_override("font", font3)
+						menu.add_child(rtb)
 				var can: bool = int(c3.get("coins", 0)) >= int(sp2["cost"]) and int(sp2["ovr"]) + int(sp2.get("tp", 0)) < int(sp2["pot"])
 				# the transfer list button is there for every man, in the eleven or not
 				var on_bench := true
@@ -2103,10 +2132,21 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				var hint2 := _label("Tap a player to see him.\nDrag a player to move him, or onto a team mate to swap.\nA yellow dot: he plays out of position." + ("\nThe bar under a name: his fitness. A red cross: injured." if fit_on else ""), 20, MUT, font3)
 				hint2.position = Vector2(18, 14)
 				hint2.autowrap_mode = TextServer.AUTOWRAP_WORD
-				hint2.size = Vector2(bw3 - 36, dp.size.y - 28 - (70 if fit_on else 0))
+				hint2.size = Vector2(bw3 - 36, dp.size.y - 28 - (96 if fit_on else 0))
 				dp.add_child(hint2)
 				if fit_on:
-					menu.add_child(_btn("REST TIRED PLAYERS", "c_rest", null, "alt", Vector2(bx3 + 18, dy + dp.size.y - 70), Vector2(bw3 - 36, 56), 20))
+					# tired men in the eleven: resting them is your call, man by man, and legs only come back day by day
+					var tired := []
+					for ti in xi:
+						var tpl2: Dictionary = sqd[int(ti)]
+						if int(tpl2.get("cond", 100)) < 75 and not bool(tpl2.get("inj", false)):
+							tired.append("%s %d%%" % [str(tpl2["n"]).capitalize(), int(tpl2["cond"])])
+					var trt := ("Tired in your eleven: " + ", ".join(tired) + ". Bring a fresher man in to rest one.") if not tired.is_empty() else "Your eleven is fit."
+					var trl := _label(trt, 19, GOLD if not tired.is_empty() else MUT, font3)
+					trl.position = Vector2(18, dp.size.y - 92)
+					trl.autowrap_mode = TextServer.AUTOWRAP_WORD
+					trl.size = Vector2(bw3 - 36, 80)
+					dp.add_child(trl)
 			if str(c3.get("msg", "")) != "":
 				var ms := _label(str(c3.get("msg", "")), 19, GOLD, font3)
 				ms.position = Vector2(bx3 + 18, dy + dp.size.y - 100)
