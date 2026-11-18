@@ -33,6 +33,7 @@ var danger := 0.0 # 0 = ball in midfield, 1 = in the box with a chance on
 var in_match := false
 var paused := false
 var home := 0 # the team most of the ground is behind
+var derby := false # a derby in the career: the whole ground is louder
 
 var _danger_s := 0.0
 var _boost := 0.0 # after a goal the whole ground stays up and settles slowly
@@ -200,8 +201,9 @@ func _process(sdt: float) -> void:
 	var fade := clampf(dt * (1.6 if on else 0.9), 0.0, 1.0)
 	_bed_l = lerpf(_bed_l, bed_to, fade)
 	_hot_l = lerpf(_hot_l, hot_to, fade)
-	_level(bed, _bed_l, -2.0)
-	_level(hot, _hot_l, 1.5)
+	var dby := 3.0 if derby else 0.0
+	_level(bed, _bed_l, -2.0 + dby)
+	_level(hot, _hot_l, 1.5 + dby)
 	if log_on and int(t * 2.0) != int((t - dt) * 2.0):
 		print("CROWD %.1f danger=%.2f bed=%.2f hot=%.2f boost=%.2f song=%d/%.2f/%.2f" % [t, _danger_s, _bed_l, _hot_l, _boost, _song, _song_l[0], _song_l[1]])
 	# songs: when the game is calm for a while, part of the ground starts singing or clapping
