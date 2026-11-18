@@ -326,6 +326,8 @@ var au := {}
 var crowd_au: AudioStreamPlayer
 var crowd_vol := -14.0
 var derby_on := false # a derby in the career: the crowd is louder
+var tac_m := [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]] # autotest: how far up and how wide each team stood
+var tac_t := [[2, 1, 1], [2, 1, 1]] # each team's plan: mentality 0-4, press 0-2, width 0-2 (career sets them)
 var confetti: CPUParticles3D
 var sparks := []
 var dust: CPUParticles3D
@@ -2612,7 +2614,7 @@ func _car_info() -> Dictionary:
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 else 0,
-		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(),
+		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(),
 	}
 
 # The Champions Cup for the hud: your next European match, the groups and the knockout rounds.
@@ -3190,6 +3192,12 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("cal", _menu_info())
 		"cset":
 			hud.show_menu("cset", _menu_info())
+		"ctac":
+			hud.show_menu("ctac", _menu_info())
+		"tac_set":
+			var ta: Array = arg if arg is Array else ([int(arg) / 10, int(arg) % 10] if arg is int else [0, 2])
+			car.set_tac(int(ta[0]), int(ta[1]))
+			hud.refresh(_menu_info())
 		"cfg_diff":
 			car.set_cfg("diff", int(arg))
 			hud.refresh(_menu_info())
@@ -4554,6 +4562,15 @@ func _net_poll() -> void:
 
 func _begin_match(with_intro: bool) -> void:
 	derby_on = career_on and in_career and car.has_save() and car.d.has("leagues") and car._next_derby()
+	tac_t = [[2, 1, 1], [2, 1, 1]]
+	if career_on and in_career and car.has_save() and car.d.has("leagues") and not car.pro():
+		tac_t = [car.tac(), car.cpu_tac(car._next_opp())]
+	if autotest:
+		for ti in 2:
+			var te := OS.get_environment("TACT%d" % ti)
+			if te != "":
+				var tp := te.split(",")
+				tac_t[ti] = [int(tp[0]), int(tp[1]), int(tp[2])]
 	golden = false
 	half_kick = 1
 	so_on = false
@@ -5343,7 +5360,19 @@ func _physics_process(dt: float) -> void:
 				print("AUTOTEST STUCK state=", state, " t=", state_t, " set=", set_piece, " clock=", clock, " owner=", players.find(ball_owner), " ball=", ball.position, " hctrl=", players.find(hc2), " forms=", forms, " clubs=", clubs, " kick_team=", kick_team)
 				get_tree().quit()
 				return
+			if state == "play" and wd_all % 30 == 0:
+				for tq in 2:
+					for pq in teams[tq]:
+						if pq.role != "GK":
+							var ai := 0 if att_team == tq else 3
+							tac_m[tq][ai] += pq.position.x * side(tq)
+							tac_m[tq][ai + 1] += absf(pq.position.z)
+							tac_m[tq][ai + 2] += 1.0
 			if state == "full":
+				for tq in 2:
+					var tm2: Array = tac_m[tq]
+					print("AUTOTEST tac team ", tq, " ", tac_t[tq], " with ball up/width=", snappedf(tm2[0] / maxf(tm2[2], 1), 0.1), "/", snappedf(tm2[1] / maxf(tm2[2], 1), 0.1),
+						" without ball up/width=", snappedf(tm2[3] / maxf(tm2[5], 1), 0.1), "/", snappedf(tm2[4] / maxf(tm2[5], 1), 0.1))
 				print("AUTOTEST score=", score, " stats=", stats, " bot=", bstats)
 				print("AUTOTEST gk_hands frames=", get_meta("gk_n", 0), " nearest_opp_min=", snappedf(get_meta("gk_min", 99.0), 0.1))
 				print("AUTOTEST team=", tst)
@@ -7766,10 +7795,11 @@ var hold_m := [0, 0.0, 0, 0] # test: AI passes, sum of time on the ball, frames 
 func _press_on(t: int, c) -> bool:
 	var s := side(t)
 	var cu: float = c.position.x * s
-	if cu < -14.0:
-		# the last 38 metres: now he is closed down
+	var pr: int = int(tac_t[t][1])
+	if cu < [-24.0, -14.0, 6.0][pr]:
+		# the last 38 metres (a low block waits until the box, a high press hunts him in his own half)
 		return true
-	if sim_t - poss_t < 2.5 and ball_last != null:
+	if sim_t - poss_t < [1.2, 2.5, 4.0][pr] and ball_last != null:
 		return true
 	if sim_t - own_at < 0.45 and c.vel.length() < c.top_speed * 0.6:
 		# his first touch, and it is not running for him: the moment to close him down
@@ -7995,18 +8025,22 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 	var u: float = -45.0 + p.home.x * 62.0 + bu * 0.6
 	var z: float = p.home.y * s * 21.0 + ball.position.z * 0.42
 	var hurry := false
+	# the manager's plan: how far up the team sits, and how wide it plays
+	var tm: float = float(int(tac_t[t][0]) - 2)
+	var tw: float = [0.82, 1.0, 1.18][int(tac_t[t][2])]
+	u += tm * 3.2
 	if att:
 		# With the ball the whole team moves up with it, like a real side: the back line squeezes up,
 		# the midfield stays close around the ball, full backs overlap and the forwards stretch the line.
 		var wide: bool = absf(p.home.y) > 0.6
 		var same: bool = p.home.y * s * ball.position.z > 0.0
-		z = p.home.y * s * 29.0 + ball.position.z * 0.25
-		u = bu + (p.home.x - 0.40) * 50.0
+		z = p.home.y * s * 29.0 * tw + ball.position.z * 0.25
+		u = bu + (p.home.x - 0.40) * 50.0 + tm * 2.5
 		if p.role == "DF":
 			if wide:
 				u = clampf(bu - (4.0 if same and bu > 0.0 else 14.0), -40.0, 40.0)
 			else:
-				u = clampf(bu - 24.0, -42.0, 8.0)
+				u = clampf(bu - 24.0 + tm * 3.5, -42.0, 8.0 + tm * 3.0)
 		elif p.role == "MF":
 			if p.home.x <= 0.38:
 				u -= 5.0
@@ -8031,14 +8065,15 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		# Without the ball the back four hold a line instead of running back to the six-yard box: they stay
 		# around the edge of the box while the ball is out in front, and drop off with it, a few metres goal
 		# side, as it comes at them. Close to goal they squeeze in towards the ball.
-		var dl: float = minf(-35.5 + (p.home.x - 0.17) * 20.0, bu - 7.0)
+		var dl: float = minf(-35.5 + (p.home.x - 0.17) * 20.0 + tm * 3.0 + (int(tac_t[t][1]) - 1) * 3.0, bu - 7.0)
 		u = clampf(maxf(u, dl), -47.0, 14.0)
 		if not loose and ball_owner.team != t:
 			u = maxf(minf(u, ball_owner.position.x * s - 2.5), -50.5)
 		var near_k: float = clampf((-bu - 15.0) / 25.0, 0.0, 1.0)
-		z = p.home.y * s * lerpf(21.0, 14.0, near_k) + ball.position.z * lerpf(0.42, 0.6, near_k)
+		z = p.home.y * s * lerpf(21.0, 14.0, near_k) * tw + ball.position.z * lerpf(0.42, 0.6, near_k)
 	else:
 		u = clampf(u, -40.0, 47.0)
+		z = p.home.y * s * 21.0 * tw + ball.position.z * 0.42
 	z = clampf(z, -HW + 1.5, HW - 1.5)
 	var spot := Vector3(u * s, 0, z)
 	if not ours and not loose and set_piece == "" and p != chaser[t] and p != second[t] and (p.role == "DF" or p.role == "MF"):
@@ -8955,10 +8990,10 @@ func _bot_inputs(dt: float) -> void:
 # to the manager as a suggestion, and the manager says yes or no.
 const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
-	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills"]
+	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
 	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_adv", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
-	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go"]
+	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go", "tac_set"]
 
 func _cv_tick(dt: float) -> void:
 	var src = proc if car == proc else carc
@@ -9109,6 +9144,13 @@ func _sug_text(act: String, arg) -> String:
 			return "ANSWER: %s" % str(mo[int(ma[1])][0]).to_upper()
 		"c_rest":
 			return "REST THE TIRED PLAYERS"
+		"tac_set":
+			var tg: Array = arg if arg is Array else []
+			if tg.size() < 2 or int(tg[0]) < 0 or int(tg[0]) > 2:
+				return ""
+			var tn: Array = Career.TAC_N[int(tg[0])]
+			var tv := clampi(int(tg[1]), 0, tn.size() - 1)
+			return ["PLAY: %s", "PRESS: %s", "WIDTH: %s"][int(tg[0])] % str(tn[tv]).to_upper()
 		"cfg_diff":
 			return "PLAY THE MATCHES ON %s" % ["EASY", "NORMAL", "HARD"][clampi(int(arg), 0, 2)]
 		"cfg_len":

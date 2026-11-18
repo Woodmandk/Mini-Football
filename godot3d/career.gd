@@ -2239,8 +2239,10 @@ func sim_match(opp: int, home: bool) -> Array:
 	var df := (match_strength() - _strength(opp)) / 14.0 + (0.12 if home else -0.12)
 	if derby(opp):
 		df *= 0.6 # form goes out of the window in a derby
-	var mine := _poisson(rng, 1.35 * exp(df) + 0.1)
-	var theirs := _poisson(rng, 1.35 * exp(-df))
+	var tk := tac_effect(tac(), cpu_tac(opp), df)
+	df += float(tk[2])
+	var mine := _poisson(rng, (1.35 * exp(df) + 0.1) * float(tk[0]))
+	var theirs := _poisson(rng, 1.35 * exp(-df) * float(tk[1]))
 	var pool := []
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
@@ -2258,6 +2260,80 @@ func sim_match(opp: int, home: bool) -> Array:
 		goals.append([rng.randi_range(2, 90), 1, ""])
 	goals.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
 	return [mine, theirs, scorers, goals]
+
+# ---------------------------------------------------------------- tactics before the match
+# How your team plays: mentality 0-4 (park the bus .. all out attack), pressing 0-2 (low, mid, high) and
+# width 0-2 (narrow, normal, wide). It changes how your men move in a match you play, and the score of one you simulate.
+const TAC_N := [["Park the bus", "Defensive", "Balanced", "Attacking", "All out attack"], ["Low", "Mid", "High"], ["Narrow", "Normal", "Wide"]]
+
+func tac() -> Array:
+	var t: Array = d.get("tac", [2, 1, 1])
+	return [clampi(int(t[0]), 0, 4), clampi(int(t[1]), 0, 2), clampi(int(t[2]), 0, 2)] if t.size() >= 3 else [2, 1, 1]
+
+func set_tac(k: int, v: int) -> void:
+	var t := tac()
+	if k < 0 or k > 2:
+		return
+	t[k] = clampi(v, 0, 4 if k == 0 else 2)
+	d["tac"] = t
+	save()
+
+static func tac_text(t: Array) -> String:
+	return "%s  ·  %s press  ·  %s" % [TAC_N[0][int(t[0])], TAC_N[1][int(t[1])], TAC_N[2][int(t[2])]]
+
+# The other manager picks his plan by how strong he is against you: a big club comes at you and presses high,
+# a small one sits deep and stays narrow. Each club has a bit of its own habit too, and a derby is played high.
+func cpu_tac(opp: int) -> Array:
+	if opp < 0:
+		return [2, 1, 1]
+	var gap := _strength(opp) - match_strength()
+	var ment := 2
+	if gap > 6.0:
+		ment = 4 if gap > 12.0 else 3
+	elif gap < -6.0:
+		ment = 0 if gap < -12.0 else 1
+	var press := 1
+	if gap > 4.0 or derby(opp):
+		press = 2
+	elif gap < -8.0:
+		press = 0
+	var width := 1
+	if ment <= 1:
+		width = 0
+	elif (opp * 7) % 3 == 0:
+		width = 2
+	return [ment, press, width]
+
+# What two plans do to a simulated match: [your goals x, their goals x, plus to the strength gap].
+# Going forward scores more but leaves holes behind; pressing high pays most for the better side;
+# width stretches a deep, narrow block but a narrow side is harder to play through.
+static func tac_effect(me: Array, op: Array, df: float) -> Array:
+	var km := 1.0
+	var kt := 1.0
+	var add := 0.0
+	var m1 := int(me[0]) - 2
+	var m2 := int(op[0]) - 2
+	km *= 1.0 + 0.14 * m1
+	kt *= 1.0 + 0.10 * m1
+	kt *= 1.0 + 0.14 * m2
+	km *= 1.0 + 0.10 * m2
+	var p1 := int(me[1]) - 1
+	var p2 := int(op[1]) - 1
+	add += p1 * (0.10 if df > 0.0 else 0.04)
+	add -= p2 * (0.10 if df < 0.0 else 0.04)
+	if int(me[2]) == 2:
+		km *= 1.10 if int(op[0]) <= 1 and int(op[2]) == 0 else 1.04
+		kt *= 1.03
+	elif int(me[2]) == 0:
+		km *= 0.95
+		kt *= 0.94
+	if int(op[2]) == 2:
+		kt *= 1.10 if int(me[0]) <= 1 and int(me[2]) == 0 else 1.04
+		km *= 1.03
+	elif int(op[2]) == 0:
+		kt *= 0.95
+		km *= 0.94
+	return [maxf(km, 0.4), maxf(kt, 0.4), add]
 
 # match settings for the career's own matches: level 0-2, length 0-2
 func set_cfg(k: String, v: int) -> void:
@@ -3376,6 +3452,8 @@ func _fit_post(fit0: Dictionary, played: Array, lines: Array, rng: RandomNumberG
 		var pl: Dictionary = sq[i]
 		var full_m := xi.has(i)
 		var drain := (25.0 + maxf(int(pl["age"]) - 28, 0) * 1.2) if full_m else 10.0
+		# a high press runs the legs off them, a low block saves a little
+		drain *= [0.9, 1.0, 1.22][clampi(int(tac()[1]), 0, 2)]
 		if ab_of(pl).has("motor"):
 			drain *= 0.75
 		if str(pl["pos"]) == "GK":

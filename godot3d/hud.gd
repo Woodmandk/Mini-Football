@@ -714,7 +714,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				play.ready.connect(func(): _pulse(play))
 			else:
 				_pulse(play)
-			menu.add_child(_back("career", null))
+			menu.add_child(_back("tab", "career"))
 		"pack":
 			var pk: Dictionary = info.get("pack", {})
 			var pw := 460.0
@@ -1045,7 +1045,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				var pb := _btn(dd[4], dd[0], null, "primary" if i == 0 else "alt", Vector2(px, h - 96.0), Vector2(cw, 68), 22)
 				menu.add_child(pb)
 				items.append([pb, Vector2(0, 60), 0.1 + 0.05 * i])
-			menu.add_child(_back("career", null))
+			menu.add_child(_back("tab", "career"))
 		"cm_pick":
 			var my2: Dictionary = info.get("my", {})
 			_title("The cup", "A cup on its own: every club in the country, lose once and you are out. Your coins go to your club.")
@@ -1599,7 +1599,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				menu.add_child(pb0)
 				items.append([pb0, Vector2(0, 60), 0.1 + 0.06 * i0])
 			if cur != "":
-				menu.add_child(_back("career", null))
+				menu.add_child(_back("tab", "career"))
 		"board":
 			var cb: Dictionary = info.get("car", {})
 			var bd: Dictionary = cb.get("board", {})
@@ -1643,7 +1643,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					cg.position = Vector2(92, 2)
 					chip.add_child(cg)
 					hx += 126.0
-			menu.add_child(_back("career", null))
+			menu.add_child(_back("tab", "career"))
 		"review":
 			var cr: Dictionary = info.get("car", {})
 			var br: Dictionary = cr.get("board", {})
@@ -1727,7 +1727,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				mv.size = Vector2(w - 32.0 - 360.0 - 60.0, 68)
 				mv.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 				menu.add_child(mv)
-				menu.add_child(_back("career", null))
+				menu.add_child(_back("tab", "career"))
 		"cup":
 			var c8: Dictionary = (info.get("car", {}) as Dictionary).get("cup", {})
 			var cm8 := bool(info.get("cupm", false))
@@ -2529,6 +2529,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					var b3 := _btn(str(r3[3][k]).to_upper(), str(r3[1]), k, "primary" if k == int(r3[2]) else "alt", Vector2(48 + 24 + k * (bw3 + 12), y3 + 86), Vector2(bw3, 50), 20)
 					menu.add_child(b3)
 			menu.add_child(_back("tab", "office"))
+		"ctac":
+			_tac_page(info, w, h, items)
 		"simres":
 			_sim_page(info, w, h, items, anim)
 		"youth":
@@ -2884,7 +2886,7 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	var c: Dictionary = info.get("car", {})
 	var cal: Array = c.get("cal", [])
 	_title("Calendar", "Season %d  ·  %s" % [int(c.get("season", 1)), str(c.get("lgname", "")).capitalize()])
-	menu.add_child(_back("career", null))
+	menu.add_child(_back("tab", "career"))
 	if cal.is_empty():
 		return
 	# the month of your next match (or the last one), moved by the arrows
@@ -3813,6 +3815,12 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 			if not st_on:
 				can_sim = false
 				pw = lw - 40
+		# the plan for the match, one tap from the card (not in a player career: there the manager decides)
+		if (info.get("pro", {}) as Dictionary).is_empty() and c.has("tac"):
+			var tt: Array = c.get("tac", [2, 1, 1])
+			var tcb := _btn("Tactics:  " + _tac_short(tt) + "  ›", "ctac", null, "ghost", Vector2(24 + 22, y0 + 52), Vector2(lw - 44 - 50, 40), 17)
+			menu.add_child(tcb)
+			items.append([tcb, Vector2(0, 30), 0.1])
 		# FIFA's ADVANCE: today, how long to the match, and a day at a time
 		var dleft := int(c.get("dleft", 0))
 		var tdl := _label(("Today: %s  ·  %s" % [str(c.get("cdate", "")), ("match in %d day%s" % [dleft, "" if dleft == 1 else "s"]) if dleft > 0 else "match day"]), 19, MUT if dleft > 0 else GREEN, font3)
@@ -4653,7 +4661,7 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	elif bool(wd.get("won", false)):
 		sub = "The window is shut: it opens on %s" % str(wn.get("otext", ""))
 	_title("Inbox", sub)
-	menu.add_child(_back("career", null))
+	menu.add_child(_back("tab", "career"))
 	var ib: Array = wd.get("inbox", [])
 	if ib.is_empty():
 		var el := _label("Nothing yet. News comes in as the days go by.", 22, MUT, font3)
@@ -4881,7 +4889,7 @@ func _scorers_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	_title(str(c.get("lgname", "The league")).capitalize(), "Top scorers this season")
 	menu.add_child(_btn("TABLE", "c_table", null, "alt", Vector2(w - 330, 14), Vector2(130, 44), 17))
 	menu.add_child(_btn("TOP SCORERS", "scorers", null, "primary", Vector2(w - 192, 14), Vector2(170, 44), 17))
-	menu.add_child(_back("career", null))
+	menu.add_child(_back("tab", "career"))
 	var top: Array = hn.get("top", [])
 	if top.is_empty():
 		var el := _label("No goals yet. The list fills up as the season goes.", 22, MUT, font3)
@@ -5073,7 +5081,7 @@ func _eu_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	elif e.has("opp"):
 		sub = "Next: %s v %s, %s" % [str(e.get("rname", "")).capitalize(), str(e["opp"]).capitalize(), str(e.get("day", ""))]
 	_title("The Champions Cup", sub)
-	menu.add_child(_back("career", null))
+	menu.add_child(_back("tab", "career"))
 	if e.is_empty():
 		return
 	var y0 := 100.0
@@ -5460,3 +5468,50 @@ func _pro_start_page(info: Dictionary, w: float, h: float, items: Array) -> void
 	var ok := int(pn.get("c", -1)) >= 0 and str(pn.get("n", "")) != ""
 	var gb := _btn("START" if ok else ("PICK A CLUB" if str(pn.get("n", "")) != "" else "CHOOSE A NAME"), "p_go" if ok else "p_name" if str(pn.get("n", "")) == "" else "p_more", null, "primary" if ok else "off", Vector2(rx + cw + gap, by), Vector2(cw, 66), 26)
 	menu.add_child(gb)
+
+
+# ---------------------------------------------------------------- tactics before the match
+const TAC_N := [["Park the bus", "Defensive", "Balanced", "Attacking", "All out attack"], ["Low", "Mid", "High"], ["Narrow", "Normal", "Wide"]]
+
+func _tac_short(t: Array) -> String:
+	return "%s  ·  %s press  ·  %s" % [TAC_N[0][clampi(int(t[0]), 0, 4)], TAC_N[1][clampi(int(t[1]), 0, 2)], TAC_N[2][clampi(int(t[2]), 0, 2)]]
+
+func _tac_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var c: Dictionary = info.get("car", {})
+	var t: Array = c.get("tac", [2, 1, 1])
+	var o: Array = c.get("otac", [2, 1, 1])
+	var opp := str(c.get("opp", "")).capitalize()
+	_title("Tactics", "How your team plays. It counts when you play the match and when you simulate it.")
+	var rows := [
+		["Mentality", ["Bus", "Defend", "Balanced", "Attack", "All out"], ["Everyone behind the ball: few goals either way", "Sit a bit deeper, hit them on the break",
+			"A bit of both", "Push up and get men forward, but it leaves room behind", "Throw everything forward: goals at both ends"]],
+		["Pressing", ["Low", "Mid", "High"], ["Wait in your own half and keep your shape. Saves legs", "Close them down in your half and after you lose it",
+			"Hunt the ball all over the pitch. Best for the better side, and it tires your men"]],
+		["Width", ["Narrow", "Normal", "Wide"], ["Stay compact through the middle: hard to play through", "The usual shape",
+			"Stretch the pitch: good against a deep, narrow side"]]]
+	var y := 112.0
+	var ph := 128.0
+	for ri in 3:
+		var r: Array = rows[ri]
+		var cur := clampi(int(t[ri]), 0, (r[1] as Array).size() - 1)
+		var pn := _card_panel(Vector2(48, y), Vector2(w - 96, ph - 10))
+		items.append([pn, Vector2(0, 40), 0.05 * ri])
+		var tl := _label(str(r[0]), 24, CHALK)
+		tl.position = Vector2(24, 10)
+		pn.add_child(tl)
+		var dl := _label(_trim(str(r[2][cur]), font3, 18, w - 96 - 220), 18, MUT, font3)
+		dl.position = Vector2(200, 14)
+		dl.size = Vector2(w - 96 - 220, 26)
+		pn.add_child(dl)
+		var n: int = (r[1] as Array).size()
+		var bw := (w - 96 - 48 - 12 * (n - 1)) / float(n)
+		for k in n:
+			var b := _btn(str(r[1][k]).to_upper(), "tac_set", [ri, k], "primary" if k == cur else "alt", Vector2(48 + 24 + k * (bw + 12), y + 52), Vector2(bw, 50), 19)
+			menu.add_child(b)
+		y += ph
+	if opp != "":
+		var sc := _label(_trim("Scout:  %s will most likely play %s" % [opp, _tac_short(o).to_lower()], font3, 19, w - 140), 19, GOLD, font3)
+		sc.position = Vector2(64, y + 4)
+		sc.size = Vector2(w - 128, 28)
+		menu.add_child(sc)
+	menu.add_child(_back("tab", "career"))
