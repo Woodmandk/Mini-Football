@@ -4,7 +4,7 @@ extends Node3D
 
 const PlayerS := preload("res://player.gd")
 const HudS := preload("res://hud.gd")
-const Sfx := preload("res://sfx.gd")
+const AudioDir := preload("res://audio.gd")
 const World := preload("res://world.gd")
 const NetS := preload("res://net.gd")
 const Career := preload("res://career.gd")
@@ -322,9 +322,7 @@ var fov_punch := 0.0
 var hud
 var world
 var net
-var au := {}
-var crowd_au: AudioStreamPlayer
-var crowd_vol := -14.0
+var audio # audio.gd: every sound of the match and the menus
 var confetti: CPUParticles3D
 var sparks := []
 var dust: CPUParticles3D
@@ -2165,27 +2163,37 @@ func _build_fx() -> void:
 	add_child(dust)
 
 func _build_audio() -> void:
-	var defs := {
-		"kick": Sfx.kick(1.0), "touch": Sfx.kick(0.45), "whistle": Sfx.whistle(0.5), "whistle_long": Sfx.whistle(1.1),
-		"roar": Sfx.roar(), "ooh": Sfx.ooh(), "net": Sfx.net(), "blip": Sfx.blip(), "post": Sfx.post(),
-		"blip2": Sfx.blip(1320.0), "whoosh": Sfx.whoosh(), "slide": Sfx.slide(), "win": Sfx.win(), "thud": Sfx.thud(), "jingle": Sfx.jingle(),
-	}
-	for k in defs:
-		var p := AudioStreamPlayer.new()
-		p.stream = defs[k]
-		add_child(p)
-		au[k] = p
-	au["roar"].volume_db = 2.0
-	au["touch"].volume_db = -8.0
-	crowd_au = AudioStreamPlayer.new()
-	crowd_au.stream = Sfx.crowd()
-	crowd_au.volume_db = -30.0
-	add_child(crowd_au)
+	audio = AudioDir.new()
+	add_child(audio)
 
 # ---------------------------------------------------------------- effects (also sent to the guest online)
 
 func _quiet() -> bool:
 	return autotest or screen == "menu"
+
+var _cf_ball := Vector3.ZERO
+var _cf_v := 0.0
+# The crowd follows the play every frame (on the guest's phone too): the ball near a goal, and
+# the ball running at a goal fast, make the ground rise; midfield lets it settle again.
+func _crowd_feed(rdt: float) -> void:
+	if audio == null:
+		return
+	audio.in_match = screen == "match" and not autotest
+	audio.paused = paused
+	var bp := ball.position
+	if rdt > 0.0 and Engine.time_scale > 0.0:
+		var vx := (bp.x - _cf_ball.x) / (rdt * Engine.time_scale)
+		if absf(vx) < 60.0:
+			_cf_v = lerpf(_cf_v, vx, clampf(rdt * 6.0, 0.0, 1.0))
+	_cf_ball = bp
+	var bx := absf(bp.x)
+	var near := clampf((bx - 18.0) / 30.0, 0.0, 1.0)
+	var run := clampf(_cf_v * signf(bp.x) / 14.0, 0.0, 1.0) * clampf((bx - 4.0) / 28.0, 0.0, 1.0)
+	var box := 1.0 if (bx > HL - 17.0 and absf(bp.z) < 21.0) else 0.0
+	var dg := maxf(near * 0.7 + run * 0.4, box * 0.92)
+	if state in ["half", "full", "goal", "replay", "intro", "off"] or set_piece == "throw":
+		dg *= 0.35
+	audio.danger = clampf(dg, 0.0, 1.0)
 
 func fx(kind: String, a = null) -> void:
 	if _quiet():
@@ -2194,13 +2202,21 @@ func fx(kind: String, a = null) -> void:
 		out_ev.append([kind, a])
 	_do_fx(kind, a)
 
-func snd(k: String) -> void:
-	fx("snd", k)
+# a sound where the ball is; vol 0..1 (a soft tap to a full strike)
+func snd(k: String, vol := 1.0) -> void:
+	if _quiet():
+		return
+	fx("snd", [k, snappedf(vol, 0.01), snappedf(ball.position.x, 0.1), snappedf(ball.position.y, 0.1), snappedf(ball.position.z, 0.1)])
 
 func _do_fx(kind: String, a) -> void:
 	match kind:
 		"snd":
-			au[a].play()
+			if a is String:
+				audio.play(a)
+			else:
+				audio.play(str(a[0]), float(a[1]), Vector3(float(a[2]), float(a[3]), float(a[4])))
+		"goal_snd":
+			audio.goal(int(a))
 		"banner":
 			hud.show_banner(a[0], Color(a[1]), a[2], a[3], int(a[4]))
 		"flash":
@@ -2437,7 +2453,8 @@ func _sub_do(t: int, slot: int, b: int) -> void:
 	_sub_show(old_name, p.pname)
 
 func _sub_show(old_name: String, new_name: String) -> void:
-	snd("whistle")
+	snd("whistle_short")
+	snd("clap", 0.7)
 	fx("say", "Substitution. %s comes on for %s." % [new_name, old_name])
 	hud.toast("%s ON  ·  %s OFF" % [new_name.to_upper(), old_name.to_upper()])
 	if hud.menu_name == "subs":
@@ -2856,8 +2873,6 @@ func _to_menu(keep_net := false) -> void:
 		p.set_meta("fouls", 0)
 		p.visible = true
 	_kickoff(0)
-	if not crowd_au.playing:
-		crowd_au.play()
 	if not keep_net:
 		_show_hub()
 
@@ -3094,7 +3109,7 @@ func _show_hub(pick := true) -> void:
 	hud.show_menu("main", _menu_info())
 
 func _action(act: String, arg = null) -> void:
-	au["blip2" if act in ["play", "start", "again"] else "blip"].play()
+	audio.play("click2" if act in ["play", "start", "again"] else "click")
 	if act == "key":
 		return
 	if assist and _as_take(act, arg):
@@ -3172,7 +3187,7 @@ func _action(act: String, arg = null) -> void:
 			var mp2: Array = arg
 			car_msg = ""
 			car.mail_pick(int(mp2[0]), int(mp2[1]))
-			au["blip2"].play()
+			audio.play("click2")
 			hud.refresh(_menu_info())
 		"bid_acc", "bid_rej", "bid_more":
 			car_msg = car.bid_answer(int(arg), {"bid_acc": "acc", "bid_rej": "rej", "bid_more": "more"}[act])
@@ -3223,7 +3238,7 @@ func _action(act: String, arg = null) -> void:
 				var ppl: Dictionary = pr["pl"]
 				pack_res = {"n": str(ppl["n"]).to_upper(), "pos": str(ppl["pos"]), "age": int(ppl["age"]), "pot": int(ppl["pot"]), "ovr": Career.ovr_of(ppl), "st": [int(ppl["pac"]), int(ppl["sho"]), int(ppl["pas"]), int(ppl["dfn"])]}
 				car_msg = ""
-				au["cheer"].play()
+				audio.play("cheer")
 				fx("flash", 0.5)
 				hud.show_menu("pack", _menu_info())
 			else:
@@ -3367,7 +3382,7 @@ func _action(act: String, arg = null) -> void:
 		"p_learn":
 			car_msg = car.pro_learn(str(arg), "pro2" if assist else "pro")
 			if car_msg.begins_with("YOU LEARNED"):
-				au["blip2"].play()
+				audio.play("click2")
 				hub_tab = "pro"
 				_show_hub()
 			else:
@@ -3483,7 +3498,7 @@ func _action(act: String, arg = null) -> void:
 					hud.show_menu("contract", _menu_info())
 					return
 				if bool(scout_res.get("ok", false)):
-					au["cheer"].play()
+					audio.play("cheer")
 					scout_i = -1
 				hud.refresh(_menu_info())
 		"sc_back":
@@ -3522,7 +3537,7 @@ func _action(act: String, arg = null) -> void:
 				var r2: String = car.train(car_sel)
 				car_msg = r2 if r2 != "" else "Not enough coins, or he has reached his best"
 				if r2 != "":
-					au["blip2"].play()
+					audio.play("click2")
 				hud.refresh(_menu_info())
 		"update":
 			if net.web:
@@ -3584,7 +3599,7 @@ func _action(act: String, arg = null) -> void:
 			if car_sel >= 0:
 				car_msg = car.learn_ab(car_sel, ab_slot, str(arg))
 				if car_msg.contains("LEARNED"):
-					au["blip2"].play()
+					audio.play("click2")
 					hud.show_menu("squad", _menu_info())
 				else:
 					hud.refresh(_menu_info())
@@ -3595,7 +3610,7 @@ func _action(act: String, arg = null) -> void:
 			if car_sel >= 0:
 				car_msg = car.spend_tp(car_sel, int(arg))
 				if car_msg.contains("+1"):
-					au["blip2"].play()
+					audio.play("click2")
 				hud.refresh(_menu_info())
 		"c_club":
 			car_msg = ""
@@ -3619,7 +3634,7 @@ func _action(act: String, arg = null) -> void:
 			car_msg = car.talk_offer()
 			if car.talk().is_empty():
 				# the talk is over: back to where it started, with the answer
-				au["blip2" if car_msg.contains("SIGN") else "blip"].play()
+				audio.play("click2" if car_msg.contains("SIGN") else "click")
 				car_sel = -1
 				scout_i = -1
 				scout_res = {}
@@ -3648,7 +3663,7 @@ func _action(act: String, arg = null) -> void:
 			car_msg = car.fac_up(str(arg)) if not car.eur else car.fac_ask(str(arg))
 			if car_msg == "BUILT":
 				car_msg = ""
-				au["blip2"].play()
+				audio.play("click2")
 			hud.refresh(_menu_info())
 		"c_market":
 			car_msg = ""
@@ -3660,14 +3675,14 @@ func _action(act: String, arg = null) -> void:
 				hud.show_menu("contract", _menu_info())
 				return
 			if car_msg.ends_with("SIGNED"):
-				au["blip2"].play()
+				audio.play("click2")
 			hud.refresh(_menu_info())
 		"c_sell":
 			# on or off the transfer list (one tap, it can always be undone)
 			if car_sel >= 0:
 				car_msg = car.sell(car_sel)
 				car_sell = -1
-				au["blip2"].play()
+				audio.play("click2")
 				hud.refresh(_menu_info())
 		"c_spot":
 			# a man dragged to a new spot on the team screen: [slot, along, across]
@@ -3682,7 +3697,7 @@ func _action(act: String, arg = null) -> void:
 			if int(ws[0]) != int(ws[1]):
 				car_msg = car.swap(int(ws[0]), int(ws[1]))
 				if car_msg == "":
-					au["blip2"].play()
+					audio.play("click2")
 			car_sel = -1
 			hud.refresh(_menu_info())
 		"c_rest":
@@ -4329,7 +4344,7 @@ func _net_poll() -> void:
 				if rk_looking:
 					# ranked: tell the other phone who you are, the host starts when both teams are known
 					net.send({"_": "rkt", "t": rk_me})
-					au["blip2"].play()
+					audio.play("click2")
 					continue
 				cv_last = 0
 				cv_t = 0.0
@@ -4344,12 +4359,12 @@ func _net_poll() -> void:
 					_ft_send()
 				if screen == "menu" and net.role == "host" and in_career and opt_car:
 					hud.toast("YOUR FRIEND IS IN THE CAREER")
-					au["blip2"].play()
+					audio.play("click2")
 					if hud.menu_name != "sug":
 						hud.refresh(_menu_info())
 				elif screen == "menu":
 					hud.show_menu("lobby", _menu_info())
-					au["blip2"].play()
+					audio.play("click2")
 			"lobby":
 				opt_mode = m.get("mode", "coop")
 				opt_diff = int(m.get("diff", 1))
@@ -4557,8 +4572,6 @@ func _begin_match(with_intro: bool) -> void:
 	cam_look = Vector3(0, 0, 0)
 	hud.show_controls = false
 	if not autotest:
-		if not crowd_au.playing:
-			crowd_au.play()
 		if with_intro:
 			intro_len = 5.4
 			fx("vs", 3.6)
@@ -4663,6 +4676,8 @@ func _kickoff(team: int) -> void:
 	fx("excite", 0.0)
 	snd("whistle")
 	if clock < 1.0 and half == 1:
+		snd("cheer", 0.8)
+		snd("clap", 0.7)
 		fx("say", "And we are under way!")
 
 func _goal(team: int) -> void:
@@ -4716,8 +4731,7 @@ func _goal(team: int) -> void:
 	hud.show_controls = false
 	fx("shake", 1.0)
 	snd("net")
-	snd("roar")
-	snd("jingle")
+	fx("goal_snd", team)
 	fx("excite", 1.0)
 	fx("confetti", ball.position.x * 0.72)
 	fx("vib", 180)
@@ -4956,7 +4970,7 @@ func _header(p) -> void:
 		q.offside = false
 	if p.offside:
 		pass
-	snd("touch")
+	snd("header", 1.0 if kind == "shot" else 0.75)
 	if kind == "shot":
 		fx("punch", 2.0)
 
@@ -5008,11 +5022,14 @@ func _foul(by, on, man_first := false) -> void:
 		stats["pens"] += 1
 	snd("whistle")
 	snd("thud")
+	if not in_box and randf() < 0.6:
+		snd("jeer", 0.55)
 	if not _quiet():
 		var who := "%d  %s" % [by.num, by.pname.to_upper()]
 		if in_box:
 			_banner("PENALTY!", Color(1.0, 0.86, 0.2), 1.6, "", 96)
 			fx("say", "Penalty!")
+			snd("gasp")
 			snd("ooh")
 		else:
 			_banner("FOUL", Color(1, 1, 1), 1.0, "", 60)
@@ -5026,7 +5043,8 @@ func _foul(by, on, man_first := false) -> void:
 
 func _offside(p) -> void:
 	stats["offsides"] += 1
-	snd("whistle")
+	snd("whistle_short")
+	snd("aww", 0.45)
 	_banner("OFFSIDE", Color(1, 1, 1), 1.1, "%d  %s" % [p.num, p.pname.to_upper()], 64)
 	ball_owner = null
 	ball_vel = Vector3.ZERO
@@ -5227,7 +5245,7 @@ func _switch(h) -> void:
 	# for a couple of seconds: no auto switch takes him, only you (SWITCH again) or a ball he wins.
 	h.pick_t = 3.0
 	if h.local:
-		au["blip"].play()
+		audio.play("click")
 
 # the other side plays a pass: put a defender who can get to the receiver under a thumb, like FIFA's auto switch
 func _switch_for_pass(t: int, m) -> void:
@@ -5901,7 +5919,11 @@ func _play(dt: float) -> void:
 		# At a sprint he knocks the ball on and runs after it: a touch, the ball jumps ahead, he catches it up.
 		# A poorer dribbler knocks it further. The ball is easier to take while it is away from his feet.
 		var spk: float = clampf((osp / maxf(o.top_speed, 1.0) - 0.84) / 0.1, 0.0, 1.0)
+		var tph0: float = o.touch_ph
 		o.touch_ph = fmod(o.touch_ph + dt * 2.2, 1.0)
+		# the little taps of a dribble, harder when he knocks it on at a sprint
+		if o.touch_ph < tph0 and osp > 1.5 and set_piece == "" and not o.hands():
+			snd("dribble", clampf(0.35 + osp / 10.0 + spk * 0.4, 0.35, 1.0))
 		bob += spk * (0.2 + 0.6 * (2.0 - o.turn_k) * (0.5 + 0.5 * cos(o.touch_ph * TAU)))
 		var rgt := Vector3(-f.z, 0, f.x)
 		var want_side := 0.0
@@ -5962,9 +5984,6 @@ func _play(dt: float) -> void:
 		_pickups()
 		if state == "play":
 			_check_lines()
-	# --- crowd gets louder near the goals
-	var near := clampf((absf(ball.position.x) - 20.0) / 30.0, 0.0, 1.0)
-	crowd_vol = lerpf(crowd_vol, -15.0 + near * 7.0, dt * 2.0)
 	# --- clock
 	if state != "play":
 		return
@@ -5978,7 +5997,8 @@ func _play(dt: float) -> void:
 		ball_owner = null
 		ball_vel = Vector3.ZERO
 		hud.show_controls = false
-		snd("whistle_long")
+		snd("whistle_half")
+		snd("clap_big", 0.7)
 		_banner("HALF TIME", Color(1, 1, 1), 2.2, "%d - %d" % [score[0], score[1]])
 	elif half == 2 and clock >= 5400.0 and score[0] == score[1] and _needs_winner() and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 5550.0):
 		# level after 90 minutes in a tie that needs a winner: two halves of extra time
@@ -6017,7 +6037,8 @@ func _break(nh: int, at: float, kicker: int, title: String, small: String) -> vo
 	ball_owner = null
 	ball_vel = Vector3.ZERO
 	hud.show_controls = false
-	snd("whistle_long")
+	snd("whistle_half")
+	snd("clap", 0.8)
 	_banner(title, Color(1.0, 0.86, 0.2) if nh == 3 else Color(1, 1, 1), 2.6, small, 84)
 	if nh == 3:
 		fx("say", "Still level after ninety minutes. We go to extra time!")
@@ -6127,7 +6148,7 @@ func _so_result(scored: bool, saved := false) -> void:
 	var tally := "PENALTIES  %d - %d" % [a, b]
 	if scored:
 		snd("net")
-		snd("roar")
+		fx("goal_snd", t)
 		fx("flash", 0.4)
 		fx("excite", 0.9)
 		_banner("SCORED!", Color(1.0, 0.86, 0.2), 1.8, tally, 96)
@@ -6166,7 +6187,8 @@ func _full_time() -> void:
 			half = 1
 			_kickoff(0)
 		return
-	snd("whistle_long")
+	snd("whistle_full")
+	snd("clap_big")
 	for p in players:
 		p.mood_t = 0.0
 		p.mood = 0 if score[0] == score[1] else (2 if (score[p.team] > score[1 - p.team]) else 3)
@@ -6467,8 +6489,8 @@ func _ball_free(dt: float) -> void:
 			ball_vel.z *= grip
 			ball_bs *= 0.3
 			ball_wv *= 0.5
-			if ball_vel.y > 2.0:
-				snd("touch")
+			if ball_vel.y > 1.2:
+				snd("bounce", clampf(ball_vel.y / 7.0, 0.3, 1.0))
 		else:
 			ball_vel.y = 0.0
 			ball_bs = 0.0
@@ -6862,7 +6884,11 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	stats["passes"] += 1
 	pass_from = p
 	pass_pw = -1.0
-	snd("kick" if (lofted or d > 22.0) and not thrown else "touch")
+	if thrown:
+		snd("touch", 0.25)
+	else:
+		var pv := v.length()
+		snd("pass" if (lofted or d > 22.0 or pv > 17.0) else "touch", clampf(pv / 24.0, 0.5, 1.0))
 	if lofted and not thrown:
 		fx("shake", 0.1)
 	if h != null and m.role != "GK" and _hum_of(m) == null:
@@ -6879,7 +6905,7 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		if taker != h:
 			h.switch_cool = 0.5
 			if taker.local:
-				au["blip"].play()
+				audio.play("click")
 	if _team_human(1 - p.team):
 		_switch_for_pass(1 - p.team, m)
 
@@ -6925,7 +6951,7 @@ func _pen_kick(p, power: float, aim_z: float) -> void:
 	tst[p.team]["shots"] += 1
 	fx("shake", 0.2 + 0.4 * power)
 	fx("punch", 1.5 + 3.0 * power)
-	snd("kick")
+	snd("shot", 0.6 + 0.4 * power)
 	fx("dust", [from.x, from.z])
 	fx("vib", 40)
 
@@ -6962,7 +6988,7 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 		var far := 24.0 + 22.0 * power
 		var tc := 1.4 + 1.0 * power
 		_release(p, cd * (far / tc) + Vector3(0, 4.9 * tc, 0), 0, tc, 0.07)
-		snd("kick")
+		snd("shot", 0.55 + 0.35 * power)
 		fx("dust", [from.x, from.z])
 		return
 	if set_piece == "pen":
@@ -7018,7 +7044,7 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 	tst[p.team]["shots"] += 1
 	fx("shake", 0.2 + 0.4 * power)
 	fx("punch", 1.5 + 3.0 * power)
-	snd("kick")
+	snd("shot", 0.6 + 0.4 * power)
 	fx("dust", [from.x, from.z])
 	fx("vib", 40)
 
@@ -7592,8 +7618,9 @@ func _pickups() -> void:
 				shot_live = false
 				stats["saves"] += 1
 				tst[t]["saves"] += 1
-				snd("touch")
+				snd("catch", 1.0)
 				snd("ooh")
+				snd("clap", 0.8)
 				fx("shake", 0.3)
 				fx("say", "What a save!")
 				_gk_pop(g, close_in)
@@ -7601,9 +7628,10 @@ func _pickups() -> void:
 				if shot_live:
 					stats["saves"] += 1
 					tst[t]["saves"] += 1
-					snd("ooh")
+					snd("ooh", 0.8)
+					snd("clap", 0.6)
 					_gk_pop(g, close_in)
-				snd("touch")
+				snd("catch", 0.85 if shot_live else 0.5)
 				# Back pass rule: a ball a team mate played to him on purpose he may not pick up. He takes it
 				# with his feet, and then he can be closed down and tackled like anyone else.
 				var bp: bool = pass_from != null and pass_from.team == t and ball_last == pass_from and pass_from != g
@@ -7688,9 +7716,10 @@ func _check_lines() -> void:
 		if absf(b.x) > HL + 0.4:
 			var defending := 0 if sx < 0.0 else 1
 			if shot_live:
-				snd("ooh")
+				snd("ooh" if randf() < 0.65 else "aww")
 			if ball_last != null and ball_last.team == defending:
 				_out("corner", Vector3(sx * (HL - 0.6), 0, signf(b.z) * (HW - 0.6)), 1 - defending)
+				snd("cheer", 0.55)
 			else:
 				_out("gk", Vector3(sx * (HL - 5.5), 0, 0), defending)
 			return
@@ -8572,7 +8601,7 @@ func _process(dt: float) -> void:
 				if tgt != null:
 					tgt.set_hint(Color(0.55, 0.95, 1.0))
 		_minimap()
-	crowd_au.volume_db = lerpf(crowd_au.volume_db, crowd_vol if screen == "match" else -26.0, clampf(rdt * 3.0, 0.0, 1.0))
+	_crowd_feed(rdt)
 	_camera(rdt)
 	if test_drag.size() >= 4 and real_t >= 1.0:
 		var a0 := Vector2(test_drag[0], test_drag[1])
@@ -8967,7 +8996,7 @@ func _as_take(act: String, arg) -> bool:
 			return true
 		co_rdy[1] = not co_rdy[1]
 		net.send({"_": "rdy", "r": co_rdy[1]})
-		au["blip2"].play()
+		audio.play("click2")
 		hud.refresh(_menu_info())
 		return true
 	if act in ["co_back", "co_leave"]:
@@ -8992,7 +9021,7 @@ func _as_take(act: String, arg) -> bool:
 	if act == "p_spend":
 		# your own player's points are yours to spend
 		net.send({"_": "psp", "si": int(arg)})
-		au["blip2"].play()
+		audio.play("click2")
 		return false
 	if act in ["p_drill", "p_learn"]:
 		# your own player's training and skills are yours too: the manager's phone does the same for your man
@@ -9135,7 +9164,7 @@ func _sug_next() -> void:
 		return
 	sug_cur = sugs.pop_front()
 	sug_prev = hud.menu_name
-	au["blip2"].play()
+	audio.play("click2")
 	hud.show_menu("sug", _menu_info())
 
 func _sug_answer(yes: bool) -> void:
@@ -9515,7 +9544,9 @@ func _booking(dt: float) -> void:
 			var who := "%d  %s" % [p.num, p.pname.to_upper()]
 			_banner("RED CARD" if red else "YELLOW CARD", Color(0.95, 0.2, 0.2) if red else Color(1.0, 0.9, 0.2), 1.5, who, 56)
 			fx("say", "A second yellow, and he is off!" if red else "The referee books him.")
-			snd("ooh" if red else "whistle")
+			snd("jeer", 1.0 if red else 0.75)
+			if red:
+				snd("gasp")
 			fx("vib", 60)
 	if book_t >= 2.9:
 		ref.card_up = 0
