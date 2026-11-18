@@ -1383,15 +1383,37 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				al.position = Vector2(20, 156)
 				rp6.add_child(al)
 				var ctr := int(res6.get("counter", 0))
-				var bids := [[int(round(ask * 0.8 / 5.0)) * 5, "LOW BID"], [ask, "THEIR PRICE"]]
+				var rc6 := int(pl7.get("rc", 0))
+				var bids := [[int(round(ask * 0.8 / 5.0)) * 5, "LOW BID", "sc_bid"], [ask, "THEIR PRICE", "sc_bid"], [int(round(ask * Career.SELLON_CUT / 5.0)) * 5, "+%d%% SELL-ON" % Career.SELLON_PCT, "sc_bid_so"]]
 				if ctr > 0:
-					bids = [[ctr, "PAY WHAT THEY ASK"]]
+					bids = [[ctr, "PAY WHAT THEY ASK", "sc_bid"]]
+				if rc6 > 0:
+					# one of their best men: not for sale, only his release clause buys him
+					al.text = "NOT FOR SALE  ·  RELEASE CLAUSE  %s" % _m(rc6)
+					bids = [[rc6, "PAY THE CLAUSE", "sc_rc"]]
 				var bw6 := (rw6 - 36.0 - 8.0 * (bids.size() - 1)) / bids.size()
 				for bi in bids.size():
 					var amt: int = bids[bi][0]
 					var can6: bool = int(c6.get("coins", 0)) >= amt
-					var bb6 := _btn("%s\n%s" % [bids[bi][1], _mp(amt)], "sc_bid", amt, "primary" if can6 else "off", Vector2(rx6 + 18 + bi * (bw6 + 8.0), 100 + 190), Vector2(bw6, 64), 17)
+					var bb6 := _btn("%s\n%s" % [bids[bi][1], _mp(amt)], str(bids[bi][2]), amt if str(bids[bi][2]) != "sc_rc" else null, "primary" if can6 else "off", Vector2(rx6 + 18 + bi * (bw6 + 8.0), 100 + 190), Vector2(bw6, 64), 16)
 					menu.add_child(bb6)
+				# a swap: one of your men plus money
+				var sw6: Dictionary = sc1.get("sw", {})
+				if not sw6.is_empty() and ctr <= 0:
+					var sy := 100 + 190 + 76
+					var swl := _label("SWAP", 16, GOLD, font2)
+					swl.position = Vector2(20, sy - 100 + 4)
+					rp6.add_child(swl)
+					menu.add_child(_btn("‹", "sc_swp", -1, "alt", Vector2(rx6 + 18, sy + 24), Vector2(44, 48), 22))
+					menu.add_child(_btn("›", "sc_swp", 1, "alt", Vector2(rx6 + 18 + 50, sy + 24), Vector2(44, 48), 22))
+					var swn := _label(_trim("%s  %s %d" % [str(sw6["n"]), str(sw6["pos"]), int(sw6["ovr"])], font2, 18, rw6 - 124 - 196), 18, Color.WHITE, font2)
+					swn.position = Vector2(124, sy - 100 + 28)
+					rp6.add_child(swn)
+					var swv := _label(_trim(("Worth %s to them" % str(sw6["worth_t"])) if bool(sw6["ok"]) else "They do not want him", font2, 15, rw6 - 124 - 196), 15, MUT if bool(sw6["ok"]) else Color(0.95, 0.5, 0.4), font2)
+					swv.position = Vector2(124, sy - 100 + 50)
+					rp6.add_child(swv)
+					var can7: bool = bool(sw6["ok"]) and int(c6.get("coins", 0)) >= int(sw6["cash"])
+					menu.add_child(_btn("HIM + %s" % _mp(int(sw6["cash"])), "sc_swap", str(sw6["key"]), "primary" if can7 else "off", Vector2(rx6 + rw6 - 18 - 170, sy + 24), Vector2(170, 48), 15))
 			else:
 				var hint := _label("Tap a player to see him and make a bid. Their best men cost more, and a big club sells to a smaller one only for a lot.", 18, Color(1, 1, 1, 0.75), font2)
 				hint.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -1498,10 +1520,27 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				vl9.size = Vector2(pw9 - 180, 34)
 				vl9.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				rp9.add_child(vl9)
+			# a release clause: he takes a little less, but a club can pay it and take him
+			var rcv: Array = c9.get("talk_rc", [0, 0, 0])
+			var rci := clampi(int(t9.get("rc", 0)), 0, 2)
+			var yy10 := 100 + 44 + 2 * 70
+			menu.add_child(_btn("–", "ct_rc", -1, "alt", Vector2(rx9 + 20, yy10), Vector2(60, 54), 28))
+			menu.add_child(_btn("+", "ct_rc", 1, "alt", Vector2(rx9 + pw9 - 80, yy10), Vector2(60, 54), 28))
+			var rct := "NO RELEASE CLAUSE" if rci == 0 else ("CLAUSE %s" % _m(int(rcv[rci])))
+			var rcl := _label(rct, 22, Color.WHITE)
+			rcl.position = Vector2(90, 44 + 2 * 70 + 12)
+			rcl.size = Vector2(pw9 - 180, 30)
+			rcl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			rp9.add_child(rcl)
+			var rch := _label(("He takes %d%% less a week, but a club can pay it and take him" % int(round((1.0 - [1.0, 0.92, 0.85][rci]) * 100))) if rci > 0 else "Add one and he takes less a week", 15, MUT, font2)
+			rch.position = Vector2(20, 44 + 2 * 70 + 60)
+			rch.size = Vector2(pw9 - 40, 22)
+			rch.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			rp9.add_child(rch)
 			var after9 := int(c9.get("wages", 0)) - int(t9.get("cur", 0)) + int(t9.get("offer", 0))
 			var wb9 := int(c9.get("wb", 0))
 			var wt9 := _label("WAGES AFTER:  %s  OF  %s A WEEK" % [Career.wage_text(after9), Career.wage_text(wb9)], 17, Color(1, 0.55, 0.45) if after9 > wb9 else Color(1, 1, 1, 0.75), font2)
-			wt9.position = Vector2(20, 190)
+			wt9.position = Vector2(20, 296)
 			rp9.add_child(wt9)
 			var go9 := _btn("MAKE THE OFFER", "ct_go", null, "primary", Vector2(rx9, h - 88), Vector2(pw9, 66), 26)
 			menu.add_child(go9)
@@ -4779,9 +4818,11 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		if str(cur.get("st", "")) == "open":
 			var bw := (pw - 48 - 20) / 3.0
 			var by := y0 + ph - 84
-			menu.add_child(_btn("SELL", "bid_acc", int(cur["id"]), "primary", Vector2(px + 24, by), Vector2(bw, 62), 22))
-			menu.add_child(_btn("ASK FOR MORE", "bid_more", int(cur["id"]), "alt" if int(cur.get("cnt", 0)) == 0 else "off", Vector2(px + 34 + bw, by), Vector2(bw, 62), 18))
-			menu.add_child(_btn("SAY NO", "bid_rej", int(cur["id"]), "ghost", Vector2(px + 44 + bw * 2, by), Vector2(bw, 62), 20))
+			var bw4 := (pw - 48 - 30) / 4.0
+			menu.add_child(_btn("SELL", "bid_acc", int(cur["id"]), "primary", Vector2(px + 24, by), Vector2(bw4, 62), 22))
+			menu.add_child(_btn("SELL + %d%%\nSELL-ON" % Career.SELLON_PCT, "bid_son", int(cur["id"]), "alt", Vector2(px + 34 + bw4, by), Vector2(bw4, 62), 16))
+			menu.add_child(_btn("ASK FOR\nMORE", "bid_more", int(cur["id"]), "alt" if int(cur.get("cnt", 0)) == 0 else "off", Vector2(px + 44 + bw4 * 2, by), Vector2(bw4, 62), 16))
+			menu.add_child(_btn("SAY NO", "bid_rej", int(cur["id"]), "ghost", Vector2(px + 54 + bw4 * 3, by), Vector2(bw4, 62), 20))
 		return
 	if str(cur["k"]) in ["press", "talk", "natjob"]:
 		var qb := _label(str(cur["b"]), 20, CHALK, font3)

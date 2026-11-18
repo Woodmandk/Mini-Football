@@ -1067,6 +1067,14 @@ func _listed_free() -> Array:
 func _sell_to(i: int, buyer: int, got: int) -> String:
 	var sq: Array = d["squad"]
 	var pl: Dictionary = sq[i]
+	var cut_t := ""
+	if pl.has("sob"):
+		# the club you bought him from has a sell-on share
+		var cut := int(round(got * SELLON_PCT / 100.0 / 5.0)) * 5
+		got -= cut
+		cut_t = "  ·  %s TO %s (SELL-ON)" % [money(cut), str(W[int(pl["sob"])]["n"])]
+		pl.erase("sob")
+	pl.erase("rc")
 	d["coins"] = int(d["coins"]) + got
 	_rec_fee("sell", got, str(pl["n"]))
 	sq.remove_at(i)
@@ -1086,7 +1094,7 @@ func _sell_to(i: int, buyer: int, got: int) -> String:
 		xi.append(int(x) - 1 if int(x) > i else int(x))
 	d["xi"] = xi
 	save()
-	return "%s SOLD TO %s FOR %s" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", money(got)]
+	return "%s SOLD TO %s FOR %s%s" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", money(got), cut_t]
 
 # ---- the club: three things to build
 
@@ -2474,13 +2482,16 @@ func ask_price(c: int, i: int) -> int:
 	return int(round(value(pl) * k / 5.0)) * 5
 
 # You bid for player i of club c. Returns {ok, msg, counter}.
-func bid(c: int, i: int, amount: int) -> Dictionary:
+# Deals as in FIFA: "so" leaves them a sell-on share (they take less now), "swap" puts one of your men in the deal
+# (his worth to them comes off the price), "rc" pays his release clause (no talk with the club at all).
+func bid(c: int, i: int, amount: int, ex := {}) -> Dictionary:
 	var sq := cpu_squad(c)
 	if i < 0 or i >= sq.size():
 		return {"ok": false, "msg": ""}
 	if window_msg() != "":
 		return {"ok": false, "msg": window_msg()}
-	if (d["squad"] as Array).size() >= SQUAD_MAX:
+	var swap := str(ex.get("swap", ""))
+	if (d["squad"] as Array).size() >= SQUAD_MAX and swap == "":
 		return {"ok": false, "msg": "Your squad is full. Sell a player first."}
 	if int(d["coins"]) < amount:
 		return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
@@ -2488,15 +2499,48 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	var neg: Dictionary = d.get("neg", {})
 	var key := "%d:%s" % [c, str(sq[i]["n"])]
 	var pl: Dictionary = sq[i]
-	if amount >= ask or (neg.has(key) and amount >= int(neg[key])):
+	var rc := cpu_clause(c, i)
+	var pay_rc := bool(ex.get("rc", false))
+	if pay_rc:
+		if rc <= 0:
+			return {"ok": false, "msg": ""}
+		amount = rc
+		if int(d["coins"]) < amount:
+			return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
+	elif rc > 0 and swap == "":
+		# one of their best men with a clause in his contract: they will not sell him, only the clause buys him
+		return {"ok": false, "msg": "%s WILL NOT SELL HIM. ONLY HIS RELEASE CLAUSE (%s) CAN BUY HIM." % [str(W[c]["n"]), money(rc)]}
+	var need := ask
+	if bool(ex.get("so", false)):
+		need = int(round(ask * SELLON_CUT / 5.0)) * 5
+	if swap != "":
+		var si := _sq_find(swap)
+		if si < 0:
+			return {"ok": false, "msg": ""}
+		var sv := swap_worth(c, i, si)
+		if sv <= 0:
+			return {"ok": false, "msg": "%s DO NOT WANT %s." % [str(W[c]["n"]), swap.to_upper()]}
+		if (d["squad"] as Array).size() <= SQUAD_MIN:
+			return {"ok": false, "msg": "You need at least %d players." % SQUAD_MIN}
+		need = maxi(0, need - sv)
+		amount = maxi(amount, need)
+		if int(d["coins"]) < amount:
+			return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
+	if pay_rc or amount >= need or (neg.has(key) and amount >= int(neg[key]) and swap == "" and not ex.has("so")):
 		neg.erase(key)
 		d["neg"] = neg
+		var ex2 := {}
+		if bool(ex.get("so", false)) and not pay_rc:
+			ex2["sob"] = c
+		if swap != "":
+			ex2["swap"] = swap
 		if wages_on():
 			# the clubs agree on the fee: now the player himself has to say yes to a contract
 			talk_sign(pl, amount, c, i)
+			(d["talk"] as Dictionary)["ex"] = ex2
 			save()
-			return {"ok": true, "talk": true, "msg": "FEE AGREED WITH %s. NOW TALK TO %s." % [str(W[c]["n"]), str(pl["n"]).to_upper()]}
-		return {"ok": true, "msg": _complete_bid(c, i, amount, -1, -1)}
+			return {"ok": true, "talk": true, "msg": "%s WITH %s. NOW TALK TO %s." % ["CLAUSE PAID" if pay_rc else "FEE AGREED", str(W[c]["n"]), str(pl["n"]).to_upper()]}
+		return {"ok": true, "msg": _complete_bid(c, i, amount, -1, -1, ex2)}
 	if amount >= int(ask * 0.75):
 		neg[key] = ask
 		d["neg"] = neg
@@ -2505,9 +2549,18 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(W[c]["n"])}
 
 # The transfer goes through: he joins you, his club signs a younger, cheaper man for his place.
-func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
+func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int, ex := {}) -> String:
 	var sq := cpu_squad(c)
 	var pl: Dictionary = sq[i]
+	var swap := str(ex.get("swap", ""))
+	var gone: Dictionary = {}
+	if swap != "":
+		var si := _sq_find(swap)
+		if si < 0:
+			return "%s IS NOT AT THE CLUB ANY MORE. THE SWAP IS OFF." % swap.to_upper()
+		gone = d["squad"][si]
+		_out_of_xi(si)
+		_remove_mine(si)
 	if true:
 		# he leaves: the club signs a younger, cheaper man for his place
 		var rng := RandomNumberGenerator.new()
@@ -2520,7 +2573,17 @@ func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
 			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "ab": []}
 		nw["pot"] = clampi(ovr_of(nw) + rng.randi_range(4, 12), ovr_of(nw), 94)
 		var their := sq.duplicate(true)
-		their[i] = nw
+		if not gone.is_empty():
+			# the swap: your man takes his place at their club
+			var g2: Dictionary = gone.duplicate(true)
+			g2["num"] = int(pl["num"])
+			g2["tp"] = 0
+			g2["xp"] = 0
+			g2.erase("sob")
+			g2.erase("rc")
+			their[i] = g2
+		else:
+			their[i] = nw
 		_set_cpu_squad(c, their)
 		var used := []
 		for x in d["squad"]:
@@ -2537,11 +2600,18 @@ func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
 		if wk >= 0:
 			me_pl["wk"] = wk
 			me_pl["ct"] = yrs
+		if ex.has("sob"):
+			# they keep a share of what you sell him for one day
+			me_pl["sob"] = int(ex["sob"])
+		if ex.has("rc"):
+			me_pl["rc"] = int(ex["rc"])
 		d["coins"] = int(d["coins"]) - amount
 		d["squad"].append(me_pl)
 		_rec_fee("buy", amount, str(pl["n"]))
 		save()
-		return "%s SIGNED FROM %s FOR %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount)]
+		if not gone.is_empty():
+			return "%s SIGNED FROM %s: %s GOES THE OTHER WAY + %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), str(gone["n"]).to_upper(), money(amount)]
+		return "%s SIGNED FROM %s FOR %s%s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount), ("  ·  %d%% SELL-ON TO THEM" % SELLON_PCT) if ex.has("sob") else ""]
 	return ""
 
 # ---------------------------------------------------------------- the career's money, like a real club (euros only)
@@ -2679,16 +2749,20 @@ func talk_set(what: String, step: int) -> void:
 	if what == "w":
 		var st := maxi(1, int(round(int(t["ask"]) * 0.04)))
 		t["offer"] = clampi(int(t["offer"]) + step * st, 1, int(t["ask"]) * 2)
+	elif what == "rc":
+		t["rc"] = (int(t.get("rc", 0)) + step + 3) % 3
 	else:
 		t["yrs"] = clampi(int(t["yrs"]) + step, 1, 5)
 	d["talk"] = t
 
-func talk_force(offer: int, yrs: int) -> void:
+func talk_force(offer: int, yrs: int, rc := -1) -> void:
 	var t := talk()
 	if t.is_empty():
 		return
 	t["offer"] = clampi(offer, 1, int(t["ask"]) * 2)
 	t["yrs"] = clampi(yrs, 1, 5)
+	if rc >= 0:
+		t["rc"] = clampi(rc, 0, 2)
 	d["talk"] = t
 
 # You make the offer. Returns what happened; when the talk is over, talk() is empty.
@@ -2721,19 +2795,30 @@ func talk_offer() -> String:
 		if not still:
 			talk_end()
 			return "%s HAS GONE ELSEWHERE. THE DEAL IS OFF." % nm
-	if int(t["offer"]) >= int(t["min"]):
+	if int(t["offer"]) >= int(round(int(t["min"]) * RC_WAGE[clampi(int(t.get("rc", 0)), 0, 2)])):
 		var wk := int(t["offer"])
 		var yrs := int(t["yrs"])
 		d.erase("talk")
 		if signing:
-			var r := _complete_bid(int(t["from"]), int(t["idx"]), int(t["fee"]), wk, yrs) if int(t["from"]) >= 0 else _complete_buy(int(t["idx"]), wk, yrs)
+			var ex3: Dictionary = (t.get("ex", {}) as Dictionary).duplicate()
+			var rc3 := clause_of_talk(t)
+			if rc3 > 0:
+				ex3["rc"] = rc3
+			var r := _complete_bid(int(t["from"]), int(t["idx"]), int(t["fee"]), wk, yrs, ex3) if int(t["from"]) >= 0 else _complete_buy(int(t["idx"]), wk, yrs)
+			if int(t["from"]) < 0 and rc3 > 0 and not d["squad"].is_empty():
+				(d["squad"][(d["squad"] as Array).size() - 1] as Dictionary)["rc"] = rc3
 			save()
 			return "%s  ·  %s A WEEK FOR %d SEASONS" % [r, wage_text(wk), yrs]
 		var pl: Dictionary = d["squad"][int(t["i"])]
 		pl["wk"] = wk
 		pl["ct"] = yrs
+		var rc4 := clause_of_talk(t)
+		if rc4 > 0:
+			pl["rc"] = rc4
+		else:
+			pl.erase("rc")
 		save()
-		return "%s SIGNS A NEW CONTRACT: %s A WEEK FOR %d SEASONS" % [nm, wage_text(wk), yrs]
+		return "%s SIGNS A NEW CONTRACT: %s A WEEK FOR %d SEASONS%s" % [nm, wage_text(wk), yrs, ("  ·  CLAUSE " + money(rc4)) if rc4 > 0 else ""]
 	t["tries"] = int(t["tries"]) - 1
 	if int(t["tries"]) <= 0:
 		d.erase("talk")
@@ -3205,6 +3290,8 @@ func world_tick(lines: Array, per_match := true) -> void:
 			ch = 0.0 # the first days of a new career: let the man settle in
 		if rng.randf() < ch:
 			_cpu_bid(rng, lines)
+		if today() >= 0:
+			_clause_tick(rng, lines)
 	if eur:
 		_press_tick(rng, lines)
 	_nat_offer(rng, lines)
@@ -3256,6 +3343,10 @@ func _cpu_deal(rng: RandomNumberGenerator, day: int) -> Array:
 		var top := range(ssq.size())
 		top.sort_custom(func(p, q): return ovr_of(ssq[p]) > ovr_of(ssq[q]))
 		var i: int = top[rng.randi() % mini(4, top.size())]
+		for k2 in ssq.size():
+			# a man you sold with a sell-on share is watched by bigger clubs
+			if ssq[k2].has("so") and rng.randf() < 0.5:
+				i = k2
 		var pl: Dictionary = ssq[i]
 		if str(pl["pos"]) == "GK" and rng.randf() < 0.7:
 			continue
@@ -3268,6 +3359,11 @@ func _cpu_deal(rng: RandomNumberGenerator, day: int) -> Array:
 		var fee := int(round(value(pl) * rng.randf_range(1.05, 1.5) / 5.0)) * 5
 		var moved: Dictionary = pl.duplicate(true)
 		moved["num"] = int(bsq[j]["num"])
+		if moved.has("so"):
+			var share := int(round(fee * int(moved["so"]) / 100.0 / 5.0)) * 5
+			moved.erase("so")
+			d["coins"] = int(d["coins"]) + share
+			_mail("info", "Sell-on money: %s" % money(share), "%s sold %s to %s for %s. Your %d%% share is %s, and it is in your transfer budget." % [str(W[seller]["n"]).capitalize(), str(pl["n"]).capitalize(), str(W[buyer]["n"]).capitalize(), money(fee), SELLON_PCT, money(share)])
 		bsq[j] = moved
 		ssq[i] = _fill_in(seller, str(pl["pos"]), int(pl["num"]), rng)
 		_set_cpu_squad(buyer, bsq)
@@ -3357,6 +3453,17 @@ func bid_answer(id: int, what: String) -> String:
 		var r := _sell_to(i, c, amt)
 		_mail("info", "Deal done", r.capitalize())
 		return r
+	if what == "son":
+		# sell, but keep a share of his next transfer: they pay a little less now
+		if (d["squad"] as Array).size() <= SQUAD_MIN:
+			return "You need at least %d players." % SQUAD_MIN
+		_out_of_xi(i)
+		m["st"] = "acc"
+		pl["so"] = SELLON_PCT
+		var got := int(round(amt * SELLON_CUT / 5.0)) * 5
+		var r2 := _sell_to(i, c, got)
+		_mail("info", "Deal done, with a sell-on", "%s. You get %d%% of the fee when %s sell him on." % [r2.capitalize(), SELLON_PCT, str(W[c]["n"]).capitalize()])
+		return r2 + "  ·  %d%% SELL-ON" % SELLON_PCT
 	if what == "rej":
 		m["st"] = "rej"
 		if rating(c) > int(my_strength()) + 2 and full():
@@ -5423,3 +5530,87 @@ func _nat_cal() -> Array:
 			var o := nat_opp()
 			out.append({"day": _nat_day_t(int(t["md"])), "kind": "nat", "opp": int(o[0]), "home": bool(o[1]), "res": [], "played": false, "name": str(o[2]).capitalize(), "next": false})
 	return out
+
+# ---------------------------------------------------------------- smarter deals
+const SELLON_PCT := 20 # the share of the next fee
+const SELLON_CUT := 0.88 # what a sell-on costs on today's fee
+const RC_WAGE := [1.0, 0.92, 0.85] # a release clause in his contract: he takes a little less
+const RC_K := [0.0, 2.5, 1.6] # the clause as a part of what he is worth: high, low
+
+func clause_of_talk(t: Dictionary) -> int:
+	var r := clampi(int(t.get("rc", 0)), 0, 2)
+	if r == 0:
+		return 0
+	var o := int(t.get("ovr", 60))
+	var v := maxi(20, int(round((30.0 + pow(maxf(o - 55.0, 0.0), 2.0) * 0.9 + maxf(int(t.get("pot", o)) - o, 0.0) * 6.0 - maxf(int(t.get("age", 25)) - 29.0, 0.0) * 15.0) / 5.0)) * 5)
+	return int(round(v * RC_K[r] / 5.0)) * 5
+
+# A computer club's best men: some have a release clause, and then only the clause buys them.
+func cpu_clause(c: int, i: int) -> int:
+	var sq := cpu_squad(c)
+	if i < 0 or i >= sq.size():
+		return 0
+	var pl: Dictionary = sq[i]
+	if pl.has("rc"):
+		return int(pl["rc"])
+	var ovs := []
+	for x in sq:
+		ovs.append(ovr_of(x))
+	ovs.sort()
+	ovs.reverse()
+	if ovr_of(pl) < int(ovs[mini(2, ovs.size() - 1)]) or _nh(str(pl["n"]) + str(c)) % 3 != 0:
+		return 0
+	return int(round(value(pl) * 2.2 / 5.0)) * 5
+
+# what your man is worth to them in a swap: only a man who would play for them, and a bit under his worth
+func swap_worth(c: int, i: int, mine: int) -> int:
+	var sq := cpu_squad(c)
+	if mine < 0 or mine >= (d["squad"] as Array).size() or i < 0 or i >= sq.size():
+		return 0
+	var pl: Dictionary = d["squad"][mine]
+	if injured(pl):
+		return 0
+	var worst := 99
+	for x in sq:
+		if str(x["pos"]) == str(pl["pos"]):
+			worst = mini(worst, ovr_of(x))
+	if ovr_of(pl) < worst - 2:
+		return 0
+	return int(round(value(pl) * 0.85 / 5.0)) * 5
+
+# a man of yours leaves the squad (the eleven is fixed up first by the caller)
+func _remove_mine(i: int) -> void:
+	var sq: Array = d["squad"]
+	sq.remove_at(i)
+	var xi := []
+	for x in d["xi"]:
+		xi.append(int(x) - 1 if int(x) > i else int(x))
+	d["xi"] = xi
+
+# in an open window a club can pay the release clause of one of your men: he goes, you cannot stop it
+func _clause_tick(rng: RandomNumberGenerator, lines: Array) -> void:
+	var sq: Array = d["squad"]
+	if sq.size() <= SQUAD_MIN:
+		return
+	for i in sq.size():
+		var pl: Dictionary = sq[i]
+		if not pl.has("rc"):
+			continue
+		var cheap := float(value(pl)) / maxf(float(pl["rc"]), 1.0)
+		if rng.randf() > interest(pl) * 0.35 * clampf(cheap * 1.4, 0.3, 1.2):
+			continue
+		var o := ovr_of(pl)
+		var cand := []
+		for c in _country_clubs():
+			if c != int(d["club"]) and rating(c) >= o - 3 and rating(c) >= int(my_strength()):
+				cand.append(c)
+		if cand.is_empty():
+			continue
+		var c: int = cand[rng.randi() % cand.size()]
+		var fee := int(pl["rc"])
+		var nm := str(pl["n"])
+		_out_of_xi(i)
+		var r := _sell_to(i, c, fee)
+		_mail("info", "%s paid the clause for %s" % [str(W[c]["n"]).capitalize(), nm.capitalize()], "%s paid his release clause of %s. He has gone, there was nothing you could do. %s" % [str(W[c]["n"]).capitalize(), money(fee), r.capitalize()])
+		lines.append("%s PAID %s'S RELEASE CLAUSE" % [str(W[c]["n"]), nm.to_upper()])
+		return
