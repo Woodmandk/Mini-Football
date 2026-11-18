@@ -112,23 +112,25 @@ def stadium_ir(rt=1.7, n_sec=2.4, er=True):
 	ir *= np.minimum(t / 0.02, 1.0)  # the tail starts after the first echoes
 	if er:
 		for d, g in [(0.031, 0.5), (0.047, 0.35), (0.083, 0.3), (0.12, 0.22), (0.17, 0.15)]:
-			ir[int(d * SR)] += g * 6.0
+			ir[int(d * SR)] += g * 0.4
 	return ir / np.sqrt(np.sum(ir ** 2))
 
 def reverb(x, wet=0.25, rt=1.7, tail=1.6, circular=False, ir=None):
+	# An open stadium, not a hall: a short, soft tail and no hard echoes (Daniel: "sounds like a cave").
+	rt *= 0.5
 	ir = stadium_ir(rt) if ir is None else ir
 	if circular:
 		n = len(x)
 		irp = np.zeros(n)
 		irp[:min(len(ir), n)] = ir[:n]
 		y = np.fft.irfft(np.fft.rfft(x) * np.fft.rfft(irp), n)
-		return x * (1 - wet) + y * wet * 3.0
+		return x * (1 - wet * 0.3) + y * wet * 0.45
 	n = len(x) + int(tail * SR)
 	xp = np.zeros(n)
 	xp[:len(x)] = x
 	m = 1 << int(np.ceil(np.log2(n + len(ir))))
 	y = np.fft.irfft(np.fft.rfft(xp, m) * np.fft.rfft(ir, m), m)[:n]
-	out = xp * (1 - wet) + y * wet * 3.0
+	out = xp * (1 - wet * 0.3) + y * wet * 0.3
 	fade = int(0.25 * SR)
 	out[-fade:] *= np.linspace(1, 0, fade) ** 2
 	return out
@@ -488,7 +490,7 @@ def whistle_blast(dur, pitch=3150.0):
 	return (tone * am + breath) * blow
 
 def whistles():
-	ir = stadium_ir(2.0)
+	ir = stadium_ir(1.0)
 	def out(name, parts):
 		total = sum(d + g for d, g in parts)
 		x = np.zeros(int(total * SR) + 10)
