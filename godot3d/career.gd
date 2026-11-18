@@ -235,7 +235,7 @@ func set_form(name: String, roles: Array) -> void:
 			for i in (d["squad"] as Array).size():
 				if used.has(i):
 					continue
-				if pass_n == 0 and str(d["squad"][i]["pos"]) != str(roles[s]):
+				if pass_n == 0 and not plays(d["squad"][i], str(roles[s])):
 					continue
 				if pass_n == 1 and str(d["squad"][i]["pos"]) == "GK":
 					continue
@@ -353,6 +353,7 @@ func _new_season() -> void:
 	d["last"] = []
 	d["myres"] = {}
 	d["day"] = -4 # pre-season: a few days before the first match
+	d["cur"] = -4
 	d["gs"] = {}
 	d["mg"] = {}
 	d["mp"] = {}
@@ -403,6 +404,74 @@ func ids(li := -1) -> Array:
 	for x in (d["leagues"] as Array)[lg() if li < 0 else li]:
 		out.append(int(x))
 	return out
+
+# ---- rivals and derbies: every club has one rival, from the same town if there is one, else the club
+# in its league closest to it. A derby is a big day: a full stadium, the board and the fans care, the press ask.
+func _town(c: int) -> String:
+	var ws: PackedStringArray = str(W[c]["n"]).split(" ")
+	return " ".join(ws.slice(0, maxi(ws.size() - 1, 1)))
+
+func rival_of(c: int) -> int:
+	if c < FIRST or c >= W.size():
+		return -1
+	var rv: Dictionary = d.get("rv", {})
+	if rv.has(str(c)):
+		return int(rv[str(c)])
+	var li := league_of(c)
+	var ctry := str(ClubDB.LEAGUES[li]["c"]) if li >= 0 else ""
+	var best := -1
+	var bs := 1e9
+	for x in range(FIRST, W.size()):
+		if x == c:
+			continue
+		var lx := league_of(x)
+		if lx < 0 or str(ClubDB.LEAGUES[lx]["c"]) != ctry:
+			continue
+		var s := 0.0
+		if _town(x) == _town(c):
+			s -= 1000.0
+		if lx != li:
+			s += 200.0 + absi(lx - li) * 50.0
+		s += absf(float(rating(x) - rating(c))) + float(absi(hash(str(c * 31 + x)) % 7)) * 0.1
+		if s < bs:
+			bs = s
+			best = x
+	rv[str(c)] = best
+	d["rv"] = rv
+	return best
+
+func derby(opp: int) -> bool:
+	var me := int(d["club"])
+	return opp >= 0 and rival_of(me) == opp
+
+func derby_rec() -> Dictionary:
+	return d.get("drb", {"w": 0, "d": 0, "l": 0})
+
+# after a derby: the record, the gate, the board and the dressing room
+func _derby_after(mine: int, theirs: int, opp: int, lines: Array) -> void:
+	if not derby(opp):
+		return
+	var r := derby_rec()
+	var k := "w" if mine > theirs else ("d" if mine == theirs else "l")
+	r[k] = int(r.get(k, 0)) + 1
+	d["drb"] = r
+	var b := board()
+	if b.has("trk"):
+		var trk: Dictionary = b["trk"]
+		trk["dp"] = int(trk.get("dp", 0)) + 1
+		if mine > theirs:
+			trk["derby"] = int(trk.get("derby", 0)) + 1
+	var on := str(W[opp]["n"]).capitalize()
+	if mine > theirs:
+		_conf_add(4)
+		_team_mood(3)
+		lines.append("DERBY WON! THE TOWN IS YOURS. THE BOARD +4")
+	elif mine < theirs:
+		_conf_add(-4)
+		_team_mood(-2)
+		lines.append("DERBY LOST TO %s. THE FANS ARE FURIOUS. THE BOARD -4" % on.to_upper())
+	else:
+		lines.append("A DERBY DRAW WITH %s" % on.to_upper())
 
 func league_of(c: int) -> int:
 	var lgs: Array = d.get("leagues", [])
@@ -519,6 +588,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		d["myres"] = {}
 	d["myres"][str(int(d["round"]))] = [mine, theirs]
 	d["day"] = lg_day(int(d["round"]))
+	d["cur"] = int(d["day"])
 	d["round"] = int(d["round"]) + 1
 	var stt: Dictionary = stats()
 	stt["p"] = int(stt["p"]) + 1
@@ -538,11 +608,15 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	market_refresh()
 	lines.append("+" + money(coins))
 	lines.append(_board_match(mine, theirs, opp_c, was_home, played if not played.is_empty() else d["xi"]))
+	_derby_after(mine, theirs, opp_c, lines)
 	if was_home:
 		# the gate: a bigger stadium and a club near the top bring more people in
 		var gate := int(round((fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)) * pay_k(lg())))
 		if eur:
 			gate = int(round(gate * 0.5))
+		if derby(opp_c):
+			# derby day: every seat sold
+			gate = int(round(gate * 1.6))
 		d["coins"] = int(d["coins"]) + gate
 		lines.append("+%s FROM THE GATE" % money(gate))
 	var was_on := []
@@ -616,6 +690,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	_fac_tick(lines)
 	if eur:
 		_after_match(played if not played.is_empty() else d["xi"], mine > theirs, lines, rng)
+	_rt_tick(d["xi"], lines)
 	_fit_post(fit0, played, lines, rng)
 	world_tick(lines)
 	save()
@@ -642,6 +717,12 @@ func _grow_key(pl: Dictionary, rng: RandomNumberGenerator) -> String:
 	return "pas"
 
 func next_season() -> void:
+	# a tournament still running when you go on: the rest of it is played without you watching
+	var ng := 0
+	while nat_due() and ng < 8:
+		var nr := nat_sim()
+		nat_finish(int(nr[0]), int(nr[1]), randf() < 0.5)
+		ng += 1
 	money_init()
 	var gone := _contracts_end()
 	var mv0 := int(d.get("move", 0))
@@ -679,6 +760,7 @@ func next_season() -> void:
 	if not gone.is_empty():
 		d["note"] = "CONTRACTS RAN OUT: %s LEFT ON A FREE." % ", ".join(PackedStringArray(gone))
 	eu_new(quals)
+	_nat_season()
 	d["wlast"] = -999
 	world_tick([])
 	save()
@@ -986,6 +1068,14 @@ func _listed_free() -> Array:
 func _sell_to(i: int, buyer: int, got: int) -> String:
 	var sq: Array = d["squad"]
 	var pl: Dictionary = sq[i]
+	var cut_t := ""
+	if pl.has("sob"):
+		# the club you bought him from has a sell-on share
+		var cut := int(round(got * SELLON_PCT / 100.0 / 5.0)) * 5
+		got -= cut
+		cut_t = "  ·  %s TO %s (SELL-ON)" % [money(cut), str(W[int(pl["sob"])]["n"])]
+		pl.erase("sob")
+	pl.erase("rc")
 	d["coins"] = int(d["coins"]) + got
 	_rec_fee("sell", got, str(pl["n"]))
 	sq.remove_at(i)
@@ -1005,7 +1095,7 @@ func _sell_to(i: int, buyer: int, got: int) -> String:
 		xi.append(int(x) - 1 if int(x) > i else int(x))
 	d["xi"] = xi
 	save()
-	return "%s SOLD TO %s FOR %s" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", money(got)]
+	return "%s SOLD TO %s FOR %s%s" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", money(got), cut_t]
 
 # ---- the club: three things to build
 
@@ -1222,7 +1312,10 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var won: bool = mine > theirs or (mine == theirs and won_tie)
 	if not bool(d.get("cupmode", false)):
 		d["day"] = cup_day(r)
+		d["cur"] = int(d["day"])
 	var copp := cup_opp()
+	if not bool(d.get("cupmode", false)):
+		_derby_after(mine + (1 if mine == theirs and won_tie else 0), theirs, copp, lines)
 	_cup_round(mine, theirs, won_tie)
 	if not bool(d.get("cupmode", false)):
 		_rec_result(mine, theirs, copp, true)
@@ -1270,6 +1363,7 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		_after_match(d["xi"], won, lines, rng3)
 	var rng4 := RandomNumberGenerator.new()
 	rng4.randomize()
+	_rt_tick(d["xi"], lines)
 	_fit_post(fit0, [], lines, rng4)
 	world_tick(lines)
 	save()
@@ -1473,6 +1567,10 @@ func _board_season() -> void:
 		if int(d["squad"][int(i)]["age"]) <= 21:
 			young += 1
 	var pool := ["goals", "cs", "build", "home"]
+	var rvl := rival_of(int(d["club"]))
+	if rvl >= 0 and league_of(rvl) == league_of(int(d["club"])):
+		pool.append("derby")
+		pool.append("derby")
 	if young >= 1 or fac("youth") >= 2:
 		pool.append("young")
 	var k: String = pool[rng.randi() % pool.size()]
@@ -1489,12 +1587,14 @@ func _board_season() -> void:
 		"home":
 			var l := int(round(rounds_total() / 2.0 * (0.12 if ex <= 3 else 0.25)))
 			ex3 = {"k": "home", "v": l, "t": "LOSE NO MORE THAN %d HOME MATCHES" % l}
+		"derby":
+			ex3 = {"k": "derby", "v": 1, "t": "BEAT %s IN A DERBY" % str(W[rvl]["n"])}
 		_:
 			# a little more than the young men in the eleven now would get anyway
 			var yv := clampi(young * rounds_total() + 6, 8, 60)
 			ex3 = {"k": "young", "v": yv, "t": "GIVE %d LEAGUE STARTS TO PLAYERS AGED 21 OR UNDER" % yv}
 	b["obj"] = [lg, cp, ex3]
-	b["trk"] = {"goals": 0, "cs": 0, "home": 0, "young": 0, "fac0": _fac_sum()}
+	b["trk"] = {"goals": 0, "cs": 0, "home": 0, "young": 0, "fac0": _fac_sum(), "derby": 0, "dp": 0}
 	b["ex"] = ex
 	b["seen"] = false
 	b["msg"] = "A NEW SEASON. THE BOARD HAS SET YOUR GOALS: THE MAIN ONE IS TO %s." % str(lg["t"]).split(":")[0]
@@ -1537,6 +1637,13 @@ func obj_state(o: Dictionary) -> Array:
 			if built >= v:
 				return ["DONE", "done"]
 			return ["NOT YET" if not over else "NOTHING BUILT", "failed" if over else ("behind" if half_way else "on")]
+		"derby":
+			if int(trk.get("derby", 0)) >= v:
+				return ["WON", "done"]
+			var lg_d := 2 if str(d.get("slen", "full")) != "short" else 1
+			if over or int(trk.get("dp", 0)) >= lg_d + 1:
+				return ["NOT WON", "failed"]
+			return ["%d PLAYED" % int(trk.get("dp", 0)), "behind" if int(trk.get("dp", 0)) >= lg_d else "on"]
 		"home":
 			var l := int(trk.get("home", 0))
 			if l > v:
@@ -2124,6 +2231,7 @@ func calendar() -> Array:
 			elif bool(ee.get("out", false)) or bool(ee.get("done", false)):
 				continue
 			out.append(e2)
+	out.append_array(_nat_cal())
 	out.sort_custom(func(a, b): return int(a["day"]) < int(b["day"]))
 	for e in out:
 		if not bool(e["played"]):
@@ -2137,6 +2245,8 @@ func next_day() -> int:
 		return maxi(cup_day(int(cup()["r"])), today() + 1)
 	if eu_due():
 		return maxi(eu_day(int(eu()["md"])), today() + 1)
+	if nat_due():
+		return maxi(nat_day(), today() + 1)
 	if season_over():
 		return -1
 	return lg_day(int(d["round"]))
@@ -2147,8 +2257,12 @@ func sim_match(opp: int, home: bool) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var df := (match_strength() - _strength(opp)) / 14.0 + (0.12 if home else -0.12)
-	var mine := _poisson(rng, 1.35 * exp(df) + 0.1)
-	var theirs := _poisson(rng, 1.35 * exp(-df))
+	if derby(opp):
+		df *= 0.6 # form goes out of the window in a derby
+	var tk := tac_effect(tac(), cpu_tac(opp), df)
+	df += float(tk[2])
+	var mine := _poisson(rng, (1.35 * exp(df) + 0.1) * float(tk[0]))
+	var theirs := _poisson(rng, 1.35 * exp(-df) * float(tk[1]))
 	var pool := []
 	for i in d["xi"]:
 		var pl: Dictionary = d["squad"][int(i)]
@@ -2166,6 +2280,80 @@ func sim_match(opp: int, home: bool) -> Array:
 		goals.append([rng.randi_range(2, 90), 1, ""])
 	goals.sort_custom(func(a, b): return int(a[0]) < int(b[0]))
 	return [mine, theirs, scorers, goals]
+
+# ---------------------------------------------------------------- tactics before the match
+# How your team plays: mentality 0-4 (park the bus .. all out attack), pressing 0-2 (low, mid, high) and
+# width 0-2 (narrow, normal, wide). It changes how your men move in a match you play, and the score of one you simulate.
+const TAC_N := [["Park the bus", "Defensive", "Balanced", "Attacking", "All out attack"], ["Low", "Mid", "High"], ["Narrow", "Normal", "Wide"]]
+
+func tac() -> Array:
+	var t: Array = d.get("tac", [2, 1, 1])
+	return [clampi(int(t[0]), 0, 4), clampi(int(t[1]), 0, 2), clampi(int(t[2]), 0, 2)] if t.size() >= 3 else [2, 1, 1]
+
+func set_tac(k: int, v: int) -> void:
+	var t := tac()
+	if k < 0 or k > 2:
+		return
+	t[k] = clampi(v, 0, 4 if k == 0 else 2)
+	d["tac"] = t
+	save()
+
+static func tac_text(t: Array) -> String:
+	return "%s  ·  %s press  ·  %s" % [TAC_N[0][int(t[0])], TAC_N[1][int(t[1])], TAC_N[2][int(t[2])]]
+
+# The other manager picks his plan by how strong he is against you: a big club comes at you and presses high,
+# a small one sits deep and stays narrow. Each club has a bit of its own habit too, and a derby is played high.
+func cpu_tac(opp: int) -> Array:
+	if opp < 0:
+		return [2, 1, 1]
+	var gap := _strength(opp) - match_strength()
+	var ment := 2
+	if gap > 6.0:
+		ment = 4 if gap > 12.0 else 3
+	elif gap < -6.0:
+		ment = 0 if gap < -12.0 else 1
+	var press := 1
+	if gap > 4.0 or derby(opp):
+		press = 2
+	elif gap < -8.0:
+		press = 0
+	var width := 1
+	if ment <= 1:
+		width = 0
+	elif (opp * 7) % 3 == 0:
+		width = 2
+	return [ment, press, width]
+
+# What two plans do to a simulated match: [your goals x, their goals x, plus to the strength gap].
+# Going forward scores more but leaves holes behind; pressing high pays most for the better side;
+# width stretches a deep, narrow block but a narrow side is harder to play through.
+static func tac_effect(me: Array, op: Array, df: float) -> Array:
+	var km := 1.0
+	var kt := 1.0
+	var add := 0.0
+	var m1 := int(me[0]) - 2
+	var m2 := int(op[0]) - 2
+	km *= 1.0 + 0.14 * m1
+	kt *= 1.0 + 0.10 * m1
+	kt *= 1.0 + 0.14 * m2
+	km *= 1.0 + 0.10 * m2
+	var p1 := int(me[1]) - 1
+	var p2 := int(op[1]) - 1
+	add += p1 * (0.10 if df > 0.0 else 0.04)
+	add -= p2 * (0.10 if df < 0.0 else 0.04)
+	if int(me[2]) == 2:
+		km *= 1.10 if int(op[0]) <= 1 and int(op[2]) == 0 else 1.04
+		kt *= 1.03
+	elif int(me[2]) == 0:
+		km *= 0.95
+		kt *= 0.94
+	if int(op[2]) == 2:
+		kt *= 1.10 if int(me[0]) <= 1 and int(me[2]) == 0 else 1.04
+		km *= 1.03
+	elif int(op[2]) == 0:
+		kt *= 0.95
+		km *= 0.94
+	return [maxf(km, 0.4), maxf(kt, 0.4), add]
 
 # match settings for the career's own matches: level 0-2, length 0-2
 func set_cfg(k: String, v: int) -> void:
@@ -2296,13 +2484,16 @@ func ask_price(c: int, i: int) -> int:
 	return int(round(value(pl) * k / 5.0)) * 5
 
 # You bid for player i of club c. Returns {ok, msg, counter}.
-func bid(c: int, i: int, amount: int) -> Dictionary:
+# Deals as in FIFA: "so" leaves them a sell-on share (they take less now), "swap" puts one of your men in the deal
+# (his worth to them comes off the price), "rc" pays his release clause (no talk with the club at all).
+func bid(c: int, i: int, amount: int, ex := {}) -> Dictionary:
 	var sq := cpu_squad(c)
 	if i < 0 or i >= sq.size():
 		return {"ok": false, "msg": ""}
 	if window_msg() != "":
 		return {"ok": false, "msg": window_msg()}
-	if (d["squad"] as Array).size() >= SQUAD_MAX:
+	var swap := str(ex.get("swap", ""))
+	if (d["squad"] as Array).size() >= SQUAD_MAX and swap == "":
 		return {"ok": false, "msg": "Your squad is full. Sell a player first."}
 	if int(d["coins"]) < amount:
 		return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
@@ -2310,15 +2501,48 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	var neg: Dictionary = d.get("neg", {})
 	var key := "%d:%s" % [c, str(sq[i]["n"])]
 	var pl: Dictionary = sq[i]
-	if amount >= ask or (neg.has(key) and amount >= int(neg[key])):
+	var rc := cpu_clause(c, i)
+	var pay_rc := bool(ex.get("rc", false))
+	if pay_rc:
+		if rc <= 0:
+			return {"ok": false, "msg": ""}
+		amount = rc
+		if int(d["coins"]) < amount:
+			return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
+	elif rc > 0 and swap == "":
+		# one of their best men with a clause in his contract: they will not sell him, only the clause buys him
+		return {"ok": false, "msg": "%s WILL NOT SELL HIM. ONLY HIS RELEASE CLAUSE (%s) CAN BUY HIM." % [str(W[c]["n"]), money(rc)]}
+	var need := ask
+	if bool(ex.get("so", false)):
+		need = int(round(ask * SELLON_CUT / 5.0)) * 5
+	if swap != "":
+		var si := _sq_find(swap)
+		if si < 0:
+			return {"ok": false, "msg": ""}
+		var sv := swap_worth(c, i, si)
+		if sv <= 0:
+			return {"ok": false, "msg": "%s DO NOT WANT %s." % [str(W[c]["n"]), swap.to_upper()]}
+		if (d["squad"] as Array).size() <= SQUAD_MIN:
+			return {"ok": false, "msg": "You need at least %d players." % SQUAD_MIN}
+		need = maxi(0, need - sv)
+		amount = maxi(amount, need)
+		if int(d["coins"]) < amount:
+			return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
+	if pay_rc or amount >= need or (neg.has(key) and amount >= int(neg[key]) and swap == "" and not ex.has("so")):
 		neg.erase(key)
 		d["neg"] = neg
+		var ex2 := {}
+		if bool(ex.get("so", false)) and not pay_rc:
+			ex2["sob"] = c
+		if swap != "":
+			ex2["swap"] = swap
 		if wages_on():
 			# the clubs agree on the fee: now the player himself has to say yes to a contract
 			talk_sign(pl, amount, c, i)
+			(d["talk"] as Dictionary)["ex"] = ex2
 			save()
-			return {"ok": true, "talk": true, "msg": "FEE AGREED WITH %s. NOW TALK TO %s." % [str(W[c]["n"]), str(pl["n"]).to_upper()]}
-		return {"ok": true, "msg": _complete_bid(c, i, amount, -1, -1)}
+			return {"ok": true, "talk": true, "msg": "%s WITH %s. NOW TALK TO %s." % ["CLAUSE PAID" if pay_rc else "FEE AGREED", str(W[c]["n"]), str(pl["n"]).to_upper()]}
+		return {"ok": true, "msg": _complete_bid(c, i, amount, -1, -1, ex2)}
 	if amount >= int(ask * 0.75):
 		neg[key] = ask
 		d["neg"] = neg
@@ -2327,9 +2551,18 @@ func bid(c: int, i: int, amount: int) -> Dictionary:
 	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(W[c]["n"])}
 
 # The transfer goes through: he joins you, his club signs a younger, cheaper man for his place.
-func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
+func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int, ex := {}) -> String:
 	var sq := cpu_squad(c)
 	var pl: Dictionary = sq[i]
+	var swap := str(ex.get("swap", ""))
+	var gone: Dictionary = {}
+	if swap != "":
+		var si := _sq_find(swap)
+		if si < 0:
+			return "%s IS NOT AT THE CLUB ANY MORE. THE SWAP IS OFF." % swap.to_upper()
+		gone = d["squad"][si]
+		_out_of_xi(si)
+		_remove_mine(si)
 	if true:
 		# he leaves: the club signs a younger, cheaper man for his place
 		var rng := RandomNumberGenerator.new()
@@ -2342,7 +2575,17 @@ func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
 			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "ab": []}
 		nw["pot"] = clampi(ovr_of(nw) + rng.randi_range(4, 12), ovr_of(nw), 94)
 		var their := sq.duplicate(true)
-		their[i] = nw
+		if not gone.is_empty():
+			# the swap: your man takes his place at their club
+			var g2: Dictionary = gone.duplicate(true)
+			g2["num"] = int(pl["num"])
+			g2["tp"] = 0
+			g2["xp"] = 0
+			g2.erase("sob")
+			g2.erase("rc")
+			their[i] = g2
+		else:
+			their[i] = nw
 		_set_cpu_squad(c, their)
 		var used := []
 		for x in d["squad"]:
@@ -2359,11 +2602,18 @@ func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int) -> String:
 		if wk >= 0:
 			me_pl["wk"] = wk
 			me_pl["ct"] = yrs
+		if ex.has("sob"):
+			# they keep a share of what you sell him for one day
+			me_pl["sob"] = int(ex["sob"])
+		if ex.has("rc"):
+			me_pl["rc"] = int(ex["rc"])
 		d["coins"] = int(d["coins"]) - amount
 		d["squad"].append(me_pl)
 		_rec_fee("buy", amount, str(pl["n"]))
 		save()
-		return "%s SIGNED FROM %s FOR %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount)]
+		if not gone.is_empty():
+			return "%s SIGNED FROM %s: %s GOES THE OTHER WAY + %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), str(gone["n"]).to_upper(), money(amount)]
+		return "%s SIGNED FROM %s FOR %s%s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount), ("  ·  %d%% SELL-ON TO THEM" % SELLON_PCT) if ex.has("sob") else ""]
 	return ""
 
 # ---------------------------------------------------------------- the career's money, like a real club (euros only)
@@ -2501,16 +2751,20 @@ func talk_set(what: String, step: int) -> void:
 	if what == "w":
 		var st := maxi(1, int(round(int(t["ask"]) * 0.04)))
 		t["offer"] = clampi(int(t["offer"]) + step * st, 1, int(t["ask"]) * 2)
+	elif what == "rc":
+		t["rc"] = (int(t.get("rc", 0)) + step + 3) % 3
 	else:
 		t["yrs"] = clampi(int(t["yrs"]) + step, 1, 5)
 	d["talk"] = t
 
-func talk_force(offer: int, yrs: int) -> void:
+func talk_force(offer: int, yrs: int, rc := -1) -> void:
 	var t := talk()
 	if t.is_empty():
 		return
 	t["offer"] = clampi(offer, 1, int(t["ask"]) * 2)
 	t["yrs"] = clampi(yrs, 1, 5)
+	if rc >= 0:
+		t["rc"] = clampi(rc, 0, 2)
 	d["talk"] = t
 
 # You make the offer. Returns what happened; when the talk is over, talk() is empty.
@@ -2543,19 +2797,30 @@ func talk_offer() -> String:
 		if not still:
 			talk_end()
 			return "%s HAS GONE ELSEWHERE. THE DEAL IS OFF." % nm
-	if int(t["offer"]) >= int(t["min"]):
+	if int(t["offer"]) >= int(round(int(t["min"]) * RC_WAGE[clampi(int(t.get("rc", 0)), 0, 2)])):
 		var wk := int(t["offer"])
 		var yrs := int(t["yrs"])
 		d.erase("talk")
 		if signing:
-			var r := _complete_bid(int(t["from"]), int(t["idx"]), int(t["fee"]), wk, yrs) if int(t["from"]) >= 0 else _complete_buy(int(t["idx"]), wk, yrs)
+			var ex3: Dictionary = (t.get("ex", {}) as Dictionary).duplicate()
+			var rc3 := clause_of_talk(t)
+			if rc3 > 0:
+				ex3["rc"] = rc3
+			var r := _complete_bid(int(t["from"]), int(t["idx"]), int(t["fee"]), wk, yrs, ex3) if int(t["from"]) >= 0 else _complete_buy(int(t["idx"]), wk, yrs)
+			if int(t["from"]) < 0 and rc3 > 0 and not d["squad"].is_empty():
+				(d["squad"][(d["squad"] as Array).size() - 1] as Dictionary)["rc"] = rc3
 			save()
 			return "%s  ·  %s A WEEK FOR %d SEASONS" % [r, wage_text(wk), yrs]
 		var pl: Dictionary = d["squad"][int(t["i"])]
 		pl["wk"] = wk
 		pl["ct"] = yrs
+		var rc4 := clause_of_talk(t)
+		if rc4 > 0:
+			pl["rc"] = rc4
+		else:
+			pl.erase("rc")
 		save()
-		return "%s SIGNS A NEW CONTRACT: %s A WEEK FOR %d SEASONS" % [nm, wage_text(wk), yrs]
+		return "%s SIGNS A NEW CONTRACT: %s A WEEK FOR %d SEASONS%s" % [nm, wage_text(wk), yrs, ("  ·  CLAUSE " + money(rc4)) if rc4 > 0 else ""]
 	t["tries"] = int(t["tries"]) - 1
 	if int(t["tries"]) <= 0:
 		d.erase("talk")
@@ -2739,6 +3004,115 @@ static func focus_name(tf: String, pos := "") -> String:
 	var k := STAT_KEYS.find(tf)
 	return stat_name(pos, k) if k >= 0 else "AUTO"
 
+# ---------------------------------------------------------------- retraining: a man learns a new position
+# Every man has his own position (pl["pos"]) and can learn more (pl["pos2"]). Out of position he plays worse: next
+# to his own line (DF-MF, MF-FW) a little, two lines away (DF-FW) more, a keeper outside his goal (or the other way)
+# a lot. Pick a new position to work on (pl["rt"]) and he learns it in training and by playing there (pl["rtp"],
+# 0-100 for each position). The cost of playing there shrinks while he learns, and at 100 it is his.
+const RT_ROLES := ["DF", "MF", "FW"]
+const RT_NAMES := {"GK": "KEEPER", "DF": "DEFENDER", "MF": "MIDFIELDER", "FW": "FORWARD"}
+const FORM_ROLES := {"4-3-3": [4, 3, 3], "4-4-2": [4, 4, 2], "3-5-2": [3, 5, 2], "5-3-2": [5, 3, 2], "4-2-3-1": [4, 3, 3]}
+
+static func pos2_of(pl: Dictionary) -> Array:
+	var a = pl.get("pos2", [])
+	return a if a is Array else []
+
+static func plays(pl: Dictionary, role: String) -> bool:
+	return str(pl.get("pos", "")) == role or pos2_of(pl).has(role)
+
+static func rt_prog(pl: Dictionary, role: String) -> float:
+	var p = pl.get("rtp", {})
+	return float((p as Dictionary).get(role, 0.0)) if p is Dictionary else 0.0
+
+# what playing in this role costs him on every stat
+static func pos_off(pl: Dictionary, role: String) -> int:
+	if role == "" or plays(pl, role):
+		return 0
+	var own := str(pl.get("pos", "MF"))
+	if (own == "GK") != (role == "GK"):
+		return -25
+	var gap := 2
+	for r in [own] + pos2_of(pl):
+		if RT_ROLES.has(str(r)):
+			gap = mini(gap, absi(RT_ROLES.find(str(r)) - RT_ROLES.find(role)))
+	var base := -6.0 if gap <= 1 else -12.0
+	return int(round(base * (1.0 - 0.6 * clampf(rt_prog(pl, role), 0.0, 100.0) / 100.0)))
+
+# the role of each of the eleven places: the formation, with the spots you dragged men to
+func slot_roles() -> Array:
+	var c: Array = FORM_ROLES.get(form(), [4, 3, 3])
+	var out := ["GK"]
+	for k in 3:
+		for j in int(c[k]):
+			out.append(RT_ROLES[k])
+	var l := lay()
+	for s in range(1, mini(out.size(), 11)):
+		if l.has(str(s)) and l[str(s)] is Array and (l[str(s)] as Array).size() == 2:
+			out[s] = role_at(float(l[str(s)][0]))
+	return out
+
+# the positions he can work on, in the order the button goes through them ("" = nothing)
+static func rt_options(pl: Dictionary) -> Array:
+	var out := [""]
+	if str(pl.get("pos", "")) == "GK":
+		return out
+	for r in RT_ROLES:
+		if not plays(pl, r):
+			out.append(r)
+	return out
+
+func retrain(i: int) -> void:
+	var sq: Array = d["squad"]
+	if i < 0 or i >= sq.size():
+		return
+	var opts := rt_options(sq[i])
+	var cur := opts.find(str(sq[i].get("rt", "")))
+	var nx := str(opts[(maxi(cur, 0) + 1) % opts.size()])
+	if nx == "":
+		sq[i].erase("rt")
+	else:
+		sq[i]["rt"] = nx
+	save()
+
+# after a match: the men who started learn the role they played in, and what they work on in training
+func _rt_tick(xi: Array, lines: Array) -> void:
+	var sq: Array = d["squad"]
+	var roles := slot_roles()
+	var where := {}
+	for k in mini(xi.size(), roles.size()):
+		where[int(xi[k])] = str(roles[k])
+	var tk := 1.0 + 0.08 * fac("training")
+	for i in sq.size():
+		var pl: Dictionary = sq[i]
+		if str(pl.get("pos", "")) == "GK" or bool(pl.get("me", false)):
+			continue
+		var gain := {}
+		var rt := str(pl.get("rt", ""))
+		if rt != "" and not plays(pl, rt):
+			gain[rt] = 2.6 * train_k(pl) * tk
+		var w := str(where.get(i, ""))
+		if w != "" and w != "GK" and not plays(pl, w):
+			gain[w] = float(gain.get(w, 0.0)) + (4.5 if w == rt else 2.0)
+		if gain.is_empty():
+			continue
+		var rtp: Dictionary = pl.get("rtp", {}) if pl.get("rtp", {}) is Dictionary else {}
+		for r in gain:
+			var v := minf(rt_prog(pl, r) + float(gain[r]), 100.0)
+			if v >= 100.0:
+				var p2 := pos2_of(pl).duplicate()
+				p2.append(r)
+				pl["pos2"] = p2
+				rtp.erase(r)
+				if rt == r:
+					pl.erase("rt")
+				lines.append("%s CAN NOW PLAY AS A %s" % [str(pl["n"]).to_upper(), RT_NAMES[r]])
+			else:
+				rtp[r] = snappedf(v, 0.1)
+		if rtp.is_empty():
+			pl.erase("rtp")
+		else:
+			pl["rtp"] = rtp
+
 # the role each man expects, from where he stands in the squad
 func roles() -> Dictionary:
 	var sq: Array = d["squad"]
@@ -2839,7 +3213,40 @@ func windows_on() -> bool:
 # where you stand in the world: the eve of your next match (the days up to it have gone by on the calendar)
 func now() -> int:
 	var nd := next_day()
-	return nd if nd >= 0 else today()
+	if nd < 0:
+		return today()
+	if not d.has("cur"):
+		return nd # an old save: the eve of the next match
+	return clampi(int(d["cur"]), today(), nd)
+
+# FIFA's ADVANCE: on to the next day something happens (news, a bid, a man fit again), or to match day.
+# Returns the day you came from.
+func advance() -> int:
+	var nd := next_day()
+	var from := now()
+	if nd < 0 or from >= nd:
+		return from
+	var t := from
+	while t < nd:
+		t += 1
+		d["cur"] = t
+		var mid := int(d.get("mid", 0))
+		world_tick([], false)
+		if int(d.get("mid", 0)) != mid:
+			break
+	save()
+	return from
+
+# before a match: the days up to it go by. Returns the day you came from.
+func go_match() -> int:
+	var nd := next_day()
+	var from := now()
+	if nd < 0 or from >= nd:
+		return from
+	d["cur"] = nd
+	world_tick([], false)
+	save()
+	return from
 
 func window() -> Dictionary:
 	var t := now()
@@ -2908,7 +3315,7 @@ func _country_clubs() -> Array:
 	return out
 
 # The days from today to your next match go by: the other clubs trade, the window opens or shuts, bids come in.
-func world_tick(lines: Array) -> void:
+func world_tick(lines: Array, per_match := true) -> void:
 	if ro or bool(d.get("cupmode", false)) or not d.has("leagues"):
 		return
 	var rng := RandomNumberGenerator.new()
@@ -2937,7 +3344,11 @@ func world_tick(lines: Array) -> void:
 		var a := maxi(maxi(from + 1, t - 10), o)
 		var b := mini(t, c)
 		if a <= b:
-			var n := 1 if rng.randf() < 0.6 else 2
+			# about one deal every five days, so a day at a time gives the same world as a week at once
+			var n := 0
+			for dday in b - a + 1:
+				if rng.randf() < 0.2:
+					n += 1
 			var dl := c >= a and c <= b
 			if dl:
 				n += rng.randi_range(3, 5)
@@ -2955,8 +3366,16 @@ func world_tick(lines: Array) -> void:
 			pl.erase("inj")
 			pl.erase("injn")
 	_month_awards(lines)
-	# bids for your men: only while a window is open for you
 	var wn := window()
+	if bool(wn["open"]) and bool(wn["deadline"]) and int(d.get("dlw", -1)) != int(wn["close"]) and not pro():
+		d["dlw"] = int(wn["close"])
+		_mail("deadline", "Deadline day is coming", "The window shuts on %s. Anything you want to do, do it now." % str(wn["ctext"]))
+		lines.append("DEADLINE DAY IS COMING")
+	_nat_tick(lines)
+	if not per_match:
+		# a day going by: the rest (bids, offers, the press) comes with the matches
+		return
+	# bids for your men: only while a window is open for you
 	for m in inbox():
 		if str(m["k"]) == "bid" and str(m.get("st", "")) == "open":
 			m["left"] = int(m.get("left", 2)) - 1
@@ -2971,10 +3390,6 @@ func world_tick(lines: Array) -> void:
 		_pro_offers(rng, lines)
 		return
 	if bool(wn["open"]):
-		if bool(wn["deadline"]) and int(d.get("dlw", -1)) != int(wn["close"]):
-			d["dlw"] = int(wn["close"])
-			_mail("deadline", "Deadline day is coming", "The window shuts on %s, before your next match. Anything you want to do, do it now." % str(wn["ctext"]))
-			lines.append("DEADLINE DAY: THE WINDOW SHUTS BEFORE YOUR NEXT MATCH")
 		# men on the transfer list: clubs look at them first
 		for li in _listed_free():
 			var lpl: Dictionary = d["squad"][li]
@@ -2986,8 +3401,11 @@ func world_tick(lines: Array) -> void:
 			ch = 0.0 # the first days of a new career: let the man settle in
 		if rng.randf() < ch:
 			_cpu_bid(rng, lines)
+		if today() >= 0:
+			_clause_tick(rng, lines)
 	if eur:
 		_press_tick(rng, lines)
+	_nat_offer(rng, lines)
 
 func _deal_mail(got: Array) -> void:
 	if got.is_empty():
@@ -3036,6 +3454,10 @@ func _cpu_deal(rng: RandomNumberGenerator, day: int) -> Array:
 		var top := range(ssq.size())
 		top.sort_custom(func(p, q): return ovr_of(ssq[p]) > ovr_of(ssq[q]))
 		var i: int = top[rng.randi() % mini(4, top.size())]
+		for k2 in ssq.size():
+			# a man you sold with a sell-on share is watched by bigger clubs
+			if ssq[k2].has("so") and rng.randf() < 0.5:
+				i = k2
 		var pl: Dictionary = ssq[i]
 		if str(pl["pos"]) == "GK" and rng.randf() < 0.7:
 			continue
@@ -3048,6 +3470,11 @@ func _cpu_deal(rng: RandomNumberGenerator, day: int) -> Array:
 		var fee := int(round(value(pl) * rng.randf_range(1.05, 1.5) / 5.0)) * 5
 		var moved: Dictionary = pl.duplicate(true)
 		moved["num"] = int(bsq[j]["num"])
+		if moved.has("so"):
+			var share := int(round(fee * int(moved["so"]) / 100.0 / 5.0)) * 5
+			moved.erase("so")
+			d["coins"] = int(d["coins"]) + share
+			_mail("info", "Sell-on money: %s" % money(share), "%s sold %s to %s for %s. Your %d%% share is %s, and it is in your transfer budget." % [str(W[seller]["n"]).capitalize(), str(pl["n"]).capitalize(), str(W[buyer]["n"]).capitalize(), money(fee), SELLON_PCT, money(share)])
 		bsq[j] = moved
 		ssq[i] = _fill_in(seller, str(pl["pos"]), int(pl["num"]), rng)
 		_set_cpu_squad(buyer, bsq)
@@ -3137,6 +3564,17 @@ func bid_answer(id: int, what: String) -> String:
 		var r := _sell_to(i, c, amt)
 		_mail("info", "Deal done", r.capitalize())
 		return r
+	if what == "son":
+		# sell, but keep a share of his next transfer: they pay a little less now
+		if (d["squad"] as Array).size() <= SQUAD_MIN:
+			return "You need at least %d players." % SQUAD_MIN
+		_out_of_xi(i)
+		m["st"] = "acc"
+		pl["so"] = SELLON_PCT
+		var got := int(round(amt * SELLON_CUT / 5.0)) * 5
+		var r2 := _sell_to(i, c, got)
+		_mail("info", "Deal done, with a sell-on", "%s. You get %d%% of the fee when %s sell him on." % [r2.capitalize(), SELLON_PCT, str(W[c]["n"]).capitalize()])
+		return r2 + "  ·  %d%% SELL-ON" % SELLON_PCT
 	if what == "rej":
 		m["st"] = "rej"
 		if rating(c) > int(my_strength()) + 2 and full():
@@ -3170,11 +3608,12 @@ func _out_of_xi(i: int) -> void:
 	if at < 0:
 		return
 	var sq: Array = d["squad"]
-	var pos := str(sq[i]["pos"])
+	var sr := slot_roles()
+	var pos := str(sr[at]) if at < sr.size() else str(sq[i]["pos"])
 	var best := -1
 	for pass_n in 2:
 		for j in sq.size():
-			if j == i or xi.has(j) or injured(sq[j]) or (pass_n == 0 and str(sq[j]["pos"]) != pos) or (pass_n == 1 and str(sq[j]["pos"]) == "GK"):
+			if j == i or xi.has(j) or injured(sq[j]) or (pass_n == 0 and not plays(sq[j], pos)) or (pass_n == 1 and str(sq[j]["pos"]) == "GK"):
 				continue
 			if best < 0 or ovr_of(sq[j]) > ovr_of(sq[best]):
 				best = j
@@ -3210,9 +3649,10 @@ func inj_text(pl: Dictionary) -> String:
 # your eleven's strength with tired legs counted (for a simulated match)
 func match_strength() -> float:
 	var s := 0.0
-	for i in d["xi"]:
-		var pl: Dictionary = d["squad"][int(i)]
-		s += ovr_of(pl) * (0.86 + 0.14 * cond_of(pl) / 100.0) * (0.6 if injured(pl) else 1.0)
+	var roles := slot_roles()
+	for k in (d["xi"] as Array).size():
+		var pl: Dictionary = d["squad"][int(d["xi"][k])]
+		s += (ovr_of(pl) + pos_off(pl, str(roles[k]) if k < roles.size() else "")) * (0.86 + 0.14 * cond_of(pl) / 100.0) * (0.6 if injured(pl) else 1.0)
 	return s / 11.0
 
 # before a match: everyone's fitness as it is on the day; returns {index: fitness}
@@ -3244,6 +3684,8 @@ func _fit_post(fit0: Dictionary, played: Array, lines: Array, rng: RandomNumberG
 		var pl: Dictionary = sq[i]
 		var full_m := xi.has(i)
 		var drain := (25.0 + maxf(int(pl["age"]) - 28, 0) * 1.2) if full_m else 10.0
+		# a high press runs the legs off them, a low block saves a little
+		drain *= [0.9, 1.0, 1.22][clampi(int(tac()[1]), 0, 2)]
 		if ab_of(pl).has("motor"):
 			drain *= 0.75
 		if str(pl["pos"]) == "GK":
@@ -3276,36 +3718,6 @@ func _fit_post(fit0: Dictionary, played: Array, lines: Array, rng: RandomNumberG
 	for i in sq.size():
 		if injured(sq[i]) and (d["xi"] as Array).has(i):
 			_out_of_xi(i)
-
-# Rest the tired: every man in the eleven under 75 (or hurt) swaps with a fresher man in his position on the bench
-# who is not much worse. Returns what happened.
-func rotate() -> String:
-	var sq: Array = d["squad"]
-	var xi: Array = d["xi"]
-	var n := 0
-	for k in xi.size():
-		var i := int(xi[k])
-		var pl: Dictionary = sq[i]
-		var c := cond_of(pl)
-		if c >= 75 and not injured(pl):
-			continue
-		var best := -1
-		for j in sq.size():
-			if xi.has(j) or injured(sq[j]) or str(sq[j]["pos"]) != str(pl["pos"]) or cond_of(sq[j]) < c + 12:
-				continue
-			if ovr_of(sq[j]) < ovr_of(pl) - 7 and not injured(pl):
-				continue
-			if best < 0 or ovr_of(sq[j]) > ovr_of(sq[best]):
-				best = j
-		if best >= 0:
-			xi[k] = best
-			n += 1
-	d["xi"] = xi
-	save()
-	if n == 0:
-		return "Nobody to rest: the eleven is fit, or the bench has no fresher man good enough."
-	return "%d tired man rested." % n if n == 1 else "%d tired men rested." % n
-
 
 # ---------------------------------------------------------------- top scorers, awards, the trophy cabinet and records
 # Every league goal has a scorer (the computer clubs' too), so there is a real top scorers list. Each month the
@@ -3811,6 +4223,7 @@ func eu_finish(mine: int, theirs: int, won_tie := false) -> Array:
 	var md := int(e["md"])
 	var opp := int(eu_opp()[0])
 	d["day"] = eu_day(md)
+	d["cur"] = int(d["day"])
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var lines := []
@@ -3844,6 +4257,7 @@ func eu_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		_after_match(d["xi"], won, lines, rng)
 	if bool(e.get("out", false)):
 		_eu_rest(rng, [])
+	_rt_tick(d["xi"], lines)
 	_fit_post(fit0, [], lines, rng)
 	world_tick(lines)
 	save()
@@ -3901,6 +4315,13 @@ func _press_tick(rng: RandomNumberGenerator, lines: Array) -> void:
 			"o": [["Yes. We are going for %s." % aim, {"tm": 4, "bd": 2}, "Big words. The players are fired up."],
 				["One match at a time.", {"tm": 1}, "A calm answer. Nothing changes."],
 				["The others are still the favourites.", {"tm": -2, "bd": -1}, "The players wanted more belief from you."]]}
+	elif _next_derby() and last != "derby":
+		topic = "derby"
+		var dn := str(W[_next_opp()]["n"]).capitalize()
+		q = {"t": "Derby week: %s" % dn, "b": "The whole town talks about one match. The press want to hear what the derby against %s means to you." % dn,
+			"o": [["We own this town. We will win.", {"tm": 4, "bold": 1, "fan": 1}, "The fans went wild. Now you have to win it."],
+				["It is three points like any other.", {"tm": -1}, "Calm, but the fans wanted fire."],
+				["The fans deserve a win. We will give everything.", {"tm": 2, "fan": 1}, "The fans and the players loved it."]]}
 	elif (eu_due() and eu_ko()) or cup_due():
 		topic = "big"
 		var what := ("%s, %s" % [EU_NAME.capitalize(), eu_round_name().capitalize()]) if eu_due() else "the cup tie"
@@ -3935,6 +4356,18 @@ func _press_tick(rng: RandomNumberGenerator, lines: Array) -> void:
 			m["st"] = "gone"
 	_mail("press", "Press: " + str(q["t"]), str(q["b"]), {"opts": q["o"], "pn": str(q.get("pn", "")), "st": "open", "left": 1})
 	lines.append("PRESS CONFERENCE: %s" % str(q["t"]).to_upper())
+
+func _next_opp() -> int:
+	if cup_due():
+		return cup_opp()
+	if eu_due():
+		return int(eu_opp()[0])
+	if season_over():
+		return -1
+	return int(next_match()[0])
+
+func _next_derby() -> bool:
+	return derby(_next_opp())
 
 # An unhappy man knocks on your door.
 func _talk_mail(pl: Dictionary, r: int) -> void:
@@ -3973,6 +4406,8 @@ func mail_pick(id: int, k: int) -> String:
 		for m2 in inbox():
 			if str(m2["k"]) == "pjob" and str(m2.get("st", "")) == "open":
 				m2["st"] = "gone"
+	if fx.has("nat"):
+		nat_take(int(fx["nat"]))
 	if fx.has("stay"):
 		pro_d()["trust"] = clampi(int(pro_d().get("trust", 50)) + 3, 0, 100)
 	if not pl.is_empty():
@@ -4497,3 +4932,769 @@ func pro_next_season() -> void:
 	if pro2():
 		pro_select("pro2", true)
 	save()
+
+# ---------------------------------------------------------------- the national team
+# As in FIFA: a country asks you to manage its national team next to your club. You call up the squad from that
+# country's best players (your own men too, when they are from there), play or simulate the qualifiers in the
+# international weeks, and the top two of the group go on to the summer tournament after the season.
+const NATIONS := [
+	["DENMARK", "DEN", ["c8102e", "ffffff", "c8102e"], 77], ["ENGLAND", "ENG", ["f4f4f4", "1d2a5c", "f4f4f4"], 83],
+	["SWEDEN", "SWE", ["fecc02", "1a4fa0", "fecc02"], 75], ["NORWAY", "NOR", ["d81e2c", "ffffff", "1a3a8a"], 74],
+	["NETHERLANDS", "NED", ["f36c21", "ffffff", "f36c21"], 82], ["GERMANY", "GER", ["f4f4f4", "111111", "f4f4f4"], 84],
+	["SPAIN", "ESP", ["c60b1e", "1d2a5c", "1d2a5c"], 85], ["FRANCE", "FRA", ["1f3e8c", "ffffff", "c8102e"], 86],
+	["ITALY", "ITA", ["1f5fbf", "ffffff", "1f5fbf"], 82], ["PORTUGAL", "POR", ["b8122a", "0f6a3a", "b8122a"], 83],
+	["BELGIUM", "BEL", ["d4102b", "111111", "d4102b"], 80], ["SCOTLAND", "SCO", ["1b2a5a", "ffffff", "1b2a5a"], 72],
+	["WALES", "WAL", ["d3112b", "d3112b", "1a9a4a"], 71], ["IRELAND", "IRL", ["15944a", "ffffff", "15944a"], 70],
+	["POLAND", "POL", ["f4f4f4", "d4213d", "f4f4f4"], 75], ["CROATIA", "CRO", ["e8e8e8", "1d3f8a", "1d3f8a"], 79],
+	["SWITZERLAND", "SUI", ["d52b1e", "ffffff", "d52b1e"], 77], ["AUSTRIA", "AUT", ["e0202e", "ffffff", "e0202e"], 76],
+	["CZECHIA", "CZE", ["d7141a", "1a3c8a", "d7141a"], 74], ["ICELAND", "ISL", ["1a4fa0", "ffffff", "1a4fa0"], 68],
+	["FINLAND", "FIN", ["f4f4f4", "1a3c8a", "f4f4f4"], 67], ["SERBIA", "SRB", ["c6363c", "1a3c8a", "f4f4f4"], 75],
+	["TURKEY", "TUR", ["e30a17", "ffffff", "e30a17"], 77], ["UKRAINE", "UKR", ["ffd500", "005bbb", "ffd500"], 75],
+	["BRAZIL", "BRA", ["ffdf1c", "1a4fa0", "f4f4f4"], 86], ["ARGENTINA", "ARG", ["75aadb", "111111", "f4f4f4"], 86],
+	["URUGUAY", "URU", ["6cb4ee", "111111", "111111"], 79], ["USA", "USA", ["f4f4f4", "1d2a5c", "f4f4f4"], 76],
+	["MEXICO", "MEX", ["0f6a3a", "ffffff", "c8102e"], 77], ["JAPAN", "JPN", ["1a2f8a", "ffffff", "1a2f8a"], 78],
+	["MOROCCO", "MAR", ["c1272d", "0f6a3a", "c1272d"], 79], ["SENEGAL", "SEN", ["f4f4f4", "0f8a3a", "f4f4f4"], 77],
+]
+const NAT_EU := 24 # the first 24 are European
+const NAT_FR := [0.07, 0.14, 0.26, 0.33, 0.45, 0.52, 0.66, 0.73, 0.83, 0.90]
+const NAT_KO := ["GROUP, MATCH 1", "GROUP, MATCH 2", "GROUP, MATCH 3", "QUARTER-FINAL", "SEMI-FINAL", "FINAL"]
+const NAT_ROLES := {"GK": 3, "DF": 8, "MF": 7, "FW": 5}
+
+func nat() -> Dictionary:
+	return d.get("nat", {})
+
+func nat_job() -> bool:
+	return not nat().is_empty() and not bool(d.get("cupmode", false)) and not pro() and d.has("leagues")
+
+static func nat_name(n: int) -> String:
+	return str(NATIONS[clampi(n, 0, NATIONS.size() - 1)][0])
+
+static func nat_kit(n: int) -> Array:
+	return (NATIONS[clampi(n, 0, NATIONS.size() - 1)][2] as Array).duplicate()
+
+func nat_str(n: int) -> float:
+	if nat_job() and n == int(nat()["n"]):
+		var xi := nat_xi()
+		if xi.size() == 11:
+			var s := 0.0
+			for pl in xi:
+				s += ovr_of(pl)
+			return s / 11.0
+	return float(NATIONS[n][3])
+
+func tour_name() -> String:
+	return "WORLD CUP" if int(d.get("season", 1)) % 2 == 0 else "EUROPEAN CHAMPIONSHIP"
+
+# where a man is from: most men come from the country they play in, the rest from all over
+func _home_nat() -> int:
+	return 0 if str(league().get("c", "ENGLAND")) == "DENMARK" else 1
+
+func nat_of(pl: Dictionary) -> int:
+	if pl.has("nat"):
+		return int(pl["nat"])
+	var h := absi(hash(str(pl.get("n", "")) + "#" + str(pl.get("num", 0))))
+	var v := _home_nat() if h % 100 < 72 else (h / 100) % NATIONS.size()
+	pl["nat"] = v
+	return v
+
+# the men a country can call up: its own players at clubs all over the world, and yours from there
+func nat_pool(n: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = n * 4099 + int(d.get("season", 1)) * 131 + 7
+	var pool := names.duplicate()
+	for k in range(pool.size() - 1, 0, -1):
+		var sw := rng.randi_range(0, k)
+		var tmp = pool[k]
+		pool[k] = pool[sw]
+		pool[sw] = tmp
+	var q := int(NATIONS[n][3]) - 72
+	var out := []
+	var i := 0
+	for role in ["GK", "DF", "MF", "FW"]:
+		for k in int(NAT_ROLES[role]) + 2:
+			var base: Array = ROLE_BASE[role]
+			var qq := q + rng.randi_range(-7, 3) + (4 if k == 0 else 0)
+			var pl := {"n": str(pool[(i + 40) % maxi(pool.size(), 1)]) if not pool.is_empty() else "PLAYER", "pos": role, "age": rng.randi_range(20, 33), "num": 0, "key": "g%d" % i,
+				"pac": clampi(base[0] + qq + rng.randi_range(-5, 5), 30, 97), "sho": clampi(base[1] + qq + rng.randi_range(-5, 5), 25, 97),
+				"pas": clampi(base[2] + qq + rng.randi_range(-5, 5), 30, 97), "dfn": clampi(base[3] + qq + rng.randi_range(-5, 5), 25, 97)}
+			pl["ab"] = ab_roll(role, ovr_of(pl), rng)
+			out.append(pl)
+			i += 1
+	if nat_job() and n == int(nat()["n"]):
+		for si in (d["squad"] as Array).size():
+			var sp: Dictionary = d["squad"][si]
+			if nat_of(sp) == n:
+				var c := sp.duplicate()
+				c["key"] = "m:" + str(sp["n"])
+				c["mine"] = si
+				out.append(c)
+	return out
+
+func _nat_find(pool: Array, key: String) -> Dictionary:
+	for pl in pool:
+		if str(pl["key"]) == key:
+			return pl
+	return {}
+
+# the best 23: three keepers, eight defenders, seven midfielders, five forwards
+func nat_call_auto() -> void:
+	var nj := nat()
+	var pool := nat_pool(int(nj["n"]))
+	var sq := []
+	for role in NAT_ROLES:
+		var by := pool.filter(func(p): return str(p["pos"]) == role and not injured(p))
+		by.sort_custom(func(a, b): return ovr_of(a) > ovr_of(b))
+		for k in mini(int(NAT_ROLES[role]), by.size()):
+			sq.append(str(by[k]["key"]))
+	nj["sq"] = sq
+
+# the called-up men, best first per place
+func nat_squad() -> Array:
+	var nj := nat()
+	if nj.is_empty():
+		return []
+	var pool := nat_pool(int(nj["n"]))
+	var out := []
+	var keep := []
+	for k in nj.get("sq", []):
+		var pl := _nat_find(pool, str(k))
+		if not pl.is_empty():
+			out.append(pl)
+			keep.append(str(k))
+	nj["sq"] = keep
+	out.sort_custom(func(a, b): return ["GK", "DF", "MF", "FW"].find(str(a["pos"])) * 1000 - ovr_of(a) < ["GK", "DF", "MF", "FW"].find(str(b["pos"])) * 1000 - ovr_of(b))
+	for i in out.size():
+		out[i]["num"] = i + 1
+	return out
+
+# call a man up, or send him home (23 at most)
+func nat_pick(key: String) -> String:
+	var nj := nat()
+	if nj.is_empty():
+		return ""
+	var sq: Array = nj.get("sq", [])
+	if sq.has(key):
+		if sq.size() <= 16:
+			return "You need at least 16 men"
+		sq.erase(key)
+		save()
+		return ""
+	if sq.size() >= 23:
+		return "The squad is full: send someone home first"
+	var pl := _nat_find(nat_pool(int(nj["n"])), key)
+	if pl.is_empty():
+		return ""
+	if injured(pl):
+		return "He is injured"
+	sq.append(key)
+	nj["sq"] = sq
+	save()
+	return ""
+
+# the eleven: the best keeper, four defenders, three midfielders and three forwards (4-3-3)
+func nat_xi(sq := []) -> Array:
+	if sq.is_empty():
+		sq = nat_squad()
+	var used := []
+	var out := []
+	for r in ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW"]:
+		var best := -1
+		for pass_n in 2:
+			for i in sq.size():
+				if used.has(i) or (pass_n == 0 and str(sq[i]["pos"]) != r) or (pass_n == 1 and (str(sq[i]["pos"]) == "GK") != (r == "GK")):
+					continue
+				if best < 0 or ovr_of(sq[i]) > ovr_of(sq[best]):
+					best = i
+			if best >= 0:
+				break
+		if best < 0:
+			continue
+		used.append(best)
+		out.append(sq[best])
+	return out
+
+# a country's team for the match engine: name, kits, the eleven and a bench of seven
+func nat_team(n: int) -> Dictionary:
+	var mine := nat_job() and n == int(nat()["n"])
+	var sq := nat_squad() if mine else nat_pool(n)
+	var xi := nat_xi(sq)
+	var row := func(pl: Dictionary, num: int) -> Dictionary:
+		return {"n": str(pl["n"]), "num": num, "pos": str(pl["pos"]), "pac": int(pl["pac"]), "sho": int(pl["sho"]), "pas": int(pl["pas"]), "dfn": int(pl["dfn"]), "ab": ab_of(pl)}
+	var x2 := []
+	var nums := [1, 2, 5, 4, 3, 8, 6, 10, 11, 9, 7]
+	for i in xi.size():
+		x2.append(row.call(xi[i], int(xi[i].get("num", 0)) if mine and int(xi[i].get("num", 0)) > 0 else nums[i]))
+	var bench := []
+	for pl in sq:
+		if bench.size() >= 7:
+			break
+		if not xi.has(pl):
+			bench.append(row.call(pl, int(pl.get("num", 0)) if mine and int(pl.get("num", 0)) > 0 else 12 + bench.size()))
+	var k := nat_kit(n)
+	var alt := "1c1c20" if Color(str(k[0])).get_luminance() > 0.6 else "f4f4f4"
+	return {"n": nat_name(n), "s": str(NATIONS[n][1]), "k": k, "a": [alt, str(k[0]), alt], "f": "4-3-3", "lay": {}, "xi": x2, "bench": bench, "ov": int(round(nat_str(n)))}
+
+# ---- the job
+func _nat_cap() -> int:
+	var cap := 66 + (4 - div()) * 4 + mini(cabinet().size(), 6) * 2 + int(d.get("season", 1)) - 1
+	if nat_job():
+		cap += 4
+	return clampi(cap, 66, 86)
+
+func _nat_offer(rng: RandomNumberGenerator, lines: Array) -> void:
+	if nat_job() or not full() or pro() or bool(d.get("cupmode", false)) or d.has("sacked"):
+		return
+	if int(d.get("natoff", 0)) == int(d.get("season", 1)) or int(d["round"]) < 4 or season_over():
+		return
+	var cap := _nat_cap()
+	var cand := []
+	for n in NAT_EU:
+		if int(NATIONS[n][3]) <= cap and int(NATIONS[n][3]) >= cap - 9:
+			cand.append(n)
+	if cand.is_empty():
+		cand = [19, 20]
+	var n: int = cand[rng.randi() % cand.size()]
+	d["natoff"] = int(d.get("season", 1))
+	var nm := nat_name(n).capitalize()
+	_mail("natjob", "%s want you as national manager" % nm, "The %s FA has watched your work. They want you to lead %s next to your club: you pick the squad, play the qualifiers in the international weeks and, if you finish in the top two, go to the %s." % [nm, nm, tour_name().to_lower()],
+		{"st": "open", "left": 4, "opts": [["Take the job", {"nat": n}, "You are the new manager of %s. Your first squad is called up on the National team page." % nm], ["Not now", {}, "They will look elsewhere. Maybe next season."]]})
+	lines.append("%s WANT YOU AS NATIONAL MANAGER" % nat_name(n))
+
+func nat_take(n: int) -> void:
+	d["nat"] = {"n": n, "since": int(d.get("season", 1)), "ok": 60, "st": {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0}, "hist": []}
+	nat_call_auto()
+	_nat_new_q()
+	save()
+
+func nat_quit() -> void:
+	if nat_job():
+		_mail("natend", "You left %s" % nat_name(int(nat()["n"])).capitalize(), "You thanked the players and left the national team.")
+		d.erase("nat")
+		save()
+
+# ---- the qualifiers: a group of five, home and away, ten rounds (each side rests in two)
+func _nat_new_q() -> void:
+	var nj := nat()
+	var me := int(nj["n"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var others := []
+	for n in NAT_EU:
+		if n != me:
+			others.append(n)
+	others.sort_custom(func(a, b): return int(NATIONS[a][3]) > int(NATIONS[b][3]))
+	# one from each pot of strength, like a real draw
+	var grp := [me]
+	var pots := [others.slice(0, 6), others.slice(6, 12), others.slice(12, 18), others.slice(18)]
+	for p in pots:
+		var pp: Array = (p as Array).filter(func(x): return not grp.has(x))
+		if not pp.is_empty():
+			grp.append(pp[rng.randi() % pp.size()])
+	# a round robin with a rest: six places, the sixth is the rest
+	var slots := grp.duplicate()
+	slots.append(-1)
+	var rounds := []
+	for r in 5:
+		var pr := []
+		for k in 3:
+			var a: int = slots[k]
+			var b: int = slots[5 - k]
+			if a >= 0 and b >= 0:
+				pr.append([a, b] if (r + k) % 2 == 0 else [b, a])
+		rounds.append(pr)
+		var last: int = slots.pop_back()
+		slots.insert(1, last)
+	for r in 5:
+		var back := []
+		for m in rounds[r]:
+			back.append([m[1], m[0]])
+		rounds.append(back)
+	var tab := {}
+	for n in grp:
+		tab[str(n)] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
+	nj["q"] = {"grp": grp, "rd": rounds, "i": 0, "tab": tab, "log": [], "season": int(d.get("season", 1))}
+	nj.erase("t")
+
+func nat_after(i: int) -> int:
+	var n := rounds_total()
+	var r := clampi(int(round(n * NAT_FR[clampi(i, 0, NAT_FR.size() - 1)])), 1, n - 1)
+	var busy := []
+	for cr in cup_rounds():
+		busy.append(cup_after_r(cr))
+	if eu_due_ever() or not eu().is_empty():
+		for md in EU_RD.size():
+			busy.append(eu_after(md))
+	for k in 4:
+		if not busy.has(r):
+			break
+		r = mini(r + 1, n - 1)
+	return r
+
+func _nat_day_q(i: int) -> int:
+	var a := nat_after(i)
+	return mini(lg_day(a - 1) + 5, maxi(lg_day(a) - 1, lg_day(a - 1) + 1))
+
+func _nat_day_t(md: int) -> int:
+	return lg_day(rounds_total() - 1) + 21 + md * 4
+
+func nat_q() -> Dictionary:
+	return nat().get("q", {})
+
+func nat_t() -> Dictionary:
+	return nat().get("t", {})
+
+# your pair in this qualifying round, or []
+func _nat_mine_q(i: int) -> Array:
+	var q := nat_q()
+	var me := int(nat()["n"])
+	if q.is_empty() or i >= (q["rd"] as Array).size():
+		return []
+	for m in q["rd"][i]:
+		if int(m[0]) == me or int(m[1]) == me:
+			return m
+	return []
+
+func nat_due() -> bool:
+	if not nat_job():
+		return false
+	var t := nat_t()
+	if not t.is_empty():
+		return season_over() and not bool(t.get("out", false)) and not bool(t.get("done", false))
+	var q := nat_q()
+	if q.is_empty() or int(q["i"]) >= 10:
+		return false
+	return not _nat_mine_q(int(q["i"])).is_empty() and int(d["round"]) >= nat_after(int(q["i"]))
+
+func nat_day() -> int:
+	var t := nat_t()
+	if not t.is_empty():
+		return _nat_day_t(int(t["md"]))
+	return _nat_day_q(int(nat_q().get("i", 0)))
+
+# [opponent, you at home, what it is]
+func nat_opp() -> Array:
+	var me := int(nat().get("n", 0))
+	var t := nat_t()
+	if not t.is_empty():
+		var md := int(t["md"])
+		if md < 3:
+			for m in t["gm"][md]:
+				if int(m[0]) == me:
+					return [int(m[1]), true, NAT_KO[md]]
+				if int(m[1]) == me:
+					return [int(m[0]), false, NAT_KO[md]]
+		for m in t.get("ko", []):
+			if int(m[0]) == me or int(m[1]) == me:
+				return [int(m[1]) if int(m[0]) == me else int(m[0]), true, NAT_KO[clampi(md, 0, 5)]]
+		return [-1, true, ""]
+	var q := nat_q()
+	var m2 := _nat_mine_q(int(q.get("i", 0)))
+	if m2.is_empty():
+		return [-1, true, ""]
+	return [int(m2[1]) if int(m2[0]) == me else int(m2[0]), int(m2[0]) == me, "QUALIFIER %d" % (_nat_my_n(int(q["i"])) + 1)]
+
+func _nat_my_n(i: int) -> int:
+	var n := 0
+	for k in i:
+		if not _nat_mine_q(k).is_empty():
+			n += 1
+	return n
+
+func nat_ko() -> bool:
+	return not nat_t().is_empty() and int(nat_t()["md"]) >= 3
+
+static func _nat_sim(a: float, b: float, rng: RandomNumberGenerator, home_a := 0.0) -> Array:
+	var df := (a - b) / 12.0 + home_a
+	return [_poisson(rng, 1.3 * exp(df)), _poisson(rng, 1.3 * exp(-df))]
+
+func _nat_book(tab: Dictionary, a: int, b: int, ga: int, gb: int) -> void:
+	for x in [[a, ga, gb], [b, gb, ga]]:
+		var r: Dictionary = tab[str(x[0])]
+		r["p"] = int(r["p"]) + 1
+		r["gf"] = int(r["gf"]) + int(x[1])
+		r["ga"] = int(r["ga"]) + int(x[2])
+		if int(x[1]) > int(x[2]):
+			r["w"] = int(r["w"]) + 1
+			r["pts"] = int(r["pts"]) + 3
+		elif int(x[1]) == int(x[2]):
+			r["d"] = int(r["d"]) + 1
+			r["pts"] = int(r["pts"]) + 1
+		else:
+			r["l"] = int(r["l"]) + 1
+
+static func _nat_order(tab: Dictionary, grp: Array) -> Array:
+	var o := grp.duplicate()
+	o.sort_custom(func(a, b):
+		var ra: Dictionary = tab[str(a)]
+		var rb: Dictionary = tab[str(b)]
+		if int(ra["pts"]) != int(rb["pts"]):
+			return int(ra["pts"]) > int(rb["pts"])
+		var da := int(ra["gf"]) - int(ra["ga"])
+		var db := int(rb["gf"]) - int(rb["ga"])
+		if da != db:
+			return da > db
+		return int(ra["gf"]) > int(rb["gf"]))
+	return o
+
+# rounds in which you rest are played when their week comes; then the group is decided
+func _nat_tick(lines: Array) -> void:
+	if not nat_job():
+		return
+	var q := nat_q()
+	if q.is_empty() or not nat_t().is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	while int(q["i"]) < 10 and _nat_mine_q(int(q["i"])).is_empty() and int(d["round"]) >= nat_after(int(q["i"])):
+		_nat_round_rest(int(q["i"]), [], rng)
+		q["i"] = int(q["i"]) + 1
+	if int(q["i"]) >= 10 and not bool(q.get("over", false)):
+		_nat_q_end(lines)
+
+func _nat_round_rest(i: int, skip: Array, rng: RandomNumberGenerator) -> void:
+	var q := nat_q()
+	var lg: Array = q["log"]
+	for m in q["rd"][i]:
+		if m == skip:
+			continue
+		var r := _nat_sim(nat_str(int(m[0])), nat_str(int(m[1])), rng, 0.1)
+		_nat_book(q["tab"], int(m[0]), int(m[1]), int(r[0]), int(r[1]))
+		lg.append([i, int(m[0]), int(m[1]), int(r[0]), int(r[1])])
+
+func _nat_q_end(lines: Array) -> void:
+	var nj := nat()
+	var q := nat_q()
+	q["over"] = true
+	var me := int(nj["n"])
+	var o := _nat_order(q["tab"], q["grp"])
+	var pos := o.find(me) + 1
+	var nm := nat_name(me).capitalize()
+	(nj["hist"] as Array).append([int(d.get("season", 1)), "Qualifiers: %s in the group" % ordinal(pos).to_lower()])
+	if pos <= 2:
+		nj["ok"] = clampi(int(nj["ok"]) + 10, 0, 100)
+		_nat_new_t()
+		_mail("natq", "%s are going to the %s!" % [nm, tour_name().to_lower()], "%s in the group. The %s is played in the summer, after the league season. Pick your 23 before it starts." % [ordinal(pos).capitalize(), tour_name().to_lower()])
+		lines.append("%s ARE GOING TO THE %s!" % [nat_name(me), tour_name()])
+	else:
+		nj["ok"] = clampi(int(nj["ok"]) - 30, 0, 100)
+		if int(nj["ok"]) < 35:
+			_mail("natend", "%s let you go" % nm, "%s in the group is not good enough. The FA thanks you for your work and looks for a new manager." % ordinal(pos).capitalize())
+			lines.append("%s HAVE LET YOU GO" % nat_name(me))
+			d.erase("nat")
+		else:
+			_mail("natq", "%s miss the %s" % [nm, tour_name().to_lower()], "%s in the group. The FA keeps faith in you, but the next qualifiers must go better." % ordinal(pos).capitalize())
+			lines.append("%s MISS THE %s" % [nat_name(me), tour_name()])
+
+# ---- the tournament: sixteen countries, four groups of four, then the knockouts
+func _nat_new_t() -> void:
+	var nj := nat()
+	var me := int(nj["n"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var field := []
+	for n in (NATIONS.size() if tour_name() == "WORLD CUP" else NAT_EU):
+		if n != me:
+			field.append(n)
+	var luck := {}
+	for n in field:
+		luck[n] = int(NATIONS[n][3]) + rng.randi_range(-4, 4)
+	field.sort_custom(func(a, b): return int(luck[a]) > int(luck[b]))
+	var teams := [me]
+	teams.append_array(field.slice(0, 15))
+	var by := teams.duplicate()
+	by.sort_custom(func(a, b): return int(NATIONS[a][3]) > int(NATIONS[b][3]))
+	var grps := [[], [], [], []]
+	for p in 4:
+		var pot: Array = by.slice(p * 4, p * 4 + 4)
+		pot.shuffle()
+		for g in 4:
+			grps[g].append(pot[g])
+	var gi := 0
+	for g in 4:
+		if (grps[g] as Array).has(me):
+			gi = g
+	var tab := {}
+	for n in teams:
+		tab[str(n)] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
+	# matchdays: 1v2 3v4, 1v3 2v4, 1v4 2v3 in every group
+	var gm := [[], [], []]
+	for g in 4:
+		var x: Array = grps[g]
+		gm[0].append_array([[x[0], x[1]], [x[2], x[3]]])
+		gm[1].append_array([[x[0], x[2]], [x[1], x[3]]])
+		gm[2].append_array([[x[0], x[3]], [x[1], x[2]]])
+	nj["t"] = {"name": tour_name(), "grp": grps, "gi": gi, "tab": tab, "gm": gm, "md": 0, "ko": [], "log": []}
+
+func _nat_t_round(mine: Array, rng: RandomNumberGenerator, lines: Array) -> void:
+	# everybody else's matches of this round, and the next round drawn
+	var nj := nat()
+	var t := nat_t()
+	var me := int(nj["n"])
+	var md := int(t["md"])
+	var lg: Array = t["log"]
+	if md < 3:
+		for m in t["gm"][md]:
+			if int(m[0]) == me or int(m[1]) == me:
+				var a_me := int(m[0]) == me
+				var ga := int(mine[0]) if a_me else int(mine[1])
+				var gb := int(mine[1]) if a_me else int(mine[0])
+				_nat_book(t["tab"], int(m[0]), int(m[1]), ga, gb)
+				lg.append([md, int(m[0]), int(m[1]), ga, gb])
+				continue
+			var r := _nat_sim(nat_str(int(m[0])), nat_str(int(m[1])), rng)
+			_nat_book(t["tab"], int(m[0]), int(m[1]), int(r[0]), int(r[1]))
+			lg.append([md, int(m[0]), int(m[1]), int(r[0]), int(r[1])])
+		if md == 2:
+			var w := []
+			for g in 4:
+				w.append(_nat_order(t["tab"], t["grp"][g]))
+			if not (w[int(t["gi"])] as Array).slice(0, 2).has(me):
+				t["out"] = true
+				var ps: int = (w[int(t["gi"])] as Array).find(me) + 1
+				_nat_t_end("Out in the group (%s)" % ordinal(ps).to_lower(), -12, lines)
+				return
+			t["ko"] = [[w[0][0], w[1][1]], [w[1][0], w[0][1]], [w[2][0], w[3][1]], [w[3][0], w[2][1]]]
+		t["md"] = md + 1
+		return
+	# a knockout round: you won yours (or you would be out), the rest are played
+	var nxt := []
+	for m in t["ko"]:
+		var a := int(m[0])
+		var b := int(m[1])
+		var win := -1
+		var ga := 0
+		var gb := 0
+		if a == me or b == me:
+			win = me if bool(mine[2]) else (b if a == me else a)
+			ga = int(mine[0]) if a == me else int(mine[1])
+			gb = int(mine[1]) if a == me else int(mine[0])
+		else:
+			var r := _nat_sim(nat_str(a), nat_str(b), rng)
+			ga = int(r[0])
+			gb = int(r[1])
+			win = a if ga > gb or (ga == gb and rng.randf() < 0.5) else b
+		lg.append([md, a, b, ga, gb])
+		nxt.append(win)
+	if not nxt.has(me):
+		t["out"] = true
+		_nat_t_end("Out in the %s" % NAT_KO[md].to_lower(), (0 if md == 3 else 8), lines)
+		return
+	if md == 5:
+		t["done"] = true
+		_honour("nat", "%s: %s winners" % [str(t["name"]).capitalize(), nat_name(me).capitalize()])
+		_nat_t_end("Winners!", 30, lines)
+		return
+	var ko := []
+	for k in range(0, nxt.size(), 2):
+		ko.append([nxt[k], nxt[k + 1]])
+	t["ko"] = ko
+	t["md"] = md + 1
+
+func _nat_t_end(what: String, ok: int, lines: Array) -> void:
+	var nj := nat()
+	var t := nat_t()
+	t["done"] = true
+	var nm := nat_name(int(nj["n"])).capitalize()
+	(nj["hist"] as Array).append([int(d.get("season", 1)), "%s: %s" % [str(t["name"]).capitalize(), what.to_lower()]])
+	nj["ok"] = clampi(int(nj["ok"]) + ok, 0, 100)
+	if what == "Winners!":
+		_mail("natend", "%s win the %s!" % [nm, str(t["name"]).to_lower()], "You have made a whole country happy. Your name is in the trophy cabinet.")
+		lines.append("%s WIN THE %s!" % [nat_name(int(nj["n"])), str(t["name"])])
+		_conf_add(6)
+	else:
+		_mail("natend", "%s: %s" % [nm, what.to_lower()], "The %s is over for %s." % [str(t["name"]).to_lower(), nm])
+		lines.append("%s: %s" % [str(t["name"]), what.to_upper()])
+
+# A national match is over (played or simulated). Returns the lines for the end screen.
+func nat_finish(mine: int, theirs: int, won_tie := false) -> Array:
+	var lines := []
+	if not nat_due():
+		return lines
+	var nj := nat()
+	var me := int(nj["n"])
+	var o := nat_opp()
+	var opp := int(o[0])
+	d["day"] = maxi(nat_day(), today() + 1)
+	d["cur"] = int(d["day"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var st: Dictionary = nj["st"]
+	st["p"] = int(st["p"]) + 1
+	st["gf"] = int(st["gf"]) + mine
+	st["ga"] = int(st["ga"]) + theirs
+	var won: bool = mine > theirs or (mine == theirs and won_tie)
+	var k := "w" if mine > theirs else ("d" if mine == theirs else "l")
+	st[k] = int(st[k]) + 1
+	nj["ok"] = clampi(int(nj["ok"]) + (4 if mine > theirs else (1 if mine == theirs else -4)), 0, 100)
+	lines.append("%s %d-%d %s" % [nat_name(me), mine, theirs, nat_name(opp)])
+	# your own men who played come back to the club a little tired, and proud
+	var xi := nat_xi()
+	var mine_n := 0
+	for pl in xi:
+		if pl.has("mine") and int(pl["mine"]) < (d["squad"] as Array).size():
+			var sp: Dictionary = d["squad"][int(pl["mine"])]
+			sp["cond"] = maxi(cond_of(sp) - 14, 30)
+			sp["cday"] = int(d["day"])
+			sp["mo"] = clampi(int(sp.get("mo", 65)) + 3, 5, 100)
+			sp["caps"] = int(sp.get("caps", 0)) + 1
+			mine_n += 1
+	if mine_n > 0:
+		lines.append("%d OF YOUR CLUB'S MEN PLAYED" % mine_n)
+	var t := nat_t()
+	if not t.is_empty():
+		_nat_t_round([mine, theirs, won], rng, lines)
+		var t2 := nat_t()
+		if not bool(t2.get("out", false)) and not bool(t2.get("done", false)):
+			if int(t2["md"]) < 3:
+				var gi := int(t2["gi"])
+				lines.append("%s IN GROUP %s" % [ordinal(_nat_order(t2["tab"], t2["grp"][gi]).find(me) + 1), "ABCD"[gi]])
+			else:
+				lines.append("THROUGH TO THE %s!" % NAT_KO[int(t2["md"])])
+	else:
+		var q := nat_q()
+		var i := int(q["i"])
+		var m := _nat_mine_q(i)
+		_nat_book(q["tab"], int(m[0]), int(m[1]), mine if int(m[0]) == me else theirs, theirs if int(m[0]) == me else mine)
+		(q["log"] as Array).append([i, int(m[0]), int(m[1]), mine if int(m[0]) == me else theirs, theirs if int(m[0]) == me else mine])
+		_nat_round_rest(i, m, rng)
+		q["i"] = i + 1
+		lines.append("%s IN THE GROUP" % ordinal(_nat_order(q["tab"], q["grp"]).find(me) + 1))
+		_nat_tick(lines)
+	if nat_job() and int(nat()["ok"]) < 15:
+		_mail("natend", "%s let you go" % nat_name(me).capitalize(), "Too many bad results. The FA looks for a new manager.")
+		lines.append("%s HAVE LET YOU GO" % nat_name(me))
+		d.erase("nat")
+	save()
+	return lines
+
+# a national match you do not play: the score from the two elevens and your tactics
+func nat_sim() -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var o := nat_opp()
+	var me := int(nat()["n"])
+	var df := (nat_str(me) - nat_str(int(o[0]))) / 12.0 + (0.1 if bool(o[1]) else -0.1)
+	var op_t := [2, 1, 1]
+	var tk := tac_effect(tac(), op_t, df)
+	df += float(tk[2])
+	return [_poisson(rng, 1.3 * exp(df) * float(tk[0])), _poisson(rng, 1.3 * exp(-df) * float(tk[1]))]
+
+# a new season: new qualifiers when the summer is done
+func _nat_season() -> void:
+	if not nat_job():
+		return
+	nat_call_auto()
+	_nat_new_q()
+
+# your national matches in the calendar ("opp" is a country)
+func _nat_cal() -> Array:
+	var out := []
+	if not nat_job():
+		return out
+	var me := int(nat()["n"])
+	var q := nat_q()
+	if not q.is_empty() and int(q.get("season", 0)) == int(d.get("season", 1)):
+		for i in 10:
+			var m := _nat_mine_q(i)
+			if m.is_empty():
+				continue
+			var e := {"day": _nat_day_q(i), "kind": "nat", "opp": int(m[1]) if int(m[0]) == me else int(m[0]), "home": int(m[0]) == me, "res": [], "played": i < int(q["i"]), "name": "Qualifier %d" % (_nat_my_n(i) + 1), "next": false}
+			for l in q["log"]:
+				if int(l[0]) == i and (int(l[1]) == me or int(l[2]) == me):
+					var am := int(l[1]) == me
+					e["res"] = [int(l[3]) if am else int(l[4]), int(l[4]) if am else int(l[3])]
+			out.append(e)
+	var t := nat_t()
+	if not t.is_empty():
+		for l in t["log"]:
+			if int(l[1]) == me or int(l[2]) == me:
+				var am2 := int(l[1]) == me
+				out.append({"day": _nat_day_t(int(l[0])), "kind": "nat", "opp": int(l[2]) if am2 else int(l[1]), "home": true, "res": [int(l[3]) if am2 else int(l[4]), int(l[4]) if am2 else int(l[3])], "played": true, "name": NAT_KO[int(l[0])].capitalize(), "next": false})
+		if nat_due():
+			var o := nat_opp()
+			out.append({"day": _nat_day_t(int(t["md"])), "kind": "nat", "opp": int(o[0]), "home": bool(o[1]), "res": [], "played": false, "name": str(o[2]).capitalize(), "next": false})
+	return out
+
+# ---------------------------------------------------------------- smarter deals
+const SELLON_PCT := 20 # the share of the next fee
+const SELLON_CUT := 0.88 # what a sell-on costs on today's fee
+const RC_WAGE := [1.0, 0.92, 0.85] # a release clause in his contract: he takes a little less
+const RC_K := [0.0, 2.5, 1.6] # the clause as a part of what he is worth: high, low
+
+func clause_of_talk(t: Dictionary) -> int:
+	var r := clampi(int(t.get("rc", 0)), 0, 2)
+	if r == 0:
+		return 0
+	var o := int(t.get("ovr", 60))
+	var v := maxi(20, int(round((30.0 + pow(maxf(o - 55.0, 0.0), 2.0) * 0.9 + maxf(int(t.get("pot", o)) - o, 0.0) * 6.0 - maxf(int(t.get("age", 25)) - 29.0, 0.0) * 15.0) / 5.0)) * 5)
+	return int(round(v * RC_K[r] / 5.0)) * 5
+
+# A computer club's best men: some have a release clause, and then only the clause buys them.
+func cpu_clause(c: int, i: int) -> int:
+	var sq := cpu_squad(c)
+	if i < 0 or i >= sq.size():
+		return 0
+	var pl: Dictionary = sq[i]
+	if pl.has("rc"):
+		return int(pl["rc"])
+	var ovs := []
+	for x in sq:
+		ovs.append(ovr_of(x))
+	ovs.sort()
+	ovs.reverse()
+	if ovr_of(pl) < int(ovs[mini(2, ovs.size() - 1)]) or _nh(str(pl["n"]) + str(c)) % 3 != 0:
+		return 0
+	return int(round(value(pl) * 2.2 / 5.0)) * 5
+
+# what your man is worth to them in a swap: only a man who would play for them, and a bit under his worth
+func swap_worth(c: int, i: int, mine: int) -> int:
+	var sq := cpu_squad(c)
+	if mine < 0 or mine >= (d["squad"] as Array).size() or i < 0 or i >= sq.size():
+		return 0
+	var pl: Dictionary = d["squad"][mine]
+	if injured(pl):
+		return 0
+	var worst := 99
+	for x in sq:
+		if str(x["pos"]) == str(pl["pos"]):
+			worst = mini(worst, ovr_of(x))
+	if ovr_of(pl) < worst - 2:
+		return 0
+	return int(round(value(pl) * 0.85 / 5.0)) * 5
+
+# a man of yours leaves the squad (the eleven is fixed up first by the caller)
+func _remove_mine(i: int) -> void:
+	var sq: Array = d["squad"]
+	sq.remove_at(i)
+	var xi := []
+	for x in d["xi"]:
+		xi.append(int(x) - 1 if int(x) > i else int(x))
+	d["xi"] = xi
+
+# in an open window a club can pay the release clause of one of your men: he goes, you cannot stop it
+func _clause_tick(rng: RandomNumberGenerator, lines: Array) -> void:
+	var sq: Array = d["squad"]
+	if sq.size() <= SQUAD_MIN:
+		return
+	for i in sq.size():
+		var pl: Dictionary = sq[i]
+		if not pl.has("rc"):
+			continue
+		var cheap := float(value(pl)) / maxf(float(pl["rc"]), 1.0)
+		if rng.randf() > interest(pl) * 0.35 * clampf(cheap * 1.4, 0.3, 1.2):
+			continue
+		var o := ovr_of(pl)
+		var cand := []
+		for c in _country_clubs():
+			if c != int(d["club"]) and rating(c) >= o - 3 and rating(c) >= int(my_strength()):
+				cand.append(c)
+		if cand.is_empty():
+			continue
+		var c: int = cand[rng.randi() % cand.size()]
+		var fee := int(pl["rc"])
+		var nm := str(pl["n"])
+		_out_of_xi(i)
+		var r := _sell_to(i, c, fee)
+		_mail("info", "%s paid the clause for %s" % [str(W[c]["n"]).capitalize(), nm.capitalize()], "%s paid his release clause of %s. He has gone, there was nothing you could do. %s" % [str(W[c]["n"]).capitalize(), money(fee), r.capitalize()])
+		lines.append("%s PAID %s'S RELEASE CLAUSE" % [str(W[c]["n"]), nm.to_upper()])
+		return
