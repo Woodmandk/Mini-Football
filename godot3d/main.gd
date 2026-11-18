@@ -212,7 +212,7 @@ class Human:
 	var charge := 0.0
 	var pass_hold := -1.0
 	var switch_cool := 0.0
-	var auto_hold := -1.0 # the player career: CALL held down = your man finds his own position (FIFA's hold to auto-position)
+	var auto_on := false # the player career: one tap and your man finds his own position, until you take the stick or get the ball
 	var pick_t := 0.0 # you picked this man yourself with SWITCH: the game leaves him under your thumb for a while
 	var local := true
 	var stam := 1.0
@@ -623,14 +623,14 @@ func _ready() -> void:
 			hh.pnode = me9
 			me9.position = Vector3(-40, 0, 20)
 			for held in [false, true]:
-				hh.auto_hold = 1.0 if held else -1.0
+				hh.auto_on = held
 				var p0: Vector3 = me9.position
 				var tt := 0.0
 				while tt < 4.0:
 					_tick(1.0 / 60.0)
 					tt += 1.0 / 60.0
 					if held:
-						hh.auto_hold = 1.0
+						hh.auto_on = true
 					hh.ctrl = me9
 				print("AUTOPOS held=", held, " moved=", snappedf(me9.position.distance_to(p0), 0.1), " at=", me9.position, " ball=", ball.position, " state=", state)
 			get_tree().quit()
@@ -3117,6 +3117,14 @@ func _to_menu(keep_net := false) -> void:
 func _apply_own() -> void:
 	_apply_own0()
 	# the friend's phone: the host's own club looks the same here
+	if carv != null and car != carv and net.role == "guest" and carv.has_save():
+		# Playing in the host's career, this phone's own club must not sit in the host's world: it took the place
+		# of a real club here, and that club may be the very opponent (Daniel's dad saw another team).
+		if car.has_save() and car.d.has("own"):
+			var mi := int(car.d["club"])
+			var base: Array = ClubDB.clubs(CLUBS0)
+			if mi >= 0 and mi < base.size():
+				CLUBS[mi] = base[mi]
 	if carv != null and car != carv and net.role == "guest" and carv.has_save() and carv.d.has("own"):
 		var o: Dictionary = carv.d["own"]
 		var k: Array = o["k"]
@@ -3222,9 +3230,9 @@ func _pro_enter(show := true) -> void:
 		q_opt = [opt_diff, opt_len]
 	in_career = true
 	car = proc
-	car.pro_select("pro", car.pro2())
+	car.pro_select("pro")
 	if car.pro2():
-		car.pro_select("pro2", true)
+		car.pro_select("pro2")
 	_apply_own()
 	hub_tab = "career"
 	car_sel = -1
@@ -4509,10 +4517,13 @@ func _host_start() -> void:
 		hud.refresh(_menu_info())
 		return
 	if career_on and car.pro():
-		# the player career together: the manager plays you both, each thumb on his own man
-		car.pro_select("pro", true)
+		# The player career together: the manager picks you like anyone else, so one of you can be on the
+		# bench (then that thumb plays like a normal match, switching between the others). Never both.
+		car.pro_select("pro")
 		if car.pro2():
-			car.pro_select("pro2", true)
+			car.pro_select("pro2")
+			if not car.pro_starts() and not car.pro_starts("pro2"):
+				car.pro_select("pro", true)
 		pro_sq = car.pro_i()
 		pro_sq2 = car.pro_i("pro2")
 	cup_on = career_on and car.cup_due()
@@ -4598,6 +4609,13 @@ func _guest_start(m: Dictionary) -> void:
 	me = 1
 	view_flip = 1.0 if h1.team == 0 else -1.0
 	var cl: Array = m.get("clubs", [0, 1])
+	if car.has_save() and car.d.has("own") and not ft_on and not rk_on:
+		# this phone's own club sits in place of a real club of the host's world: show that club as it is
+		var mi := int(car.d["club"])
+		if mi == int(cl[1]) or (mi == int(cl[0]) and not (carv.has_save() and carv.d.has("own") and int(carv.d["club"]) == mi)):
+			var base0: Array = ClubDB.clubs(CLUBS0)
+			if mi >= 0 and mi < base0.size():
+				CLUBS[mi] = base0[mi]
 	sq_over = m.get("sq", [])
 	sq1_over = m.get("sq1", [])
 	co_got = false
@@ -5466,7 +5484,7 @@ func _nearest_human(t: int, pos: Vector3):
 	var best = null
 	var bd := 1e9
 	for h in humans:
-		if h.team != t:
+		if h.team != t or _locked(h):
 			continue
 		var d: float = h.ctrl.position.distance_to(pos) if h.ctrl != null else 1e6
 		if d < bd:
@@ -5474,12 +5492,14 @@ func _nearest_human(t: int, pos: Vector3):
 			best = h
 	return best
 
+# a thumb on its own man in the player career (not one on the bench) is never switched
+func _locked(h) -> bool:
+	return h.psq >= 0 and _pro_man(h) != null
+
 func _assign_defenders(t: int, force: bool) -> void:
-	if pro_sq >= 0 and t == 0:
-		return
 	var hs := []
 	for h in humans:
-		if h.team == t and (force or h.switch_cool <= 0.0):
+		if h.team == t and (force or h.switch_cool <= 0.0) and not _locked(h):
 			if h.pick_t > 0.0 and h.ctrl != null and not h.ctrl.off and h.ctrl.role != "GK":
 				continue # he picked this man himself a moment ago
 			hs.append(h)
@@ -5636,8 +5656,6 @@ func _switch(h) -> void:
 
 # the other side plays a pass: put a defender who can get to the receiver under a thumb, like FIFA's auto switch
 func _switch_for_pass(t: int, m) -> void:
-	if pro_sq >= 0 and t == 0:
-		return
 	var own_goal := Vector3(-HL * side(t), 0, 0)
 	var spot: Vector3 = m.position + (own_goal - m.position).normalized() * 2.0
 	var best = null
@@ -5654,7 +5672,7 @@ func _switch_for_pass(t: int, m) -> void:
 	var hw = null
 	var worst := 0.0
 	for h in humans:
-		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0 and h.pick_t <= 0.0:
+		if h.team == t and h.ctrl != null and h.switch_cool <= 0.0 and h.pick_t <= 0.0 and not _locked(h):
 			# a man who stands in the path of the pass, or close to the receiver, is kept: he can win it himself
 			var ln: Vector3 = m.position - ball.position
 			ln.y = 0.0
@@ -6039,15 +6057,14 @@ func _play(dt: float) -> void:
 					h.ot = 1
 					h.ot_t = 1.6
 				elif h.psq >= 0 and _pro_man(h) != null:
-					# your own player: a tap calls for the ball, holding it lets him run his own position
-					h.auto_hold = 0.0
+					# your own player: one tap and he runs his own position (Daniel: a tap, not a hold); with a team
+					# mate on the ball the same tap also calls for it, and he moves into space to get it
+					h.auto_on = true
+					if ball_owner != null and ball_owner.team == h.team and ball_owner != h.ctrl:
+						_switch(h)
 				else:
 					_switch(h)
 			elif e == "pass_up":
-				if h.auto_hold >= 0.0:
-					if h.auto_hold < 0.3 and ball_owner != null and ball_owner.team == h.team and ball_owner != h.ctrl:
-						_switch(h)
-					h.auto_hold = -1.0
 				if h.pass_hold >= 0.0 and ball_owner == h.ctrl:
 					var ppw: float = clampf(h.pass_hold / 0.6, 0.0, 1.0)
 					pass_pw = ppw
@@ -6091,8 +6108,8 @@ func _play(dt: float) -> void:
 			h.thru_hold = -1.0
 		if h.thru_hold >= 0.0:
 			h.thru_hold += dt
-		if h.auto_hold >= 0.0:
-			h.auto_hold += dt
+		if h.auto_on and (ball_owner == h.ctrl or h.stick.length() > 0.3 or not _locked(h)):
+			h.auto_on = false # the ball is his, or you steer him again
 		if h.pass_hold >= 0.0:
 			h.pass_hold += dt
 		if h.lob_hold >= 0.0:
@@ -6238,7 +6255,7 @@ func _play(dt: float) -> void:
 				var ma := _meet_for(p, aim)
 				want = _run_to(p, ma, p.top_speed)
 				h.stam = clampf(h.stam + 0.16 * dt, 0.0, 1.0)
-			elif h.auto_hold >= 0.3 and ball_owner != p and set_piece == "":
+			elif h.auto_on and ball_owner != p and set_piece == "":
 				# auto-positioning: he moves like the computer would move him (runs, support, his place in the shape)
 				want = _ai_offball(p, chaser, second, aim)
 				h.stam = clampf(h.stam + 0.1 * dt, 0.0, 1.0)
@@ -6646,7 +6663,8 @@ func _full_time() -> void:
 			if h9.psq < 0:
 				continue
 			var k9 := "pro" if hi == 0 else "pro2"
-			var l9: Array = car.pro_after(_pro_rating(h9, k9), int(h9.ptrk.get("g", 0)), int(h9.ptrk.get("a", 0)), true, true, k9)
+			var on_p: bool = _pro_man(h9) != null
+			var l9: Array = car.pro_after(_pro_rating(h9, k9), int(h9.ptrk.get("g", 0)), int(h9.ptrk.get("a", 0)), on_p, on_p, k9)
 			if hi == 0:
 				pl9 = l9
 			elif co_pay.size() > 2:
@@ -6654,8 +6672,8 @@ func _full_time() -> void:
 				co_pay[2] = l9 + (co_pay[2] as Array)
 		car_lines = pl9 + _pro_lines(car_lines)
 		if car.pro2():
-			car.pro_select("pro", true)
-			car.pro_select("pro2", true)
+			car.pro_select("pro")
+			car.pro_select("pro2")
 		if has_meta("pro_fast"):
 			print("PRO full time lines=", car_lines.slice(0, 4), " pro2 lv=", car.pro_lv("pro2"), " xp=", car.pro_d("pro2").get("pxp"), " co2=", (co_pay[2] as Array).slice(0, 3) if co_pay.size() > 2 else [])
 		car.pro_select()
@@ -9014,7 +9032,9 @@ func _process(dt: float) -> void:
 			hud.lab_b = "PASS" if mine2 else "SWITCH"
 			if hm.psq >= 0:
 				# the player career: you are one man, so no switching. With the ball at a team mate you call for it
-				hud.lab_b = "PASS" if mine2 else ("AUTO" if hm.auto_hold >= 0.3 else ("CALL" if ours else "AUTO"))
+				hud.lab_b = "PASS" if mine2 else ("AUTO ON" if hm.auto_on else ("CALL" if ours else "AUTO"))
+				if _pro_man(hm) == null:
+					hud.lab_b = "PASS" if mine2 else "SWITCH" # on the bench: you help like in a normal match
 			hud.charge = hm.charge
 			hud.stam = hm.stam
 			hud.ctrl_name = ("%d  %s  %d" % [hm.ctrl.num, hm.ctrl.pname.to_upper(), hm.ctrl.ovr]) if hm.ctrl != null else ""
@@ -9759,9 +9779,9 @@ func _sim_mine() -> void:
 	if opp < 0:
 		return
 	if car.pro() and car.pro2():
-		# together the manager plays you both
-		car.pro_select("pro", true)
-		car.pro_select("pro2", true)
+		# together: the manager picks you both like anyone else (never the bench for long)
+		car.pro_select("pro")
+		car.pro_select("pro2")
 	var r: Array = car.sim_match(opp, home)
 	# the player career: did you play, and how well? (together: both of you, each his own man)
 	var pro_l: Array = []
@@ -9814,9 +9834,9 @@ func _sim_mine() -> void:
 		_car_coins(true)
 	if car.pro():
 		car_lines = pro_l + _pro_lines(car_lines)
-		car.pro_select("pro", car.pro2())
+		car.pro_select("pro")
 		if car.pro2():
-			car.pro_select("pro2", true)
+			car.pro_select("pro2")
 		car.save()
 	adv_from = car.today()
 	var me_c := int(car.d["club"])
