@@ -26,9 +26,9 @@ const LEN_NAMES := ["3 MIN", "5 MIN", "8 MIN"]
 const DIFF_NAMES := ["EASY", "NORMAL", "HARD"]
 const SND_NAMES := ["FULL", "LOW", "OFF"]
 const DIFF := [
-	{"need": 0.70, "spd": 0.86, "err": 3.0, "think": 0.70, "wait": 3.2},
-	{"need": 0.50, "spd": 0.92, "err": 1.9, "think": 0.45, "wait": 2.2},
-	{"need": 0.38, "spd": 0.98, "err": 1.0, "think": 0.28, "wait": 1.4},
+	{"need": 0.70, "spd": 0.86, "err": 1.8, "think": 0.70, "wait": 3.2},
+	{"need": 0.50, "spd": 0.92, "err": 1.2, "think": 0.45, "wait": 2.2},
+	{"need": 0.38, "spd": 0.98, "err": 0.85, "think": 0.28, "wait": 1.4},
 ]
 # your own computer-run team mates
 const MATE := {"need": 0.45, "spd": 1.0, "err": 0.6, "think": 0.22, "wait": 1.4}
@@ -330,6 +330,12 @@ var audio # audio.gd: every sound of the match and the menus
 var derby_on := false # a derby in the career: the crowd is louder
 var tac_m := [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]] # autotest: how far up and how wide each team stood
 var tac_t := [[2, 1, 1], [2, 1, 1]] # each team's plan: mentality 0-4, press 0-2, width 0-2 (career sets them)
+var tac_base := [[2, 1, 1], [2, 1, 1]] # the plan the team started with (the computer manager changes tac_t from it)
+var tac_mood := ["", ""] # what the computer manager is doing right now ("push", "allout", "sit", "bus", "ten", "")
+var mgr_t := 0.0
+var cpu_sub_at := [0.0, 0.0] # match clock of the computer's last change
+var sub_hint := {} # players we already told you are tired (instance id)
+var paused_by := ""
 var confetti: CPUParticles3D
 var sparks := []
 var dust: CPUParticles3D
@@ -356,6 +362,8 @@ var demo := false
 var shot_path := ""
 var test_drag := []
 var shot_at := 0.0
+var strip_n := -1
+var strip_t := 0.0
 var force_goal := -1.0
 var force_kind := ""
 var _sprint_was := false
@@ -522,7 +530,8 @@ func _ready() -> void:
 				cup_on = true
 				_set_clubs(int(car.d["club"]), car.cup_opp(), true)
 		_begin_match(demo and OS.get_cmdline_user_args().has("--intro"))
-		if menu_arg in ["subs", "pause"]:
+		if menu_arg in ["subs", "pause", "mtac"]:
+			tac_mood[1] = "push"
 			for p in players:
 				p.fit = randf_range(0.4, 1.0)
 			_substitute(9, 0)
@@ -925,6 +934,8 @@ func _ready() -> void:
 					h2.team = 0 if bot_mode == "coop" else 1
 					humans.append(h2)
 			_kickoff(0)
+			if menu_arg in ["pause", "mtac"]:
+				hud.show_menu(menu_arg, _menu_info())
 	else:
 		_to_menu()
 		if menu_arg != "":
@@ -1079,6 +1090,12 @@ func _ready() -> void:
 				for rr in 3:
 					_sim_mine()
 				var rsrc = proc if rp[2] == "p" else carc
+				if OS.get_environment("RVOOP") != "" and rp[2] == "m":
+					# a forward in defence and a defender up front: out of position on purpose
+					var xo: Array = carc.d["xi"]
+					var t0 = xo[2]
+					xo[2] = xo[9]
+					xo[9] = t0
 				if OS.get_environment("RVNAT") != "" and rp[2] == "m":
 					carc.nat_take(int(OS.get_environment("RVNAT")))
 				if rwho == "h":
@@ -2502,7 +2519,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
-		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on or nat_on, "subs": _subs_info(), "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on or nat_on, "subs": _subs_info(), "mtac": _mtac_info(), "paused_by": paused_by, "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
@@ -2553,6 +2570,39 @@ func _ab_pick_info() -> Dictionary:
 		"cur": Career.ABIL[have[ab_slot]][0] if ab_slot < have.size() else "", "opts": opts}
 
 # Your side in this match (the guest plays team 1 against the host; together you are both team 0).
+# Your side's plan changed in the pause menu: it counts at once (and the computer manager leaves it alone).
+func _tac_change(t: int, k: int, v: int) -> void:
+	if t < 0 or t > 1 or k < 0 or k > 2:
+		return
+	v = clampi(v, 0, 4 if k == 0 else 2)
+	if net.role == "guest":
+		tac_t[t][k] = v
+		net.send({"_": "tacq", "t": t, "k": k, "v": v})
+		return
+	tac_t[t][k] = v
+	tac_base[t][k] = v
+	if net.role == "host" and net.connected:
+		net.send({"_": "tacd", "t": t, "v": tac_t[t]})
+
+func _my_name() -> String:
+	# against each other: the club that stopped it; on the same side: your team mate
+	if _team_human(0) and _team_human(1):
+		return str(TEAM_NAMES[_my_side()])
+	return "your friend"
+
+func _mtac_info() -> Dictionary:
+	if screen != "match" or pro_sq >= 0 or teams[0].size() < 2:
+		return {}
+	var t := _my_side()
+	if not _team_human(t):
+		return {}
+	var o: int = 1 - t
+	var opp := ""
+	if not _team_human(o):
+		var md := str(tac_mood[o])
+		opp = "%s: %s" % [str(TEAM_NAMES[o]).capitalize(), (str(MOOD_TXT[md][0]).to_lower() if md != "" else "playing their usual game")]
+	return {"tac": tac_t[t], "opp": opp, "sub": "%s  %d - %d  %s   ·   %d'" % [str(TEAM_NAMES[0]), score[0], score[1], str(TEAM_NAMES[1]), int(clock / 60.0) + 1]}
+
 func _my_side() -> int:
 	for h in humans:
 		if h.local:
@@ -2790,6 +2840,13 @@ func _car_info() -> Dictionary:
 			"ab": _ab_rows(Career.ab_of(pl)), "ab_cost": [car.ab_price(pl, 0), car.ab_price(pl, 1)], "ab_lock2": Career.ovr_of(pl) < Career.AB_SLOT2,
 			"wk": int(pl.get("wk", 0)), "ct": int(pl.get("ct", 0)), "mo": int(pl.get("mo", 65)), "role": int(ro_all.get(i, 2)), "tf": str(pl.get("tf", "")), "tr": pl.has("tr"), "pos2": Career.pos2_of(pl), "rt": str(pl.get("rt", "")), "rtp": int(Career.rt_prog(pl, str(pl.get("rt", "")))), "rto": Career.rt_options(pl).size() > 1,
 			"cond": car.cond_of(pl) if car.eur else -1, "inj": car.injured(pl) if car.eur else false, "injt": car.inj_text(pl) if car.eur and car.injured(pl) else ""})
+	# where each man of the eleven plays now, and what it costs him when that is not his own place
+	var sr0: Array = car.slot_roles()
+	for k0 in mini((d["xi"] as Array).size(), sr0.size()):
+		var xi0 := int(d["xi"][k0])
+		if xi0 < squad.size():
+			squad[xi0]["sr"] = str(sr0[k0])
+			squad[xi0]["po"] = Career.pos_off(d["squad"][xi0], str(sr0[k0]))
 	var tp_all := 0
 	for pl in d["squad"]:
 		tp_all += int(pl.get("tp", 0))
@@ -4209,9 +4266,19 @@ func _action(act: String, arg = null) -> void:
 			_to_menu()
 		"pause":
 			if screen == "match" and state != "full":
-				if net.role == "":
-					paused = true
+				paused = true
+				paused_by = ""
+				if net.role != "" and net.connected:
+					# online the match stops on both phones, and the other one sees who stopped it
+					net.send({"_": "pz", "on": true, "by": _my_name()})
 				hud.show_menu("pause", _menu_info())
+		"mtac":
+			if screen == "match" and state != "full":
+				hud.show_menu("mtac", _menu_info())
+		"mtac_set":
+			var ta: Array = arg if arg is Array else [0, 2]
+			_tac_change(_my_side(), int(ta[0]), int(ta[1]))
+			hud.refresh(_menu_info())
 		"subs":
 			if screen == "match" and not _subs_info().is_empty():
 				sub_sel = -1
@@ -4226,6 +4293,9 @@ func _action(act: String, arg = null) -> void:
 				hud.refresh(_menu_info())
 		"resume":
 			paused = false
+			paused_by = ""
+			if net.role != "" and net.connected and screen == "match":
+				net.send({"_": "pz", "on": false})
 			hud.show_menu("", {})
 		"snd_opt":
 			opt_snd = (opt_snd + 1) % 3
@@ -4683,6 +4753,39 @@ func _net_poll() -> void:
 					sub_bench = bb
 					sub_left2 = [3, 3]
 					sub_used = [[], []]
+			"pz":
+				# the other phone paused (or carried on): the match stops and goes on together
+				if screen == "match" and state != "full":
+					paused = bool(m.get("on", false))
+					if paused:
+						paused_by = str(m.get("by", "your friend"))
+						if hud.menu_name == "":
+							hud.show_menu("pause", _menu_info())
+						else:
+							hud.refresh(_menu_info())
+					else:
+						paused_by = ""
+						if hud.menu_name in ["pause", "mtac", "subs"]:
+							hud.show_menu("", {})
+			"tacq":
+				# the friend changed his side's tactics in the pause menu
+				if net.role == "host" and screen == "match":
+					var tqt := int(m.get("t", -1))
+					for hm in humans:
+						if not hm.local and hm.team == tqt:
+							_tac_change(tqt, int(m.get("k", 0)), int(m.get("v", 2)))
+							break
+			"tacd":
+				if net.role == "guest":
+					var tdt2 := int(m.get("t", -1))
+					var tv = m.get("v", [])
+					if tdt2 >= 0 and tdt2 < 2 and tv is Array and tv.size() == 3:
+						tac_t[tdt2] = [int(tv[0]), int(tv[1]), int(tv[2])]
+						if hud.menu_name == "mtac":
+							hud.refresh(_menu_info())
+			"toast":
+				if net.role == "guest":
+					hud.toast(str(m.get("s", "")))
 			"subq":
 				# the friend makes a substitution in his side: the host does it and tells both phones
 				if net.role == "host" and screen == "match":
@@ -4900,6 +5003,12 @@ func _begin_match(with_intro: bool) -> void:
 			if te != "":
 				var tp := te.split(",")
 				tac_t[ti] = [int(tp[0]), int(tp[1]), int(tp[2])]
+	tac_base = tac_t.duplicate(true)
+	tac_mood = ["", ""]
+	mgr_t = 0.0
+	cpu_sub_at = [0.0, 0.0]
+	sub_hint = {}
+	paused_by = ""
 	golden = false
 	half_kick = 1
 	so_on = false
@@ -5921,6 +6030,10 @@ func _play(dt: float) -> void:
 		var sr: float = clampf(p.vel.length() / maxf(p.base_top, 1.0), 0.0, 1.2)
 		p.fit = maxf(p.fit - gdt * (0.00002 + 0.00012 * sr * sr) * (0.6 if p.has_ab("motor") else 1.0), 0.0)
 		p.top_speed = p.base_top * (0.84 + 0.16 * p.fit)
+	mgr_t -= dt
+	if mgr_t <= 0.0 and net.role != "guest":
+		mgr_t = 2.0
+		_managers()
 	ignore_t -= dt
 	protect_t -= dt
 	if force_kind != "" and state_t > 3.0:
@@ -6238,6 +6351,15 @@ func _play(dt: float) -> void:
 					if mq.role == "MF" and not sup[ot].has(mq) and not runner[ot].has(mq) and mq.position.x * side(ot) < ball_owner.position.x * side(ot) + 12.0:
 						runner[ot].append(mq)
 						break
+		if not go_run.is_empty():
+			for q2 in teams[ot]:
+				var gid: int = q2.get_instance_id()
+				if go_run.has(gid):
+					if float(go_run[gid]) < sim_t or q2 == ball_owner:
+						go_run.erase(gid)
+					elif not runner[ot].has(q2) and _hum_of(q2) == null:
+						sup[ot].erase(q2)
+						runner[ot].append(q2)
 	# --- move everyone
 	for p in players:
 		var want := Vector3.ZERO
@@ -7119,7 +7241,11 @@ func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0, thru := false):
 			# power picks the distance: a tap finds the near man, a long hold the far one
 			sc -= (absf(d - want_d) * 0.07) if want_d > 0.0 else d * 0.02
 		else:
-			sc += n.x * s * 1.6 - absf(d - 15.0) * 0.04
+			sc += n.x * s * (2.2 if ai and p.position.x * s > 0.0 else 1.6) - absf(d - 15.0) * 0.04
+			if ai and p.position.x * s > -22.0:
+				# in their half the computer looks for the dangerous ball: a man near goal, in the box, between the lines
+				var gdm: float = Vector2(HL * s - m.position.x, m.position.z).length()
+				sc += clampf(32.0 - gdm, 0.0, 20.0) * 0.11 * _ai_vision(p.team)
 		if m.role == "GK":
 			sc -= 3.0
 		if thru:
@@ -7340,6 +7466,9 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		snd("pass" if (lofted or d > 22.0 or pv > 17.0) else "touch", clampf(pv / 24.0, 0.5, 1.0))
 	if lofted and not thrown:
 		fx("shake", 0.1)
+	if h == null and set_piece == "" and not lofted and p.role in ["MF", "FW"] and p.position.x * side(p.team) > -6.0 and (m.position.x - p.position.x) * side(p.team) > -8.0:
+		# the computer plays and goes: after a pass in their half he runs on for the return (one-two)
+		go_run[p.get_instance_id()] = sim_t + 2.6
 	if h != null and m.role != "GK" and _hum_of(m) == null:
 		# Co-op: a pass goes to your partner. When one of you passes, the other one gets the man on the ball
 		# (Daniel: "aflevere jeg skal min far modtage den og omvendt"); you keep the passer and can run on.
@@ -7425,6 +7554,10 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 		for h in humans:
 			if h.psq >= 0 and p == _pro_man(h):
 				h.ptrk["sh"] = int(h.ptrk.get("sh", 0)) + 1
+	seq_m[1] += 1
+	if ai_ev[0] != "" and p.team == ai_ev[1] and sim_t - ai_ev[2] < 7.0:
+		stats[ai_ev[0] + "_sh"] = int(stats.get(ai_ev[0] + "_sh", 0)) + 1
+		ai_ev[0] = ""
 	var s := side(p.team)
 	var from := ball.position
 	var d := Vector2(HL * s - from.x, aim_z - from.z).length()
@@ -7500,12 +7633,29 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 # ---------------------------------------------------------------- winning the ball
 
 func _give(p) -> void:
+	if ai_ev[0] != "" and not ai_ev[3] and sim_t - ai_ev[2] < 4.0:
+		# what came of the computer's last attacking ball (test numbers)
+		var rk: String = ai_ev[0] + ("_off" if p.offside else ("_ok" if p.team == ai_ev[1] else "_lost"))
+		if OS.get_cmdline_user_args().has("--thrudbg") and ai_ev[0].begins_with("ai_thru"):
+			var nd9 := 99.0
+			for o9 in teams[1 - p.team]:
+				if o9.role != "GK":
+					nd9 = minf(nd9, o9.position.distance_to(p.position))
+			print("THRU ", ai_ev[0], " got=", p.team == ai_ev[1], " t=", snappedf(sim_t - ai_ev[2], 0.1), " at=", Vector2(snappedf(p.position.x * side(ai_ev[1]), 0.1), snappedf(p.position.z, 0.1)), " role=", p.role, " near_def=", snappedf(nd9, 0.1))
+		stats[rk] = int(stats.get(rk, 0)) + 1
+		ai_ev[3] = true
 	if p.offside and state == "play":
 		_offside(p)
 		return
 	var prev = ball_last
 	if prev == null or prev.team != p.team:
 		poss_t = sim_t
+		if prev != null:
+			if autotest:
+				var lx: float = prev.position.x * side(prev.team)
+				var lk: String = "loss" + str(prev.team) + ("_3" if lx > HL - 35.0 else ("_m" if lx > -HL + 35.0 else "_1")) + ("_tk" if p.position.distance_to(prev.position) < 3.0 else "_pass")
+				stats[lk] = int(stats.get(lk, 0)) + 1
+			_seq_end(prev.team)
 	own_at = sim_t
 	ball_owner = p
 	ball_last = p
@@ -8204,6 +8354,295 @@ func _press_on(t: int, c) -> bool:
 		return true
 	return false
 
+
+# --- the computer in attack: it plays like FIFA's AI, calm in the build-up but sharp in the last third.
+# Everything here goes through the players' own ratings: a poor passer sees and lands fewer through balls,
+# a poor finisher shoots less from range and sprays it more (the error is in _pass/_shoot as for you).
+
+
+# ---------------------------------------------------------------- the managers on the touchline
+# Like a real manager the computer changes its plan during the match: behind late on it presses high and
+# throws men forward, ahead it sits deeper and sees it out, a man down it tightens up. It also brings on
+# fresh legs. For a human side it only suggests a change (tired men); you make it in the pause menu.
+const MOOD_TXT := {
+	"push": ["PUSHING FOR A GOAL", "%s push up and press higher, they need a goal."],
+	"allout": ["ALL OUT ATTACK", "%s are throwing everyone forward now!"],
+	"sit": ["SITTING DEEPER", "%s drop off and protect the lead."],
+	"bus": ["PARKING THE BUS", "Everyone behind the ball for %s, they want to see this out."],
+	"ten": ["TIGHTENING UP", "%s are a man down and tighten up at the back."],
+	"ease": ["EASING OFF", "%s are cruising and take the foot off the gas."],
+}
+
+func _men_on(t: int) -> int:
+	var n := 0
+	for p in teams[t]:
+		if not p.off:
+			n += 1
+	return n
+
+func _managers() -> void:
+	if state != "play" or screen != "match" or teams[0].size() < 2:
+		return
+	var mn: float = clock / 60.0
+	for t in 2:
+		if _team_human(t):
+			_sub_hints(t, mn)
+			continue
+		if humans.is_empty() and not autotest:
+			continue
+		var b: Array = tac_base[t]
+		var m: int = int(b[0])
+		var pr: int = int(b[1])
+		var w: int = int(b[2])
+		var gd: int = score[t] - score[1 - t]
+		var mood := ""
+		if gd < 0:
+			if mn >= 80.0 or (gd <= -2 and mn >= 62.0):
+				m = 4
+				pr = 2
+				w = 2
+				mood = "allout"
+			elif mn >= 58.0 or gd <= -2:
+				m = maxi(m, 3)
+				pr = 2
+				mood = "push"
+		elif gd > 0:
+			if mn >= 82.0 and gd == 1:
+				m = 0
+				pr = 0
+				w = mini(w, 1)
+				mood = "bus"
+			elif mn >= 65.0 and gd <= 2:
+				m = mini(m, 1)
+				pr = mini(pr, 1)
+				mood = "sit"
+			elif gd >= 3:
+				m = mini(m, 2)
+				pr = mini(pr, 1)
+				mood = "ease"
+		if mood == "" or mood == "push":
+			if _men_on(t) < _men_on(1 - t):
+				m = maxi(mini(m, int(b[0])) - 1, 0)
+				pr = mini(pr, 1)
+				mood = "ten"
+		var nt := [m, pr, w]
+		if nt != tac_t[t]:
+			tac_t[t] = nt
+		if mood != tac_mood[t]:
+			tac_mood[t] = mood
+			if mood != "" and not autotest:
+				var tx: Array = MOOD_TXT[mood]
+				fx("say", str(tx[1]) % str(TEAM_NAMES[t]).capitalize())
+				hud.toast("%s  ·  %s" % [str(TEAM_NAMES[t]).to_upper(), tx[0]])
+				_net_toast("%s  ·  %s" % [str(TEAM_NAMES[t]).to_upper(), tx[0]], -1)
+			stats["mood_" + (mood if mood != "" else "plan")] = int(stats.get("mood_" + (mood if mood != "" else "plan"), 0)) + 1
+		_cpu_subs(t, mn, mood)
+
+# The computer's substitutions: tired men off from about the hour, an extra forward when it chases the game.
+func _cpu_subs(t: int, mn: float, mood: String) -> void:
+	if mn < 55.0 or int(sub_left2[t]) <= 0 or (sub_bench[t] as Array).is_empty() or set_piece != "" or ball_owner == null:
+		return
+	if clock - float(cpu_sub_at[t]) < 6.0 * 60.0:
+		return
+	var bl: Array = sub_bench[t]
+	var worst = null
+	var wf := 0.78 if mn < 70.0 else 0.84
+	for p in teams[t]:
+		if p.off or p.role == "GK" or p == ball_owner:
+			continue
+		if p.fit < wf:
+			wf = p.fit
+			worst = p
+	var want_role := ""
+	if worst == null and mood in ["push", "allout"] and mn >= 62.0:
+		# chasing the game: a fresh forward for a tired midfielder or defender
+		for p in teams[t]:
+			if not p.off and p.role in ["MF", "DF"] and p != ball_owner and (worst == null or p.fit < worst.fit):
+				worst = p
+		want_role = "FW"
+	if worst == null:
+		return
+	if want_role == "":
+		want_role = worst.role
+	var pick := -1
+	for i in bl.size():
+		if (sub_used[t] as Array).has(i):
+			continue
+		var pos := str((bl[i] as Dictionary).get("pos", ""))
+		if pos == want_role:
+			pick = i
+			break
+		if pick < 0 and pos != "GK" and (want_role != "FW" or pos != "DF"):
+			pick = i
+	if pick < 0:
+		return
+	cpu_sub_at[t] = clock
+	stats["cpu_subs"] = int(stats.get("cpu_subs", 0)) + 1
+	_sub_do(t, teams[t].find(worst), pick)
+
+# A human side gets a tip when a man is out on his feet: who, how tired, and where to change him.
+func _sub_hints(t: int, mn: float) -> void:
+	if mn < 50.0 or int(sub_left2[t]) <= 0 or (sub_bench[t] as Array).is_empty() or pro_sq >= 0:
+		return
+	if (sub_used[t] as Array).size() >= (sub_bench[t] as Array).size():
+		return
+	if clock - float(sub_hint.get("_t%d" % t, -999.0)) < 7.0 * 60.0:
+		return
+	for p in teams[t]:
+		if p.off or p.role == "GK":
+			continue
+		var id: int = p.get_instance_id()
+		if p.fit < 0.72 and not sub_hint.has(id):
+			sub_hint["_t%d" % t] = clock
+			sub_hint[id] = true
+			var tx := "%s IS TIRED (%d%%)  ·  PAUSE  ›  SUBSTITUTIONS" % [p.pname.to_upper(), int(round(p.fit * 100.0))]
+			stats["sub_hint"] = int(stats.get("sub_hint", 0)) + 1
+			if autotest:
+				return
+			for h in humans:
+				if h.team == t and h.local:
+					hud.toast(tx)
+			_net_toast(tx, t)
+			return
+
+# a short line on the friend's phone too (team -1 = both, else only if his side is that team)
+func _net_toast(tx: String, t: int) -> void:
+	if net.role != "host" or not net.connected:
+		return
+	for h in humans:
+		if not h.local and (t < 0 or h.team == t):
+			net.send({"_": "toast", "s": tx})
+			return
+
+var go_run := {} # computer players on a pass-and-go run: instance id -> until (sim_t)
+var ai_ev := ["", -1, -99.0, false]
+var seq_m := [0, 0] # test numbers: how far this spell on the ball got (1 last third, 2 box), shots in it
+func _seq_end(t: int) -> void:
+	if seq_m[0] > 0:
+		var k: String = "seq" + str(t) + ("_box" if seq_m[0] == 2 else "_3rd")
+		stats[k] = int(stats.get(k, 0)) + 1
+		if seq_m[1] > 0:
+			stats[k + "_sh"] = int(stats.get(k + "_sh", 0)) + 1
+	seq_m = [0, 0]
+func _ai_mark(kind: String, t: int) -> void:
+	stats[kind] = int(stats.get(kind, 0)) + 1
+	ai_ev = [kind, t, sim_t, false]
+
+# how well this computer side reads the game (easy level slower and blinder, team mates sharp)
+func _ai_vision(t: int) -> float:
+	return clampf(1.25 - float(_cpu(t)["think"]), 0.5, 1.0)
+
+# opponents (not the keeper) standing in the line from a to b
+func _lane_block(t: int, a: Vector3, b: Vector3, r: float) -> int:
+	var to: Vector3 = b - a
+	to.y = 0.0
+	var l: float = to.length()
+	if l < 0.5:
+		return 0
+	var n: Vector3 = to / l
+	var k := 0
+	for o in teams[1 - t]:
+		if o.off or o.role == "GK":
+			continue
+		var ap: Vector3 = o.position - a
+		ap.y = 0.0
+		var tt: float = ap.dot(n)
+		if tt < 0.5 or tt > l:
+			continue
+		if (ap - n * tt).length() < r:
+			k += 1
+	return k
+
+# A run in behind that is on: a man going forward near their last line, onside, with grass in front of him
+# that he gets to before any defender (or the keeper). Returns [man, lofted, lead time] or null.
+func _ai_thru(p):
+	var s := side(p.team)
+	var t: int = p.team
+	if p.position.x * s < -20.0:
+		return null
+	var best = null
+	var bs := -1e9
+	for m in teams[t]:
+		if m == p or m.off or m.role == "GK" or m.stun > 0.0 or _hum_of(m) != null:
+			continue
+		var mu: float = m.position.x * s
+		if m.vel.x * s < 2.2 or mu < off_line[t] - 7.0 or mu < p.position.x * s + 2.0:
+			continue
+		if _is_offside(p, m):
+			continue
+		var d: float = m.position.distance_to(p.position)
+		if d < 8.0 or d > 42.0:
+			continue
+		var rd := Vector3(s, 0, 0) * 0.55
+		var mv: Vector3 = m.vel
+		mv.y = 0.0
+		if mv.length() > 1.5:
+			rd += mv.normalized() * 0.65
+		if mu > HL - 36.0:
+			var tog: Vector3 = Vector3(HL * s, 0, 0) - m.position
+			tog.y = 0.0
+			rd += tog.normalized() * 0.5
+		rd = rd.normalized()
+		var lead: float = 1.1 + randf() * 0.4
+		var vr: float = m.top_speed * 0.82
+		var spot: Vector3 = m.position + rd * vr * lead
+		spot.x = clampf(spot.x, -HL + 7.0, HL - 7.0)
+		spot.z = clampf(spot.z, -HW + 3.0, HW - 3.0)
+		spot.y = 0.0
+		var t_me: float = m.position.distance_to(spot) / maxf(vr, 1.0)
+		var margin := 9.0
+		for o in teams[1 - t]:
+			if o.off:
+				continue
+			var ot: float = o.position.distance_to(spot) / maxf(o.top_speed, 1.0) + (0.55 if o.role == "GK" else 0.3)
+			if o.role == "GK" and absf(spot.x * s) < HL - 17.0:
+				continue
+			margin = minf(margin, ot - t_me)
+		if margin < 0.15:
+			continue
+		var lofted := false
+		if _lane_block(t, p.position, spot, 1.7) > 0:
+			# the ground is shut: over the top, but only a real passer tries the chip
+			if d < 14.0 or p.pas < 62:
+				continue
+			lofted = true
+		var sc: float = (spot.x * s - p.position.x * s) * 0.12 + minf(margin, 1.5) * 2.0 - d * 0.03
+		if mu > HL - 30.0:
+			sc += 1.5
+		# a ball that takes him wide to the corner flag is worth less than one through the middle
+		sc -= maxf(absf(spot.z) - 11.0, 0.0) * 0.22
+		if sc > bs:
+			bs = sc
+			best = [m, lofted, lead]
+	return best
+
+# A team mate in or near the box who is freer than me: the cut back or the square ball for a tap in.
+func _ai_better(p, dist: float):
+	var s := side(p.team)
+	var best = null
+	var bd := dist - 4.0
+	for m in teams[p.team]:
+		if m == p or m.off or m.role == "GK" or m.stun > 0.0:
+			continue
+		var gd: float = Vector2(HL * s - m.position.x, m.position.z).length()
+		if gd > bd or gd > 17.0 or absf(m.position.z) > 12.0:
+			continue
+		if _is_offside(p, m):
+			continue
+		var mark := 9.0
+		for o in teams[1 - p.team]:
+			if o.role != "GK":
+				mark = minf(mark, o.position.distance_to(m.position))
+		if mark < 2.2:
+			continue
+		if _lane_block(p.team, p.position, m.position, 1.3) > 0:
+			continue
+		if _lane_block(p.team, m.position, Vector3(HL * s, 0, 0), 1.0) > 0:
+			continue
+		bd = gd
+		best = m
+	return best
+
 func _ai_carrier(p, dt: float) -> Vector3:
 	var s := side(p.team)
 	var cpu := _cpu(p.team)
@@ -8241,6 +8680,12 @@ func _ai_carrier(p, dt: float) -> Vector3:
 	if nd < 2.0 and p.star and p.skill_t < 0.0 and protect_t <= 0.0 and randf() < dt * 0.9:
 		_skill(p, Vector3(s, 0, signf(p.position.z - near.position.z) * 0.7))
 	p.hold_t += dt
+	if autotest:
+		var fx3: float = p.position.x * s
+		var fk: String = "ftb" if fx3 > HL - 16.5 and absf(p.position.z) < 20.0 else ("ft3" if fx3 > HL - 35.0 else ("ftm" if fx3 > -HL + 35.0 else "ft1"))
+		stats[fk + str(p.team)] = int(stats.get(fk + str(p.team), 0)) + 1
+		if fk == "ft3" or fk == "ftb":
+			seq_m[0] = maxi(seq_m[0], 1 if fk == "ft3" else 2)
 	if autotest or OS.get_cmdline_user_args().has("--holddbg"):
 		hold_m[2] += 1
 		for o5 in teams[1 - p.team]:
@@ -8257,16 +8702,62 @@ func _ai_carrier(p, dt: float) -> Vector3:
 		p.ai_cool = 0.05 # first the ball has to be under control
 	elif p.ai_cool <= 0.0:
 		p.ai_cool = cpu["think"] * (0.8 + randf() * 0.6)
+		if dist < 30.0:
+			# near their goal the moments come and go fast: he looks up more often
+			p.ai_cool *= 0.6
 		var angle_ok := absf(p.position.z) < 8.0 + (HL - absf(p.position.x)) * 0.8
-		if dist < 24.0 and angle_ok and (nd > 1.7 or dist < 14.0):
-			if dist < 20.0 or randf() < 0.4:
-				var gk = teams[1 - p.team][0]
-				var az := (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * (0.5 + randf() * 0.28)
-				_shoot(p, 0.5 + randf() * 0.4, az, cpu["err"], 0.7 if (p.sho > 74 and randf() < 0.6) else 0.0)
+		var sho_q: float = clampf((p.sho - 40) / 50.0, 0.0, 1.0)
+		var vis: float = _ai_vision(p.team)
+		var blk: int = _lane_block(p.team, p.position, Vector3(HL * s, 0, 0), 1.1)
+		var take := false
+		if dist < 24.0 and angle_ok and (nd > 1.7 or dist < 18.0 or (nd > 1.1 and blk == 0)):
+			take = dist < 20.0 or randf() < 0.4 + 0.3 * sho_q * float(blk == 0)
+			if take and blk > 0 and dist > 9.0:
+				# a defender in the way: a cut back to a free man is the better chance
+				var cb = _ai_better(p, dist)
+				if cb != null and randf() < 0.45 + 0.4 * vis:
+					_ai_mark("ai_cut", p.team)
+					_pass(p, cb, false)
+					return Vector3.ZERO
+		elif dist < 29.0 and absf(p.position.z) < 13.0 and blk == 0 and nd > 3.2 and p.sho >= 70 and randf() < (0.12 + 0.3 * sho_q) * vis:
+			# a good shooter with a clear sight of goal just outside the box lets fly
+			take = true
+			stats["ai_long"] = int(stats.get("ai_long", 0)) + 1
+		if take:
+			var gk = teams[1 - p.team][0]
+			var az := (-1.0 if gk.position.z > 0.0 else 1.0) * GOAL_HW * (0.5 + randf() * 0.28)
+			stats["ai_shot"] = int(stats.get("ai_shot", 0)) + 1
+			_shoot(p, 0.5 + randf() * 0.4, az, cpu["err"], 0.7 if (p.sho > 74 and randf() < 0.6) else 0.0)
+			return Vector3.ZERO
+		# A run in behind: a passer with his head up sees it and plays it straight away, he does not
+		# wait for the build-up clock. A poor passer or an easy computer side misses more of them.
+		if p.hold_t > 0.35 and randf() < (0.3 + 0.55 * pas_q) * vis:
+			var th = _ai_thru(p)
+			if th != null:
+				_ai_mark("ai_thru_lob" if th[1] else "ai_thru", p.team)
+				_pass(p, th[0], th[1], false, th[2])
 				return Vector3.ZERO
+		# Out wide in the last third: whip it in for the men in the box, or pull it back
+		var wide_now: bool = absf(p.position.z) > 13.0 and p.position.x * s > HL - 30.0
+		if wide_now and p.hold_t > 0.3:
+			var deep: bool = p.position.x * s > HL - 17.0
+			if deep or tight or nd < 4.5 or p.hold_t > 1.4:
+				var cb2 = _ai_better(p, 99.0) if deep else null
+				if cb2 != null and randf() < 0.5:
+					_ai_mark("ai_cut", p.team)
+					_pass(p, cb2, false)
+					return Vector3.ZERO
+				var cm = _cross_target(p)
+				if cm != null and Vector2(HL * s - cm.position.x, cm.position.z).length() < 16.0 and randf() < 0.45 + 0.4 * pas_q:
+					_ai_mark("ai_cross", p.team)
+					_pass(p, cm, true, true)
+					return Vector3.ZERO
 		# how long he is happy to keep it: a calm playmaker longer, everybody shorter near their own goal
 		var own_d: float = p.position.distance_to(Vector3(-HL * s, 0, 0))
 		var keep_t: float = lerpf(1.6, 3.2, randf()) * (0.6 if own_d < 25.0 else 1.0)
+		if p.position.x * s > 0.0:
+			# calm at the back, but in their half the ball moves quicker
+			keep_t *= 0.75
 		var closing: bool = nd < 4.5
 		var go := false
 		var m3 = null
@@ -8282,7 +8773,7 @@ func _ai_carrier(p, dt: float) -> Vector3:
 			go = p.hold_t > 0.9 and randf() < 0.35
 		elif p.hold_t > keep_t:
 			go = true
-		elif p.hold_t > 0.8 and randf() < 0.2 + 0.15 * pas_q:
+		elif p.hold_t > 0.8 and randf() < (0.2 + 0.15 * pas_q) * (1.6 if p.position.x * s > -12.0 else 1.0):
 			# room to play: only a real chance makes him pass early (a man free in front, a run in behind)
 			m3 = _pass_target(p, Vector3.ZERO, true)
 			if m3 != null and (m3.position.x - p.position.x) * s > 10.0:
@@ -8305,12 +8796,36 @@ func _ai_carrier(p, dt: float) -> Vector3:
 	var dir := to_goal.normalized()
 	if dist > 30.0:
 		dir = Vector3(s, 0, clampf(-p.position.z * 0.01, -0.3, 0.3)).normalized()
+	var ux: float = p.position.x * s
+	if absf(p.position.z) > 14.0 and ux > HL - 34.0 and ux < HL - 12.0:
+		# a wide man in the last third goes down the line to get the cross in, not into the crowd in the middle
+		dir = Vector3(s, 0, -signf(p.position.z) * 0.22).normalized()
+	# Take him on: in the last third a quick, good dribbler goes at a lone defender instead of turning back,
+	# when there is no second man behind him. Ratings decide who tries it and how often.
+	var drb_q: float = clampf(((p.pac + p.ovr) * 0.5 - 55.0) / 35.0, 0.0, 1.0)
+	var attack: bool = false
+	if near != null and nd < 4.5 and ux > 8.0 and p.skill_t < 0.0 and protect_t <= 0.0:
+		var cover := false
+		for o6 in teams[1 - p.team]:
+			if o6 != near and o6.role != "GK" and o6.position.distance_to(near.position) < 6.0 and (o6.position.x - near.position.x) * s > -1.0:
+				cover = true
+				break
+		if not cover and (near.position - p.position).dot(dir) > 0.0:
+			attack = true
+			if nd < 2.4 and randf() < dt * (0.6 + 2.2 * drb_q) * _ai_vision(p.team) * (1.4 if p.star else 1.0):
+				var sd: float = signf(p.position.z - near.position.z)
+				if sd == 0.0:
+					sd = 1.0 if randf() < 0.5 else -1.0
+				_ai_mark("ai_take", p.team)
+				ai_ev[3] = true
+				_skill(p, Vector3(s, 0, sd * 0.75))
 	if near != null and nd < 5.0:
 		var away: Vector3 = (p.position - near.position).normalized()
 		var side_step := Vector3(-dir.z, 0, dir.x)
 		if side_step.dot(away) < 0.0:
 			side_step = -side_step
-		dir = (dir + side_step * (1.0 - nd / 5.0) * 1.3).normalized()
+		# going at him he aims past his shoulder; otherwise he turns away from him
+		dir = (dir + side_step * (1.0 - nd / 5.0) * (0.6 if attack else 1.3)).normalized()
 	if absf(p.position.z) > HW - 3.0 and signf(dir.z) == signf(p.position.z):
 		dir.z *= -0.5
 	# Building up he jogs with it, head up, instead of sprinting into the next man; he only runs at
@@ -8319,6 +8834,9 @@ func _ai_carrier(p, dt: float) -> Vector3:
 	var brk: bool = sim_t - poss_t < 4.0 or dist < 30.0
 	if not brk:
 		pace_k = 0.88
+		if ux > -15.0 and (near == null or nd > 9.0 or (near.position - p.position).dot(dir) < 0.0):
+			# open grass in front of him past halfway: he drives into it, like FIFA's AI does
+			pace_k = 0.96
 	if near != null and nd > 3.0 and nd < 9.0 and (near.position - p.position).dot(dir) > 0.0 and dist > 24.0:
 		# a man stands off him in the way: no point running into him, he slows down, keeps it and looks up
 		pace_k = 0.55
@@ -8536,7 +9054,8 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 					for o in teams[1 - t]:
 						if o.role != "GK" and absf(o.position.x * s - off_line[t]) < 8.0:
 							gap = minf(gap, absf(o.position.z - zz))
-					gap -= absf(dz) * 0.15 + absf(zz) * 0.05
+					# a forward runs through the middle channels, towards goal, not off to the flag
+					gap -= absf(dz) * 0.15 + absf(zz) * (0.05 if absf(zz) < 12.0 else 0.22)
 					if gap > bg:
 						bg = gap
 						bz = zz
@@ -9091,6 +9610,18 @@ func _process(dt: float) -> void:
 			e1.global_position = a1
 			Input.parse_input_event(e1)
 			test_drag = []
+	if shot_path != "" and OS.get_environment("STRIP") != "":
+		# test pictures of a computer attack: a frame every 0.6 s once team 1 has it in the last 40 m
+		if strip_n < 0 and real_t > shot_at and ball_owner != null and ball_owner.team == 1 and ball_owner.position.x * side(1) > HL - 40.0 and state == "play":
+			strip_n = 0
+			strip_t = real_t
+		if strip_n >= 0 and real_t >= strip_t:
+			get_viewport().get_texture().get_image().save_png(shot_path.replace(".png", "_%d.png" % strip_n))
+			strip_n += 1
+			strip_t = real_t + 0.6
+			if strip_n >= int(OS.get_environment("STRIP")):
+				get_tree().quit()
+		return
 	if shot_path != "" and real_t >= shot_at:
 		var img := get_viewport().get_texture().get_image()
 		img.save_png(shot_path)
@@ -9389,7 +9920,7 @@ func _bot_inputs(dt: float) -> void:
 # everything: the squad, the table, the transfers, the club and the office. What he changes there is not done: it goes
 # to the manager as a suggestion, and the manager says yes or no.
 const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
-	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
+	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt", "mtac", "mtac_set",
 	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac", "nat", "nat_tab", "ct_rc", "sc_swp"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
 	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_adv", "c_rt", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",

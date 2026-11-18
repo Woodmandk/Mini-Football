@@ -179,8 +179,8 @@ func _process(sdt: float) -> void:
 	_bed_l = lerpf(_bed_l, bed_to, fade)
 	_hot_l = lerpf(_hot_l, hot_to, fade)
 	var dby := 3.0 if derby else 0.0
-	_level(bed, _bed_l, 0.0 + dby)
-	_level(hot, _hot_l, -2.0 + dby)
+	_level(bed, _bed_l, -7.0 + dby)
+	_level(hot, _hot_l, -4.5 + dby)
 	if log_on and int(t * 2.0) != int((t - dt) * 2.0):
 		print("CROWD %.1f danger=%.2f bed=%.2f hot=%.2f boost=%.2f song=%d/%.2f/%.2f" % [t, _danger_s, _bed_l, _hot_l, _boost, _song, _song_l[0], _song_l[1]])
 	# songs: when the game is calm for a while, part of the ground starts singing or clapping

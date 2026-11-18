@@ -60,6 +60,7 @@ const STICK_R := 62.0
 const SPRINT_R := 1.42
 const GREEN := Color(0.2, 0.78, 0.38)
 const GOLD := Color(1.0, 0.84, 0.25)
+const WRONG := Color(1.0, 0.55, 0.18) # a man out of position
 const DARK := Color(0.04, 0.08, 0.06)
 const RankC := preload("res://rank.gd")
 const Career := preload("res://career.gd")
@@ -331,7 +332,7 @@ func _fit_col(c: int) -> Color:
 	return GREEN if c >= 80 else (GOLD if c >= 60 else Color(0.92, 0.35, 0.3))
 
 # One squad player as a button: position stripe, name, rating.
-func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dictionary, chosen: bool, wrong: bool) -> Button:
+func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dictionary, chosen: bool, wrong_at: String) -> Button:
 	var nm := str(pl["n"])
 	if nm.length() > 9:
 		nm = nm.substr(0, 9)
@@ -349,9 +350,13 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 	n1.clip_text = true
 	n1.size = Vector2(sz.x - 22, 24)
 	b.add_child(n1)
-	var n2 := _label("%s  %d" % [str(pl["pos"]), int(pl["ovr"])], 17, GOLD if chosen else Color(1, 1, 1, 0.75), font3)
+	# his own position, and where he stands when that is another place (orange: he plays out of position)
+	var n2 := _label(("%s › %s  %d" % [str(pl["pos"]), wrong_at, int(pl["ovr"])]) if wrong_at != "" else ("%s  %d" % [str(pl["pos"]), int(pl["ovr"])]), 17, WRONG if wrong_at != "" else (GOLD if chosen else Color(1, 1, 1, 0.75)), font3)
 	n2.position = Vector2(18, sz.y - 24)
 	b.add_child(n2)
+	if wrong_at != "" and not chosen:
+		for st in ["normal", "hover", "focus", "pressed", "disabled"]:
+			b.add_theme_stylebox_override(st, _box(Color(0.12, 0.08, 0.04, 0.95), 10, WRONG))
 	if int(pl.get("tp", 0)) > 0:
 		var tpd := _label("TP", 11, Color(0.05, 0.08, 0.02))
 		tpd.add_theme_stylebox_override("normal", _box(GOLD, 6))
@@ -391,13 +396,6 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 		tlb.size = Vector2(22, 15)
 		tlb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		b.add_child(tlb)
-	if wrong:
-		var wr := ColorRect.new()
-		wr.color = Color(1.0, 0.85, 0.1)
-		wr.position = Vector2(sz.x - 14, 6)
-		wr.size = Vector2(8, 8)
-		wr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_child(wr)
 	return b
 
 # A button in a club's colours: the name, with a kit stripe on the left.
@@ -626,7 +624,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# a calm, dark pitch-green behind every menu so the words read; the match only shows through a little.
 	# In the match (pause, subs, full time) it stays lighter so you can still see the pitch.
-	shade.color = Color(0.051, 0.114, 0.082, 0.62) if n in ["full", "pause", "subs", "so"] else Color(0.051, 0.114, 0.082, 0.9)
+	shade.color = Color(0.051, 0.114, 0.082, 0.62) if n in ["full", "pause", "subs", "so", "mtac"] else Color(0.051, 0.114, 0.082, 0.9)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(shade)
 	var items := [] # [control, slide-from, delay]
@@ -1945,7 +1943,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			for si2 in xi.size():
 				var pl: Dictionary = sqd[int(xi[si2])]
 				tp[si2].y = clampf(tp[si2].y, py + 12.0, py + ph - 12.0 - 46.0)
-				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) != str(pl["pos"]) and not (pl.get("pos2", []) as Array).has(str(form[si2][0])))
+				var pb := _player_btn(pl, int(xi[si2]), tp[si2], Vector2(bw, 46), pcol, int(xi[si2]) == sel, str(form[si2][0]) if str(form[si2][0]) != str(pl["pos"]) and not (pl.get("pos2", []) as Array).has(str(form[si2][0])) else "")
 				menu.add_child(pb)
 				ctx["plates"].append([pb, int(xi[si2]), si2])
 				_drag_plate(pb, int(xi[si2]), si2, ctx)
@@ -1963,7 +1961,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				for qi in sqd.size():
 					if xi.has(qi) or xi.has(float(qi)):
 						continue
-					var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), bench_y + (bn / bcols) * 58), Vector2(bw3 / bcols - 8, 52), pcol, false, false)
+					var bb := _player_btn(sqd[qi], qi, Vector2(bx3 + (bn % bcols) * (bw3 / bcols), bench_y + (bn / bcols) * 58), Vector2(bw3 / bcols - 8, 52), pcol, false, "")
 					menu.add_child(bb)
 					ctx["plates"].append([bb, qi, -1])
 					_drag_plate(bb, qi, -1, ctx)
@@ -1996,11 +1994,16 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					meta += "  ·  %d goals" % int(sp2["g"])
 				if eur3 and sp2.has("fm"):
 					meta = "Form %s  ·  " % Career.form_name(int(sp2["fm"])).to_lower() + meta
+				var sr3 := str(sp2.get("sr", ""))
+				var wrong3 := sr3 != "" and sr3 != str(sp2["pos"]) and not (sp2.get("pos2", []) as Array).has(sr3)
+				if wrong3:
+					# out of position: where he stands and what it costs him, first on the line
+					meta = "Out of position: plays %s, %d on every stat  ·  " % [{"GK": "in goal", "DF": "in defence", "MF": "in midfield", "FW": "up front"}.get(sr3, sr3), int(sp2.get("po", 0))] + meta
 				var fit_t := ""
 				if int(sp2.get("cond", -1)) >= 0:
 					fit_t = ("Injured: " + str(sp2.get("injt", ""))) if bool(sp2.get("inj", false)) else "Fitness %d%%" % int(sp2["cond"])
 				var hurt := bool(sp2.get("inj", false))
-				var dd := _label(_trim(fit_t if hurt else meta, font3, 20, bw3 - 130), 20, Color(0.95, 0.45, 0.4) if hurt else (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT), font3)
+				var dd := _label(_trim(fit_t if hurt else meta, font3, 20, bw3 - 130), 20, Color(0.95, 0.45, 0.4) if hurt else (WRONG if wrong3 else (GOLD if wg3 and int(sp2.get("ct", 1)) <= 1 else MUT)), font3)
 				if fit_t != "" and not hurt:
 					var ftl := _label(fit_t, 20, _fit_col(int(sp2["cond"])), font3)
 					ftl.position = Vector2(bw3 - 250, 16)
@@ -2138,7 +2141,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					menu.add_child(slb)
 			else:
 				var fit_on := not sqd.is_empty() and int((sqd[0] as Dictionary).get("cond", -1)) >= 0
-				var hint2 := _label("Tap a player to see him.\nDrag a player to move him, or onto a team mate to swap.\nA yellow dot: he plays out of position." + ("\nThe bar under a name: his fitness. A red cross: injured." if fit_on else ""), 20, MUT, font3)
+				var hint2 := _label("Tap a player to see him.\nDrag a player to move him, or onto a team mate to swap.\nOrange DF › FW: a defender playing up front (out of position)." + ("\nThe bar under a name: his fitness. A red cross: injured." if fit_on else ""), 20, MUT, font3)
 				hint2.position = Vector2(18, 14)
 				hint2.autowrap_mode = TextServer.AUTOWRAP_WORD
 				hint2.size = Vector2(bw3 - 36, dp.size.y - 28 - (96 if fit_on else 0))
@@ -2301,6 +2304,48 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				menu.add_child(bb6)
 			var bk6 := _back("pause", null)
 			menu.add_child(bk6)
+		"mtac":
+			# change how your side plays without leaving the match (like the pause menu in FIFA)
+			var mt: Dictionary = info.get("mtac", {})
+			var dim8 := ColorRect.new()
+			dim8.color = Color(0.0, 0.03, 0.02, 0.72)
+			dim8.size = Vector2(w, h)
+			dim8.mouse_filter = Control.MOUSE_FILTER_STOP
+			menu.add_child(dim8)
+			menu.move_child(dim8, 0)
+			_title("Tactics", str(mt.get("sub", "")))
+			var t8: Array = mt.get("tac", [2, 1, 1])
+			var rows8 := [
+				["Mentality", ["Bus", "Defend", "Balanced", "Attack", "All out"], ["Everyone behind the ball", "Sit deeper, hit them on the break",
+					"A bit of both", "Push up and get men forward", "Throw everything forward"]],
+				["Pressing", ["Low", "Mid", "High"], ["Wait in your own half. Saves legs", "Close them down in your half",
+					"Hunt the ball everywhere. It tires your men"]],
+				["Width", ["Narrow", "Normal", "Wide"], ["Compact through the middle", "The usual shape", "Stretch the pitch"]]]
+			var y8 := 100.0
+			var ph8 := minf(118.0, (h - 200.0) / 3.0)
+			for ri in 3:
+				var r8: Array = rows8[ri]
+				var cur8 := clampi(int(t8[ri]), 0, (r8[1] as Array).size() - 1)
+				var pn8 := _card_panel(Vector2(48, y8), Vector2(w - 96, ph8 - 10))
+				items.append([pn8, Vector2(0, 30), 0.04 * ri])
+				var tl8 := _label(str(r8[0]), 22, CHALK)
+				tl8.position = Vector2(24, 8)
+				pn8.add_child(tl8)
+				var dl8 := _label(_trim(str(r8[2][cur8]), font3, 18, w - 96 - 220), 18, MUT, font3)
+				dl8.position = Vector2(200, 12)
+				dl8.size = Vector2(w - 96 - 220, 26)
+				pn8.add_child(dl8)
+				var n8: int = (r8[1] as Array).size()
+				var bw8 := (w - 96 - 48 - 12 * (n8 - 1)) / float(n8)
+				for k in n8:
+					menu.add_child(_btn(str(r8[1][k]).to_upper(), "mtac_set", [ri, k], "primary" if k == cur8 else "alt", Vector2(48 + 24 + k * (bw8 + 12), y8 + 46), Vector2(bw8, 48), 18))
+				y8 += ph8
+			var op8 := str(mt.get("opp", ""))
+			if op8 != "":
+				var ol8 := _label(_trim(op8, font3, 19, w - 140), 19, GOLD, font3)
+				ol8.position = Vector2(64, y8 + 2)
+				menu.add_child(ol8)
+			menu.add_child(_back("pause", null))
 		"club":
 			var c7: Dictionary = info.get("car", {})
 			var eur7 := bool(c7.get("eur", false))
@@ -2684,7 +2729,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			var panel := Panel.new()
 			panel.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.94), 20, Color(1, 1, 1, 0.16)))
 			var can_sub := bool(info.get("can_sub", false))
-			var ph0 := 394.0 if can_sub else 322.0
+			var can_tac := not (info.get("mtac", {}) as Dictionary).is_empty()
+			var ph0 := (394.0 if can_sub else 322.0) + (68.0 if can_tac else 0.0)
 			panel.position = Vector2((w - pw) * 0.5, h * 0.5 - ph0 * 0.5)
 			panel.size = Vector2(pw, ph0)
 			menu.add_child(panel)
@@ -2693,10 +2739,22 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			pt.size = Vector2(pw, 44)
 			pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			panel.add_child(pt)
+			var pby := str(info.get("paused_by", ""))
+			if pby != "":
+				var pbl := _label("Paused by %s" % pby, 16, Color(1, 1, 1, 0.6), font2)
+				pbl.position = Vector2(0, 54)
+				pbl.size = Vector2(pw, 20)
+				pbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				panel.add_child(pbl)
 			panel.add_child(_btn("RESUME", "resume", null, "primary", Vector2(30, 76), Vector2(pw - 60, 72), 30))
+			var ty := 160.0
+			if can_tac:
+				panel.add_child(_btn("TACTICS", "mtac", null, "alt", Vector2(30, ty), Vector2(pw - 60, 60), 19))
+				ty += 68.0
 			if can_sub:
-				panel.add_child(_btn("SUBSTITUTIONS  (%d LEFT)" % int((info.get("subs", {}) as Dictionary).get("left", 0)), "subs", null, "alt", Vector2(30, 160), Vector2(pw - 60, 60), 19))
-			var sy := 236.0 if can_sub else 164.0
+				panel.add_child(_btn("SUBSTITUTIONS  (%d LEFT)" % int((info.get("subs", {}) as Dictionary).get("left", 0)), "subs", null, "alt", Vector2(30, ty), Vector2(pw - 60, 60), 19))
+				ty += 76.0
+			var sy := ty if can_sub else ty + 4.0
 			panel.add_child(_btn("SOUND: " + str(info.get("snd", "")), "snd_opt", null, "ghost", Vector2(30, sy), Vector2((pw - 72) * 0.5, 50), 15))
 			panel.add_child(_btn("VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt", null, "ghost", Vector2(30 + (pw - 72) * 0.5 + 12, sy), Vector2((pw - 72) * 0.5, 50), 15))
 			panel.add_child(_btn("LEAVE MATCH", "menu", null, "alt" if not can_sub else "ghost", Vector2(30, sy + 62), Vector2(pw - 60, 60), 22))
