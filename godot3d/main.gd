@@ -1261,7 +1261,7 @@ func _ready() -> void:
 				# a few rounds played, so the table has form
 				for r7 in 7:
 					car.finish_match(r7 % 3, (r7 * 2) % 3, [])
-			if menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad"):
+			if (menu_arg in ["career", "table", "cfull", "market", "club"] or menu_arg.begins_with("squad")) and not has_meta("rv"):
 				_action("career")
 			if menu_arg == "start_club":
 				start_li = 0
@@ -1841,7 +1841,7 @@ func _ready() -> void:
 			if menu_arg == "squadab":
 				car_sel = 9
 				menu_arg = "squad"
-			if menu_arg.begins_with("squad"):
+			if menu_arg.begins_with("squad") and not has_meta("rv"):
 				for fi2 in (int(menu_arg.substr(5)) % 9) if menu_arg.length() > 5 else 0:
 					_action("c_form")
 				if menu_arg != "squad9":
