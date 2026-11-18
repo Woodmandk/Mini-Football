@@ -405,6 +405,74 @@ func ids(li := -1) -> Array:
 		out.append(int(x))
 	return out
 
+# ---- rivals and derbies: every club has one rival, from the same town if there is one, else the club
+# in its league closest to it. A derby is a big day: a full stadium, the board and the fans care, the press ask.
+func _town(c: int) -> String:
+	var ws: PackedStringArray = str(W[c]["n"]).split(" ")
+	return " ".join(ws.slice(0, maxi(ws.size() - 1, 1)))
+
+func rival_of(c: int) -> int:
+	if c < FIRST or c >= W.size():
+		return -1
+	var rv: Dictionary = d.get("rv", {})
+	if rv.has(str(c)):
+		return int(rv[str(c)])
+	var li := league_of(c)
+	var ctry := str(ClubDB.LEAGUES[li]["c"]) if li >= 0 else ""
+	var best := -1
+	var bs := 1e9
+	for x in range(FIRST, W.size()):
+		if x == c:
+			continue
+		var lx := league_of(x)
+		if lx < 0 or str(ClubDB.LEAGUES[lx]["c"]) != ctry:
+			continue
+		var s := 0.0
+		if _town(x) == _town(c):
+			s -= 1000.0
+		if lx != li:
+			s += 200.0 + absi(lx - li) * 50.0
+		s += absf(float(rating(x) - rating(c))) + float(absi(hash(str(c * 31 + x)) % 7)) * 0.1
+		if s < bs:
+			bs = s
+			best = x
+	rv[str(c)] = best
+	d["rv"] = rv
+	return best
+
+func derby(opp: int) -> bool:
+	var me := int(d["club"])
+	return opp >= 0 and rival_of(me) == opp
+
+func derby_rec() -> Dictionary:
+	return d.get("drb", {"w": 0, "d": 0, "l": 0})
+
+# after a derby: the record, the gate, the board and the dressing room
+func _derby_after(mine: int, theirs: int, opp: int, lines: Array) -> void:
+	if not derby(opp):
+		return
+	var r := derby_rec()
+	var k := "w" if mine > theirs else ("d" if mine == theirs else "l")
+	r[k] = int(r.get(k, 0)) + 1
+	d["drb"] = r
+	var b := board()
+	if b.has("trk"):
+		var trk: Dictionary = b["trk"]
+		trk["dp"] = int(trk.get("dp", 0)) + 1
+		if mine > theirs:
+			trk["derby"] = int(trk.get("derby", 0)) + 1
+	var on := str(W[opp]["n"]).capitalize()
+	if mine > theirs:
+		_conf_add(4)
+		_team_mood(3)
+		lines.append("DERBY WON! THE TOWN IS YOURS. THE BOARD +4")
+	elif mine < theirs:
+		_conf_add(-4)
+		_team_mood(-2)
+		lines.append("DERBY LOST TO %s. THE FANS ARE FURIOUS. THE BOARD -4" % on.to_upper())
+	else:
+		lines.append("A DERBY DRAW WITH %s" % on.to_upper())
+
 func league_of(c: int) -> int:
 	var lgs: Array = d.get("leagues", [])
 	for li in lgs.size():
@@ -540,11 +608,15 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	market_refresh()
 	lines.append("+" + money(coins))
 	lines.append(_board_match(mine, theirs, opp_c, was_home, played if not played.is_empty() else d["xi"]))
+	_derby_after(mine, theirs, opp_c, lines)
 	if was_home:
 		# the gate: a bigger stadium and a club near the top bring more people in
 		var gate := int(round((fac("stadium") * 9 + (6 if rank_of(me) <= 3 else 0)) * pay_k(lg())))
 		if eur:
 			gate = int(round(gate * 0.5))
+		if derby(opp_c):
+			# derby day: every seat sold
+			gate = int(round(gate * 1.6))
 		d["coins"] = int(d["coins"]) + gate
 		lines.append("+%s FROM THE GATE" % money(gate))
 	var was_on := []
@@ -1226,6 +1298,8 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		d["day"] = cup_day(r)
 		d["cur"] = int(d["day"])
 	var copp := cup_opp()
+	if not bool(d.get("cupmode", false)):
+		_derby_after(mine + (1 if mine == theirs and won_tie else 0), theirs, copp, lines)
 	_cup_round(mine, theirs, won_tie)
 	if not bool(d.get("cupmode", false)):
 		_rec_result(mine, theirs, copp, true)
@@ -1476,6 +1550,10 @@ func _board_season() -> void:
 		if int(d["squad"][int(i)]["age"]) <= 21:
 			young += 1
 	var pool := ["goals", "cs", "build", "home"]
+	var rvl := rival_of(int(d["club"]))
+	if rvl >= 0 and league_of(rvl) == league_of(int(d["club"])):
+		pool.append("derby")
+		pool.append("derby")
 	if young >= 1 or fac("youth") >= 2:
 		pool.append("young")
 	var k: String = pool[rng.randi() % pool.size()]
@@ -1492,12 +1570,14 @@ func _board_season() -> void:
 		"home":
 			var l := int(round(rounds_total() / 2.0 * (0.12 if ex <= 3 else 0.25)))
 			ex3 = {"k": "home", "v": l, "t": "LOSE NO MORE THAN %d HOME MATCHES" % l}
+		"derby":
+			ex3 = {"k": "derby", "v": 1, "t": "BEAT %s IN A DERBY" % str(W[rvl]["n"])}
 		_:
 			# a little more than the young men in the eleven now would get anyway
 			var yv := clampi(young * rounds_total() + 6, 8, 60)
 			ex3 = {"k": "young", "v": yv, "t": "GIVE %d LEAGUE STARTS TO PLAYERS AGED 21 OR UNDER" % yv}
 	b["obj"] = [lg, cp, ex3]
-	b["trk"] = {"goals": 0, "cs": 0, "home": 0, "young": 0, "fac0": _fac_sum()}
+	b["trk"] = {"goals": 0, "cs": 0, "home": 0, "young": 0, "fac0": _fac_sum(), "derby": 0, "dp": 0}
 	b["ex"] = ex
 	b["seen"] = false
 	b["msg"] = "A NEW SEASON. THE BOARD HAS SET YOUR GOALS: THE MAIN ONE IS TO %s." % str(lg["t"]).split(":")[0]
@@ -1540,6 +1620,13 @@ func obj_state(o: Dictionary) -> Array:
 			if built >= v:
 				return ["DONE", "done"]
 			return ["NOT YET" if not over else "NOTHING BUILT", "failed" if over else ("behind" if half_way else "on")]
+		"derby":
+			if int(trk.get("derby", 0)) >= v:
+				return ["WON", "done"]
+			var lg_d := 2 if str(d.get("slen", "full")) != "short" else 1
+			if over or int(trk.get("dp", 0)) >= lg_d + 1:
+				return ["NOT WON", "failed"]
+			return ["%d PLAYED" % int(trk.get("dp", 0)), "behind" if int(trk.get("dp", 0)) >= lg_d else "on"]
 		"home":
 			var l := int(trk.get("home", 0))
 			if l > v:
@@ -2150,6 +2237,8 @@ func sim_match(opp: int, home: bool) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var df := (match_strength() - _strength(opp)) / 14.0 + (0.12 if home else -0.12)
+	if derby(opp):
+		df *= 0.6 # form goes out of the window in a derby
 	var mine := _poisson(rng, 1.35 * exp(df) + 0.1)
 	var theirs := _poisson(rng, 1.35 * exp(-df))
 	var pool := []
@@ -3945,6 +4034,13 @@ func _press_tick(rng: RandomNumberGenerator, lines: Array) -> void:
 			"o": [["Yes. We are going for %s." % aim, {"tm": 4, "bd": 2}, "Big words. The players are fired up."],
 				["One match at a time.", {"tm": 1}, "A calm answer. Nothing changes."],
 				["The others are still the favourites.", {"tm": -2, "bd": -1}, "The players wanted more belief from you."]]}
+	elif _next_derby() and last != "derby":
+		topic = "derby"
+		var dn := str(W[_next_opp()]["n"]).capitalize()
+		q = {"t": "Derby week: %s" % dn, "b": "The whole town talks about one match. The press want to hear what the derby against %s means to you." % dn,
+			"o": [["We own this town. We will win.", {"tm": 4, "bold": 1, "fan": 1}, "The fans went wild. Now you have to win it."],
+				["It is three points like any other.", {"tm": -1}, "Calm, but the fans wanted fire."],
+				["The fans deserve a win. We will give everything.", {"tm": 2, "fan": 1}, "The fans and the players loved it."]]}
 	elif (eu_due() and eu_ko()) or cup_due():
 		topic = "big"
 		var what := ("%s, %s" % [EU_NAME.capitalize(), eu_round_name().capitalize()]) if eu_due() else "the cup tie"
@@ -3979,6 +4075,18 @@ func _press_tick(rng: RandomNumberGenerator, lines: Array) -> void:
 			m["st"] = "gone"
 	_mail("press", "Press: " + str(q["t"]), str(q["b"]), {"opts": q["o"], "pn": str(q.get("pn", "")), "st": "open", "left": 1})
 	lines.append("PRESS CONFERENCE: %s" % str(q["t"]).to_upper())
+
+func _next_opp() -> int:
+	if cup_due():
+		return cup_opp()
+	if eu_due():
+		return int(eu_opp()[0])
+	if season_over():
+		return -1
+	return int(next_match()[0])
+
+func _next_derby() -> bool:
+	return derby(_next_opp())
 
 # An unhappy man knocks on your door.
 func _talk_mail(pl: Dictionary, r: int) -> void:

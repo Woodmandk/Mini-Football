@@ -325,6 +325,7 @@ var net
 var au := {}
 var crowd_au: AudioStreamPlayer
 var crowd_vol := -14.0
+var derby_on := false # a derby in the career: the crowd is louder
 var confetti: CPUParticles3D
 var sparks := []
 var dust: CPUParticles3D
@@ -1659,6 +1660,27 @@ func _ready() -> void:
 					car.cup_new()
 					print("CUPTEST ", car.cup_round_name(), " v ", car.cup_opp(), " ", car.cup_finish(0, 1), " over=", car.cup_over(), " opp=", car.cup_opp())
 				menu_arg = "cup"
+			if menu_arg in ["derbytest", "derbyres"]:
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				var me_d := int(car.d["club"])
+				print("DERBY me=", CLUBS[me_d]["n"], " rival=", CLUBS[car.rival_of(me_d)]["n"], " same lg=", car.league_of(car.rival_of(me_d)) == car.league_of(me_d))
+				for c9 in [8, 20, 40, 60, 100]:
+					if c9 < CLUBS.size():
+						print("DERBY ", CLUBS[c9]["n"], " v ", CLUBS[car.rival_of(c9)]["n"] if car.rival_of(c9) >= 0 else "-")
+				for it in 60:
+					if car._next_derby():
+						break
+					_sim_mine()
+				print("DERBY next=", car._next_derby(), " round=", car.d["round"], " obj=", car.board()["obj"][2]["t"])
+				if menu_arg == "derbyres":
+					_sim_mine()
+					print("DERBY after sim lines=", car_lines.slice(0, 6), " rec=", car.derby_rec())
+					menu_arg = "simres"
+				else:
+					menu_arg = "main"
+					hub_tab = "career"
 			if menu_arg == "advseason":
 				# a whole season a day at a time: advance to match day, simulate, again
 				carc.new_career(carc.weakest(3), true)
@@ -2581,7 +2603,7 @@ func _car_info() -> Dictionary:
 	var roles := _my_form(car.form(), car.lay())
 	return {
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
-		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [],
+		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [], "derby": car._next_derby() if car.d.has("leagues") else false, "rival": str(CLUBS[car.rival_of(me_c)]["n"]) if car.d.has("leagues") and car.rival_of(me_c) >= 0 else "", "drb": car.derby_rec(),
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
 		"div": car.div(), "lgname": car.league_name(), "n": car.ids().size(), "up": int(car.league()["up"]), "down": int(car.league()["down"]), "slen": str(d.get("slen", "full")), "cup": _cup_info(),
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
@@ -4531,6 +4553,7 @@ func _net_poll() -> void:
 # ---------------------------------------------------------------- match flow
 
 func _begin_match(with_intro: bool) -> void:
+	derby_on = career_on and in_career and car.has_save() and car.d.has("leagues") and car._next_derby()
 	golden = false
 	half_kick = 1
 	so_on = false
@@ -5997,7 +6020,7 @@ func _play(dt: float) -> void:
 			_check_lines()
 	# --- crowd gets louder near the goals
 	var near := clampf((absf(ball.position.x) - 20.0) / 30.0, 0.0, 1.0)
-	crowd_vol = lerpf(crowd_vol, -15.0 + near * 7.0, dt * 2.0)
+	crowd_vol = lerpf(crowd_vol, -15.0 + near * 7.0 + (4.0 if derby_on else 0.0), dt * 2.0)
 	# --- clock
 	if state != "play":
 		return
