@@ -5115,6 +5115,8 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		var on := int(m["id"]) == sel
 		if on:
 			cur = m
+			# the open mail is always in view, however far down the list it is
+			sc.set_deferred("scroll_vertical", int(maxf(0.0, i * (rh + 6) - (h - y0 - 20) * 0.5 + rh * 0.5)))
 		var open_bid := str(m["k"]) in ["bid", "press", "talk"] and str(m.get("st", "")) == "open"
 		var b := _btn("", "mail", int(m["id"]), "alt", Vector2(0, i * (rh + 6)), Vector2(lw - 12, rh), 16)
 		b.add_theme_stylebox_override("normal", _box(Color(S1.r, S1.g, S1.b, 0.95) if not on else Color(0.2, 0.32, 0.24, 0.98), 12, GOLD if open_bid else (GREEN if on else LINE)))

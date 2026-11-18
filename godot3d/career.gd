@@ -408,7 +408,7 @@ func ids(li := -1) -> Array:
 # ---- rivals and derbies: every club has one rival, from the same town if there is one, else the club
 # in its league closest to it. A derby is a big day: a full stadium, the board and the fans care, the press ask.
 func _town(c: int) -> String:
-	var ws: PackedStringArray = str(W[c]["n"]).split(" ")
+	var ws: PackedStringArray = str(cname(c)).split(" ")
 	return " ".join(ws.slice(0, maxi(ws.size() - 1, 1)))
 
 func rival_of(c: int) -> int:
@@ -461,7 +461,7 @@ func _derby_after(mine: int, theirs: int, opp: int, lines: Array) -> void:
 		trk["dp"] = int(trk.get("dp", 0)) + 1
 		if mine > theirs:
 			trk["derby"] = int(trk.get("derby", 0)) + 1
-	var on := str(W[opp]["n"]).capitalize()
+	var on := str(cname(opp)).capitalize()
 	if mine > theirs:
 		_conf_add(4)
 		_team_mood(3)
@@ -1076,7 +1076,7 @@ func _sell_to(i: int, buyer: int, got: int) -> String:
 		# the club you bought him from has a sell-on share
 		var cut := int(round(got * SELLON_PCT / 100.0 / 5.0)) * 5
 		got -= cut
-		cut_t = "  ·  %s TO %s (SELL-ON)" % [money(cut), str(W[int(pl["sob"])]["n"])]
+		cut_t = "  ·  %s TO %s (SELL-ON)" % [money(cut), str(cname(int(pl["sob"])))]
 		pl.erase("sob")
 	pl.erase("rc")
 	d["coins"] = int(d["coins"]) + got
@@ -1098,7 +1098,7 @@ func _sell_to(i: int, buyer: int, got: int) -> String:
 		xi.append(int(x) - 1 if int(x) > i else int(x))
 	d["xi"] = xi
 	save()
-	return "%s SOLD TO %s FOR %s%s" % [str(pl["n"]).to_upper(), str(W[buyer]["n"]) if buyer >= 0 else "A CLUB ABROAD", money(got), cut_t]
+	return "%s SOLD TO %s FOR %s%s" % [str(pl["n"]).to_upper(), str(cname(buyer)) if buyer >= 0 else "A CLUB ABROAD", money(got), cut_t]
 
 # ---- the club: three things to build
 
@@ -1591,7 +1591,7 @@ func _board_season() -> void:
 			var l := int(round(rounds_total() / 2.0 * (0.12 if ex <= 3 else 0.25)))
 			ex3 = {"k": "home", "v": l, "t": "LOSE NO MORE THAN %d HOME MATCHES" % l}
 		"derby":
-			ex3 = {"k": "derby", "v": 1, "t": "BEAT %s IN A DERBY" % str(W[rvl]["n"])}
+			ex3 = {"k": "derby", "v": 1, "t": "BEAT %s IN A DERBY" % str(cname(rvl))}
 		_:
 			# a little more than the young men in the eleven now would get anyway
 			var yv := clampi(young * rounds_total() + 6, 8, 60)
@@ -2512,7 +2512,7 @@ func refuses(pl: Dictionary, from_c := -1, short := false) -> String:
 	var in_eu := 1 if not eu().is_empty() and bool(eu().get("me", false)) and not bool(eu().get("done", false)) else 0
 	var gap := 9 + (4 if age >= 31 else 0) + 3 * in_eu + (2 if in_eu == 1 and eu_k() == 0 else 0)
 	if ovr >= my_strength() + gap:
-		return "Your club is too small for him" if short else "%s SAYS NO: %s IS NOT BIG ENOUGH FOR A PLAYER OF HIS LEVEL." % [str(pl["n"]).to_upper(), str(W[int(d["club"])]["n"])]
+		return "Your club is too small for him" if short else "%s SAYS NO: %s IS NOT BIG ENOUGH FOR A PLAYER OF HIS LEVEL." % [str(pl["n"]).to_upper(), str(cname(int(d["club"])))]
 	if from_c >= 0 and age < 31:
 		var drop := club_prestige(int(d["club"])) - club_prestige(from_c) - in_eu
 		if drop >= 1 and ovr >= rating(from_c) - 2:
@@ -2547,7 +2547,7 @@ func bid(c: int, i: int, amount: int, ex := {}) -> Dictionary:
 			return {"ok": false, "msg": "You need %s more." % money(amount - int(d["coins"]))}
 	elif rc > 0 and swap == "":
 		# one of their best men with a clause in his contract: they will not sell him, only the clause buys him
-		return {"ok": false, "msg": "%s WILL NOT SELL HIM. ONLY HIS RELEASE CLAUSE (%s) CAN BUY HIM." % [str(W[c]["n"]), money(rc)]}
+		return {"ok": false, "msg": "%s WILL NOT SELL HIM. ONLY HIS RELEASE CLAUSE (%s) CAN BUY HIM." % [str(cname(c)), money(rc)]}
 	var need := ask
 	if bool(ex.get("so", false)):
 		need = int(round(ask * SELLON_CUT / 5.0)) * 5
@@ -2557,7 +2557,7 @@ func bid(c: int, i: int, amount: int, ex := {}) -> Dictionary:
 			return {"ok": false, "msg": ""}
 		var sv := swap_worth(c, i, si)
 		if sv <= 0:
-			return {"ok": false, "msg": "%s DO NOT WANT %s." % [str(W[c]["n"]), swap.to_upper()]}
+			return {"ok": false, "msg": "%s DO NOT WANT %s." % [str(cname(c)), swap.to_upper()]}
 		if (d["squad"] as Array).size() <= SQUAD_MIN:
 			return {"ok": false, "msg": "You need at least %d players." % SQUAD_MIN}
 		need = maxi(0, need - sv)
@@ -2577,14 +2577,14 @@ func bid(c: int, i: int, amount: int, ex := {}) -> Dictionary:
 			talk_sign(pl, amount, c, i)
 			(d["talk"] as Dictionary)["ex"] = ex2
 			save()
-			return {"ok": true, "talk": true, "msg": "%s WITH %s. NOW TALK TO %s." % ["CLAUSE PAID" if pay_rc else "FEE AGREED", str(W[c]["n"]), str(pl["n"]).to_upper()]}
+			return {"ok": true, "talk": true, "msg": "%s WITH %s. NOW TALK TO %s." % ["CLAUSE PAID" if pay_rc else "FEE AGREED", str(cname(c)), str(pl["n"]).to_upper()]}
 		return {"ok": true, "msg": _complete_bid(c, i, amount, -1, -1, ex2)}
 	if amount >= int(ask * 0.75):
 		neg[key] = ask
 		d["neg"] = neg
 		save()
-		return {"ok": false, "counter": ask, "msg": "%s SAY NO, BUT THEY WOULD TAKE %s." % [str(W[c]["n"]), money(ask)]}
-	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(W[c]["n"])}
+		return {"ok": false, "counter": ask, "msg": "%s SAY NO, BUT THEY WOULD TAKE %s." % [str(cname(c)), money(ask)]}
+	return {"ok": false, "msg": "%s TURN THE BID DOWN FLAT." % str(cname(c))}
 
 # The transfer goes through: he joins you, his club signs a younger, cheaper man for his place.
 func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int, ex := {}) -> String:
@@ -2648,8 +2648,8 @@ func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int, ex := {}) -> 
 		_rec_fee("buy", amount, str(pl["n"]))
 		save()
 		if not gone.is_empty():
-			return "%s SIGNED FROM %s: %s GOES THE OTHER WAY + %s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), str(gone["n"]).to_upper(), money(amount)]
-		return "%s SIGNED FROM %s FOR %s%s" % [str(pl["n"]).to_upper(), str(W[c]["n"]), money(amount), ("  ·  %d%% SELL-ON TO THEM" % SELLON_PCT) if ex.has("sob") else ""]
+			return "%s SIGNED FROM %s: %s GOES THE OTHER WAY + %s" % [str(pl["n"]).to_upper(), str(cname(c)), str(gone["n"]).to_upper(), money(amount)]
+		return "%s SIGNED FROM %s FOR %s%s" % [str(pl["n"]).to_upper(), str(cname(c)), money(amount), ("  ·  %d%% SELL-ON TO THEM" % SELLON_PCT) if ex.has("sob") else ""]
 	return ""
 
 # ---------------------------------------------------------------- the career's money, like a real club (euros only)
@@ -3303,6 +3303,12 @@ func window_msg() -> String:
 		return ""
 	return "The transfer window is shut. It opens on %s." % str(wn["otext"])
 
+# a club's name; your own club (made by you) has your name, not the club it took the place of
+func cname(c: int) -> String:
+	if c == int(d.get("club", -1)) and d.has("own") and d["own"] is Dictionary:
+		return str(d["own"].get("n", W[c]["n"]))
+	return str(W[c]["n"]) if c >= 0 and c < W.size() else ""
+
 func inbox() -> Array:
 	return d.get("inbox", [])
 
@@ -3458,7 +3464,7 @@ func _deal_mail(got: Array) -> void:
 
 # [day, name, pos, ovr, age, from, to, fee]
 func deal_text(x: Array) -> String:
-	return "%s sign %s (%s, %d) from %s for %s" % [str(W[int(x[6])]["n"]).capitalize(), str(x[1]).capitalize(), str(x[2]), int(x[3]), str(W[int(x[5])]["n"]).capitalize(), money(int(x[7]))]
+	return "%s sign %s (%s, %d) from %s for %s" % [str(cname(int(x[6]))).capitalize(), str(x[1]).capitalize(), str(x[2]), int(x[3]), str(cname(int(x[5]))).capitalize(), money(int(x[7]))]
 
 # a young man for the place a club just sold
 func _fill_in(c: int, role: String, num: int, rng: RandomNumberGenerator) -> Dictionary:
@@ -3510,7 +3516,7 @@ func _cpu_deal(rng: RandomNumberGenerator, day: int) -> Array:
 			var share := int(round(fee * int(moved["so"]) / 100.0 / 5.0)) * 5
 			moved.erase("so")
 			d["coins"] = int(d["coins"]) + share
-			_mail("info", "Sell-on money: %s" % money(share), "%s sold %s to %s for %s. Your %d%% share is %s, and it is in your transfer budget." % [str(W[seller]["n"]).capitalize(), str(pl["n"]).capitalize(), str(W[buyer]["n"]).capitalize(), money(fee), SELLON_PCT, money(share)])
+			_mail("info", "Sell-on money: %s" % money(share), "%s sold %s to %s for %s. Your %d%% share is %s, and it is in your transfer budget." % [str(cname(seller)).capitalize(), str(pl["n"]).capitalize(), str(cname(buyer)).capitalize(), money(fee), SELLON_PCT, money(share)])
 		bsq[j] = moved
 		ssq[i] = _fill_in(seller, str(pl["pos"]), int(pl["num"]), rng)
 		_set_cpu_squad(buyer, bsq)
@@ -3571,10 +3577,10 @@ func _cpu_bid(rng: RandomNumberGenerator, lines: Array, force := -1) -> void:
 	var c: int = cand[rng.randi() % cand.size()]
 	# a man you have listed is cheaper: they know you want to sell
 	var amt := int(round(value(pl) * (rng.randf_range(0.7, 1.0) if listed(pl) else rng.randf_range(0.8, 1.25)) * (0.85 + pform(pl) * 0.003) / 5.0)) * 5
-	_mail("bid", "%s bid for %s" % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize()],
-		"%s want %s (%s, %d, age %d) and offer %s. Their scouts say his form is %s. The offer stands for two matches." % [str(W[c]["n"]).capitalize(), str(pl["n"]).capitalize(), str(pl["pos"]), o, int(pl["age"]), money(amt), form_name(pform(pl)).to_lower()],
+	_mail("bid", "%s bid for %s" % [str(cname(c)).capitalize(), str(pl["n"]).capitalize()],
+		"%s want %s (%s, %d, age %d) and offer %s. Their scouts say his form is %s. The offer stands for two matches." % [str(cname(c)).capitalize(), str(pl["n"]).capitalize(), str(pl["pos"]), o, int(pl["age"]), money(amt), form_name(pform(pl)).to_lower()],
 		{"c": c, "pn": str(pl["n"]), "amt": amt, "st": "open", "left": 1, "cnt": 0})
-	lines.append("%s HAVE BID %s FOR %s" % [str(W[c]["n"]), money(amt), str(pl["n"]).to_upper()])
+	lines.append("%s HAVE BID %s FOR %s" % [str(cname(c)), money(amt), str(pl["n"]).to_upper()])
 
 # You answer a bid: "acc" sell, "rej" say no, "more" ask for more (once). Returns what happened.
 func bid_answer(id: int, what: String) -> String:
@@ -3609,7 +3615,7 @@ func bid_answer(id: int, what: String) -> String:
 		pl["so"] = SELLON_PCT
 		var got := int(round(amt * SELLON_CUT / 5.0)) * 5
 		var r2 := _sell_to(i, c, got)
-		_mail("info", "Deal done, with a sell-on", "%s. You get %d%% of the fee when %s sell him on." % [r2.capitalize(), SELLON_PCT, str(W[c]["n"]).capitalize()])
+		_mail("info", "Deal done, with a sell-on", "%s. You get %d%% of the fee when %s sell him on." % [r2.capitalize(), SELLON_PCT, str(cname(c)).capitalize()])
 		return r2 + "  ·  %d%% SELL-ON" % SELLON_PCT
 	if what == "rej":
 		m["st"] = "rej"
@@ -3617,7 +3623,7 @@ func bid_answer(id: int, what: String) -> String:
 			# a bigger club wanted him: he is not happy you said no
 			pl["mo"] = clampi(int(pl.get("mo", 65)) - 12, 5, 100)
 			save()
-			return "%s is upset: he wanted the move to %s." % [str(pl["n"]).capitalize(), str(W[c]["n"]).capitalize()]
+			return "%s is upset: he wanted the move to %s." % [str(pl["n"]).capitalize(), str(cname(c)).capitalize()]
 		save()
 		return "You turned the bid down."
 	if what == "more":
@@ -3628,10 +3634,10 @@ func bid_answer(id: int, what: String) -> String:
 		if rng.randf() < ch:
 			m["amt"] = int(round(amt * rng.randf_range(1.1, 1.25) / 5.0)) * 5
 			save()
-			return "%s raise the bid to %s." % [str(W[c]["n"]).capitalize(), money(int(m["amt"]))]
+			return "%s raise the bid to %s." % [str(cname(c)).capitalize(), money(int(m["amt"]))]
 		m["st"] = "gone"
 		save()
-		return "%s walk away." % str(W[c]["n"]).capitalize()
+		return "%s walk away." % str(cname(c)).capitalize()
 	return ""
 
 # take a man out of the eleven: the best one on the bench in his position (or any outfield man) takes his place
@@ -3833,7 +3839,7 @@ func _award(k: String, title: String, c: int, n: String, v: String, lines: Array
 	aw.append({"k": k, "t": title, "c": c, "n": n, "v": v})
 	d["aw"] = aw
 	var mine := c == int(d["club"])
-	var who := ("%s (%s)" % [n.capitalize(), str(W[c]["n"]).capitalize()]) if n != "" else str(W[c]["n"]).capitalize()
+	var who := ("%s (%s)" % [n.capitalize(), str(cname(c)).capitalize()]) if n != "" else str(cname(c)).capitalize()
 	if mine:
 		_honour(k, "%s: %s" % [title, n.capitalize() if n != "" else "you"])
 		lines.append("%s: %s!" % [title.to_upper(), (n.to_upper() if n != "" else "YOU")])
@@ -3933,7 +3939,7 @@ func _rec_set(k: String, v: Array) -> void:
 func _rec_result(mine: int, theirs: int, opp: int, cup_t: bool) -> void:
 	var r: Dictionary = records()
 	var gd := mine - theirs
-	var txt := "%d-%d v %s, season %d%s" % [mine, theirs, str(W[opp]["n"]).capitalize() if opp >= 0 else "?", int(d.get("season", 1)), " (cup)" if cup_t else ""]
+	var txt := "%d-%d v %s, season %d%s" % [mine, theirs, str(cname(opp)).capitalize() if opp >= 0 else "?", int(d.get("season", 1)), " (cup)" if cup_t else ""]
 	if gd > 0 and (not r.has("bw") or gd > int(r["bw"][0]) or (gd == int(r["bw"][0]) and mine > int(r["bw"][2]))):
 		_rec_set("bw", [gd, txt, mine])
 	if gd < 0 and (not r.has("bl") or -gd > int(r["bl"][0])):
@@ -4281,7 +4287,7 @@ func _eu_night(mine: int, theirs: int, won_tie: bool, rng: RandomNumberGenerator
 				_eu_pay(3, lines)
 				_conf_add(15)
 			else:
-				_mail("eu", "%s win %s" % [str(W[int(nxt[0])]["n"]).capitalize(), eu_name().capitalize()], "The final is over.")
+				_mail("eu", "%s win %s" % [str(cname(int(nxt[0]))).capitalize(), eu_name().capitalize()], "The final is over.")
 		else:
 			if mine >= 0 and not nxt.has(me) and bool(e["me"]) and not bool(e["out"]):
 				e["out"] = true
@@ -4408,7 +4414,7 @@ func _press_tick(rng: RandomNumberGenerator, lines: Array) -> void:
 				["The others are still the favourites.", {"tm": -2, "bd": -1}, "The players wanted more belief from you."]]}
 	elif _next_derby() and last != "derby":
 		topic = "derby"
-		var dn := str(W[_next_opp()]["n"]).capitalize()
+		var dn := str(cname(_next_opp())).capitalize()
 		q = {"t": "Derby week: %s" % dn, "b": "The whole town talks about one match. The press want to hear what the derby against %s means to you." % dn,
 			"o": [["We own this town. We will win.", {"tm": 4, "bold": 1, "fan": 1}, "The fans went wild. Now you have to win it."],
 				["It is three points like any other.", {"tm": -1}, "Calm, but the fans wanted fire."],
@@ -4864,15 +4870,15 @@ func _pro_offers(rng: RandomNumberGenerator, lines: Array) -> void:
 	if cand.is_empty():
 		return
 	var c: int = cand[rng.randi() % cand.size()]
-	var cn := str(W[c]["n"]).capitalize()
+	var cn := str(cname(c)).capitalize()
 	if both:
 		_mail("pjob", "%s want you both" % cn, "%s (%s) have watched you two: an average rating of %.1f this season. They want you both, together, when the season ends." % [cn, league_name_of(c).capitalize(), avg],
 			{"c": c, "st": "open", "left": 3, "opts": [["Yes, we join %s together this summer." % cn, {"join": 1}, "Agreed. You both move to %s when the season is over." % cn], ["No, we stay here.", {"stay": 1}, "You stay. The manager hears about it and likes your loyalty."]]})
-		lines.append("%s WANT TO SIGN YOU BOTH" % str(W[c]["n"]))
+		lines.append("%s WANT TO SIGN YOU BOTH" % str(cname(c)))
 		return
 	_mail("pjob", "%s want you" % cn, "%s (%s) have watched you: an average rating of %.1f this season. They want you to join them when the season ends." % [cn, league_name_of(c).capitalize(), avg],
 		{"c": c, "st": "open", "left": 3, "opts": [["Yes, I will join %s this summer." % cn, {"join": 1}, "Agreed. You move to %s when the season is over." % cn], ["No, I stay here.", {"stay": 1}, "You stay. The manager hears about it and likes your loyalty."]]})
-	lines.append("%s WANT TO SIGN YOU" % str(W[c]["n"]))
+	lines.append("%s WANT TO SIGN YOU" % str(cname(c)))
 
 func league_name_of(c: int) -> String:
 	var li := league_of(c)
@@ -5017,7 +5023,7 @@ func pro_next_season() -> void:
 		d["mode"] = "simple"
 		p["trust"] = 50
 		p["all"]["clubs"] = int(p["all"].get("clubs", 1)) + 1
-		_mail("info", "Welcome to %s" % str(W[c]["n"]).capitalize(), "A new club and a new manager. Show him what you can do: his trust starts again.")
+		_mail("info", "Welcome to %s" % str(cname(c)).capitalize(), "A new club and a new manager. Show him what you can do: his trust starts again.")
 	else:
 		next_season()
 		p["trust"] = clampi(int(p["trust"]) + (6 if pro_avg() >= 7.0 else 0), 0, 100)
@@ -5793,6 +5799,6 @@ func _clause_tick(rng: RandomNumberGenerator, lines: Array) -> void:
 		var nm := str(pl["n"])
 		_out_of_xi(i)
 		var r := _sell_to(i, c, fee)
-		_mail("info", "%s paid the clause for %s" % [str(W[c]["n"]).capitalize(), nm.capitalize()], "%s paid his release clause of %s. He has gone, there was nothing you could do. %s" % [str(W[c]["n"]).capitalize(), money(fee), r.capitalize()])
-		lines.append("%s PAID %s'S RELEASE CLAUSE" % [str(W[c]["n"]), nm.to_upper()])
+		_mail("info", "%s paid the clause for %s" % [str(cname(c)).capitalize(), nm.capitalize()], "%s paid his release clause of %s. He has gone, there was nothing you could do. %s" % [str(cname(c)).capitalize(), money(fee), r.capitalize()])
+		lines.append("%s PAID %s'S RELEASE CLAUSE" % [str(cname(c)), nm.to_upper()])
 		return
