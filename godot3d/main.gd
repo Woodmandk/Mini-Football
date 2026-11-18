@@ -1509,6 +1509,28 @@ func _ready() -> void:
 					car.cup_new()
 					print("CUPTEST ", car.cup_round_name(), " v ", car.cup_opp(), " ", car.cup_finish(0, 1), " over=", car.cup_over(), " opp=", car.cup_opp())
 				menu_arg = "cup"
+			if menu_arg == "advseason":
+				# a whole season a day at a time: advance to match day, simulate, again
+				carc.new_career(carc.weakest(3), true)
+				carc.set_mode("full")
+				_cr_enter(false)
+				var steps := 0
+				var mails := 0
+				for it in int(OS.get_environment("ADVN")) if OS.get_environment("ADVN") != "" else 400:
+					if car.season_over() and not car.cup_due() and not car.eu_due():
+						break
+					var m0: int = int(car.d.get("mid", 0))
+					while car.now() < car.next_day():
+						car.advance()
+						steps += 1
+					mails += int(car.d.get("mid", 0)) - m0
+					_sim_mine()
+					if it % 5 == 0:
+						print("ADV it=", it, " round=", car.d["round"], " ", car.date_text(car.today()), " steps=", steps, " t=", Time.get_ticks_msec())
+				print("ADVSEASON round=", car.d["round"], " day=", car.today(), " ", car.date_text(car.today()), " steps=", steps, " mails=", mails, " deals=", car.deals().size(), " over=", car.season_over())
+				get_tree().quit()
+				return
+				menu_arg = "main"
 			if menu_arg == "seasontest":
 				_action("career")
 				print("SEASONTEST fac_up=", car.fac_up("stadium"), " coins=", car.d["coins"])
@@ -2417,7 +2439,7 @@ func _car_info() -> Dictionary:
 		"sacked": car.d.has("sacked"), "on": car.on(),
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
-		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "",
+		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 else 0,
 		"cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(),
 	}
 
@@ -2978,7 +3000,7 @@ func _action(act: String, arg = null) -> void:
 		"career":
 			car_msg = ""
 			car_sure = false
-			if adv_from > -99 and in_career and (car == carc or car == proc) and not assist and net.role == "":
+			if adv_from > -99 and in_career and (car == carc or car == proc) and not assist and net.role == "" and not car.d.has("cur"):
 				var f := adv_from
 				adv_from = -99
 				if car.next_day() > f:
@@ -3004,6 +3026,11 @@ func _action(act: String, arg = null) -> void:
 			hud.refresh(_menu_info())
 		"c_sim":
 			_sim_mine()
+		"c_adv":
+			# FIFA's ADVANCE: day by day to the next news or to match day
+			if in_career and (car == carc or car == proc) and (not car.season_over() or car.cup_due() or car.eu_due()):
+				var af: int = car.advance()
+				_adv_show(af, car.now())
 		"youth":
 			car_msg = ""
 			hud.show_menu("youth", _menu_info())
@@ -3083,6 +3110,7 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("cup", _menu_info())
 		"eu_play":
 			if car.eu_due() and int(car.eu_opp()[0]) >= 0:
+				car.go_match()
 				career_on = true
 				eu_on = true
 				# the knockouts need a winner: extra time and penalties, like a cup tie
@@ -3100,6 +3128,7 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("eu", _menu_info())
 		"cup_play":
 			if car.cup_due() and car.cup_opp() >= 0:
+				car.go_match()
 				career_on = true
 				eu_on = false
 				cup_on = true
@@ -3123,6 +3152,8 @@ func _action(act: String, arg = null) -> void:
 				return
 			pro_sq = -1
 			pro_sq2 = -1
+			if in_career and (car == carc or car == proc) and not car.season_over():
+				car.go_match()
 			if car.pro() and not car.season_over() or (car.pro() and (car.cup_due() or car.eu_due())):
 				car.pro_select()
 				if not car.pro_starts():
@@ -3995,6 +4026,8 @@ func _host_start() -> void:
 	career_on = _co_text() != ""
 	pro_sq = -1
 	pro_sq2 = -1
+	if career_on and in_career and (car == carc or car == proc):
+		car.go_match()
 	if career_on and car.pro() and not car.pro2():
 		# never a player career match together before the friend has made his own man
 		career_on = false
@@ -8597,7 +8630,7 @@ const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", 
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt",
 	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
-	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
+	"bid_acc", "bid_rej", "bid_more", "mail_pick", "c_adv", "c_rest", "y_sign", "y_prom", "y_rel", "y_send", "c_focus", "c_sim",
 	"cfg_diff", "cfg_len", "c_wb", "y_hire", "y_drop", "c_job", "c_next", "ct_go"]
 
 func _cv_tick(dt: float) -> void:
@@ -8774,6 +8807,8 @@ func _sug_text(act: String, arg) -> String:
 			return "NEW CONTRACT FOR %s: %s A WEEK FOR %d SEASONS" % [_pn(int(ca[0])), Career.wage_text(int(ca[1])), int(ca[2])]
 		"c_sim":
 			return "SIMULATE THE NEXT MATCH"
+		"c_adv":
+			return "GO ON TO THE NEXT DAY"
 		"y_sign", "y_prom", "y_rel", "y_send":
 			return {"y_sign": "SIGN YOUTH TALENT %d", "y_prom": "PROMOTE ACADEMY PLAYER %d", "y_rel": "RELEASE ACADEMY PLAYER %d", "y_send": "SEND A SCOUT (%d)"}[act] % ((int(arg) if arg != null else 0) + 1)
 		"c_focus":
@@ -8950,6 +8985,8 @@ func _sim_mine() -> void:
 	var eut: bool = not cupt and car.eu_due()
 	if not cupt and not eut and car.season_over():
 		return
+	# the days up to the match go by first (fitness back, the world moves on)
+	car.go_match()
 	var opp: int = car.cup_opp() if cupt else (int(car.eu_opp()[0]) if eut else int(car.next_match()[0]))
 	var home: bool = true if cupt else (bool(car.eu_opp()[1]) if eut else bool(car.next_match()[1]))
 	if opp < 0:
@@ -9029,8 +9066,10 @@ func _sim_mine() -> void:
 	hud.show_menu("simres", _menu_info())
 
 # The days between two matches go by on a calendar page, with the news of those days.
-func _adv_show(from: int) -> void:
-	var to: int = car.next_day()
+func _adv_show(from: int, to := -99) -> void:
+	var step := to != -99
+	if to == -99:
+		to = car.next_day()
 	var me_c := int(car.d["club"])
 	var news := []
 	# results around you in the league
@@ -9047,9 +9086,9 @@ func _adv_show(from: int) -> void:
 		var close := mini(absi(ra - my_r), absi(rb - my_r))
 		near.append([mini(close, mini(ra, rb) + 1), "%s %d - %d %s" % [str(CLUBS[aa]["n"]).capitalize(), int(r[2]), int(r[3]), str(CLUBS[bb]["n"]).capitalize()]])
 	near.sort_custom(func(x, y): return int(x[0]) < int(y[0]))
-	for k in mini(2, near.size()):
+	for k in mini(0 if step else 2, near.size()):
 		news.append(["result", str(near[k][1])])
-	if not car.season_over() or car.cup_due():
+	if (not car.season_over() or car.cup_due()) and not step:
 		var lead: int = int(ord[0])
 		var pts_me: int = int(car.d["table"][str(me_c)]["pts"])
 		if lead == me_c:
@@ -9069,7 +9108,7 @@ func _adv_show(from: int) -> void:
 			if wn != me_c and ls != me_c and car.rating(ls) - car.rating(wn) >= 6:
 				big = "Cup shock: %s knock out %s" % [str(CLUBS[wn]["n"]).capitalize(), str(CLUBS[ls]["n"]).capitalize()]
 				break
-		if big != "":
+		if big != "" and not step:
 			news.append(["cup", big])
 	# the world: deals between the clubs in these days, bids for your men, the window
 	var nd_deal := 0
@@ -9078,24 +9117,45 @@ func _adv_show(from: int) -> void:
 		if int(wv[1]) > from and int(wv[1]) <= to:
 			dl_day = int(wv[1])
 	for m in car.inbox():
-		if int(m["day"]) == car.now() and str(m["k"]) in ["deadline", "window", "med"]:
+		if int(m["day"]) > from and int(m["day"]) <= to and str(m["k"]) in ["deadline", "window", "med"]:
 			news.append(["med" if str(m["k"]) == "med" else "window", str(m["t"])])
 	for x in car.deals():
 		if int(x[0]) > from and int(x[0]) <= to and nd_deal < 2:
 			news.append(["deal", ("Deadline day: " if int(x[0]) == dl_day else "") + car.deal_text(x)])
 			nd_deal += 1
 	for m in car.inbox():
-		if int(m["day"]) == car.now() and str(m["k"]) == "bid":
+		if int(m["day"]) > from and int(m["day"]) <= to and str(m["k"]) in ["bid", "press", "talk", "pjob", "info", "award"]:
 			news.append(["bid", str(m["t"])])
 	var mk: Array = car.market()
-	if not mk.is_empty() and news.size() < 5:
+	if not mk.is_empty() and news.size() < 5 and not step:
 		var best: Dictionary = mk[0]
 		for pl in mk:
 			if Career.ovr_of(pl) > Career.ovr_of(best):
 				best = pl
 		news.append(["market", "Transfer list: %s (%s, %d) is the best of %d new players" % [str(best["n"]).capitalize(), str(best["pos"]), Career.ovr_of(best), mk.size()]])
-	if news.size() < 6:
+	if news.size() < 6 and not step:
 		news.append(["board", "The board: %s (%d)" % [str(Career.mood_of(car.conf())).capitalize(), car.conf()]])
+	if step:
+		var nxt_t := "the match"
+		if car.cup_due():
+			nxt_t = "%s, %s" % [car.cup_name().capitalize(), car.cup_round_name().capitalize()]
+		elif car.eu_due():
+			nxt_t = Career.EU_NAME.capitalize()
+		elif not car.season_over():
+			nxt_t = "League v %s" % str(CLUBS[int(car.next_match()[0])]["n"]).capitalize()
+		# a day at a time: what happened, and how the squad feels after training
+		var hurt := 0
+		var tired := 0
+		for pl in car.d["squad"]:
+			if car.injured(pl):
+				hurt += 1
+			elif car.cond_of(pl) < 80:
+				tired += 1
+		if to >= car.next_day():
+			news.push_front(["table", "Today: " + nxt_t])
+		elif news.is_empty():
+			news.append(["board", "A quiet day at the training ground"])
+		news.append(["med", "Training: %d still tired, %d injured" % [tired, hurt] if tired + hurt > 0 else "Training: the whole squad is fit"])
 	news = news.slice(0, 6)
 	var nxt := ""
 	if car.cup_due():
@@ -9108,10 +9168,10 @@ func _adv_show(from: int) -> void:
 		var nm: Array = car.next_match()
 		nxt = "League v %s, %s" % [str(CLUBS[int(nm[0])]["n"]).capitalize(), "home" if bool(nm[1]) else "away"]
 	var days := []
-	for dd in range(from, to + 1):
+	for dd in range(from + (1 if step and to > from else 0), to + 1):
 		var t: Dictionary = car.date_of(dd)
 		days.append([int(t["d"]), Career.WDAYS[int(t["wd"])], Career.MONTHS[int(t["m"]) - 1]])
-	adv_info = {"days": days, "news": news, "next": nxt, "ndate": car.date_text(to, true)}
+	adv_info = {"days": days, "news": news, "next": nxt, "ndate": car.date_text(car.next_day(), true) if car.next_day() >= 0 else "", "step": step, "mday": step and to >= car.next_day()}
 	hud.show_menu("adv", _menu_info())
 
 
