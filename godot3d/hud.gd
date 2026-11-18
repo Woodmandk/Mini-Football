@@ -3273,7 +3273,7 @@ func _adv_page(info: Dictionary, w: float, h: float, anim: bool) -> void:
 			var ab := _btn("ADVANCE  ›", "c_adv", null, "primary", Vector2(w * 0.5 + 20, h - 86), Vector2(340, 70), 30)
 			menu.add_child(ab)
 		else:
-			cb = _btn("TO THE MATCH", "adv_done", null, "primary", Vector2(w * 0.5 - 170, h - 86), Vector2(340, 70), 30)
+			cb = _btn("MATCH DAY  ›", "adv_done", null, "primary", Vector2(w * 0.5 - 170, h - 86), Vector2(340, 70), 30)
 	menu.add_child(cb)
 	if anim and days.size() > 1:
 		var dur := clampf(days.size() * 0.16, 0.8, 2.6)
@@ -3930,11 +3930,14 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		tdl.position = Vector2(22, ch - bh - 66)
 		tdl.size = Vector2(lw - 44 - (190 if dleft > 0 else 0), 26)
 		card.add_child(tdl)
+		tdl.size = Vector2(lw - 44, 26)
+		# no match before match day: until then the big button lets the days go by (to news, or to the match)
+		var pm: Button
 		if dleft > 0:
-			var avb := _btn("ADVANCE  ›", "c_adv", null, "ghost", Vector2(24 + lw - 20 - 180, y0 + ch - bh - 76), Vector2(180, 44), 18)
-			menu.add_child(avb)
-			items.append([avb, Vector2(0, 40), 0.12])
-		var pm := _btn(_co_play_text(info, ptx), "c_play", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(pw, bh), 30 if can_sim else 32)
+			pm = _btn("SIMULATE  ›", "c_adv", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(lw - 40, bh), 32)
+			can_sim = false
+		else:
+			pm = _btn(_co_play_text(info, ptx), "c_play", null, "primary", Vector2(44, y0 + ch - bh - 20), Vector2(pw, bh), 30 if can_sim else 32)
 		menu.add_child(pm)
 		items.append([pm, Vector2(0, 60), 0.1])
 		if can_sim:
