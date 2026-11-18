@@ -1258,6 +1258,10 @@ func _ready() -> void:
 				carc.new_career(carc.weakest(3), true)
 				carc.set_mode("full")
 				_cr_enter(false)
+				if OS.get_environment("HOWN") != "":
+					# your own club, made by you: its own name everywhere (awards, mails)
+					car.d["own"] = {"n": "VIKINGS", "s": "VIK", "k": ["7b2fbe", "7b2fbe", "f05aa0"]}
+					_apply_own()
 				var rng8 := RandomNumberGenerator.new()
 				rng8.seed = 7
 				var full_s := menu_arg != "htest4"
@@ -1279,7 +1283,15 @@ func _ready() -> void:
 				print("HON cab ", car.cabinet())
 				print("HON aw ", car.awards().size(), " rec ", car.records())
 				print("HON top ", car.scorers_top(5))
-				if menu_arg == "htest0":
+				for m8 in car.inbox().slice(0, 6):
+					print("HMAIL ", m8["t"], " | ", m8["b"])
+				if OS.get_environment("HOWN") != "":
+					if OS.get_environment("HSCR") != "":
+						for k8 in car.inbox().size():
+							car.inbox()[k8]["rd"] = k8 != 9
+					_action("inbox")
+					menu_arg = hud.menu_name
+				elif menu_arg == "htest0":
 					menu_arg = "scorers"
 				else:
 					cab_tab = {"htest1": 0, "htest2": 1, "htest3": 2, "htest4": 1}[menu_arg]
@@ -3510,8 +3522,13 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("youth", _menu_info())
 		"inbox":
 			car_msg = ""
-			if mail_sel < 0 and not car.inbox().is_empty():
+			# open on the news the home card showed: the newest unread mail, else the newest
+			if not car.inbox().is_empty():
 				mail_sel = int(car.inbox()[0]["id"])
+				for m0 in car.inbox():
+					if not bool(m0.get("rd", false)):
+						mail_sel = int(m0["id"])
+						break
 			car.mail_read(mail_sel)
 			hud.show_menu("inbox", _menu_info())
 		"mail":
