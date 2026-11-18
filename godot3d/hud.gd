@@ -624,7 +624,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# a calm, dark pitch-green behind every menu so the words read; the match only shows through a little.
 	# In the match (pause, subs, full time) it stays lighter so you can still see the pitch.
-	shade.color = Color(0.051, 0.114, 0.082, 0.62) if n in ["full", "pause", "subs", "so"] else Color(0.051, 0.114, 0.082, 0.9)
+	shade.color = Color(0.051, 0.114, 0.082, 0.62) if n in ["full", "pause", "subs", "so", "mtac"] else Color(0.051, 0.114, 0.082, 0.9)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	menu.add_child(shade)
 	var items := [] # [control, slide-from, delay]
@@ -2304,6 +2304,48 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				menu.add_child(bb6)
 			var bk6 := _back("pause", null)
 			menu.add_child(bk6)
+		"mtac":
+			# change how your side plays without leaving the match (like the pause menu in FIFA)
+			var mt: Dictionary = info.get("mtac", {})
+			var dim8 := ColorRect.new()
+			dim8.color = Color(0.0, 0.03, 0.02, 0.72)
+			dim8.size = Vector2(w, h)
+			dim8.mouse_filter = Control.MOUSE_FILTER_STOP
+			menu.add_child(dim8)
+			menu.move_child(dim8, 0)
+			_title("Tactics", str(mt.get("sub", "")))
+			var t8: Array = mt.get("tac", [2, 1, 1])
+			var rows8 := [
+				["Mentality", ["Bus", "Defend", "Balanced", "Attack", "All out"], ["Everyone behind the ball", "Sit deeper, hit them on the break",
+					"A bit of both", "Push up and get men forward", "Throw everything forward"]],
+				["Pressing", ["Low", "Mid", "High"], ["Wait in your own half. Saves legs", "Close them down in your half",
+					"Hunt the ball everywhere. It tires your men"]],
+				["Width", ["Narrow", "Normal", "Wide"], ["Compact through the middle", "The usual shape", "Stretch the pitch"]]]
+			var y8 := 100.0
+			var ph8 := minf(118.0, (h - 200.0) / 3.0)
+			for ri in 3:
+				var r8: Array = rows8[ri]
+				var cur8 := clampi(int(t8[ri]), 0, (r8[1] as Array).size() - 1)
+				var pn8 := _card_panel(Vector2(48, y8), Vector2(w - 96, ph8 - 10))
+				items.append([pn8, Vector2(0, 30), 0.04 * ri])
+				var tl8 := _label(str(r8[0]), 22, CHALK)
+				tl8.position = Vector2(24, 8)
+				pn8.add_child(tl8)
+				var dl8 := _label(_trim(str(r8[2][cur8]), font3, 18, w - 96 - 220), 18, MUT, font3)
+				dl8.position = Vector2(200, 12)
+				dl8.size = Vector2(w - 96 - 220, 26)
+				pn8.add_child(dl8)
+				var n8: int = (r8[1] as Array).size()
+				var bw8 := (w - 96 - 48 - 12 * (n8 - 1)) / float(n8)
+				for k in n8:
+					menu.add_child(_btn(str(r8[1][k]).to_upper(), "mtac_set", [ri, k], "primary" if k == cur8 else "alt", Vector2(48 + 24 + k * (bw8 + 12), y8 + 46), Vector2(bw8, 48), 18))
+				y8 += ph8
+			var op8 := str(mt.get("opp", ""))
+			if op8 != "":
+				var ol8 := _label(_trim(op8, font3, 19, w - 140), 19, GOLD, font3)
+				ol8.position = Vector2(64, y8 + 2)
+				menu.add_child(ol8)
+			menu.add_child(_back("pause", null))
 		"club":
 			var c7: Dictionary = info.get("car", {})
 			var eur7 := bool(c7.get("eur", false))
@@ -2687,7 +2729,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			var panel := Panel.new()
 			panel.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.94), 20, Color(1, 1, 1, 0.16)))
 			var can_sub := bool(info.get("can_sub", false))
-			var ph0 := 394.0 if can_sub else 322.0
+			var can_tac := not (info.get("mtac", {}) as Dictionary).is_empty()
+			var ph0 := (394.0 if can_sub else 322.0) + (68.0 if can_tac else 0.0)
 			panel.position = Vector2((w - pw) * 0.5, h * 0.5 - ph0 * 0.5)
 			panel.size = Vector2(pw, ph0)
 			menu.add_child(panel)
@@ -2696,10 +2739,22 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			pt.size = Vector2(pw, 44)
 			pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			panel.add_child(pt)
+			var pby := str(info.get("paused_by", ""))
+			if pby != "":
+				var pbl := _label("Paused by %s" % pby, 16, Color(1, 1, 1, 0.6), font2)
+				pbl.position = Vector2(0, 54)
+				pbl.size = Vector2(pw, 20)
+				pbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				panel.add_child(pbl)
 			panel.add_child(_btn("RESUME", "resume", null, "primary", Vector2(30, 76), Vector2(pw - 60, 72), 30))
+			var ty := 160.0
+			if can_tac:
+				panel.add_child(_btn("TACTICS", "mtac", null, "alt", Vector2(30, ty), Vector2(pw - 60, 60), 19))
+				ty += 68.0
 			if can_sub:
-				panel.add_child(_btn("SUBSTITUTIONS  (%d LEFT)" % int((info.get("subs", {}) as Dictionary).get("left", 0)), "subs", null, "alt", Vector2(30, 160), Vector2(pw - 60, 60), 19))
-			var sy := 236.0 if can_sub else 164.0
+				panel.add_child(_btn("SUBSTITUTIONS  (%d LEFT)" % int((info.get("subs", {}) as Dictionary).get("left", 0)), "subs", null, "alt", Vector2(30, ty), Vector2(pw - 60, 60), 19))
+				ty += 76.0
+			var sy := ty if can_sub else ty + 4.0
 			panel.add_child(_btn("SOUND: " + str(info.get("snd", "")), "snd_opt", null, "ghost", Vector2(30, sy), Vector2((pw - 72) * 0.5, 50), 15))
 			panel.add_child(_btn("VOICE: " + ("ON" if bool(info.get("voice", true)) else "OFF"), "voice_opt", null, "ghost", Vector2(30 + (pw - 72) * 0.5 + 12, sy), Vector2((pw - 72) * 0.5, 50), 15))
 			panel.add_child(_btn("LEAVE MATCH", "menu", null, "alt" if not can_sub else "ghost", Vector2(30, sy + 62), Vector2(pw - 60, 60), 22))
