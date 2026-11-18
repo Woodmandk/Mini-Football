@@ -2531,6 +2531,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			menu.add_child(_back("tab", "office"))
 		"ctac":
 			_tac_page(info, w, h, items)
+		"nat":
+			_nat_page(info, w, h, items)
 		"simres":
 			_sim_page(info, w, h, items, anim)
 		"youth":
@@ -2951,7 +2953,7 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		var bg := Color(S1.r, S1.g, S1.b, 0.9)
 		var bc := LINE
 		if not e.is_empty():
-			bg = Color(0.16, 0.14, 0.05, 0.95) if str(e["kind"]) == "cup" else (Color(0.06, 0.1, 0.2, 0.95) if str(e["kind"]) == "eu" else S2)
+			bg = Color(0.16, 0.14, 0.05, 0.95) if str(e["kind"]) == "cup" else (Color(0.06, 0.1, 0.2, 0.95) if str(e["kind"]) == "eu" else (Color(0.2, 0.07, 0.07, 0.95) if str(e["kind"]) == "nat" else S2))
 			if bool(e["next"]):
 				bc = GOLD
 		var cell := Panel.new()
@@ -2978,7 +2980,7 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		strip.size = Vector2(4, 20)
 		strip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(strip)
-		var ol := _label(("" if bool(e["home"]) or str(e["kind"]) == "cup" else "@") + str(e["os"]), 18, CHALK)
+		var ol := _label(("" if bool(e["home"]) or str(e["kind"]) in ["cup", "nat"] else "@") + str(e["os"]), 18, CHALK)
 		ol.position = Vector2(14, chh - 34)
 		ol.clip_text = true
 		ol.size = Vector2(cw - 18, 26)
@@ -3008,7 +3010,7 @@ func _cal_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	for e in cal:
 		if bool(e["played"]) or shown >= 6:
 			continue
-		var l1 := _label(str(e["date"]) + "  ·  " + ("Cup, " + str(e["name"]).to_lower() if str(e["kind"]) == "cup" else (("Europe, " + str(e["name"]).to_lower()) if str(e["kind"]) == "eu" else ("Home" if bool(e["home"]) else "Away"))), 17, GOLD if bool(e["next"]) else MUT, font3)
+		var l1 := _label(str(e["date"]) + "  ·  " + ("Cup, " + str(e["name"]).to_lower() if str(e["kind"]) == "cup" else (("Europe, " + str(e["name"]).to_lower()) if str(e["kind"]) == "eu" else (("Country v %s, " % str(e["os"]) + str(e["name"]).to_lower()) if str(e["kind"]) == "nat" else ("Home" if bool(e["home"]) else "Away")))), 17, GOLD if bool(e["next"]) else MUT, font3)
 		l1.position = Vector2(18, y2)
 		l1.clip_text = true
 		l1.size = Vector2(rw - 36, 22)
@@ -3333,6 +3335,9 @@ func _icon(kind: String, sz: float, col: Color) -> Control:
 				pl.call([[8, 14], [10, 14]])
 				pl.call([[14, 14], [16, 14]])
 				pl.call([[8, 17], [10, 17]])
+			"flag":
+				pl.call([[6, 21], [6, 3]])
+				pl.call([[6, 4], [19, 4], [16, 8.5], [19, 13], [6, 13]])
 			"sim":
 				pl.call([[4, 6], [12, 12], [4, 18]], true)
 				pl.call([[12, 6], [20, 12], [12, 18]], true)
@@ -3722,7 +3727,7 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	cic.position = Vector2(lw - 46, 16)
 	card.add_child(cic)
 	var bh := 72.0
-	if bool(c.get("over", false)):
+	if bool(c.get("over", false)) and not bool(c.get("nat_due", false)):
 		var nt := _label(str(c.get("note", "SEASON OVER")), 26, GOLD)
 		nt.autowrap_mode = TextServer.AUTOWRAP_WORD
 		nt.position = Vector2(24, 40)
@@ -3753,6 +3758,12 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 			cpn = c.get("eu", {})
 			cdue = true
 			what = "Champions Cup, %s" % str(cpn.get("rname", "")).capitalize()
+		var ndue := not cdue and not edue and bool(c.get("nat_due", false))
+		if ndue:
+			# your country plays: its kit and name on the card, the club waits
+			cpn = c.get("natm", {})
+			cdue = true
+			what = "%s, %s" % [str(cpn.get("tname", "")).capitalize(), str(cpn.get("rname", "")).to_lower()]
 		var dtx := str(c.get("ndate", ""))
 		if bool(c.get("derby", false)):
 			# derby day: the card says it in red
@@ -3764,8 +3775,8 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		nx.clip_text = true
 		nx.size = Vector2(lw - 80, 30)
 		card.add_child(nx)
-		var kits := [c.get("kit", ["888888"]), cpn.get("opp_kit", ["888888"]) if cdue else c.get("opp_kit", ["888888"])]
-		var nms := [str(c.get("name", "")), str(cpn.get("opp", "")) if cdue else str(c.get("opp", ""))]
+		var kits := [cpn.get("kit", ["888888"]) if ndue else c.get("kit", ["888888"]), cpn.get("opp_kit", ["888888"]) if cdue else c.get("opp_kit", ["888888"])]
+		var nms := [str(cpn.get("me", "")) if ndue else str(c.get("name", "")), str(cpn.get("opp", "")) if cdue else str(c.get("opp", ""))]
 		var rks := [int(c.get("rank", 1)), int(cpn.get("opp_rank", 1)) if cdue else int(c.get("opp_rank", 1))]
 		var ks := minf(96.0, ch - bh - 190.0)
 		var my := 60.0 + (ch - bh - 60.0 - ks - 90.0) * 0.5
@@ -3784,7 +3795,7 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 			nl.clip_text = true
 			card.add_child(nl)
 			var other_lg: bool = cdue and si == 1 and str(cpn.get("opp_lg", "")) != str(c.get("lgname", ""))
-			var rl := _label((str(cpn.get("opp_lg", "")).capitalize() if other_lg else _ord(rks[si]).to_lower() + " in the table"), 20, MUT, font3)
+			var rl := _label(str((cpn.get("sub", ["", ""]) as Array)[si]) if ndue else (str(cpn.get("opp_lg", "")).capitalize() if other_lg else _ord(rks[si]).to_lower() + " in the table"), 20, MUT, font3)
 			rl.position = Vector2(cx - lw * 0.24, my + ks + 40)
 			rl.size = Vector2(lw * 0.48, 26)
 			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -3797,7 +3808,7 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		# simulate works together too: the manager's tap simulates on both phones, the friend's tap asks him
 		var can_sim := not bool(c.get("sacked", false))
 		var pw := (lw - 40) * (0.64 if can_sim else 1.0)
-		var ptx := "PLAY EUROPE" if edue else ("PLAY CUP MATCH" if cdue else "PLAY MATCH")
+		var ptx := "PLAY EUROPE" if edue else ("PLAY FOR %s" % str(cpn.get("me", "")) if ndue else ("PLAY CUP MATCH" if cdue else "PLAY MATCH"))
 		var pro_i: Dictionary = info.get("pro", {})
 		if bool(pro_i.get("need2", false)):
 			pro_i = {}
@@ -4182,7 +4193,7 @@ func _tab_club(info: Dictionary, w: float, y0: float, ch: float, items: Array) -
 		["Buildings", ft if ft != "" else "Stadium, training, youth", "c_club", "build", GREEN],
 		(["Trophy cabinet", _cab_line(c), "cab", "cup", GOLD] if incar else ["Transfers", "%d players for sale" % (c.get("market", []) as Array).size(), "c_market", "swap"]),
 		(["Youth academy", "Scouts, reports and your boys", "youth", "me", GOLD] if incar else ["Name and kit", "Your club's colours", "own", "kit"]),
-	], 24, y0, w - 48, top_h, 3, items)
+	] + ([["National team", (str(((info.get("car", {}) as Dictionary).get("natp", {}) as Dictionary).get("n", "")).capitalize() + ": your country") if bool(((info.get("car", {}) as Dictionary).get("natp", {}) as Dictionary).get("job", false)) else "No job yet", "nat", "flag", Color(0.95, 0.36, 0.33)]] if incar and not ((info.get("car", {}) as Dictionary).get("natp", {}) as Dictionary).is_empty() else []), 24, y0, w - 48, top_h, 4 if incar and not ((info.get("car", {}) as Dictionary).get("natp", {}) as Dictionary).is_empty() else 3, items)
 	var ip := _card_panel(Vector2(24, y0 + top_h + 14), Vector2(w - 48, ch - top_h - 14))
 	var i2 := _label("A bigger stadium brings %s at home. A better training ground makes players grow faster." % _mw(), 21, MUT, font3)
 	i2.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -4772,7 +4783,7 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 			menu.add_child(_btn("ASK FOR MORE", "bid_more", int(cur["id"]), "alt" if int(cur.get("cnt", 0)) == 0 else "off", Vector2(px + 34 + bw, by), Vector2(bw, 62), 18))
 			menu.add_child(_btn("SAY NO", "bid_rej", int(cur["id"]), "ghost", Vector2(px + 44 + bw * 2, by), Vector2(bw, 62), 20))
 		return
-	if str(cur["k"]) in ["press", "talk"]:
+	if str(cur["k"]) in ["press", "talk", "natjob"]:
 		var qb := _label(str(cur["b"]), 20, CHALK, font3)
 		qb.autowrap_mode = TextServer.AUTOWRAP_WORD
 		qb.position = Vector2(24, 88)
@@ -4795,7 +4806,7 @@ func _inbox_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		elif stq == "gone":
 			rt = "You did not answer in time. The board noticed." if str(cur["k"]) == "press" else "You never answered him."
 		elif stq == "open":
-			rt = "Pick an answer. Your words matter to the players and the board."
+			rt = "Pick an answer." if str(cur["k"]) == "natjob" else "Pick an answer. Your words matter to the players and the board."
 		var rl := _label(rt, 19, GOLD if stq == "done" else MUT, font3)
 		rl.autowrap_mode = TextServer.AUTOWRAP_WORD
 		rl.position = Vector2(24, oy + opts.size() * (oh + 8) + 6)
@@ -5515,3 +5526,177 @@ func _tac_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		sc.size = Vector2(w - 128, 28)
 		menu.add_child(sc)
 	menu.add_child(_back("tab", "career"))
+
+
+# ---------------------------------------------------------------- the national team
+func _nat_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var np: Dictionary = (info.get("car", {}) as Dictionary).get("natp", {})
+	menu.add_child(_back("tab", "club"))
+	if np.is_empty() or not bool(np.get("job", false)):
+		_title("National team", "No country has asked you yet")
+		var pn0 := _card_panel(Vector2(w * 0.5 - 380, 140), Vector2(760, 230))
+		items.append([pn0, Vector2(0, 30), 0.0])
+		var ic0 := _icon("flag", 64, Color(0.95, 0.36, 0.33))
+		ic0.position = Vector2(348, 24)
+		pn0.add_child(ic0)
+		var tx0 := _label("Countries look for a manager who wins. Win matches and trophies, and an offer comes to your inbox during the season. You can manage a country next to your club." + ("\nThis season's offer is in your inbox." if bool(np.get("off", false)) else ""), 21, MUT, font3)
+		tx0.autowrap_mode = TextServer.AUTOWRAP_WORD
+		tx0.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tx0.position = Vector2(30, 100)
+		tx0.size = Vector2(700, 120)
+		pn0.add_child(tx0)
+		return
+	var st: Dictionary = np.get("st", {})
+	_title(str(np["n"]).capitalize(), "Rated %d  ·  played %d, won %d, drew %d, lost %d" % [int(np["rating"]), int(st.get("p", 0)), int(st.get("w", 0)), int(st.get("d", 0)), int(st.get("l", 0))])
+	var sh := _shirt(np.get("kit", ["888888"]), 52)
+	sh.position = Vector2(w - 96, 22)
+	menu.add_child(sh)
+	var tab := int(np.get("tab", 0))
+	var nm := ["Squad", "Group and matches", "The job"]
+	var tw := 240.0
+	var tx := w * 0.5 - (tw * 3 + 20) * 0.5
+	for k in 3:
+		menu.add_child(_btn(nm[k].to_upper(), "nat_tab", k, "primary" if k == tab else "alt", Vector2(tx + k * (tw + 10), 100), Vector2(tw, 46), 17))
+	var y0 := 160.0
+	if tab == 0:
+		# left: the 23 you called up (tap to send home); right: the men you could call up (tap to call)
+		var lw := (w - 48 - 14) * 0.5
+		var hl := _label("Called up: %d of 23  ·  %d from your club" % [int(np["nsq"]), int(np["nmine"])], 19, GOLD, font3)
+		hl.position = Vector2(28, y0)
+		menu.add_child(hl)
+		var hr := _label("Also available", 19, MUT, font3)
+		hr.position = Vector2(24 + lw + 18, y0)
+		menu.add_child(hr)
+		var ab := _btn("BEST 23", "nat_auto", null, "ghost", Vector2(24 + lw - 130, y0 - 6), Vector2(130, 36), 15)
+		menu.add_child(ab)
+		for side in 2:
+			var rows: Array = np.get("sq" if side == 0 else "pool", [])
+			var sc := ScrollContainer.new()
+			sc.position = Vector2(24 + side * (lw + 14), y0 + 34)
+			sc.size = Vector2(lw, h - y0 - 34 - 14)
+			sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+			menu.add_child(sc)
+			var box := Control.new()
+			var rh := 46.0
+			box.custom_minimum_size = Vector2(lw - 12, rows.size() * (rh + 6))
+			sc.add_child(box)
+			for i in rows.size():
+				var r: Dictionary = rows[i]
+				var b := _btn("", "nat_pick", str(r["key"]), "alt", Vector2(0, i * (rh + 6)), Vector2(lw - 12, rh), 16)
+				var bc := GREEN if bool(r["xi"]) and side == 0 else (GOLD if bool(r["mine"]) else LINE)
+				b.add_theme_stylebox_override("normal", _box(Color(S1.r, S1.g, S1.b, 0.95), 10, bc))
+				box.add_child(b)
+				var pl := _label(str(r["pos"]), 17, MUT, font3)
+				pl.position = Vector2(12, 11)
+				b.add_child(pl)
+				var nl := _label(_trim(str(r["n"]) + ("  (your club)" if bool(r["mine"]) else ""), font3, 18, lw - 12 - 170), 18, GOLD if bool(r["mine"]) else CHALK, font3)
+				nl.position = Vector2(56, 10)
+				b.add_child(nl)
+				var ol := _label(("inj" if bool(r["inj"]) else str(int(r["ovr"]))), 20, Color(0.92, 0.36, 0.33) if bool(r["inj"]) else CHALK)
+				ol.position = Vector2(lw - 12 - 100, 8)
+				ol.size = Vector2(44, 28)
+				ol.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				b.add_child(ol)
+				var sg := _label("−" if side == 0 else "+", 24, MUT if side == 0 else GREEN)
+				sg.position = Vector2(lw - 12 - 40, 4)
+				b.add_child(sg)
+		return
+	if tab == 1:
+		var lw2 := (w - 48 - 14) * 0.55
+		var pn := _card_panel(Vector2(24, y0), Vector2(lw2, h - y0 - 14))
+		items.append([pn, Vector2(0, 30), 0.0])
+		var gl := _label(str(np.get("gname", "")), 20, GOLD, font3)
+		gl.position = Vector2(18, 10)
+		pn.add_child(gl)
+		var cols := [["P", "p"], ["W", "w"], ["D", "d"], ["L", "l"], ["+/-", "gd"], ["Pts", "pts"]]
+		for k in cols.size():
+			var hlb := _label(str(cols[k][0]), 16, MUT, font3)
+			hlb.position = Vector2(lw2 - 330 + k * 52, 42)
+			hlb.size = Vector2(46, 22)
+			hlb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			pn.add_child(hlb)
+		var grp: Array = np.get("grp", [])
+		for i in grp.size():
+			var g: Dictionary = grp[i]
+			var yy := 70.0 + i * 40.0
+			var strip := ColorRect.new()
+			strip.color = Color("#" + str((g["k"] as Array)[0]))
+			strip.position = Vector2(18, yy + 6)
+			strip.size = Vector2(6, 22)
+			pn.add_child(strip)
+			var nl2 := _label("%d  %s" % [i + 1, str(g["n"])], 20, GOLD if bool(g["me"]) else CHALK, font3)
+			nl2.position = Vector2(32, yy)
+			pn.add_child(nl2)
+			for k in cols.size():
+				var v := _label(str(int(g[str(cols[k][1])])), 19, GOLD if bool(g["me"]) else CHALK, font3)
+				v.position = Vector2(lw2 - 330 + k * 52, yy + 2)
+				v.size = Vector2(46, 26)
+				v.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				pn.add_child(v)
+		var ko: Array = np.get("ko", [])
+		if not ko.is_empty():
+			var kl := _label("Knockouts: " + "  ·  ".join(PackedStringArray(ko)), 17, MUT, font3)
+			kl.autowrap_mode = TextServer.AUTOWRAP_WORD
+			kl.position = Vector2(18, 80 + grp.size() * 40)
+			kl.size = Vector2(lw2 - 36, 90)
+			pn.add_child(kl)
+		var rx := 24 + lw2 + 14
+		var rw := w - rx - 24
+		var pn2 := _card_panel(Vector2(rx, y0), Vector2(rw, h - y0 - 14))
+		items.append([pn2, Vector2(0, 30), 0.05])
+		var fl := _label("Your matches", 20, GOLD, font3)
+		fl.position = Vector2(18, 10)
+		pn2.add_child(fl)
+		var fx: Array = np.get("fix", [])
+		var shown := 0
+		var start := maxi(0, fx.size() - 8)
+		for i in range(start, fx.size()):
+			var e: Dictionary = fx[i]
+			var rs: Array = e["res"]
+			var t := "%s  ·  %s %s" % [str(e["date"]), ("" if bool(e["home"]) else "@ "), str(e["opp"])]
+			var el := _label(_trim(t, font3, 18, rw - 100), 18, CHALK if bool(e["played"]) else MUT, font3)
+			el.position = Vector2(18, 46 + shown * 36)
+			pn2.add_child(el)
+			var rl := _label("%d-%d" % [int(rs[0]), int(rs[1])] if rs.size() == 2 else "", 18, GREEN if rs.size() == 2 and int(rs[0]) > int(rs[1]) else (Color(0.92, 0.36, 0.33) if rs.size() == 2 and int(rs[0]) < int(rs[1]) else MUT), font3)
+			rl.position = Vector2(rw - 80, 46 + shown * 36)
+			rl.size = Vector2(62, 24)
+			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			pn2.add_child(rl)
+			shown += 1
+		return
+	# the job: how the FA sees you, what you have done, and the way out
+	var ok := int(np.get("ok", 50))
+	var pn3 := _card_panel(Vector2(24, y0), Vector2(w - 48, h - y0 - 14))
+	items.append([pn3, Vector2(0, 30), 0.0])
+	var mood := "Delighted" if ok >= 80 else ("Happy" if ok >= 60 else ("Patient" if ok >= 40 else "Worried"))
+	var jl := _label("The FA: %s (%d)" % [mood, ok], 24, GOLD if ok >= 40 else Color(0.92, 0.36, 0.33))
+	jl.position = Vector2(24, 18)
+	pn3.add_child(jl)
+	var bar := _bar(Vector2(24, 60), Vector2(w - 96, 10), ok / 100.0, GOLD if ok >= 40 else Color(0.92, 0.36, 0.33))
+	pn3.add_child(bar)
+	var wl := _label("Manager since season %d. Top two in the qualifying group goes to the %s; a bad campaign costs you the job." % [int(np.get("since", 1)), str(np.get("tname", "")).capitalize()], 19, MUT, font3)
+	wl.autowrap_mode = TextServer.AUTOWRAP_WORD
+	wl.position = Vector2(24, 84)
+	wl.size = Vector2(w - 96, 56)
+	pn3.add_child(wl)
+	var hs: Array = np.get("hist", [])
+	for i in mini(hs.size(), 4):
+		var e2: Array = hs[hs.size() - 1 - i]
+		var hl2 := _label("Season %d:  %s" % [int(e2[0]), str(e2[1])], 19, CHALK, font3)
+		hl2.position = Vector2(24, 148 + i * 32)
+		pn3.add_child(hl2)
+	var qb := _btn("LEAVE THE JOB", "nat_quit", null, "ghost", Vector2(w - 24 - 24 - 220, h - 14 - 24 - 50), Vector2(220, 50), 17)
+	menu.add_child(qb)
+
+func _bar(pos: Vector2, sz: Vector2, v: float, col: Color) -> Control:
+	var bg := Panel.new()
+	bg.add_theme_stylebox_override("panel", _box(Color(1, 1, 1, 0.08), int(sz.y * 0.5), Color(0, 0, 0, 0)))
+	bg.position = pos
+	bg.size = sz
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var fg := Panel.new()
+	fg.add_theme_stylebox_override("panel", _box(col, int(sz.y * 0.5), Color(0, 0, 0, 0)))
+	fg.size = Vector2(maxf(sz.x * clampf(v, 0.0, 1.0), sz.y), sz.y)
+	fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bg.add_child(fg)
+	return bg

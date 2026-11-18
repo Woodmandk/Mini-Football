@@ -716,6 +716,12 @@ func _grow_key(pl: Dictionary, rng: RandomNumberGenerator) -> String:
 	return "pas"
 
 func next_season() -> void:
+	# a tournament still running when you go on: the rest of it is played without you watching
+	var ng := 0
+	while nat_due() and ng < 8:
+		var nr := nat_sim()
+		nat_finish(int(nr[0]), int(nr[1]), randf() < 0.5)
+		ng += 1
 	money_init()
 	var gone := _contracts_end()
 	var mv0 := int(d.get("move", 0))
@@ -753,6 +759,7 @@ func next_season() -> void:
 	if not gone.is_empty():
 		d["note"] = "CONTRACTS RAN OUT: %s LEFT ON A FREE." % ", ".join(PackedStringArray(gone))
 	eu_new(quals)
+	_nat_season()
 	d["wlast"] = -999
 	world_tick([])
 	save()
@@ -2214,6 +2221,7 @@ func calendar() -> Array:
 			elif bool(ee.get("out", false)) or bool(ee.get("done", false)):
 				continue
 			out.append(e2)
+	out.append_array(_nat_cal())
 	out.sort_custom(func(a, b): return int(a["day"]) < int(b["day"]))
 	for e in out:
 		if not bool(e["played"]):
@@ -2227,6 +2235,8 @@ func next_day() -> int:
 		return maxi(cup_day(int(cup()["r"])), today() + 1)
 	if eu_due():
 		return maxi(eu_day(int(eu()["md"])), today() + 1)
+	if nat_due():
+		return maxi(nat_day(), today() + 1)
 	if season_over():
 		return -1
 	return lg_day(int(d["round"]))
@@ -3165,6 +3175,7 @@ func world_tick(lines: Array, per_match := true) -> void:
 		d["dlw"] = int(wn["close"])
 		_mail("deadline", "Deadline day is coming", "The window shuts on %s. Anything you want to do, do it now." % str(wn["ctext"]))
 		lines.append("DEADLINE DAY IS COMING")
+	_nat_tick(lines)
 	if not per_match:
 		# a day going by: the rest (bids, offers, the press) comes with the matches
 		return
@@ -3196,6 +3207,7 @@ func world_tick(lines: Array, per_match := true) -> void:
 			_cpu_bid(rng, lines)
 	if eur:
 		_press_tick(rng, lines)
+	_nat_offer(rng, lines)
 
 func _deal_mail(got: Array) -> void:
 	if got.is_empty():
@@ -4203,6 +4215,8 @@ func mail_pick(id: int, k: int) -> String:
 		for m2 in inbox():
 			if str(m2["k"]) == "pjob" and str(m2.get("st", "")) == "open":
 				m2["st"] = "gone"
+	if fx.has("nat"):
+		nat_take(int(fx["nat"]))
 	if fx.has("stay"):
 		pro_d()["trust"] = clampi(int(pro_d().get("trust", 50)) + 3, 0, 100)
 	if not pl.is_empty():
@@ -4727,3 +4741,685 @@ func pro_next_season() -> void:
 	if pro2():
 		pro_select("pro2", true)
 	save()
+
+# ---------------------------------------------------------------- the national team
+# As in FIFA: a country asks you to manage its national team next to your club. You call up the squad from that
+# country's best players (your own men too, when they are from there), play or simulate the qualifiers in the
+# international weeks, and the top two of the group go on to the summer tournament after the season.
+const NATIONS := [
+	["DENMARK", "DEN", ["c8102e", "ffffff", "c8102e"], 77], ["ENGLAND", "ENG", ["f4f4f4", "1d2a5c", "f4f4f4"], 83],
+	["SWEDEN", "SWE", ["fecc02", "1a4fa0", "fecc02"], 75], ["NORWAY", "NOR", ["d81e2c", "ffffff", "1a3a8a"], 74],
+	["NETHERLANDS", "NED", ["f36c21", "ffffff", "f36c21"], 82], ["GERMANY", "GER", ["f4f4f4", "111111", "f4f4f4"], 84],
+	["SPAIN", "ESP", ["c60b1e", "1d2a5c", "1d2a5c"], 85], ["FRANCE", "FRA", ["1f3e8c", "ffffff", "c8102e"], 86],
+	["ITALY", "ITA", ["1f5fbf", "ffffff", "1f5fbf"], 82], ["PORTUGAL", "POR", ["b8122a", "0f6a3a", "b8122a"], 83],
+	["BELGIUM", "BEL", ["d4102b", "111111", "d4102b"], 80], ["SCOTLAND", "SCO", ["1b2a5a", "ffffff", "1b2a5a"], 72],
+	["WALES", "WAL", ["d3112b", "d3112b", "1a9a4a"], 71], ["IRELAND", "IRL", ["15944a", "ffffff", "15944a"], 70],
+	["POLAND", "POL", ["f4f4f4", "d4213d", "f4f4f4"], 75], ["CROATIA", "CRO", ["e8e8e8", "1d3f8a", "1d3f8a"], 79],
+	["SWITZERLAND", "SUI", ["d52b1e", "ffffff", "d52b1e"], 77], ["AUSTRIA", "AUT", ["e0202e", "ffffff", "e0202e"], 76],
+	["CZECHIA", "CZE", ["d7141a", "1a3c8a", "d7141a"], 74], ["ICELAND", "ISL", ["1a4fa0", "ffffff", "1a4fa0"], 68],
+	["FINLAND", "FIN", ["f4f4f4", "1a3c8a", "f4f4f4"], 67], ["SERBIA", "SRB", ["c6363c", "1a3c8a", "f4f4f4"], 75],
+	["TURKEY", "TUR", ["e30a17", "ffffff", "e30a17"], 77], ["UKRAINE", "UKR", ["ffd500", "005bbb", "ffd500"], 75],
+	["BRAZIL", "BRA", ["ffdf1c", "1a4fa0", "f4f4f4"], 86], ["ARGENTINA", "ARG", ["75aadb", "111111", "f4f4f4"], 86],
+	["URUGUAY", "URU", ["6cb4ee", "111111", "111111"], 79], ["USA", "USA", ["f4f4f4", "1d2a5c", "f4f4f4"], 76],
+	["MEXICO", "MEX", ["0f6a3a", "ffffff", "c8102e"], 77], ["JAPAN", "JPN", ["1a2f8a", "ffffff", "1a2f8a"], 78],
+	["MOROCCO", "MAR", ["c1272d", "0f6a3a", "c1272d"], 79], ["SENEGAL", "SEN", ["f4f4f4", "0f8a3a", "f4f4f4"], 77],
+]
+const NAT_EU := 24 # the first 24 are European
+const NAT_FR := [0.07, 0.14, 0.26, 0.33, 0.45, 0.52, 0.66, 0.73, 0.83, 0.90]
+const NAT_KO := ["GROUP, MATCH 1", "GROUP, MATCH 2", "GROUP, MATCH 3", "QUARTER-FINAL", "SEMI-FINAL", "FINAL"]
+const NAT_ROLES := {"GK": 3, "DF": 8, "MF": 7, "FW": 5}
+
+func nat() -> Dictionary:
+	return d.get("nat", {})
+
+func nat_job() -> bool:
+	return not nat().is_empty() and not bool(d.get("cupmode", false)) and not pro() and d.has("leagues")
+
+static func nat_name(n: int) -> String:
+	return str(NATIONS[clampi(n, 0, NATIONS.size() - 1)][0])
+
+static func nat_kit(n: int) -> Array:
+	return (NATIONS[clampi(n, 0, NATIONS.size() - 1)][2] as Array).duplicate()
+
+func nat_str(n: int) -> float:
+	if nat_job() and n == int(nat()["n"]):
+		var xi := nat_xi()
+		if xi.size() == 11:
+			var s := 0.0
+			for pl in xi:
+				s += ovr_of(pl)
+			return s / 11.0
+	return float(NATIONS[n][3])
+
+func tour_name() -> String:
+	return "WORLD CUP" if int(d.get("season", 1)) % 2 == 0 else "EUROPEAN CHAMPIONSHIP"
+
+# where a man is from: most men come from the country they play in, the rest from all over
+func _home_nat() -> int:
+	return 0 if str(league().get("c", "ENGLAND")) == "DENMARK" else 1
+
+func nat_of(pl: Dictionary) -> int:
+	if pl.has("nat"):
+		return int(pl["nat"])
+	var h := absi(hash(str(pl.get("n", "")) + "#" + str(pl.get("num", 0))))
+	var v := _home_nat() if h % 100 < 72 else (h / 100) % NATIONS.size()
+	pl["nat"] = v
+	return v
+
+# the men a country can call up: its own players at clubs all over the world, and yours from there
+func nat_pool(n: int) -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = n * 4099 + int(d.get("season", 1)) * 131 + 7
+	var pool := names.duplicate()
+	for k in range(pool.size() - 1, 0, -1):
+		var sw := rng.randi_range(0, k)
+		var tmp = pool[k]
+		pool[k] = pool[sw]
+		pool[sw] = tmp
+	var q := int(NATIONS[n][3]) - 72
+	var out := []
+	var i := 0
+	for role in ["GK", "DF", "MF", "FW"]:
+		for k in int(NAT_ROLES[role]) + 2:
+			var base: Array = ROLE_BASE[role]
+			var qq := q + rng.randi_range(-7, 3) + (4 if k == 0 else 0)
+			var pl := {"n": str(pool[(i + 40) % maxi(pool.size(), 1)]) if not pool.is_empty() else "PLAYER", "pos": role, "age": rng.randi_range(20, 33), "num": 0, "key": "g%d" % i,
+				"pac": clampi(base[0] + qq + rng.randi_range(-5, 5), 30, 97), "sho": clampi(base[1] + qq + rng.randi_range(-5, 5), 25, 97),
+				"pas": clampi(base[2] + qq + rng.randi_range(-5, 5), 30, 97), "dfn": clampi(base[3] + qq + rng.randi_range(-5, 5), 25, 97)}
+			pl["ab"] = ab_roll(role, ovr_of(pl), rng)
+			out.append(pl)
+			i += 1
+	if nat_job() and n == int(nat()["n"]):
+		for si in (d["squad"] as Array).size():
+			var sp: Dictionary = d["squad"][si]
+			if nat_of(sp) == n:
+				var c := sp.duplicate()
+				c["key"] = "m:" + str(sp["n"])
+				c["mine"] = si
+				out.append(c)
+	return out
+
+func _nat_find(pool: Array, key: String) -> Dictionary:
+	for pl in pool:
+		if str(pl["key"]) == key:
+			return pl
+	return {}
+
+# the best 23: three keepers, eight defenders, seven midfielders, five forwards
+func nat_call_auto() -> void:
+	var nj := nat()
+	var pool := nat_pool(int(nj["n"]))
+	var sq := []
+	for role in NAT_ROLES:
+		var by := pool.filter(func(p): return str(p["pos"]) == role and not injured(p))
+		by.sort_custom(func(a, b): return ovr_of(a) > ovr_of(b))
+		for k in mini(int(NAT_ROLES[role]), by.size()):
+			sq.append(str(by[k]["key"]))
+	nj["sq"] = sq
+
+# the called-up men, best first per place
+func nat_squad() -> Array:
+	var nj := nat()
+	if nj.is_empty():
+		return []
+	var pool := nat_pool(int(nj["n"]))
+	var out := []
+	var keep := []
+	for k in nj.get("sq", []):
+		var pl := _nat_find(pool, str(k))
+		if not pl.is_empty():
+			out.append(pl)
+			keep.append(str(k))
+	nj["sq"] = keep
+	out.sort_custom(func(a, b): return ["GK", "DF", "MF", "FW"].find(str(a["pos"])) * 1000 - ovr_of(a) < ["GK", "DF", "MF", "FW"].find(str(b["pos"])) * 1000 - ovr_of(b))
+	for i in out.size():
+		out[i]["num"] = i + 1
+	return out
+
+# call a man up, or send him home (23 at most)
+func nat_pick(key: String) -> String:
+	var nj := nat()
+	if nj.is_empty():
+		return ""
+	var sq: Array = nj.get("sq", [])
+	if sq.has(key):
+		if sq.size() <= 16:
+			return "You need at least 16 men"
+		sq.erase(key)
+		save()
+		return ""
+	if sq.size() >= 23:
+		return "The squad is full: send someone home first"
+	var pl := _nat_find(nat_pool(int(nj["n"])), key)
+	if pl.is_empty():
+		return ""
+	if injured(pl):
+		return "He is injured"
+	sq.append(key)
+	nj["sq"] = sq
+	save()
+	return ""
+
+# the eleven: the best keeper, four defenders, three midfielders and three forwards (4-3-3)
+func nat_xi(sq := []) -> Array:
+	if sq.is_empty():
+		sq = nat_squad()
+	var used := []
+	var out := []
+	for r in ["GK", "DF", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW"]:
+		var best := -1
+		for pass_n in 2:
+			for i in sq.size():
+				if used.has(i) or (pass_n == 0 and str(sq[i]["pos"]) != r) or (pass_n == 1 and (str(sq[i]["pos"]) == "GK") != (r == "GK")):
+					continue
+				if best < 0 or ovr_of(sq[i]) > ovr_of(sq[best]):
+					best = i
+			if best >= 0:
+				break
+		if best < 0:
+			continue
+		used.append(best)
+		out.append(sq[best])
+	return out
+
+# a country's team for the match engine: name, kits, the eleven and a bench of seven
+func nat_team(n: int) -> Dictionary:
+	var mine := nat_job() and n == int(nat()["n"])
+	var sq := nat_squad() if mine else nat_pool(n)
+	var xi := nat_xi(sq)
+	var row := func(pl: Dictionary, num: int) -> Dictionary:
+		return {"n": str(pl["n"]), "num": num, "pos": str(pl["pos"]), "pac": int(pl["pac"]), "sho": int(pl["sho"]), "pas": int(pl["pas"]), "dfn": int(pl["dfn"]), "ab": ab_of(pl)}
+	var x2 := []
+	var nums := [1, 2, 5, 4, 3, 8, 6, 10, 11, 9, 7]
+	for i in xi.size():
+		x2.append(row.call(xi[i], int(xi[i].get("num", 0)) if mine and int(xi[i].get("num", 0)) > 0 else nums[i]))
+	var bench := []
+	for pl in sq:
+		if bench.size() >= 7:
+			break
+		if not xi.has(pl):
+			bench.append(row.call(pl, int(pl.get("num", 0)) if mine and int(pl.get("num", 0)) > 0 else 12 + bench.size()))
+	var k := nat_kit(n)
+	var alt := "1c1c20" if Color(str(k[0])).get_luminance() > 0.6 else "f4f4f4"
+	return {"n": nat_name(n), "s": str(NATIONS[n][1]), "k": k, "a": [alt, str(k[0]), alt], "f": "4-3-3", "lay": {}, "xi": x2, "bench": bench, "ov": int(round(nat_str(n)))}
+
+# ---- the job
+func _nat_cap() -> int:
+	var cap := 66 + (4 - div()) * 4 + mini(cabinet().size(), 6) * 2 + int(d.get("season", 1)) - 1
+	if nat_job():
+		cap += 4
+	return clampi(cap, 66, 86)
+
+func _nat_offer(rng: RandomNumberGenerator, lines: Array) -> void:
+	if nat_job() or not full() or pro() or bool(d.get("cupmode", false)) or d.has("sacked"):
+		return
+	if int(d.get("natoff", 0)) == int(d.get("season", 1)) or int(d["round"]) < 4 or season_over():
+		return
+	var cap := _nat_cap()
+	var cand := []
+	for n in NAT_EU:
+		if int(NATIONS[n][3]) <= cap and int(NATIONS[n][3]) >= cap - 9:
+			cand.append(n)
+	if cand.is_empty():
+		cand = [19, 20]
+	var n: int = cand[rng.randi() % cand.size()]
+	d["natoff"] = int(d.get("season", 1))
+	var nm := nat_name(n).capitalize()
+	_mail("natjob", "%s want you as national manager" % nm, "The %s FA has watched your work. They want you to lead %s next to your club: you pick the squad, play the qualifiers in the international weeks and, if you finish in the top two, go to the %s." % [nm, nm, tour_name().to_lower()],
+		{"st": "open", "left": 4, "opts": [["Take the job", {"nat": n}, "You are the new manager of %s. Your first squad is called up on the National team page." % nm], ["Not now", {}, "They will look elsewhere. Maybe next season."]]})
+	lines.append("%s WANT YOU AS NATIONAL MANAGER" % nat_name(n))
+
+func nat_take(n: int) -> void:
+	d["nat"] = {"n": n, "since": int(d.get("season", 1)), "ok": 60, "st": {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0}, "hist": []}
+	nat_call_auto()
+	_nat_new_q()
+	save()
+
+func nat_quit() -> void:
+	if nat_job():
+		_mail("natend", "You left %s" % nat_name(int(nat()["n"])).capitalize(), "You thanked the players and left the national team.")
+		d.erase("nat")
+		save()
+
+# ---- the qualifiers: a group of five, home and away, ten rounds (each side rests in two)
+func _nat_new_q() -> void:
+	var nj := nat()
+	var me := int(nj["n"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var others := []
+	for n in NAT_EU:
+		if n != me:
+			others.append(n)
+	others.sort_custom(func(a, b): return int(NATIONS[a][3]) > int(NATIONS[b][3]))
+	# one from each pot of strength, like a real draw
+	var grp := [me]
+	var pots := [others.slice(0, 6), others.slice(6, 12), others.slice(12, 18), others.slice(18)]
+	for p in pots:
+		var pp: Array = (p as Array).filter(func(x): return not grp.has(x))
+		if not pp.is_empty():
+			grp.append(pp[rng.randi() % pp.size()])
+	# a round robin with a rest: six places, the sixth is the rest
+	var slots := grp.duplicate()
+	slots.append(-1)
+	var rounds := []
+	for r in 5:
+		var pr := []
+		for k in 3:
+			var a: int = slots[k]
+			var b: int = slots[5 - k]
+			if a >= 0 and b >= 0:
+				pr.append([a, b] if (r + k) % 2 == 0 else [b, a])
+		rounds.append(pr)
+		var last: int = slots.pop_back()
+		slots.insert(1, last)
+	for r in 5:
+		var back := []
+		for m in rounds[r]:
+			back.append([m[1], m[0]])
+		rounds.append(back)
+	var tab := {}
+	for n in grp:
+		tab[str(n)] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
+	nj["q"] = {"grp": grp, "rd": rounds, "i": 0, "tab": tab, "log": [], "season": int(d.get("season", 1))}
+	nj.erase("t")
+
+func nat_after(i: int) -> int:
+	var n := rounds_total()
+	var r := clampi(int(round(n * NAT_FR[clampi(i, 0, NAT_FR.size() - 1)])), 1, n - 1)
+	var busy := []
+	for cr in cup_rounds():
+		busy.append(cup_after_r(cr))
+	if eu_due_ever() or not eu().is_empty():
+		for md in EU_RD.size():
+			busy.append(eu_after(md))
+	for k in 4:
+		if not busy.has(r):
+			break
+		r = mini(r + 1, n - 1)
+	return r
+
+func _nat_day_q(i: int) -> int:
+	var a := nat_after(i)
+	return mini(lg_day(a - 1) + 5, maxi(lg_day(a) - 1, lg_day(a - 1) + 1))
+
+func _nat_day_t(md: int) -> int:
+	return lg_day(rounds_total() - 1) + 21 + md * 4
+
+func nat_q() -> Dictionary:
+	return nat().get("q", {})
+
+func nat_t() -> Dictionary:
+	return nat().get("t", {})
+
+# your pair in this qualifying round, or []
+func _nat_mine_q(i: int) -> Array:
+	var q := nat_q()
+	var me := int(nat()["n"])
+	if q.is_empty() or i >= (q["rd"] as Array).size():
+		return []
+	for m in q["rd"][i]:
+		if int(m[0]) == me or int(m[1]) == me:
+			return m
+	return []
+
+func nat_due() -> bool:
+	if not nat_job():
+		return false
+	var t := nat_t()
+	if not t.is_empty():
+		return season_over() and not bool(t.get("out", false)) and not bool(t.get("done", false))
+	var q := nat_q()
+	if q.is_empty() or int(q["i"]) >= 10:
+		return false
+	return not _nat_mine_q(int(q["i"])).is_empty() and int(d["round"]) >= nat_after(int(q["i"]))
+
+func nat_day() -> int:
+	var t := nat_t()
+	if not t.is_empty():
+		return _nat_day_t(int(t["md"]))
+	return _nat_day_q(int(nat_q().get("i", 0)))
+
+# [opponent, you at home, what it is]
+func nat_opp() -> Array:
+	var me := int(nat().get("n", 0))
+	var t := nat_t()
+	if not t.is_empty():
+		var md := int(t["md"])
+		if md < 3:
+			for m in t["gm"][md]:
+				if int(m[0]) == me:
+					return [int(m[1]), true, NAT_KO[md]]
+				if int(m[1]) == me:
+					return [int(m[0]), false, NAT_KO[md]]
+		for m in t.get("ko", []):
+			if int(m[0]) == me or int(m[1]) == me:
+				return [int(m[1]) if int(m[0]) == me else int(m[0]), true, NAT_KO[clampi(md, 0, 5)]]
+		return [-1, true, ""]
+	var q := nat_q()
+	var m2 := _nat_mine_q(int(q.get("i", 0)))
+	if m2.is_empty():
+		return [-1, true, ""]
+	return [int(m2[1]) if int(m2[0]) == me else int(m2[0]), int(m2[0]) == me, "QUALIFIER %d" % (_nat_my_n(int(q["i"])) + 1)]
+
+func _nat_my_n(i: int) -> int:
+	var n := 0
+	for k in i:
+		if not _nat_mine_q(k).is_empty():
+			n += 1
+	return n
+
+func nat_ko() -> bool:
+	return not nat_t().is_empty() and int(nat_t()["md"]) >= 3
+
+static func _nat_sim(a: float, b: float, rng: RandomNumberGenerator, home_a := 0.0) -> Array:
+	var df := (a - b) / 12.0 + home_a
+	return [_poisson(rng, 1.3 * exp(df)), _poisson(rng, 1.3 * exp(-df))]
+
+func _nat_book(tab: Dictionary, a: int, b: int, ga: int, gb: int) -> void:
+	for x in [[a, ga, gb], [b, gb, ga]]:
+		var r: Dictionary = tab[str(x[0])]
+		r["p"] = int(r["p"]) + 1
+		r["gf"] = int(r["gf"]) + int(x[1])
+		r["ga"] = int(r["ga"]) + int(x[2])
+		if int(x[1]) > int(x[2]):
+			r["w"] = int(r["w"]) + 1
+			r["pts"] = int(r["pts"]) + 3
+		elif int(x[1]) == int(x[2]):
+			r["d"] = int(r["d"]) + 1
+			r["pts"] = int(r["pts"]) + 1
+		else:
+			r["l"] = int(r["l"]) + 1
+
+static func _nat_order(tab: Dictionary, grp: Array) -> Array:
+	var o := grp.duplicate()
+	o.sort_custom(func(a, b):
+		var ra: Dictionary = tab[str(a)]
+		var rb: Dictionary = tab[str(b)]
+		if int(ra["pts"]) != int(rb["pts"]):
+			return int(ra["pts"]) > int(rb["pts"])
+		var da := int(ra["gf"]) - int(ra["ga"])
+		var db := int(rb["gf"]) - int(rb["ga"])
+		if da != db:
+			return da > db
+		return int(ra["gf"]) > int(rb["gf"]))
+	return o
+
+# rounds in which you rest are played when their week comes; then the group is decided
+func _nat_tick(lines: Array) -> void:
+	if not nat_job():
+		return
+	var q := nat_q()
+	if q.is_empty() or not nat_t().is_empty():
+		return
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	while int(q["i"]) < 10 and _nat_mine_q(int(q["i"])).is_empty() and int(d["round"]) >= nat_after(int(q["i"])):
+		_nat_round_rest(int(q["i"]), [], rng)
+		q["i"] = int(q["i"]) + 1
+	if int(q["i"]) >= 10 and not bool(q.get("over", false)):
+		_nat_q_end(lines)
+
+func _nat_round_rest(i: int, skip: Array, rng: RandomNumberGenerator) -> void:
+	var q := nat_q()
+	var lg: Array = q["log"]
+	for m in q["rd"][i]:
+		if m == skip:
+			continue
+		var r := _nat_sim(nat_str(int(m[0])), nat_str(int(m[1])), rng, 0.1)
+		_nat_book(q["tab"], int(m[0]), int(m[1]), int(r[0]), int(r[1]))
+		lg.append([i, int(m[0]), int(m[1]), int(r[0]), int(r[1])])
+
+func _nat_q_end(lines: Array) -> void:
+	var nj := nat()
+	var q := nat_q()
+	q["over"] = true
+	var me := int(nj["n"])
+	var o := _nat_order(q["tab"], q["grp"])
+	var pos := o.find(me) + 1
+	var nm := nat_name(me).capitalize()
+	(nj["hist"] as Array).append([int(d.get("season", 1)), "Qualifiers: %s in the group" % ordinal(pos).to_lower()])
+	if pos <= 2:
+		nj["ok"] = clampi(int(nj["ok"]) + 10, 0, 100)
+		_nat_new_t()
+		_mail("natq", "%s are going to the %s!" % [nm, tour_name().to_lower()], "%s in the group. The %s is played in the summer, after the league season. Pick your 23 before it starts." % [ordinal(pos).capitalize(), tour_name().to_lower()])
+		lines.append("%s ARE GOING TO THE %s!" % [nat_name(me), tour_name()])
+	else:
+		nj["ok"] = clampi(int(nj["ok"]) - 30, 0, 100)
+		if int(nj["ok"]) < 35:
+			_mail("natend", "%s let you go" % nm, "%s in the group is not good enough. The FA thanks you for your work and looks for a new manager." % ordinal(pos).capitalize())
+			lines.append("%s HAVE LET YOU GO" % nat_name(me))
+			d.erase("nat")
+		else:
+			_mail("natq", "%s miss the %s" % [nm, tour_name().to_lower()], "%s in the group. The FA keeps faith in you, but the next qualifiers must go better." % ordinal(pos).capitalize())
+			lines.append("%s MISS THE %s" % [nat_name(me), tour_name()])
+
+# ---- the tournament: sixteen countries, four groups of four, then the knockouts
+func _nat_new_t() -> void:
+	var nj := nat()
+	var me := int(nj["n"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var field := []
+	for n in (NATIONS.size() if tour_name() == "WORLD CUP" else NAT_EU):
+		if n != me:
+			field.append(n)
+	var luck := {}
+	for n in field:
+		luck[n] = int(NATIONS[n][3]) + rng.randi_range(-4, 4)
+	field.sort_custom(func(a, b): return int(luck[a]) > int(luck[b]))
+	var teams := [me]
+	teams.append_array(field.slice(0, 15))
+	var by := teams.duplicate()
+	by.sort_custom(func(a, b): return int(NATIONS[a][3]) > int(NATIONS[b][3]))
+	var grps := [[], [], [], []]
+	for p in 4:
+		var pot: Array = by.slice(p * 4, p * 4 + 4)
+		pot.shuffle()
+		for g in 4:
+			grps[g].append(pot[g])
+	var gi := 0
+	for g in 4:
+		if (grps[g] as Array).has(me):
+			gi = g
+	var tab := {}
+	for n in teams:
+		tab[str(n)] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
+	# matchdays: 1v2 3v4, 1v3 2v4, 1v4 2v3 in every group
+	var gm := [[], [], []]
+	for g in 4:
+		var x: Array = grps[g]
+		gm[0].append_array([[x[0], x[1]], [x[2], x[3]]])
+		gm[1].append_array([[x[0], x[2]], [x[1], x[3]]])
+		gm[2].append_array([[x[0], x[3]], [x[1], x[2]]])
+	nj["t"] = {"name": tour_name(), "grp": grps, "gi": gi, "tab": tab, "gm": gm, "md": 0, "ko": [], "log": []}
+
+func _nat_t_round(mine: Array, rng: RandomNumberGenerator, lines: Array) -> void:
+	# everybody else's matches of this round, and the next round drawn
+	var nj := nat()
+	var t := nat_t()
+	var me := int(nj["n"])
+	var md := int(t["md"])
+	var lg: Array = t["log"]
+	if md < 3:
+		for m in t["gm"][md]:
+			if int(m[0]) == me or int(m[1]) == me:
+				var a_me := int(m[0]) == me
+				var ga := int(mine[0]) if a_me else int(mine[1])
+				var gb := int(mine[1]) if a_me else int(mine[0])
+				_nat_book(t["tab"], int(m[0]), int(m[1]), ga, gb)
+				lg.append([md, int(m[0]), int(m[1]), ga, gb])
+				continue
+			var r := _nat_sim(nat_str(int(m[0])), nat_str(int(m[1])), rng)
+			_nat_book(t["tab"], int(m[0]), int(m[1]), int(r[0]), int(r[1]))
+			lg.append([md, int(m[0]), int(m[1]), int(r[0]), int(r[1])])
+		if md == 2:
+			var w := []
+			for g in 4:
+				w.append(_nat_order(t["tab"], t["grp"][g]))
+			if not (w[int(t["gi"])] as Array).slice(0, 2).has(me):
+				t["out"] = true
+				var ps: int = (w[int(t["gi"])] as Array).find(me) + 1
+				_nat_t_end("Out in the group (%s)" % ordinal(ps).to_lower(), -12, lines)
+				return
+			t["ko"] = [[w[0][0], w[1][1]], [w[1][0], w[0][1]], [w[2][0], w[3][1]], [w[3][0], w[2][1]]]
+		t["md"] = md + 1
+		return
+	# a knockout round: you won yours (or you would be out), the rest are played
+	var nxt := []
+	for m in t["ko"]:
+		var a := int(m[0])
+		var b := int(m[1])
+		var win := -1
+		var ga := 0
+		var gb := 0
+		if a == me or b == me:
+			win = me if bool(mine[2]) else (b if a == me else a)
+			ga = int(mine[0]) if a == me else int(mine[1])
+			gb = int(mine[1]) if a == me else int(mine[0])
+		else:
+			var r := _nat_sim(nat_str(a), nat_str(b), rng)
+			ga = int(r[0])
+			gb = int(r[1])
+			win = a if ga > gb or (ga == gb and rng.randf() < 0.5) else b
+		lg.append([md, a, b, ga, gb])
+		nxt.append(win)
+	if not nxt.has(me):
+		t["out"] = true
+		_nat_t_end("Out in the %s" % NAT_KO[md].to_lower(), (0 if md == 3 else 8), lines)
+		return
+	if md == 5:
+		t["done"] = true
+		_honour("nat", "%s: %s winners" % [str(t["name"]).capitalize(), nat_name(me).capitalize()])
+		_nat_t_end("Winners!", 30, lines)
+		return
+	var ko := []
+	for k in range(0, nxt.size(), 2):
+		ko.append([nxt[k], nxt[k + 1]])
+	t["ko"] = ko
+	t["md"] = md + 1
+
+func _nat_t_end(what: String, ok: int, lines: Array) -> void:
+	var nj := nat()
+	var t := nat_t()
+	t["done"] = true
+	var nm := nat_name(int(nj["n"])).capitalize()
+	(nj["hist"] as Array).append([int(d.get("season", 1)), "%s: %s" % [str(t["name"]).capitalize(), what.to_lower()]])
+	nj["ok"] = clampi(int(nj["ok"]) + ok, 0, 100)
+	if what == "Winners!":
+		_mail("natend", "%s win the %s!" % [nm, str(t["name"]).to_lower()], "You have made a whole country happy. Your name is in the trophy cabinet.")
+		lines.append("%s WIN THE %s!" % [nat_name(int(nj["n"])), str(t["name"])])
+		_conf_add(6)
+	else:
+		_mail("natend", "%s: %s" % [nm, what.to_lower()], "The %s is over for %s." % [str(t["name"]).to_lower(), nm])
+		lines.append("%s: %s" % [str(t["name"]), what.to_upper()])
+
+# A national match is over (played or simulated). Returns the lines for the end screen.
+func nat_finish(mine: int, theirs: int, won_tie := false) -> Array:
+	var lines := []
+	if not nat_due():
+		return lines
+	var nj := nat()
+	var me := int(nj["n"])
+	var o := nat_opp()
+	var opp := int(o[0])
+	d["day"] = maxi(nat_day(), today() + 1)
+	d["cur"] = int(d["day"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var st: Dictionary = nj["st"]
+	st["p"] = int(st["p"]) + 1
+	st["gf"] = int(st["gf"]) + mine
+	st["ga"] = int(st["ga"]) + theirs
+	var won: bool = mine > theirs or (mine == theirs and won_tie)
+	var k := "w" if mine > theirs else ("d" if mine == theirs else "l")
+	st[k] = int(st[k]) + 1
+	nj["ok"] = clampi(int(nj["ok"]) + (4 if mine > theirs else (1 if mine == theirs else -4)), 0, 100)
+	lines.append("%s %d-%d %s" % [nat_name(me), mine, theirs, nat_name(opp)])
+	# your own men who played come back to the club a little tired, and proud
+	var xi := nat_xi()
+	var mine_n := 0
+	for pl in xi:
+		if pl.has("mine") and int(pl["mine"]) < (d["squad"] as Array).size():
+			var sp: Dictionary = d["squad"][int(pl["mine"])]
+			sp["cond"] = maxi(cond_of(sp) - 14, 30)
+			sp["cday"] = int(d["day"])
+			sp["mo"] = clampi(int(sp.get("mo", 65)) + 3, 5, 100)
+			sp["caps"] = int(sp.get("caps", 0)) + 1
+			mine_n += 1
+	if mine_n > 0:
+		lines.append("%d OF YOUR CLUB'S MEN PLAYED" % mine_n)
+	var t := nat_t()
+	if not t.is_empty():
+		_nat_t_round([mine, theirs, won], rng, lines)
+		var t2 := nat_t()
+		if not bool(t2.get("out", false)) and not bool(t2.get("done", false)):
+			if int(t2["md"]) < 3:
+				var gi := int(t2["gi"])
+				lines.append("%s IN GROUP %s" % [ordinal(_nat_order(t2["tab"], t2["grp"][gi]).find(me) + 1), "ABCD"[gi]])
+			else:
+				lines.append("THROUGH TO THE %s!" % NAT_KO[int(t2["md"])])
+	else:
+		var q := nat_q()
+		var i := int(q["i"])
+		var m := _nat_mine_q(i)
+		_nat_book(q["tab"], int(m[0]), int(m[1]), mine if int(m[0]) == me else theirs, theirs if int(m[0]) == me else mine)
+		(q["log"] as Array).append([i, int(m[0]), int(m[1]), mine if int(m[0]) == me else theirs, theirs if int(m[0]) == me else mine])
+		_nat_round_rest(i, m, rng)
+		q["i"] = i + 1
+		lines.append("%s IN THE GROUP" % ordinal(_nat_order(q["tab"], q["grp"]).find(me) + 1))
+		_nat_tick(lines)
+	if nat_job() and int(nat()["ok"]) < 15:
+		_mail("natend", "%s let you go" % nat_name(me).capitalize(), "Too many bad results. The FA looks for a new manager.")
+		lines.append("%s HAVE LET YOU GO" % nat_name(me))
+		d.erase("nat")
+	save()
+	return lines
+
+# a national match you do not play: the score from the two elevens and your tactics
+func nat_sim() -> Array:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var o := nat_opp()
+	var me := int(nat()["n"])
+	var df := (nat_str(me) - nat_str(int(o[0]))) / 12.0 + (0.1 if bool(o[1]) else -0.1)
+	var op_t := [2, 1, 1]
+	var tk := tac_effect(tac(), op_t, df)
+	df += float(tk[2])
+	return [_poisson(rng, 1.3 * exp(df) * float(tk[0])), _poisson(rng, 1.3 * exp(-df) * float(tk[1]))]
+
+# a new season: new qualifiers when the summer is done
+func _nat_season() -> void:
+	if not nat_job():
+		return
+	nat_call_auto()
+	_nat_new_q()
+
+# your national matches in the calendar ("opp" is a country)
+func _nat_cal() -> Array:
+	var out := []
+	if not nat_job():
+		return out
+	var me := int(nat()["n"])
+	var q := nat_q()
+	if not q.is_empty() and int(q.get("season", 0)) == int(d.get("season", 1)):
+		for i in 10:
+			var m := _nat_mine_q(i)
+			if m.is_empty():
+				continue
+			var e := {"day": _nat_day_q(i), "kind": "nat", "opp": int(m[1]) if int(m[0]) == me else int(m[0]), "home": int(m[0]) == me, "res": [], "played": i < int(q["i"]), "name": "Qualifier %d" % (_nat_my_n(i) + 1), "next": false}
+			for l in q["log"]:
+				if int(l[0]) == i and (int(l[1]) == me or int(l[2]) == me):
+					var am := int(l[1]) == me
+					e["res"] = [int(l[3]) if am else int(l[4]), int(l[4]) if am else int(l[3])]
+			out.append(e)
+	var t := nat_t()
+	if not t.is_empty():
+		for l in t["log"]:
+			if int(l[1]) == me or int(l[2]) == me:
+				var am2 := int(l[1]) == me
+				out.append({"day": _nat_day_t(int(l[0])), "kind": "nat", "opp": int(l[2]) if am2 else int(l[1]), "home": true, "res": [int(l[3]) if am2 else int(l[4]), int(l[4]) if am2 else int(l[3])], "played": true, "name": NAT_KO[int(l[0])].capitalize(), "next": false})
+		if nat_due():
+			var o := nat_opp()
+			out.append({"day": _nat_day_t(int(t["md"])), "kind": "nat", "opp": int(o[0]), "home": bool(o[1]), "res": [], "played": false, "name": str(o[2]).capitalize(), "next": false})
+	return out
