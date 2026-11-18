@@ -745,7 +745,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			k4.size = Vector2(pw, 24)
 			k4.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			pp.add_child(k4)
-			var sn2 := ["PACE", "SHOOTING", "PASSING", "DEFENDING"]
+			var sn2 := Career.GK_NAMES if str(pk.get("pos", "")) == "GK" else Career.STAT_NAMES
 			var sv: Array = pk.get("st", [0, 0, 0, 0])
 			for si3 in 4:
 				var sx := 40.0 + (si3 % 2) * (pw * 0.5 - 20.0)
@@ -1365,7 +1365,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				var o7 := _label(str(int(pl7["ovr"])), 48, GOLD)
 				o7.position = Vector2(rw6 - 90, 4)
 				rp6.add_child(o7)
-				var stn := ["PAC", "SHO", "PAS", "DEF"]
+				var stn := Career.GK_SHORT if str(pl7["pos"]) == "GK" else Career.STAT_SHORT
 				for k7 in 4:
 					var sl7 := _label("%s  %d" % [stn[k7], int(pl7["st"][k7])], 18, Color.WHITE, font2)
 					sl7.position = Vector2(20 + (k7 % 2) * (rw6 * 0.45), 76 + (k7 / 2) * 24)
@@ -1974,7 +1974,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					tpl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 					dp.add_child(tpl)
 				# four stats with bars; a training point gives a +1 next to each
-				var sn := ["Pace", "Shooting", "Passing", "Defending"]
+				var sn := (["Diving", "Handling", "Kicking", "Reflexes"] if str(sp2.get("pos", "")) == "GK" else ["Pace", "Shooting", "Passing", "Defending"])
 				var cw3 := (bw3 - 48) * 0.5
 				for sti in 4:
 					var sx := 18 + (sti % 2) * (cw3 + 12)
@@ -2006,7 +2006,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					ml.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 					ml.size = Vector2(bw3 - 250, 26)
 					dp.add_child(ml)
-					var fcb := _btn("Trains: %s  ›" % Career.focus_name(str(sp2.get("tf", ""))).capitalize(), "c_focus", null, "alt", Vector2(bx3 + bw3 - 18 - 220, dy + ly - 6), Vector2(220, 38), 17)
+					var fcb := _btn("Trains: %s  ›" % Career.focus_name(str(sp2.get("tf", "")), str(sp2.get("pos", ""))).capitalize(), "c_focus", null, "alt", Vector2(bx3 + bw3 - 18 - 220, dy + ly - 6), Vector2(220, 38), 17)
 					fcb.add_theme_font_override("font", font3)
 					menu.add_child(fcb)
 					ly += 38.0
@@ -2334,6 +2334,12 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					var vl5 := _label(str(v5[0]), int(v5[2]), v5[3])
 					vl5.position = Vector2(float(v5[1]) * tw5, cy5 - int(v5[2]) * 0.72)
 					rp5.add_child(vl5)
+				if str(mp["pos"]) == "GK":
+					# a keeper's numbers are keeper skills: say which under each one
+					for gi5 in 4:
+						var gl5 := _label(Career.GK_SHORT[gi5], 16, Color(0.95, 0.6, 0.1), font2)
+						gl5.position = Vector2([0.56, 0.62, 0.68, 0.74][gi5] * tw5, cy5 + 6)
+						rp5.add_child(gl5)
 				var can5: bool = int(c5.get("coins", 0)) >= int(mp["price"])
 				var bb5 := _btn("BUY   %s" % _mp(int(mp["price"])), "c_buy", mi, "primary" if can5 else "alt", Vector2(tx5 + tw5 * 0.81, 114 + mi * rh5 + 6), Vector2(tw5 * 0.19 - 8, rh5 - 18), 18)
 				menu.add_child(bb5)
@@ -4469,7 +4475,8 @@ func _input(e: InputEvent) -> void:
 	elif e is InputEventScreenDrag:
 		if _ids.has(e.index) and _ids[e.index] in ["pass", "thru"] and hi_btn == "" and lab_a == "SHOOT":
 			# slide the thumb up from PASS or THROUGH: the ball goes high
-			if _starts.get(e.index, e.position).y - e.position.y > 30.0:
+			var sd: Vector2 = _starts.get(e.index, e.position) - e.position
+			if sd.y > 30.0:
 				hi_btn = _ids[e.index]
 				ev.append("hi")
 		if e.index == _stick_id:
@@ -5228,7 +5235,7 @@ func _tab_pro(info: Dictionary, w: float, y0: float, ch: float, items: Array) ->
 	fl.clip_text = true
 	lp.add_child(fl)
 	var tp := int(p["tp"])
-	var sn := ["Pace", "Shooting", "Passing", "Defending"]
+	var sn := (["Diving", "Handling", "Kicking", "Reflexes"] if str(p.get("pos", "")) == "GK" else ["Pace", "Shooting", "Passing", "Defending"])
 	var st: Array = p["st"]
 	var cost: Array = p.get("cost", [1, 1, 1, 1])
 	var dp: Array = p.get("dp", [0, 0, 0, 0])

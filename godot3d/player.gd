@@ -62,6 +62,7 @@ var tq_err := 0.0 # CPU: how wrong he reads the moment to tackle (a better defen
 var tq_t := 0.0 # CPU: time until he reads it again
 var rush_t := 0.0 # CPU: a poor defender's itch to dive in
 var tk_aim := Vector3.ZERO # CPU: where he thinks the ball will be when his foot arrives
+var ai_tag := "" # test: what the AI had him doing this frame
 var slide_k := 1.0 # slide speed: a computer man goes in a little less wildly than you
 var card_up := 0 # the referee: 1 = holds up a yellow card, 2 = a red one
 var card_mesh: MeshInstance3D = null
