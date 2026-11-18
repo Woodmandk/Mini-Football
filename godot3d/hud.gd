@@ -13,6 +13,10 @@ var ev := [] # queued events: "shoot_down", "shoot_up", "pass_down", "pass_up", 
 var charge := 0.0
 var stam := 1.0
 var ctrl_name := ""
+var pro_rt := -1.0 # the player career: your match rating, live (-1 = not shown)
+var _prt_prev := -1.0
+var _prt_t := 9.0
+var _prt_dir := 0.0
 var lab_a := "SHOOT"
 var lab_b := "PASS"
 var show_controls := false
@@ -2822,6 +2826,9 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				l3.position = Vector2(w * 0.5 + 120, sy)
 				menu.add_child(l3)
 				sy += 24.0
+			var pxb: Dictionary = info.get("pxp", {})
+			if not pxb.is_empty():
+				_xp_panel(pxb, Vector2(24, h * 0.5 + 54), anim)
 			if anim:
 				sc.scale = Vector2(2.6, 2.6)
 				sc.modulate.a = 0.0
@@ -2902,6 +2909,97 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 	if anim:
 		for it in items:
 			_slide_in(it[0], it[1], it[2])
+
+# The player career at full time: your rating, and the XP bar filling up. A new level gets a little party.
+func _xp_panel(xb: Dictionary, at: Vector2, anim: bool) -> void:
+	var pw := 320.0
+	var ph := 118.0
+	var pn := Panel.new()
+	pn.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.82), 14, Color(1, 1, 1, 0.14)))
+	pn.position = at
+	pn.size = Vector2(pw, ph)
+	pn.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(pn)
+	var lv0 := int(xb.get("lv0", 1))
+	var lv1 := int(xb.get("lv1", lv0))
+	var f0 := clampf(float(xb.get("x0", 0)) / maxf(float(xb.get("n0", 100)), 1.0), 0.0, 1.0)
+	var f1 := clampf(float(xb.get("x1", 0)) / maxf(float(xb.get("n1", 100)), 1.0), 0.0, 1.0)
+	var rt := float(xb.get("rt", -1.0))
+	var rl := _label(("MY RATING  %.1f" % rt) if rt >= 0.0 else "DID NOT PLAY", 18, (GREEN if rt >= 7.0 else (GOLD if rt >= 6.0 else Color(0.95, 0.45, 0.35))) if rt >= 0.0 else Color(1, 1, 1, 0.6), font3)
+	rl.position = Vector2(16, 10)
+	pn.add_child(rl)
+	var lvl := _label("LEVEL %d" % lv0, 22, Color.WHITE)
+	lvl.position = Vector2(16, 38)
+	pn.add_child(lvl)
+	var gain := _label("", 18, GOLD, font3)
+	gain.position = Vector2(pw - 140, 42)
+	gain.size = Vector2(124, 24)
+	gain.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	pn.add_child(gain)
+	var bw := pw - 32.0
+	var bg := ColorRect.new()
+	bg.color = Color(1, 1, 1, 0.12)
+	bg.position = Vector2(16, 78)
+	bg.size = Vector2(bw, 14)
+	pn.add_child(bg)
+	var fill := ColorRect.new()
+	fill.color = GOLD
+	fill.position = Vector2(16, 78)
+	fill.size = Vector2(bw * (f0 if anim else f1), 14)
+	pn.add_child(fill)
+	var nx := _label("%d / %d XP" % [int(xb.get("x1", 0)), int(xb.get("n1", 100))], 16, Color(1, 1, 1, 0.65), font2)
+	nx.position = Vector2(16, 94)
+	pn.add_child(nx)
+	var xp_gain := (int(xb.get("x1", 0)) - int(xb.get("x0", 0))) if lv1 == lv0 else (int(xb.get("n0", 100)) - int(xb.get("x0", 0)) + int(xb.get("x1", 0)))
+	gain.text = "+%d XP" % maxi(xp_gain, 0)
+	if not anim:
+		lvl.text = "LEVEL %d" % lv1
+		return
+	var tw := fill.create_tween()
+	tw.tween_interval(0.9)
+	if lv1 > lv0:
+		tw.tween_property(fill, "size:x", bw, 0.7).set_ease(Tween.EASE_IN_OUT)
+		tw.tween_callback(func():
+			_level_party(pn, lvl, lv1, pw)
+			fill.size.x = 0.0)
+		tw.tween_interval(0.35)
+	tw.tween_property(fill, "size:x", bw * f1, 0.8).set_ease(Tween.EASE_OUT)
+
+func _level_party(pn: Panel, lvl: Label, lv: int, pw: float) -> void:
+	lvl.text = "LEVEL %d" % lv
+	lvl.add_theme_color_override("font_color", GOLD)
+	pn.add_theme_stylebox_override("panel", _box(Color(DARK.r, DARK.g, DARK.b, 0.9), 14, GOLD))
+	var up := _label("LEVEL UP!", 34, GOLD)
+	up.add_theme_constant_override("outline_size", 10)
+	up.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.75))
+	up.position = Vector2(0, 26)
+	up.size = Vector2(pw, 44)
+	up.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	up.pivot_offset = Vector2(pw * 0.5, 22)
+	up.scale = Vector2(0.2, 0.2)
+	pn.add_child(up)
+	var t1 := up.create_tween()
+	t1.tween_property(up, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t1.tween_interval(1.6)
+	t1.tween_property(up, "modulate:a", 0.0, 0.4)
+	var cols := [GOLD, GREEN, Color.WHITE, Color(0.4, 0.75, 1.0)]
+	for i in 18:
+		# a little burst of confetti from the bar
+		var cf := ColorRect.new()
+		cf.color = cols[i % cols.size()]
+		cf.size = Vector2(7, 7)
+		cf.position = Vector2(pw * 0.5 + randf_range(-40, 40), 80)
+		cf.rotation = randf() * TAU
+		cf.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		pn.add_child(cf)
+		var t2 := cf.create_tween()
+		t2.set_parallel(true)
+		var to := cf.position + Vector2(randf_range(-170, 170), randf_range(-150, -60))
+		t2.tween_property(cf, "position", to, 0.9).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+		t2.tween_property(cf, "rotation", cf.rotation + randf_range(-6, 6), 0.9)
+		t2.tween_property(cf, "modulate:a", 0.0, 0.9).set_delay(0.4)
+	if get_parent() != null and get_parent().has_method("snd"):
+		get_parent().snd("cheer")
 
 # ---------------------------------------------------------------- scouting and the youth academy
 func _youth_page(info: Dictionary, w: float, h: float, items: Array) -> void:
@@ -4748,6 +4846,8 @@ func _draw() -> void:
 				_text("HIGH", hc - Vector2(0, 10), 14, hcol)
 	if ctrl_name != "":
 		_text(ctrl_name, Vector2(size.x * 0.5, size.y - 138.0 * 68.0 / 105.0 - 20.0), 16, Color(1, 1, 1, 0.9))
+	if pro_rt >= 0.0:
+		_pro_badge()
 	if charge > 0.0:
 		var c: Vector2 = b["shoot"][0]
 		var col := Color(1.0, 0.9, 0.2).lerp(Color(1.0, 0.25, 0.15), clampf((charge - 0.6) / 0.4, 0.0, 1.0))
@@ -4792,6 +4892,31 @@ func _button(c: Vector2, rad: float, text: String, down: bool, col: Color) -> vo
 	draw_circle(c, rad * k, Color(col.r, col.g, col.b, 0.5 if down else 0.2))
 	draw_arc(c, rad * k, 0, TAU, 48, Color(col.r, col.g, col.b, 0.9), 3.0, true)
 	_text(text, c + Vector2(0, 6), 18 if rad > 50.0 else 14, Color(1, 1, 1, 0.95))
+
+# The player career: your rating for this match, live under the score. It glows and shows an arrow when it moves.
+func _pro_badge() -> void:
+	var r := snappedf(pro_rt, 0.1)
+	if _prt_prev < 0.0:
+		_prt_prev = r
+	elif absf(r - _prt_prev) >= 0.1:
+		_prt_dir = signf(r - _prt_prev)
+		_prt_prev = r
+		_prt_t = 0.0
+	_prt_t += get_process_delta_time()
+	var col := GREEN if r >= 7.0 else (GOLD if r >= 6.0 else Color(0.95, 0.35, 0.25))
+	var rc := Rect2(Vector2(22, 64), Vector2(176, 36))
+	var glow := clampf(1.0 - _prt_t / 1.4, 0.0, 1.0)
+	draw_style_box(_box(Color(DARK.r, DARK.g, DARK.b, 0.78), 10, col.lerp(Color.WHITE, glow * 0.5) if glow > 0.0 else Color(1, 1, 1, 0.12)), rc)
+	draw_string(font2, rc.position + Vector2(12, 25), "MY RATING", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1, 1, 1, 0.75))
+	var big := 22 + int(round(6.0 * glow))
+	draw_string_outline(font, rc.position + Vector2(108, 27), "%.1f" % r, HORIZONTAL_ALIGNMENT_LEFT, -1, big, 4, Color(0, 0, 0, 0.6))
+	draw_string(font, rc.position + Vector2(108, 27), "%.1f" % r, HORIZONTAL_ALIGNMENT_LEFT, -1, big, col)
+	if glow > 0.0 and _prt_dir != 0.0:
+		var c := rc.position + Vector2(162, 18)
+		var up := _prt_dir > 0.0
+		var ac := Color(GREEN.r, GREEN.g, GREEN.b, glow) if up else Color(0.95, 0.35, 0.25, glow)
+		var pts := PackedVector2Array([c + Vector2(-7, 4), c + Vector2(7, 4), c + Vector2(0, -7)]) if up else PackedVector2Array([c + Vector2(-7, -4), c + Vector2(7, -4), c + Vector2(0, 7)])
+		draw_colored_polygon(pts, ac)
 
 func _text(t: String, at: Vector2, fs: int, col: Color) -> void:
 	var w := font.get_string_size(t, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
