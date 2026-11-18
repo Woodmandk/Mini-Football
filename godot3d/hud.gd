@@ -1391,7 +1391,16 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					# one of their best men: not for sale, only his release clause buys him
 					al.text = "NOT FOR SALE  ·  RELEASE CLAUSE  %s" % _m(rc6)
 					bids = [[rc6, "PAY THE CLAUSE", "sc_rc"]]
-				var bw6 := (rw6 - 36.0 - 8.0 * (bids.size() - 1)) / bids.size()
+				var no6 := str(pl7.get("no", ""))
+				if no6 != "":
+					# he will not come: no bids, only why
+					al.text = "HE WILL NOT JOIN YOU"
+					al.add_theme_color_override("font_color", Color(0.95, 0.5, 0.4))
+					var nl6 := _label(_trim(no6, font2, 18, rw6 - 40), 18, Color.WHITE, font2)
+					nl6.position = Vector2(20, 184)
+					rp6.add_child(nl6)
+					bids = []
+				var bw6 := (rw6 - 36.0 - 8.0 * maxi(bids.size() - 1, 0)) / maxi(bids.size(), 1)
 				for bi in bids.size():
 					var amt: int = bids[bi][0]
 					var can6: bool = int(c6.get("coins", 0)) >= amt
@@ -1399,7 +1408,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					menu.add_child(bb6)
 				# a swap: one of your men plus money
 				var sw6: Dictionary = sc1.get("sw", {})
-				if not sw6.is_empty() and ctr <= 0:
+				if not sw6.is_empty() and ctr <= 0 and no6 == "":
 					var sy := 100 + 190 + 76
 					var swl := _label("SWAP", 16, GOLD, font2)
 					swl.position = Vector2(20, sy - 100 + 4)
@@ -1839,7 +1848,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			var bk8 := _back("cm_back" if cm8 else "career", null)
 			menu.add_child(bk8)
 			if not cm8 and not ((info.get("car", {}) as Dictionary).get("eu", {}) as Dictionary).is_empty():
-				menu.add_child(_btn("CHAMPIONS CUP  ›", "eu", null, "alt", Vector2(w - 250, 14), Vector2(226, 44), 17))
+				menu.add_child(_btn(str(((info.get("car", {}) as Dictionary).get("eu", {}) as Dictionary).get("name", "EUROPE")).trim_prefix("THE ") + "  ›", "eu", null, "alt", Vector2(w - 250, 14), Vector2(226, 44), 17))
 			if cm8:
 				menu.add_child(_btn("THE TEAM", "cm_team", null, "alt", Vector2(w - 200, 14), Vector2(170, 48), 18))
 		"squad":
@@ -3840,7 +3849,7 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 			# a European night: the card shows the Champions Cup opponent the same way
 			cpn = c.get("eu", {})
 			cdue = true
-			what = "Champions Cup, %s" % str(cpn.get("rname", "")).capitalize()
+			what = "%s, %s" % [str(cpn.get("name", "Europe")).capitalize().trim_prefix("The "), str(cpn.get("rname", "")).capitalize()]
 		var ndue := not cdue and not edue and bool(c.get("nat_due", false))
 		if ndue:
 			# your country plays: its kit and name on the card, the club waits
@@ -4005,14 +4014,15 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 	var eui: Dictionary = c.get("eu", {})
 	var show_eu := not eui.is_empty() and (bool(c.get("eu_due", false)) or bool(cpi.get("won", false)) or bool(cpi.get("out", false)))
 	if show_eu:
+		var eun := str(eui.get("name", "Europe")).capitalize().trim_prefix("The ")
 		if bool(eui.get("won", false)):
-			cps = "Champions of Europe!"
+			cps = "Champions of Europe!" if int(eui.get("k", 0)) == 0 else "You won the %s!" % eun
 		elif bool(eui.get("done", false)):
-			cps = "Champions Cup: %s won it" % str(eui.get("win", ""))
+			cps = "%s: %s won it" % [eun, str(eui.get("win", ""))]
 		elif bool(eui.get("out", false)):
-			cps = "Champions Cup: you are out"
+			cps = "%s: you are out" % eun
 		else:
-			cps = "Champions Cup v %s, %s" % [str(eui.get("opp", "?")).capitalize(), str(eui.get("day", ""))]
+			cps = "%s v %s, %s" % [eun, str(eui.get("opp", "?")).capitalize(), str(eui.get("day", ""))]
 	var cb := _card("eu" if show_eu else "cup", null, Vector2(rx, yy + each + gap), Vector2(rw, each))
 	menu.add_child(cb)
 	items.append([cb, Vector2(80, 0), 0.08])
@@ -5169,14 +5179,14 @@ func _eu_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	var e: Dictionary = c.get("eu", {})
 	var sub := ""
 	if bool(e.get("won", false)):
-		sub = "You won it: champions of Europe!"
+		sub = "You won it: champions of Europe!" if int(e.get("k", 0)) == 0 else "You won it!"
 	elif bool(e.get("done", false)):
 		sub = "%s won it this season" % str(e.get("win", ""))
 	elif bool(e.get("out", false)):
 		sub = "You are out. The cup goes on without you."
 	elif e.has("opp"):
 		sub = "Next: %s v %s, %s" % [str(e.get("rname", "")).capitalize(), str(e["opp"]).capitalize(), str(e.get("day", ""))]
-	_title("The Champions Cup", sub)
+	_title(str(e.get("name", "THE CHAMPIONS CUP")).capitalize(), sub)
 	menu.add_child(_back("tab", "career"))
 	if e.is_empty():
 		return
@@ -5277,7 +5287,7 @@ func _tab_league(info: Dictionary, w: float, y0: float, ch: float, items: Array)
 		["Trophy cabinet", "Trophies, awards and records", "cab", "cup"],
 	]
 	if not eu.is_empty():
-		defs.append(["Champions Cup", "Europe's big cup", "eu", "cup", EUBLUE])
+		defs.append([str(eu.get("name", "THE CHAMPIONS CUP")).capitalize().trim_prefix("The "), "Europe's big cup" if int(eu.get("k", 0)) == 0 else "Europe's second cup, Thursdays", "eu", "cup", EUBLUE])
 	defs.append(["Calendar", ("Next: " + str(c.get("ndate", ""))) if str(c.get("ndate", "")) != "" else "The season", "cal", "cal"])
 	_tiles(defs, 24, y0, w - 48, ch, 3, items)
 
