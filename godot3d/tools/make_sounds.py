@@ -33,11 +33,11 @@ def lp(f, fc, o=2):
 def hp(f, fc, o=2):
 	return 1.0 / np.sqrt(1.0 + (fc / np.maximum(f, 1.0)) ** (2 * o))
 
-def formant_mag(f, vowel, bright=1.0):
+def formant_mag(f, vowel, bright=1.0, scale=1.0, bw=1.6):
 	F, B, A = VOWELS[vowel]
 	m = np.zeros_like(f)
 	for fi, bi, ai in zip(F, B, A):
-		m += ai * (bright if fi > 1500 else 1.0) / (1.0 + ((f - fi) / (bi * 1.6)) ** 2)
+		m += ai * (bright if fi > 1500 else 1.0) / (1.0 + ((f - fi * scale) / (bi * bw * scale)) ** 2)
 	return m * hp(f, 90, 1) * lp(f, 4500, 2)
 
 def env_adsr(n, a, r):
@@ -66,6 +66,7 @@ class Bank:
 		self.b = {}
 
 	def add(self, key, start, sig):
+		key = (key[0], key[1], int(rng.integers(0, 6)))
 		buf = self.b.setdefault(key, np.zeros(self.n))
 		idx = (start + np.arange(len(sig)))
 		if self.circ:
@@ -78,8 +79,9 @@ class Bank:
 	def render(self, bright=1.0):
 		f = freqs(self.n)
 		out = np.zeros(self.n)
-		for (vowel, dist), buf in self.b.items():
-			mag = formant_mag(f, vowel, bright) * lp(f, [5000, 2600, 1300][dist], 2)
+		for (vowel, dist, sc), buf in self.b.items():
+			# people's throats differ: formants spread ~ +-15%, and far away they blur into each other
+			mag = formant_mag(f, vowel, bright, 0.86 + 0.056 * sc, 1.6 * [1.3, 2.0, 3.0][dist]) * lp(f, [5000, 2600, 1300][dist], 2)
 			out += ffilt(buf, mag)
 		return out
 
@@ -185,7 +187,9 @@ def crowd_bed(sec, density, shout_k, excite, name):
 	v /= np.std(v) + 1e-9
 	# the far mass: thousands more, too far away to be voices, just the sound of a full ground
 	f = freqs(n)
-	mass = ffilt(rng.standard_normal(n), (formant_mag(f, "a") * 0.6 + formant_mag(f, "o") * 0.6 + 0.15 / (1.0 + (f / 700.0) ** 2)) * lp(f, 2400 + 1600 * excite, 2))
+	# a broad, smooth hum with no peaks in it (peaks are what made it sound hollow, like a cave)
+	lf = np.log(np.maximum(f, 20.0) / (550.0 + 250.0 * excite))
+	mass = ffilt(rng.standard_normal(n), hp(f, 140, 1) * lp(f, 2200 + 1800 * excite, 1) * (0.35 + np.exp(-lf ** 2 / 1.2)) / np.sqrt(np.maximum(f, 20.0) / 200.0))
 	mass /= np.std(mass) + 1e-9
 	# a few claps and the odd finger whistle
 	claps = np.zeros(n)
@@ -206,7 +210,7 @@ def crowd_bed(sec, density, shout_k, excite, name):
 		whis[idx] += s
 	mix = v * 0.9 + mass * (0.9 - 0.3 * excite) + claps / (np.std(claps) + 1e-9) * 0.12 + whis * 0.6
 	mix *= loop_mod(n, 0.14 + 0.1 * excite, [1, 2, 3, 5])
-	mix = reverb(mix, wet=0.45, rt=2.0, circular=True)
+	# no reverb on the bed: in an open ground the crowd is all round you, not echoing
 	save(name, norm(mix, 0.7))
 
 # ---------------------------------------------------------------- the chant (looping)
@@ -270,7 +274,7 @@ def chant():
 	claps = ffilt(claps, hp(f, 500, 2) * lp(f, 4000, 2) + 0.3 * lp(f, 300, 2) * hp(f, 120, 1))
 	claps /= np.std(claps) + 1e-9
 	mix = sing + claps * 0.35
-	mix = reverb(mix, wet=0.5, rt=2.1, circular=True)
+	mix = reverb(mix, wet=0.2, rt=1.4, circular=True)
 	save("chant", norm(mix, 0.7))
 
 def clap_rhythm():
@@ -297,7 +301,7 @@ def clap_rhythm():
 	hey = bank.render(1.3)
 	hey /= np.std(hey) + 1e-9
 	mix = claps + hey * 0.45
-	mix = reverb(mix, wet=0.5, rt=2.1, circular=True)
+	mix = reverb(mix, wet=0.2, rt=1.4, circular=True)
 	save("claps", norm(mix, 0.7))
 
 # ---------------------------------------------------------------- crowd reactions (one-shots)
