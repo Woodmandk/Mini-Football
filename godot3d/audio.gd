@@ -20,8 +20,7 @@ const DEF := {
 const ALIAS := {"kick": "pass", "win": "tackle", "blip": "click", "blip2": "click2"}
 
 var streams := {}
-var pool3: Array[AudioStreamPlayer3D] = []
-var pool2: Array[AudioStreamPlayer] = []
+var players := {} # name -> one player per variant (its stream never changes: the web build needs that)
 var bed: AudioStreamPlayer
 var hot: AudioStreamPlayer
 var songs: Array[AudioStreamPlayer] = []
@@ -58,17 +57,22 @@ func _ready() -> void:
 			if s != null:
 				arr.append(s)
 		streams[k] = arr
-	for i in 14:
-		var p := AudioStreamPlayer3D.new()
-		p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
-		p.panning_strength = 0.7
-		p.max_polyphony = 1
-		add_child(p)
-		pool3.append(p)
-	for i in 10:
-		var p := AudioStreamPlayer.new()
-		add_child(p)
-		pool2.append(p)
+		var ps := []
+		for st in arr:
+			# Each sound keeps its own player and its stream is set before it enters the tree.
+			# On phones (web) a player whose stream is swapped stays silent, so no shared pool.
+			var p
+			if bool(DEF[k][2]):
+				p = AudioStreamPlayer3D.new()
+				p.attenuation_model = AudioStreamPlayer3D.ATTENUATION_DISABLED
+				p.panning_strength = 0.6
+			else:
+				p = AudioStreamPlayer.new()
+			p.stream = st
+			p.max_polyphony = 4 # overlapping plays ring out, nothing is cut off
+			add_child(p)
+			ps.append(p)
+		players[k] = ps
 	bed = _loop("res://snd/crowd.wav")
 	hot = _loop("res://snd/crowd_hot.wav")
 	songs = [_loop("res://snd/chant.wav"), _loop("res://snd/claps.wav")]
@@ -91,36 +95,12 @@ func _loop(f: String) -> AudioStreamPlayer:
 	add_child(p)
 	return p
 
-func _free3() -> AudioStreamPlayer3D:
-	var best: AudioStreamPlayer3D = pool3[0]
-	var bt := -1.0
-	for p in pool3:
-		if not p.playing:
-			return p
-		var pt := p.get_playback_position()
-		if pt > bt:
-			bt = pt
-			best = p
-	return best
-
-func _free2() -> AudioStreamPlayer:
-	var best: AudioStreamPlayer = pool2[0]
-	var bt := -1.0
-	for p in pool2:
-		if not p.playing:
-			return p
-		var pt := p.get_playback_position()
-		if pt > bt:
-			bt = pt
-			best = p
-	return best
-
 # Play one sound. vol 0..1 scales it, at = where on the pitch it happened (null = everywhere).
 func play(k: String, vol := 1.0, at = null) -> void:
 	k = ALIAS.get(k, k)
 	if not DEF.has(k) or vol <= 0.01:
 		return
-	var arr: Array = streams.get(k, [])
+	var arr: Array = players.get(k, [])
 	if arr.is_empty():
 		return
 	# the same sound twice in the same instant is one sound, a little louder
@@ -133,25 +113,20 @@ func play(k: String, vol := 1.0, at = null) -> void:
 		print("SND %.2f %s %.2f" % [t, k, vol])
 	var db: float = float(d[0]) + linear_to_db(clampf(vol, 0.0, 1.5))
 	var pitch: float = 1.0 + randf_range(-1.0, 1.0) * float(d[1])
-	var s = arr[randi() % arr.size()]
-	if bool(d[2]) and at != null:
-		var p := _free3()
-		p.stream = s
-		p.global_position = at
+	var p = arr[randi() % arr.size()]
+	if p is AudioStreamPlayer3D:
+		var cpos := Vector3.ZERO
 		var cam := get_viewport().get_camera_3d()
 		if cam != null:
+			cpos = cam.global_position
+		p.global_position = at if at != null else cpos
+		if cam != null and at != null:
 			# farther from the camera = quieter and a little duller, as from the TV gantry
 			var dist: float = cam.global_position.distance_to(at)
 			db -= clampf((dist - 25.0) * 0.08, 0.0, 4.0)
-		p.volume_db = db
-		p.pitch_scale = pitch
-		p.play()
-	else:
-		var p := _free2()
-		p.stream = s
-		p.volume_db = db
-		p.pitch_scale = pitch
-		p.play()
+	p.volume_db = db
+	p.pitch_scale = pitch
+	p.play()
 
 func play_in(sec: float, k: String, vol := 1.0) -> void:
 	later.append([t + sec, k, vol])
@@ -170,10 +145,9 @@ func goal(team: int) -> void:
 	_stop_song()
 
 func stop_all() -> void:
-	for p in pool2:
-		p.stop()
-	for p in pool3:
-		p.stop()
+	for k in players:
+		for p in players[k]:
+			p.stop()
 	later.clear()
 
 func _stop_song() -> void:
