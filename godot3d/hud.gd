@@ -3752,7 +3752,12 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 			cdue = true
 			what = "Champions Cup, %s" % str(cpn.get("rname", "")).capitalize()
 		var dtx := str(c.get("ndate", ""))
-		var nx := _label((dtx + "  ·  " if dtx != "" else "") + what, 22, EUBLUE if edue else GOLD, font3)
+		if bool(c.get("derby", false)):
+			# derby day: the card says it in red
+			var drb: Dictionary = c.get("drb", {})
+			var dn := int(drb.get("w", 0)) + int(drb.get("d", 0)) + int(drb.get("l", 0))
+			what = ("DERBY (W%d D%d L%d)  ·  " % [int(drb.get("w", 0)), int(drb.get("d", 0)), int(drb.get("l", 0))] if dn > 0 else "DERBY  ·  ") + what
+		var nx := _label((dtx + "  ·  " if dtx != "" else "") + what, 22, EUBLUE if edue else (Color(1.0, 0.42, 0.36) if bool(c.get("derby", false)) else GOLD), font3)
 		nx.position = Vector2(22, 16)
 		nx.clip_text = true
 		nx.size = Vector2(lw - 80, 30)
