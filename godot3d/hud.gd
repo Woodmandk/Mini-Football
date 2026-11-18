@@ -45,6 +45,8 @@ var _banner_tw: Tween
 var _toast: Label
 var _toast_tw: Tween
 var _code := ""
+var _code_len := 4 # the number pad: 4 digits = a room code, 6 = a friend code
+var _code_act := "code"
 var vs_t := -1.0
 var vs_len := 0.0
 var vs_names := ["", ""]
@@ -1170,6 +1172,135 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			menu.add_child(_btn("TRY AGAIN" if stopped else "STOP", "rk_find" if stopped else "rk_stop", null, "primary" if stopped else "alt", Vector2(w * 0.5 - 150, h - 96.0), Vector2(300, 66), 26))
 			if stopped:
 				menu.add_child(_back("online", null))
+		"friends":
+			var fi: Dictionary = info.get("fr", {})
+			var web_ok := bool(info.get("web", true))
+			var froff := bool(fi.get("off", false))
+			_title("Friends", "Add each other with a code. Invite a friend who is online, and the match pops up on his phone.")
+			var lw := minf(330.0, w * 0.34)
+			var lp := _card_panel(Vector2(32, 104), Vector2(lw, h - 124.0))
+			items.append([lp, Vector2(-60, 0), 0.0])
+			var c1 := _label("YOUR FRIEND CODE", 18, MUT, font2)
+			c1.position = Vector2(20, 16)
+			lp.add_child(c1)
+			var cd := str(fi.get("code", ""))
+			var c2 := _label(" ".join(cd.split("")) if cd != "" else ("-" if (froff or not web_ok) else "..."), 50, GOLD)
+			c2.position = Vector2(16, 40)
+			c2.size = Vector2(lw - 32, 64)
+			lp.add_child(c2)
+			var c3 := _label("Online friends need the web version." if not web_ok else ("Online friends are not switched on yet." if froff else "Give it to a friend so he can add you."), 18, Color(1, 1, 1, 0.78), font3)
+			c3.autowrap_mode = TextServer.AUTOWRAP_WORD
+			c3.position = Vector2(20, 108)
+			c3.size = Vector2(lw - 40, 50)
+			lp.add_child(c3)
+			var ad := _btn("ADD A FRIEND", "fr_add", null, "primary" if (web_ok and not froff) else "off", Vector2(52, 104 + h - 124.0 - 84.0), Vector2(lw - 40, 64), 24)
+			menu.add_child(ad)
+			items.append([ad, Vector2(-60, 0), 0.05])
+			var fm := str(fi.get("msg", ""))
+			if fm != "":
+				var c4 := _label(fm, 18, GOLD, font3)
+				c4.autowrap_mode = TextServer.AUTOWRAP_WORD
+				c4.position = Vector2(20, 162)
+				c4.size = Vector2(lw - 40, 50)
+				lp.add_child(c4)
+			var rx := 32.0 + lw + 18.0
+			var rw := w - rx - 32.0
+			var rows: Array = fi.get("fr", [])
+			if rows.is_empty():
+				var e := _label("No friends yet. Swap codes with someone, and you appear on each other's list.", 22, Color(1, 1, 1, 0.75), font3)
+				e.autowrap_mode = TextServer.AUTOWRAP_WORD
+				e.position = Vector2(rx + 20, h * 0.5 - 30)
+				e.size = Vector2(rw - 40, 70)
+				e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				menu.add_child(e)
+			var rh := 70.0
+			var per := int((h - 124.0 + 8.0) / (rh + 8.0))
+			for ri in mini(rows.size(), per):
+				var r: Dictionary = rows[ri]
+				var y := 104.0 + ri * (rh + 8.0)
+				var fon := bool(r.get("on", false))
+				var bg := Panel.new()
+				bg.add_theme_stylebox_override("panel", _box(Color(S1.r, S1.g, S1.b, 0.96), 14, GREEN if fon else LINE))
+				bg.position = Vector2(rx, y)
+				bg.size = Vector2(rw, rh)
+				bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				menu.add_child(bg)
+				items.append([bg, Vector2(80, 0), 0.03 * ri])
+				var dot := ColorRect.new()
+				dot.color = GREEN if fon else Color(1, 1, 1, 0.25)
+				dot.position = Vector2(16, rh * 0.5 - 6)
+				dot.size = Vector2(12, 12)
+				dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				bg.add_child(dot)
+				var fnm := _label(str(r.get("n", "Friend")), 24, CHALK)
+				fnm.position = Vector2(40, 6)
+				fnm.size = Vector2(rw - 330, 32)
+				fnm.clip_text = true
+				bg.add_child(fnm)
+				var rkn: Dictionary = RankC.rank_of(int(r.get("rp", 0)))
+				var st := _label("%s   ·   %s  %d RP" % [str(r.get("t", "")), str(rkn["n"]), int(r.get("rp", 0))], 18, GREEN.lightened(0.3) if fon else MUT, font3)
+				st.position = Vector2(40, 38)
+				st.size = Vector2(rw - 330, 26)
+				st.clip_text = true
+				bg.add_child(st)
+				var fid := str(r.get("id", ""))
+				var rmb := _btn("REMOVE?" if bool(r.get("rm", false)) else "X", "fr_rm", fid, "alt", Vector2(rx + rw - (130.0 if bool(r.get("rm", false)) else 62.0) - 10.0, y + 9), Vector2(130.0 if bool(r.get("rm", false)) else 62.0, 52), 20)
+				menu.add_child(rmb)
+				if fon and int(r.get("s", 0)) == 0 and not bool(r.get("rm", false)):
+					var ib := _btn("INVITE", "fr_invite", fid, "primary", Vector2(rx + rw - 62.0 - 10.0 - 12.0 - 170.0, y + 9), Vector2(170, 52), 24)
+					menu.add_child(ib)
+					_pulse(ib)
+			if rows.size() > per:
+				var more := _label("+%d more" % (rows.size() - per), 17, MUT, font3)
+				more.position = Vector2(rx, h - 22)
+				menu.add_child(more)
+			menu.add_child(_back("tab", "profile"))
+		"fr_add":
+			_title("Add a friend", "")
+			_code = ""
+			_code_len = 6
+			_code_act = "fr_code"
+			var slots6 := _label("_  _  _  _  _  _", 50, GOLD)
+			slots6.name = "slots"
+			slots6.position = Vector2(40, h * 0.5 - 40)
+			slots6.size = Vector2(w * 0.5 - 60, 70)
+			slots6.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(slots6)
+			var hint6 := _label("Type the 6 digits from your friend's Friends screen", 18, Color(1, 1, 1, 0.75), font2)
+			hint6.autowrap_mode = TextServer.AUTOWRAP_WORD
+			hint6.position = Vector2(60, h * 0.5 + 40)
+			hint6.size = Vector2(w * 0.5 - 100, 60)
+			hint6.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(hint6)
+			var keys6 := ["1", "2", "3", "4", "5", "6", "7", "8", "9", "<", "0", ""]
+			var ks6 := minf(72.0, (h - 110.0) / 4.0 - 8.0)
+			for i in keys6.size():
+				if keys6[i] == "":
+					continue
+				var kb6 := _btn(keys6[i], "key", keys6[i], "alt", Vector2(w * 0.5 + 40.0 + (i % 3) * (ks6 + 28.0), 84.0 + (i / 3) * (ks6 + 8.0)), Vector2(ks6 + 20.0, ks6), 30)
+				kb6.pressed.disconnect(kb6.pressed.get_connections()[0]["callable"])
+				var kv6: String = keys6[i]
+				kb6.pressed.connect(func(): _key(kv6))
+				menu.add_child(kb6)
+				items.append([kb6, Vector2(0, 40), 0.02 * i])
+			menu.add_child(_back("friends", null))
+		"fr_inv":
+			var iv: Dictionary = info.get("fr_inv", {})
+			_title("Match invite", "")
+			var il := _label("%s wants to play with you right now" % str(iv.get("n", "A friend")), 34, GOLD)
+			il.autowrap_mode = TextServer.AUTOWRAP_WORD
+			il.position = Vector2(60, h * 0.5 - 110)
+			il.size = Vector2(w - 120, 100)
+			il.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			menu.add_child(il)
+			items.append([il, Vector2(0, -40), 0.0])
+			var no := _btn("NOT NOW", "inv_no", null, "alt", Vector2(w * 0.5 - 312, h * 0.5 + 30), Vector2(290, 80), 26)
+			var yes := _btn("JOIN", "inv_yes", null, "primary", Vector2(w * 0.5 + 22, h * 0.5 + 30), Vector2(290, 80), 30)
+			menu.add_child(no)
+			menu.add_child(yes)
+			_pulse(yes)
+			items.append([no, Vector2(0, 60), 0.05])
+			items.append([yes, Vector2(0, 60), 0.1])
 		"rk_lb":
 			var rk5: Dictionary = info.get("rank", {})
 			_title("Leaderboard", "Everyone's rank points in ranked online.")
@@ -1196,7 +1327,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					bg5.size = Vector2(cw5, 30)
 					bg5.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					menu.add_child(bg5)
-					var a5 := _label("%d.   %s" % [ri + 1, str(r5["n"])], 18, Color.WHITE)
+					var a5 := _label("%d.   %s" % [ri + 1, str(r5["n"])], 18, GOLD if bool(r5.get("fr", false)) else Color.WHITE)
 					a5.position = Vector2(12, 3)
 					bg5.add_child(a5)
 					var rkn: Dictionary = RankC.rank_of(int(r5["rp"]))
@@ -2538,13 +2669,18 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			menu.add_child(b)
 			items.append([a, Vector2(0, 80), 0.05])
 			items.append([b, Vector2(0, 80), 0.12])
+			var fl := _btn("FRIENDS  ·  INVITE SOMEONE ONLINE", "friends", null, "ghost", Vector2(w * 0.5 - cw - 12, cy + 136), Vector2(cw * 2 + 24, 56), 20)
+			menu.add_child(fl)
+			items.append([fl, Vector2(0, 80), 0.18])
 			if not bool(info.get("web", true)):
 				var nw := _label("Online play needs the web version.", 18, GOLD, font2)
-				nw.position = Vector2(w * 0.5 - 150, cy + 136)
+				nw.position = Vector2(w * 0.5 - 150, cy + 200)
 				menu.add_child(nw)
 		"join":
 			_title("Enter the room code", "")
 			_code = ""
+			_code_len = 4
+			_code_act = "code"
 			var slots := _label("_  _  _  _", 54, GOLD)
 			slots.name = "slots"
 			slots.position = Vector2(60, h * 0.5 - 40)
@@ -4443,10 +4579,11 @@ func _tab_profile(info: Dictionary, w: float, y0: float, ch: float, items: Array
 	var sets := [
 		["Sound: " + str(info.get("snd", "")).to_lower(), "snd_opt"], ["Voice: " + ("on" if bool(info.get("voice", true)) else "off"), "voice_opt"],
 		["Level: " + str(info.get("diff", "")).to_lower(), "diff"], ["Match: " + str(info.get("len", "")).to_lower(), "len"],
+		["Friends", "friends"], ["Leaderboard", "rk_lb"],
 		["How to play", "how"], ["Update the game", "update"],
 		["Installed" if bool(info.get("inst", false)) else "Install the game", "install"],
 	]
-	var sbh := minf(64.0, (ch - 36.0) / 4.0 - 10.0)
+	var sbh := minf(64.0, (ch - 36.0) / ceilf(sets.size() / 2.0) - 10.0)
 	for i in sets.size():
 		var sb := _btn(str(sets[i][0]), str(sets[i][1]), null, "alt", Vector2(rx + (i % 2) * (bw2 + 12.0), y0 + (i / 2) * (sbh + 10.0)), Vector2(bw2, sbh), 21)
 		sb.add_theme_font_override("font", font3)
@@ -4578,18 +4715,18 @@ func _title(text: String, small: String) -> void:
 func _key(k: String) -> void:
 	if k == "<":
 		_code = _code.substr(0, maxi(_code.length() - 1, 0))
-	elif _code.length() < 4:
+	elif _code.length() < _code_len:
 		_code += k
 	if on_action.is_valid():
 		on_action.call("key", null)
 	var slots := menu.get_node_or_null("slots")
 	if slots != null:
 		var parts := []
-		for i in 4:
+		for i in _code_len:
 			parts.append(_code[i] if i < _code.length() else "_")
 		slots.text = "  ".join(parts)
-	if _code.length() == 4 and on_action.is_valid():
-		on_action.call("code", _code)
+	if _code.length() == _code_len and on_action.is_valid():
+		on_action.call(_code_act, _code)
 
 # ---------------------------------------------------------------- touch input
 

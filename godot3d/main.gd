@@ -154,6 +154,10 @@ var opt_own := true # in a friend's room you play with your own club (not one of
 var guest_tm := {} # the host's copy of the friend's own team ({} = the friend picked one of the eight)
 var lb := [] # the leaderboard
 var lb_state := ""
+var fr_t := 3.0 # online friends: next card update / poll (see bbFr in web/net.js)
+var fr_poll := 1.0
+var fr := {} # the friends list as the page last told it
+var fr_inv := {} # a match invite waiting for an answer
 var career_on := false
 var cup_on := false
 var eu_on := false # a Champions Cup match in the career
@@ -2520,7 +2524,7 @@ func _menu_info() -> Dictionary:
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
 		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on or nat_on, "subs": _subs_info(), "mtac": _mtac_info(), "paused_by": paused_by, "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
-		"rank": _rk_info(), "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
+		"rank": _rk_info(), "fr": fr, "fr_inv": fr_inv, "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
 
@@ -4150,6 +4154,36 @@ func _action(act: String, arg = null) -> void:
 		"rk_lb":
 			_lb_fetch()
 			hud.show_menu("rk_lb", _menu_info())
+		"friends":
+			if net.web:
+				_fr_card()
+				net._js("bbFr.open()")
+			fr_poll = 0.6
+			hud.show_menu("friends", _menu_info())
+		"fr_add":
+			hud.show_menu("fr_add", _menu_info())
+		"fr_code":
+			net._js("bbFr.add(%s)" % JSON.stringify(str(arg)))
+			fr_poll = 0.4
+			hud.show_menu("friends", _menu_info())
+		"fr_rm":
+			net._js("bbFr.remove(%s)" % JSON.stringify(str(arg)))
+			fr_poll = 0.0
+		"fr_invite":
+			# open a room the normal way and tell the friend's phone the code
+			_action("host")
+			if net.role == "host" and room.length() == 4:
+				net._js("bbFr.invite(%s, %s)" % [JSON.stringify(str(arg)), JSON.stringify(room)])
+		"inv_yes":
+			var ic := str(fr_inv.get("c", ""))
+			fr_inv = {}
+			net._js("bbFr.inviteDone()")
+			if ic.length() == 4:
+				_action("code", ic)
+		"inv_no":
+			fr_inv = {}
+			net._js("bbFr.inviteDone()")
+			_show_hub(false)
 		"rk_road":
 			hud.show_menu("rk_road", _menu_info())
 		"cupm":
@@ -4533,14 +4567,49 @@ func _rk_walkover() -> void:
 
 # ---- the leaderboard: everybody's card on the shared database (only the web build talks to it)
 func _lb_publish() -> void:
-	if not net.web or not car.has_save():
+	if not net.web:
 		return
-	var nm := str(CLUBS[int(car.d["club"])]["n"]).substr(0, 14)
-	var body := {"n": nm, "rp": 0, "rp11": rk.rp(), "w": int(rk.d["w"]), "d": int(rk.d["dr"]), "l": int(rk.d["l"]), "g": int(rk.d["g"]), "ov": clampi(int(round(car.my_strength())), 0, 99), "t": int(Time.get_unix_time_from_system() * 1000.0)}
-	var hr := HTTPRequest.new()
-	add_child(hr)
-	hr.request_completed.connect(func(_r, _c, _h, _b): hr.queue_free())
-	hr.request(FB + "pl/%s.json" % str(rk.d["id"]), PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_PUT, JSON.stringify(body))
+	_fr_card()
+	net._js("bbFr.tick()")
+
+# your public card: the leaderboard and your friends see it
+func _fr_card() -> void:
+	if not net.web or rk == null:
+		return
+	var nm := (str(CLUBS[int(car_main.d["club"])]["n"]) if car_main.has_save() else "Coach").substr(0, 14)
+	var body := {"n": nm, "rp": 0, "rp11": rk.rp(), "w": int(rk.d["w"]), "d": int(rk.d["dr"]), "l": int(rk.d["l"]), "g": int(rk.d["g"]), "ov": clampi(int(round(car_main.my_strength())) if car_main.has_save() else 0, 0, 99), "s": 1 if (screen == "match" or net.role != "") else 0}
+	net._js("bbFr.setMe(%s, %s)" % [JSON.stringify(str(rk.d["id"])), JSON.stringify(JSON.stringify(body))])
+
+# read the page's friends state once a second: new friends, invites, and the list when it is on screen
+func _fr_tick(dt: float) -> void:
+	if not net.web:
+		return
+	fr_t -= dt
+	if fr_t <= 0.0:
+		fr_t = 20.0
+		_fr_card()
+		net._js("bbFr.tick()")
+	fr_poll -= dt
+	if fr_poll > 0.0:
+		return
+	fr_poll = 1.0
+	var raw = net._js("bbFr.state()")
+	var v = JSON.parse_string(str(raw)) if raw != null else null
+	if not (v is Dictionary):
+		return
+	var was := JSON.stringify(fr)
+	fr = v
+	if str(v.get("toast", "")) != "":
+		hud.toast(str(v["toast"]))
+	fr.erase("toast")
+	var iv = v.get("inv")
+	if iv is Dictionary and fr_inv.is_empty() and screen == "menu" and net.role == "" and not rk_looking and not rk_on:
+		fr_inv = iv
+		audio.play("click2")
+		hud.show_menu("fr_inv", _menu_info())
+		return
+	if hud.menu_name == "friends" and JSON.stringify(fr) != was:
+		hud.refresh(_menu_info())
 
 func _lb_fetch() -> void:
 	if not net.web:
@@ -4553,19 +4622,24 @@ func _lb_fetch() -> void:
 		hr.queue_free()
 		if code == 200:
 			var v = JSON.parse_string(body.get_string_from_utf8())
+			var fv = JSON.parse_string(str(net._js("bbFr.ids()")))
+			var fids: Array = fv if fv is Array else []
 			lb = []
 			if v is Dictionary:
 				for id in v:
 					var c = v[id]
-					if c is Dictionary and int(c.get("rp11", 0)) > 0:
-						lb.append({"n": str(c.get("n", "?")), "rp": int(c.get("rp11", 0)), "w": int(c.get("w", 0)), "d": int(c.get("d", 0)), "l": int(c.get("l", 0)), "me": str(id) == str(rk.d["id"])})
+					if c is Dictionary and (int(c.get("rp11", 0)) > 0 or int(c.get("w", 0)) + int(c.get("d", 0)) + int(c.get("l", 0)) > 0):
+						lb.append({"n": str(c.get("n", "?")), "rp": int(c.get("rp11", 0)), "w": int(c.get("w", 0)), "d": int(c.get("d", 0)), "l": int(c.get("l", 0)), "me": str(id) == str(rk.d["id"]), "fr": fids.has(str(id))})
 			lb.sort_custom(func(a, b): return int(a["rp"]) > int(b["rp"]))
 			lb_state = "ok"
 		else:
 			lb_state = "off" if code in [401, 403] else "err"
 		if hud.menu_name == "rk_lb":
 			hud.refresh(_menu_info()))
-	if hr.request(FB + "pl.json?orderBy=%22rp11%22&limitToLast=100") != OK:
+	var base := str(net._js("bbFr.base()"))
+	if not base.begins_with("https://"):
+		base = FB
+	if hr.request(base + "pl.json?orderBy=%22rp11%22&limitToLast=100") != OK:
 		lb_state = "err"
 
 func _rk_info() -> Dictionary:
@@ -9423,6 +9497,7 @@ func _guest_frame(dt: float) -> void:
 
 func _process(dt: float) -> void:
 	real_t += dt
+	_fr_tick(dt)
 	if rk_looking and hud.menu_name == "rk_find":
 		var was_s := int(rk_t)
 		rk_t += dt
