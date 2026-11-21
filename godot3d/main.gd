@@ -108,6 +108,10 @@ const OWN_COLS := ["dc2424", "f57c00", "f5c518", "2e9e4f", "7fd0ff", "2961eb", "
 var TEAM_NAMES := ["RED BISON", "HARBOUR SHARKS"]
 var opt_club := 0
 var guest_club := 1
+var opt_opp := -1 # the computer's team in a quick match or in a room together (-1 = a random one)
+var team_side := "me" # the team picker is choosing: "me" (your team) or "opp" (the computer's team)
+var team_li := -99 # the team picker's tab (-98 = the eight, -1 = the rest of Europe, 0.. = a league)
+const QUICK_R := [76, 74, 73, 78, 75, 72, 74, 73] # the eight quick-match clubs' ratings (72 = the usual men)
 var clubs := [0, 1]
 var kits := [[], []]
 var teams_from := "main"
@@ -1987,6 +1991,67 @@ func _ready() -> void:
 				opt_mode = "versus"
 				guest_tm = {"n": "DADS FC", "xi": []}
 				menu_arg = "teams" if menu_arg == "ftteams" else "lobby"
+			if menu_arg in ["tmeng", "tmopp", "tmclassic", "coopl", "quickst"]:
+				# every club in the team picker with its stars; the computer's team in a quick match and in a room together
+				teams_from = "quick"
+				team_side = "opp" if menu_arg == "tmopp" else "me"
+				team_li = {"tmeng": 0, "tmopp": 2, "tmclassic": -98}.get(menu_arg, -98)
+				if menu_arg == "tmopp":
+					opt_opp = ClubDB.start_leagues(Career.FIRST)[2][3]
+				if menu_arg in ["coopl", "quickst"]:
+					opt_opp = ClubDB.start_leagues(Career.FIRST)[0][1]
+					if menu_arg == "coopl":
+						teams_from = "lobby"
+						net.role = "host"
+						net.connected = true
+						room = "4821"
+						opt_mode = "coop"
+				menu_arg = {"coopl": "lobby", "quickst": "quick"}.get(menu_arg, "teams")
+			if menu_arg == "tmtest":
+				# a quick match with a league club against a Champions Cup club: own men, own strength, own formation
+				var avg := func(t: int) -> float:
+					var s9 := 0.0
+					for p9 in teams[t]:
+						s9 += p9.ovr
+					return s9 / maxf(teams[t].size(), 1)
+				var L := ClubDB.start_leagues(Career.FIRST)
+				seen_how = true
+				print("TM has_own=", _has_own())
+				for pair in [[L[0][0], ClubDB.foreign_ids(Career.FIRST)[0]], [L[5][11], L[0][1]], [0, 3], [L[3][5], -1]]:
+					_own_ft(false)
+					opt_club = int(pair[0])
+					opt_opp = int(pair[1])
+					_action("play")
+					print("TM ", TEAM_NAMES, " forms=", forms, " rate=", _club_rate(clubs[0]), "/", _club_rate(clubs[1]), " avg=%.1f/%.1f" % [avg.call(0), avg.call(1)], " p9=", teams[0][9].pname, " ", teams[1][9].pname, " ft=", ft_on)
+					_to_menu()
+				if _has_own():
+					_own_ft(true)
+					opt_opp = L[1][2]
+					_action("play")
+					print("TM own ", TEAM_NAMES, " ft=", ft_on, " avg=%.1f/%.1f" % [avg.call(0), avg.call(1)], " p9=", teams[0][9].pname, " ", teams[1][9].pname, " forms=", forms)
+					_to_menu()
+				# the room together: the host picks the computer's team, the guest gets the same names
+				opt_own = false
+				opt_mode = "coop"
+				opt_club = L[4][0]
+				opt_opp = L[0][0]
+				_host_start()
+				var sm: Dictionary = JSON.parse_string(JSON.stringify(start_msg))
+				var hn := [teams[0][9].pname, teams[1][9].pname, TEAM_NAMES.duplicate()]
+				_to_menu(true)
+				_guest_start(sm)
+				print("TM coop host=", hn, " guest=", [teams[0][9].pname, teams[1][9].pname, TEAM_NAMES])
+				_to_menu(true)
+				opt_mode = "versus"
+				guest_club = L[2][4]
+				_host_start()
+				sm = JSON.parse_string(JSON.stringify(start_msg))
+				hn = [teams[0][9].pname, teams[1][9].pname, TEAM_NAMES.duplicate()]
+				_to_menu(true)
+				_guest_start(sm)
+				print("TM versus host=", hn, " guest=", [teams[0][9].pname, teams[1][9].pname, TEAM_NAMES])
+				get_tree().quit()
+				return
 			if menu_arg == "cfull":
 				career_on = true
 				_set_clubs(int(car.d["club"]), car.next_match()[0], true)
@@ -2158,6 +2223,10 @@ func _set_clubs(a: int, b: int, force := false) -> void:
 	# a career club plays its own formation
 	if CLUBS[b].has("f"):
 		forms[1] = FORM_NAMES[clampi(int(CLUBS[b]["f"]), 0, FORM_NAMES.size() - 1)]
+	elif not career_on and _club_form(b) >= 0:
+		forms[1] = FORM_NAMES[_club_form(b)]
+	if not career_on and _club_form(a) >= 0 and a < RKI:
+		forms[0] = FORM_NAMES[_club_form(a)]
 	if rk_on or ft_on:
 		for t in 2:
 			var fn := str((tov[t] as Dictionary).get("f", ""))
@@ -2233,6 +2302,14 @@ func _build_teams() -> void:
 			for f in FORM:
 				rl.append(str(f[0]))
 			cpu_xi = car.cpu_xi(clubs[1], rl)
+		# a club picked for a match with a friend or a quick match plays with its own men and its own strength
+		var pci := _plain_ci(t)
+		if pci >= Career.FIRST and pci < RKI:
+			var rl2 := []
+			for f in FORM:
+				rl2.append(str(f[0]))
+			cpu_xi = car_main.cpu_xi(pci, rl2)
+		var pq := int(QUICK_R[pci % QUICK_R.size()]) - 72 if (pci >= 0 and pci < Career.FIRST) else 0
 		if rk_on or ft_on:
 			var tl = (tov[t] as Dictionary).get("lay", {})
 			FORM = _my_form(forms[t], tl if tl is Dictionary else {})
@@ -2263,10 +2340,10 @@ func _build_teams() -> void:
 			var boots: Color = [Color(0.08, 0.08, 0.08), Color(0.95, 0.95, 0.95), Color(1.0, 0.45, 0.1), Color(0.3, 0.9, 0.9)][rng.randi() % 4]
 			p.build(shirt, shorts, socks, skins[rng.randi() % skins.size()], hairs[rng.randi() % hairs.size()], boots)
 			var base: Array = {"GK": [72, 70, 60, 74], "DF": [68, 46, 64, 76], "MF": [70, 66, 77, 64], "FW": [79, 77, 66, 42]}[p.role]
-			var up := 0
+			var up := pq
 			p.star = i == 9 or i == (6 + clubs[t] % 2)
 			if p.star:
-				up = 8
+				up += 8
 			p.pac = clampi(base[0] + up + rng.randi_range(-5, 5), 40, 96)
 			p.sho = clampi(base[1] + up + rng.randi_range(-5, 5), 25, 96)
 			p.pas = clampi(base[2] + up + rng.randi_range(-5, 5), 40, 96)
@@ -2334,6 +2411,23 @@ func _build_teams() -> void:
 					p.pas += lv
 					p.dfn += lv
 					p.ovr += lv
+			elif cpu_xi.size() == FORM.size() and cpu_xi[i] is Dictionary:
+				# the picked club's own men, the best eleven for its formation
+				var px: Dictionary = cpu_xi[i]
+				if not ((t == 0 and sq_over.size() == 11) or (t == 1 and sq1_over.size() == 11)):
+					p.pname = str(px["n"])
+					p.num = int(px["num"])
+				elif t == 1:
+					p.pname = str(sq1_over[i][0])
+					p.num = int(sq1_over[i][1])
+				var off4 := Career.pos_off(px, p.role)
+				p.pac = int(px["pac"]) + off4
+				p.sho = int(px["sho"]) + off4
+				p.pas = int(px["pas"]) + off4
+				p.dfn = int(px["dfn"]) + off4
+				p.ovr = Career.ovr_of(px) + off4
+				p.star = Career.ovr_of(px) >= _club_rate(pci) + 4
+				p.ab = Career.ab_of(px)
 			elif t == 1 and sq1_over.size() == 11:
 				p.pname = str(sq1_over[i][0])
 				p.num = int(sq1_over[i][1])
@@ -2546,7 +2640,7 @@ func _menu_info() -> Dictionary:
 	return {
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
-		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from,
+		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from, "rates": _club_rates(), "tgroups": _team_groups(), "tside": team_side, "tli": team_li, "opp": opt_opp,
 		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on or nat_on, "subs": _subs_info(), "mtac": _mtac_info(), "paused_by": paused_by, "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "pxp": pro_bar, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "fr": fr, "fr_inv": fr_inv, "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
@@ -3462,7 +3556,15 @@ func _action(act: String, arg = null) -> void:
 			humans = [Human.new()]
 			me = 0
 			view_flip = 1.0
-			_set_clubs(opt_club, _other_club(opt_club))
+			_ft_off()
+			if opt_own and _has_own():
+				# your own club: your own eleven, formation and spots against the computer's team
+				ft_on = true
+				tov = [_ft_me(), _ft_plain(_cpu_club(int(car_main.d["club"])))]
+				_apply_own()
+				_set_clubs(RKI, RKI + 1, true)
+			else:
+				_set_clubs(opt_club, _cpu_club(opt_club), true)
 			screen = "match"
 			hud.show_menu("", {})
 			_begin_match(true)
@@ -4241,22 +4343,41 @@ func _action(act: String, arg = null) -> void:
 			hud.show_menu("squad", _menu_info())
 		"teams":
 			teams_from = "lobby" if net.role != "" else "quick"
+			team_side = "opp" if str(arg) == "opp" else "me"
+			var cur := (opt_opp if opt_opp >= 0 else _lobby_club()) if team_side == "opp" else _lobby_club()
+			team_li = _team_tab(cur) if not (team_side == "me" and opt_own and _has_own()) else -98
 			hud.show_menu("teams", _menu_info())
+		"tm_lg":
+			team_li = int(arg)
+			hud.show_menu("teams", _menu_info())
+		"opp_any":
+			# the computer picks its own team again
+			opt_opp = -1
+			team_side = "me"
+			hud.show_menu(teams_from, _menu_info())
 		"club_own":
-			# back to your own club in the friend's room
+			# back to your own club (a quick match or a friend's room)
 			_own_ft(true)
+			team_side = "me"
 			_ft_send()
 			hud.show_menu(teams_from, _menu_info())
 		"teams_back":
+			team_side = "me"
 			if teams_from == "new":
 				_show_hub(false)
 			else:
 				hud.show_menu(teams_from, _menu_info())
 		"club":
+			if team_side == "opp":
+				# the computer's team for a quick match or the two of you together
+				opt_opp = int(arg)
+				team_side = "me"
+				hud.show_menu(teams_from, _menu_info())
+				return
 			opt_club = int(arg)
 			if net.web:
 				JavaScriptBridge.eval("try{localStorage.setItem('bb3d-club','%d')}catch(e){}" % opt_club, true)
-			if teams_from == "lobby":
+			if teams_from == "lobby" or teams_from == "quick":
 				_own_ft(false)
 			if net.role == "guest":
 				_ft_send()
@@ -4457,11 +4578,100 @@ func _ft_me() -> Dictionary:
 
 # one of the eight clubs written like an own team (no eleven: the usual players)
 func _ft_plain(ci: int) -> Dictionary:
-	var cl: Dictionary = CLUBS[clampi(ci, 0, CLUBS.size() - 1)]
-	return {"n": str(cl["n"]), "s": str(cl["s"]), "k": (cl["k"] as Array).duplicate(), "a": (cl.get("a", cl["k"]) as Array).duplicate()}
+	ci = clampi(ci, 0, CLUBS.size() - 1)
+	var cl: Dictionary = CLUBS[ci]
+	var out := {"n": str(cl["n"]), "s": str(cl["s"]), "k": (cl["k"] as Array).duplicate(), "a": (cl.get("a", cl["k"]) as Array).duplicate(), "ci": ci}
+	var fi := _club_form(ci)
+	if fi >= 0:
+		out["f"] = FORM_NAMES[fi]
+	return out
+
+# ---- every club in the game can be picked for a match against a person or the computer, with its own strength
+
+# a club's rating: the eight have their own, the leagues' and Europe's clubs as they are, your own club its eleven
+func _club_rate(ci: int) -> int:
+	if ci < 0:
+		return 0
+	if ci < Career.FIRST:
+		return int(QUICK_R[ci % QUICK_R.size()])
+	if _has_own() and ci == int(car_main.d["club"]):
+		return int(round(car_main.my_strength()))
+	var base: Array = ClubDB.clubs(CLUBS0)
+	if ci < base.size():
+		return int(base[ci].get("r", 72))
+	return 72
+
+func _club_rates() -> Array:
+	var out := []
+	var base: Array = ClubDB.clubs(CLUBS0)
+	var oi := int(car_main.d["club"]) if _has_own() else -1
+	for ci in CLUBS.size():
+		if ci < Career.FIRST:
+			out.append(int(QUICK_R[ci % QUICK_R.size()]))
+		elif ci == oi:
+			out.append(int(round(car_main.my_strength())))
+		elif ci < base.size():
+			out.append(int(base[ci].get("r", 72)))
+		else:
+			out.append(72)
+	return out
+
+# a club's own formation (-1 = none of its own)
+func _club_form(ci: int) -> int:
+	if ci < Career.FIRST:
+		return -1
+	var base: Array = ClubDB.clubs(CLUBS0)
+	if ci < base.size() and base[ci].has("f"):
+		return clampi(int(base[ci]["f"]), 0, FORM_NAMES.size() - 1)
+	return -1
+
+# the team picker's tabs: the eight, every league, the rest of Europe; your own club sits in its own button
+func _team_groups() -> Array:
+	var base: Array = ClubDB.clubs(CLUBS0)
+	var oi := int(car_main.d["club"]) if _has_own() else -1
+	var g := [{"li": -98, "n": "CLASSIC", "ids": range(Career.FIRST)}]
+	for li in ClubDB.LEAGUES.size():
+		var ids := []
+		for ci in range(Career.FIRST, base.size()):
+			if int(base[ci].get("lg", -9)) == li and ci != oi:
+				ids.append(ci)
+		var ln := str(ClubDB.LEAGUES[li]["n"]).replace("DIVISION ", "").replace("ENGLAND", "ENG").replace("DENMARK", "DEN")
+		g.append({"li": li, "n": ln, "ids": ids})
+	var eu := []
+	for ci in range(Career.FIRST, base.size()):
+		if int(base[ci].get("lg", -9)) == -1 and ci != oi:
+			eu.append(ci)
+	g.append({"li": -1, "n": "EUROPE", "ids": eu})
+	return g
+
+# the tab a club sits in
+func _team_tab(ci: int) -> int:
+	if ci < Career.FIRST:
+		return -98
+	var base: Array = ClubDB.clubs(CLUBS0)
+	if ci < base.size():
+		return int(base[ci].get("lg", -1))
+	return -98
+
+# the computer's team: the one you picked, or a random one that is not yours
+func _cpu_club(mine: int) -> int:
+	if opt_opp >= 0 and opt_opp < RKI and opt_opp != mine:
+		return opt_opp
+	return _other_club(mine)
+
+# the plain club a side plays as (-1 = an own team or the career)
+func _plain_ci(t: int) -> int:
+	if rk_on or career_on:
+		return -1
+	if ft_on:
+		var tt: Dictionary = tov[t]
+		if _ft_ok(tt):
+			return -1
+		return int(tt.get("ci", -1))
+	return int(clubs[t])
 
 func _ft_ok(t) -> bool:
-	return t is Dictionary and t.get("xi", []) is Array and (t["xi"] as Array).size() == 11
+	return t is Dictionary and t.get("xi", []) is Array and (t.get("xi", []) as Array).size() == 11
 
 # the club button in the lobby: your own club or the one of the eight you picked
 func _lobby_club() -> int:
@@ -4744,12 +4954,14 @@ func _host_start() -> void:
 			if ta.is_empty():
 				ta = _ft_plain(opt_club)
 			if tb.is_empty():
-				tb = _ft_plain(_other_club(opt_club) if opt_mode == "coop" else guest_club)
+				tb = _ft_plain(_cpu_club(_lobby_club()) if opt_mode == "coop" else guest_club)
 			tov = [ta, tb]
 			_apply_own()
 			_set_clubs(RKI, RKI + 1, true)
 		else:
-			_set_clubs(opt_club, _other_club(opt_club) if opt_mode == "coop" else guest_club)
+			_set_clubs(opt_club, _cpu_club(opt_club) if opt_mode == "coop" else guest_club)
+		for p in teams[0]:
+			sq.append([p.pname, p.num])
 	screen = "match"
 	hud.show_menu("", {})
 	var sq1 := []

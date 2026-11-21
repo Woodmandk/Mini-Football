@@ -458,7 +458,170 @@ func _club_btn(info: Dictionary, ci: int, act: String, arg, pos: Vector2, sz: Ve
 		chip2.position = Vector2(12, 10 + (sz.y - 20) * 0.65)
 		chip2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		b.add_child(chip2)
+		if info.has("rates") and ci >= 0:
+			# its strength in stars at the right end, the name keeps the left
+			var ss := clampf(sz.y * 0.3, 12.0, 17.0)
+			var stc := _stars(_club_rate(info, ci), ss)
+			stc.position = Vector2(sz.x - stc.size.x - 12.0, sz.y * 0.5 - ss * 0.5)
+			b.add_child(stc)
+			var rn := _label(str(_club_rate(info, ci)), 16, Color(1, 1, 1, 0.7), font2)
+			rn.position = Vector2(stc.position.x - 36.0, sz.y * 0.5 - 11.0)
+			rn.size = Vector2(30, 26)
+			rn.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			b.add_child(rn)
+			b.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			b.add_theme_constant_override("h_separation", 0)
+			var fs := 17 if sz.y < 80 else 20
+			var room := sz.x - stc.size.x - 46.0
+			var txt := b.text
+			while fs > _min_fs and font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room:
+				fs -= 1
+			b.add_theme_font_size_override("font_size", maxi(fs, _min_fs))
+			b.text = "     " + txt
+			b.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			b.clip_text = true
+			for st in ["normal", "hover", "focus", "pressed"]:
+				var sb := b.get_theme_stylebox(st).duplicate() as StyleBoxFlat
+				if sb != null:
+					sb.content_margin_right = stc.size.x + 54.0
+					b.add_theme_stylebox_override(st, sb)
 	return b
+
+# a club's strength as stars, like FIFA: half a star to five, from its rating
+static func star_val(r: int) -> float:
+	return clampf(round((r - 50) / 7.0 * 2.0) / 2.0, 0.5, 5.0)
+
+func _stars(r: int, sz: float, col := GOLD) -> Control:
+	var c := Control.new()
+	var v := star_val(r)
+	c.size = Vector2(sz * 5.0 + 2.0 * 4.0, sz)
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.draw.connect(func():
+		for k in 5:
+			var cx := k * (sz + 2.0) + sz * 0.5
+			var pts := PackedVector2Array()
+			for j in 10:
+				var ang := -PI * 0.5 + j * PI / 5.0
+				var rr := sz * (0.5 if j % 2 == 0 else 0.21)
+				pts.append(Vector2(cx + cos(ang) * rr, sz * 0.54 + sin(ang) * rr))
+			c.draw_colored_polygon(pts, Color(1, 1, 1, 0.16))
+			var fill := clampf(v - k, 0.0, 1.0)
+			if fill >= 0.99:
+				c.draw_colored_polygon(pts, col)
+			elif fill > 0.0:
+				var half := PackedVector2Array([Vector2(cx - sz, -sz), Vector2(cx, -sz), Vector2(cx, sz * 2.0), Vector2(cx - sz, sz * 2.0)])
+				for poly in Geometry2D.intersect_polygons(pts, half):
+					c.draw_colored_polygon(poly, col)
+	)
+	return c
+
+# the computer's team: the one picked or "any team"
+func _opp_btn(info: Dictionary, pos: Vector2, sz: Vector2) -> Button:
+	var oc := int(info.get("opp", -1))
+	if oc >= 0 and oc < (info.get("clubs", []) as Array).size():
+		return _club_btn(info, oc, "teams", "opp", pos, sz, "VS:  ")
+	return _btn("VS:  ANY TEAM  ›", "teams", "opp", "alt", pos, sz, 19)
+
+func _club_rate(info: Dictionary, ci: int) -> int:
+	var rr: Array = info.get("rates", [])
+	return int(rr[ci]) if ci >= 0 and ci < rr.size() else 72
+
+# The team picker: every club in the game, league by league, each with its strength in stars.
+func _teams_page(info: Dictionary, w: float, h: float, items: Array) -> void:
+	var opp := str(info.get("tside", "me")) == "opp"
+	var lobby := str(info.get("from", "")) == "lobby"
+	var oi := int(info.get("own_i", -1))
+	var own_on := bool(info.get("own_ft", false))
+	var mine := int(info.get("lclub", info.get("club", 0)))
+	var cur := int(info.get("opp", -1)) if opp else (-1 if own_on else int(info.get("club", 0)))
+	if opp:
+		_title("Pick the opponent", "The computer plays with this team. Stars show how strong it is.")
+	else:
+		_title("Pick your team", "Any club in the game. Stars show how strong it is." if oi < 0 else "Any club in the game, or your own club with your own squad.")
+	var gs: Array = info.get("tgroups", [])
+	var li := int(info.get("tli", -98))
+	var gi := 0
+	for k in gs.size():
+		if int(gs[k]["li"]) == li:
+			gi = k
+	# the tabs: the classic eight, every league, the rest of Europe
+	var tw := (w - 64.0 - (gs.size() - 1) * 6.0) / maxf(gs.size(), 1)
+	for k in gs.size():
+		var tb := _btn(str(gs[k]["n"]), "tm_lg", int(gs[k]["li"]), "ghost", Vector2(32 + k * (tw + 6.0), 92), Vector2(tw, 42), 16)
+		if k == gi:
+			for st in ["normal", "hover", "focus", "pressed"]:
+				tb.add_theme_stylebox_override(st, _box(Color(0.94, 0.95, 0.92), 12))
+			for cc in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+				tb.add_theme_color_override(cc, Color(0.03, 0.08, 0.05))
+		menu.add_child(tb)
+	var top := 144.0
+	# your own club (your team only) or the computer's random pick (the opponent only)
+	if (not opp and oi >= 0) or opp:
+		var ob: Button
+		if opp:
+			ob = _btn("ANY TEAM  ·  THE COMPUTER PICKS", "opp_any", null, "alt", Vector2(32, top), Vector2(w * 0.5 - 40, 48), 18)
+			if cur < 0:
+				for st in ["normal", "hover", "focus", "pressed"]:
+					ob.add_theme_stylebox_override(st, _box(Color(0.22, 0.27, 0.25, 0.96), 14, GOLD))
+		else:
+			ob = _club_btn(info, oi, "club_own", null, Vector2(32, top), Vector2(w * 0.5 - 40, 48), "YOUR OWN CLUB:  ")
+			if own_on:
+				for st in ["normal", "hover", "focus", "pressed"]:
+					ob.add_theme_stylebox_override(st, _box(Color(0.22, 0.27, 0.25, 0.96), 14, GOLD))
+		menu.add_child(ob)
+		items.append([ob, Vector2(0, 40), 0.0])
+		top += 56.0
+	var cl: Array = info.get("clubs", [])
+	var ids: Array = gs[gi]["ids"] if gs.size() > 0 else []
+	var cols := 4 if ids.size() <= 8 else 5
+	var rows := maxi(int(ceil(ids.size() / float(cols))), 1)
+	var gw := (w - 64.0 - (cols - 1) * 8.0) / cols
+	var gh := minf(96.0 if ids.size() <= 8 else 70.0, (h - top - 12.0) / rows - 6.0)
+	for ti in ids.size():
+		var ci := int(ids[ti])
+		if ci >= cl.size():
+			continue
+		var c: Dictionary = cl[ci]
+		var pos := Vector2(32 + (ti % cols) * (gw + 8.0), top + (ti / cols) * (gh + 6.0))
+		var same := opp and ci == mine and not own_on
+		var bt := _btn("", "club" if not same else "", ci, "alt" if not same else "off", pos, Vector2(gw, gh), 16)
+		if ci == cur:
+			for st in ["normal", "hover", "focus", "pressed"]:
+				bt.add_theme_stylebox_override(st, _box(Color(0.22, 0.27, 0.25, 0.96), 14, GOLD))
+		menu.add_child(bt)
+		items.append([bt, Vector2(0, 30), 0.008 * ti])
+		var k0 := ColorRect.new()
+		k0.color = Color(str(c["k"][0]))
+		k0.position = Vector2(8, 8)
+		k0.size = Vector2(9, gh - 16)
+		k0.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bt.add_child(k0)
+		var k1 := ColorRect.new()
+		k1.color = Color(str(c["k"][1]))
+		k1.position = Vector2(17, 8)
+		k1.size = Vector2(5, gh - 16)
+		k1.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bt.add_child(k1)
+		var nm := str(c["n"])
+		var fs := 17
+		while fs > 13 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > gw - 40.0:
+			fs -= 1
+		var big := gh >= 80.0
+		var nl := _label(nm, fs if not big else 20, GOLD if ci == cur else (Color(1, 1, 1, 0.45) if same else Color.WHITE))
+		nl.position = Vector2(30, gh * (0.2 if big else 0.1) - 2.0)
+		nl.size = Vector2(gw - 34.0, fs + 8)
+		nl.clip_text = true
+		nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		bt.add_child(nl)
+		var r := _club_rate(info, ci)
+		var ss := 15.0 if not big else 19.0
+		var st2 := _stars(r, ss)
+		st2.position = Vector2(30, gh * (0.58 if big else 0.56) - 1.0)
+		bt.add_child(st2)
+		var rl := _label(str(r), 16 if not big else 19, Color(1, 1, 1, 0.7), font2)
+		rl.position = Vector2(30 + st2.size.x + 8.0, st2.position.y - (4.0 if not big else 3.0))
+		bt.add_child(rl)
+	menu.add_child(_back("teams_back", null))
 
 func _slide_in(c: Control, from: Vector2, delay: float) -> void:
 	var to := c.position
@@ -704,14 +867,19 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			_title("Quick match", "A friendly against the computer. Nothing is at stake.")
 			var qx := w * 0.5 - 190.0
 			var qy := maxf(104.0, h * 0.5 - 150.0)
-			var tb := _club_btn(info, int(info.get("club", 0)), "teams", null, Vector2(qx, qy), Vector2(380, 60), "TEAM:  ")
+			qx = w * 0.5 - 250.0
+			qy = maxf(96.0, h * 0.5 - 176.0)
+			var tb := _club_btn(info, int(info.get("lclub", info.get("club", 0))), "teams", null, Vector2(qx, qy), Vector2(500, 58), "YOU:  ")
 			menu.add_child(tb)
 			items.append([tb, Vector2(0, 40), 0.0])
-			var d := _btn("LEVEL: " + str(info.get("diff", "")), "diff", null, "alt", Vector2(qx, qy + 72), Vector2(185, 58), 19)
+			var ob := _opp_btn(info, Vector2(qx, qy + 66), Vector2(500, 58))
+			menu.add_child(ob)
+			items.append([ob, Vector2(0, 40), 0.03])
+			var d := _btn("LEVEL: " + str(info.get("diff", "")), "diff", null, "alt", Vector2(qx, qy + 134), Vector2(245, 56), 19)
 			menu.add_child(d)
-			var l := _btn("MATCH: " + str(info.get("len", "")), "len", null, "alt", Vector2(qx + 195, qy + 72), Vector2(185, 58), 19)
+			var l := _btn("MATCH: " + str(info.get("len", "")), "len", null, "alt", Vector2(qx + 255, qy + 134), Vector2(245, 56), 19)
 			menu.add_child(l)
-			var play := _btn("PLAY", "play", null, "primary", Vector2(qx, qy + 150), Vector2(380, 88), 42)
+			var play := _btn("PLAY", "play", null, "primary", Vector2(qx, qy + 202), Vector2(500, 84), 42)
 			menu.add_child(play)
 			items.append([play, Vector2(0, 60), 0.08])
 			if anim:
@@ -2639,30 +2807,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				var sc5 := _btn("OTHER CLUBS  >", "scout", null, "primary", Vector2(w - 260 - 230, 14), Vector2(220, 48), 18)
 				menu.add_child(sc5)
 		"teams":
-			if str(info.get("from", "")) == "new":
-				_title("Pick your club", "This is the club you will run and play for.")
-			elif str(info.get("from", "")) == "lobby" and int(info.get("own_i", -1)) >= 0:
-				_title("Pick your team", "Your own club plays with your own squad, formation and spots.")
-			else:
-				_title("Pick your team", "")
-			var cl: Array = info.get("clubs", [])
-			var gw := minf(250.0, (w - 100.0) / 4.0 - 12.0)
-			var gx := (w - (gw + 12.0) * 4.0 + 12.0) * 0.5
-			for ci in mini(cl.size(), 8):
-				var cb := _club_btn(info, ci, "club", ci, Vector2(gx + (ci % 4) * (gw + 12.0), 96 + (ci / 4) * 172.0), Vector2(gw, 156), "")
-				menu.add_child(cb)
-				items.append([cb, Vector2(0, 50), 0.03 * ci])
-			var oi := int(info.get("own_i", -1))
-			if str(info.get("from", "")) == "lobby" and oi >= 0 and oi < cl.size():
-				# in a friend's room: your own club, with your own squad, formation and spots
-				var ob := _club_btn(info, oi, "club_own", null, Vector2(w * 0.5 - 240, 96 + 2 * 172.0 - 4), Vector2(480, 58), "YOUR OWN CLUB:  ")
-				if bool(info.get("own_ft", false)):
-					for st in ["normal", "hover", "focus", "pressed"]:
-						ob.add_theme_stylebox_override(st, _box(Color(0.22, 0.27, 0.25, 0.96), 14, GOLD))
-				menu.add_child(ob)
-				items.append([ob, Vector2(0, 50), 0.26])
-			var bk := _back("teams_back", null)
-			menu.add_child(bk)
+			_teams_page(info, w, h, items)
 		"friend":
 			_title("Play with a friend", "Two phones, one match. One of you creates a room, the other joins.")
 			var cw := minf(300.0, (w - 140.0) * 0.5)
@@ -2729,8 +2874,12 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				menu.add_child(sh)
 				if str(info.get("co_text", "")) == "":
 					# in a career together you play as the career's club: no other team to pick
-					var tb2 := _club_btn(info, int(info.get("lclub", info.get("club", 0))), "teams", null, Vector2(48, 318), Vector2(260, 50), "TEAM:  ")
+					var tb2 := _club_btn(info, int(info.get("lclub", info.get("club", 0))), "teams", null, Vector2(48, 318), Vector2(col_w - 20.0, 50), "TEAM:  ")
 					menu.add_child(tb2)
+					if str(info.get("mode", "")) == "coop":
+						# the two of you against the computer: pick its team too
+						var ob2 := _opp_btn(info, Vector2(48, 376), Vector2(col_w - 20.0, 50))
+						menu.add_child(ob2)
 				var rx := w - col_w - 40.0
 				var cot := str(info.get("co_text", ""))
 				var md := _btn(((("CUP TOGETHER" if bool(info.get("co_cup", false)) else "CAREER TOGETHER") if cot != "" else "SAME TEAM") if str(info.get("mode", "")) == "coop" else "AGAINST EACH OTHER") + "  ›", "mode", null, "alt", Vector2(rx, 92), Vector2(col_w, 62), 22)
@@ -2774,7 +2923,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				s3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 				menu.add_child(s3)
 				if conn and str(info.get("co_text", "")) == "" and not bool(info.get("has_cv", false)):
-					var tb3 := _club_btn(info, int(info.get("lclub", info.get("club", 0))), "teams", null, Vector2(w * 0.5 - 170, h * 0.5 + 60), Vector2(340, 56), "YOUR TEAM:  ")
+					var tb3 := _club_btn(info, int(info.get("lclub", info.get("club", 0))), "teams", null, Vector2(w * 0.5 - 240, h * 0.5 + 60), Vector2(480, 56), "YOUR TEAM:  ")
 					menu.add_child(tb3)
 				if conn:
 					if bool(info.get("has_cv", false)):
