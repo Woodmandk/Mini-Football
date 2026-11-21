@@ -55,6 +55,7 @@ var vs_t := -1.0
 var vs_len := 0.0
 var vs_names := ["", ""]
 var vs_stars := ["", ""]
+var vs_r := [0, 0] # each side's rating on the intro card
 var vs_swap := false
 var t_names := ["RED BISON", "HARBOUR SHARKS"]
 var t_short := ["BIS", "SHA"]
@@ -522,6 +523,25 @@ func _opp_btn(info: Dictionary, pos: Vector2, sz: Vector2) -> Button:
 		return _club_btn(info, oc, "teams", "opp", pos, sz, "VS:  ")
 	return _btn("VS:  ANY TEAM  ›", "teams", "opp", "alt", pos, sz, 19)
 
+# stars drawn straight onto the HUD (the intro card)
+func _draw_stars(pos: Vector2, r: int, sz: float) -> void:
+	var v := star_val(r)
+	for k in 5:
+		var cx := pos.x + k * (sz + 3.0) + sz * 0.5
+		var pts := PackedVector2Array()
+		for j in 10:
+			var ang := -PI * 0.5 + j * PI / 5.0
+			var rr := sz * (0.5 if j % 2 == 0 else 0.21)
+			pts.append(Vector2(cx + cos(ang) * rr, pos.y + sz * 0.54 + sin(ang) * rr))
+		draw_colored_polygon(pts, Color(1, 1, 1, 0.18))
+		var fill := clampf(v - k, 0.0, 1.0)
+		if fill >= 0.99:
+			draw_colored_polygon(pts, GOLD)
+		elif fill > 0.0:
+			var half := PackedVector2Array([Vector2(cx - sz, pos.y - sz), Vector2(cx, pos.y - sz), Vector2(cx, pos.y + sz * 2.0), Vector2(cx - sz, pos.y + sz * 2.0)])
+			for poly in Geometry2D.intersect_polygons(pts, half):
+				draw_colored_polygon(poly, GOLD)
+
 func _club_rate(info: Dictionary, ci: int) -> int:
 	var rr: Array = info.get("rates", [])
 	return int(rr[ci]) if ci >= 0 and ci < rr.size() else 72
@@ -690,7 +710,8 @@ func show_banner(text: String, col: Color, hold := 1.6, small := "", fs := 96) -
 		_banner_tw.tween_property(banner, "scale", Vector2(1.25, 1.25), 0.4).set_delay(hold)
 		_banner_tw.tween_property(sub, "modulate:a", 0.0, 0.4).set_delay(hold)
 
-func show_vs(length: float, names: Array, stars: Array, swap: bool) -> void:
+func show_vs(length: float, names: Array, stars: Array, swap: bool, rates := [0, 0]) -> void:
+	vs_r = rates
 	vs_len = length
 	vs_t = 0.0 if length > 0.0 else -1.0
 	vs_names = names
@@ -702,7 +723,7 @@ func _vs() -> void:
 	var out := clampf((vs_t - (vs_len - 0.4)) / 0.4, 0.0, 1.0)
 	var e := (1.0 - pow(1.0 - o, 3.0)) * (1.0 - out * out)
 	var w := size.x * 0.44
-	var hgt := 112.0
+	var hgt := 140.0
 	var y := size.y * 0.5 - hgt * 0.5 + 30.0
 	var cols := t_cols
 	for i in 2:
@@ -718,8 +739,15 @@ func _vs() -> void:
 		var fs := 40
 		while fs > 20 and font.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w - 90.0:
 			fs -= 2
-		_text(nm, Vector2(cx, y + 52.0), fs, Color.WHITE)
-		_text("STAR PLAYER   " + vs_stars[t], Vector2(cx, y + 88.0), 17, GOLD)
+		_text(nm, Vector2(cx, y + 50.0), fs, Color.WHITE)
+		if int(vs_r[t]) > 0:
+			# the team's strength: stars and its rating, like the team picker
+			var ss := 22.0
+			var sw := ss * 5.0 + 3.0 * 4.0
+			_draw_stars(Vector2(cx - sw * 0.5 - 22.0, y + 66.0), int(vs_r[t]), ss)
+			var rt := str(int(vs_r[t]))
+			draw_string(font, Vector2(cx + sw * 0.5 - 14.0, y + 85.0), rt, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(1, 1, 1, 0.85))
+		_text("STAR PLAYER   " + vs_stars[t], Vector2(cx, y + 118.0), 17, GOLD)
 	var pop := clampf((vs_t - 0.3) / 0.25, 0.0, 1.0) * (1.0 - out)
 	if pop > 0.0:
 		var c := Vector2(size.x * 0.5, y + hgt * 0.5)
@@ -1141,6 +1169,11 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					vl.position = Vector2(18 + cols2[ci3] * tw2 + (12 if ci3 == 1 else 0), (rh2 - 6) * 0.5 - 14)
 					vl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 					rp.add_child(vl)
+				if r.size() > 11 and int(r[11]) > 0:
+					# the club's strength in stars, at the end of the club column
+					var st7 := _stars(int(r[11]), 15.0)
+					st7.position = Vector2(cols2[2] * tw2 - st7.size.x - 2.0, (rh2 - 6) * 0.5 - 8.0)
+					rp.add_child(st7)
 				# form: the last five results as small squares, newest on the right
 				var fm7 := str(r[10]) if r.size() > 10 else ""
 				for fi in fm7.length():
@@ -1612,14 +1645,21 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				while fs2 > 11 and font.get_string_size(nm2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > gw2 - 74.0:
 					fs2 -= 1
 				var nl := _label(nm2, fs2, GOLD if own2 else Color.WHITE)
-				nl.position = Vector2(28 if not own2 else 14, gh2 * 0.5 - fs2 * 0.7)
+				var two := not own2 and gh2 >= 44.0
+				nl.position = Vector2(28 if not own2 else 14, (gh2 * 0.5 - fs2 - 4.0) if two else (gh2 * 0.5 - fs2 * 0.7))
 				nl.size = Vector2(gw2 - 70.0, fs2 + 8)
+				nl.clip_text = true
 				bt.add_child(nl)
 				var rl2 := _label("NEW" if own2 else str(int(cl2["r"])), 18 if not own2 else 14, GOLD if not own2 else GOLD, font if not own2 else font2)
 				rl2.position = Vector2(gw2 - 48.0, gh2 * 0.5 - 13)
 				rl2.size = Vector2(40, 26)
 				rl2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				bt.add_child(rl2)
+				if not own2:
+					var st2 := _stars(int(cl2["r"]), 12.0)
+					st2.position = Vector2(28, gh2 * 0.5 + 5.0) if two else Vector2(gw2 - 52.0 - st2.size.x, gh2 * 0.5 - 6.0)
+					if two or gw2 - 74.0 - st2.size.x > font.get_string_size(nm2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x:
+						bt.add_child(st2)
 			menu.add_child(_back("st_back" if n == "start_club" else "c_market", null))
 		"scout_sq":
 			var sc1: Dictionary = info.get("scout", {})
@@ -4311,8 +4351,9 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 		var kits := [cpn.get("kit", ["888888"]) if ndue else c.get("kit", ["888888"]), cpn.get("opp_kit", ["888888"]) if cdue else c.get("opp_kit", ["888888"])]
 		var nms := [str(cpn.get("me", "")) if ndue else str(c.get("name", "")), str(cpn.get("opp", "")) if cdue else str(c.get("opp", ""))]
 		var rks := [int(c.get("rank", 1)), int(cpn.get("opp_rank", 1)) if cdue else int(c.get("opp_rank", 1))]
-		var ks := minf(96.0, ch - bh - 190.0)
-		var my := 60.0 + (ch - bh - 60.0 - ks - 90.0) * 0.5
+		var ks := minf(96.0, ch - bh - 214.0)
+		var my := 60.0 + (ch - bh - 60.0 - ks - 114.0) * 0.5
+		var rts := [int(c.get("my_r", 0)), int(cpn.get("opp_r", 0)) if cdue else int(c.get("opp_r", 0))]
 		for si in 2:
 			var cx := lw * (0.27 if si == 0 else 0.73)
 			var sh := _shirt(kits[si], ks)
@@ -4333,6 +4374,15 @@ func _tab_career(info: Dictionary, w: float, y0: float, ch: float, items: Array,
 			rl.size = Vector2(lw * 0.48, 26)
 			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			card.add_child(rl)
+			if not ndue and int(rts[si]) > 0:
+				# how strong each side is: stars and the rating, like the team picker
+				var stk := _stars(int(rts[si]), 17.0)
+				var rtl := _label(str(int(rts[si])), 17, MUT, font2)
+				var tw7 := stk.size.x + 8.0 + font2.get_string_size(str(int(rts[si])), HORIZONTAL_ALIGNMENT_LEFT, -1, 17).x
+				stk.position = Vector2(cx - tw7 * 0.5, my + ks + 72)
+				rtl.position = Vector2(stk.position.x + stk.size.x + 8.0, my + ks + 68)
+				card.add_child(stk)
+				card.add_child(rtl)
 		var vv := _label("v", 30, MUT)
 		vv.position = Vector2(0, my + ks * 0.5 - 20)
 		vv.size = Vector2(lw, 40)
