@@ -2625,11 +2625,22 @@ func _do_fx(kind: String, a) -> void:
 					if q.ovr > best.ovr:
 						best = q
 				st.append("%d  %s  %d" % [best.num, best.pname.to_upper(), best.ovr])
-			hud.show_vs(float(a), TEAM_NAMES, st, view_flip < 0.0)
-			intro_t0 = real_t if float(a) > 0.0 else -99.0
-			if float(a) > 0.0:
+			var vl := float(a[0]) if a is Array else float(a)
+			var vr := [int(a[1]), int(a[2])] if a is Array and (a as Array).size() >= 3 else [_team_ovr(0), _team_ovr(1)]
+			hud.show_vs(vl, TEAM_NAMES, st, view_flip < 0.0, vr)
+			intro_t0 = real_t if vl > 0.0 else -99.0
+			if vl > 0.0:
 				cam_pos = Vector3(-56, 5.0, 40 * view_flip)
 				cam_look = Vector3(-20, 1, 0)
+
+# a side's strength on the pitch: the average rating of its eleven
+func _team_ovr(t: int) -> int:
+	if teams.size() <= t or (teams[t] as Array).is_empty():
+		return 0
+	var s9 := 0.0
+	for p in teams[t]:
+		s9 += p.ovr
+	return int(round(s9 / (teams[t] as Array).size()))
 
 func _banner(text: String, col: Color, hold: float, small := "", fs := 96) -> void:
 	fx("banner", [text, col.to_html(), hold, small, fs])
@@ -2949,7 +2960,7 @@ func _car_info() -> Dictionary:
 	for i in ord.size():
 		var c: int = ord[i]
 		var t: Dictionary = d["table"][str(c)]
-		rows.append([i + 1, CLUBS[c]["n"], int(t["p"]), int(t["w"]), int(t["d"]), int(t["l"]), int(t["gf"]) - int(t["ga"]), int(t["pts"]), c == me_c, CLUBS[c]["k"][0], str(t.get("fm", ""))])
+		rows.append([i + 1, CLUBS[c]["n"], int(t["p"]), int(t["w"]), int(t["d"]), int(t["l"]), int(t["gf"]) - int(t["ga"]), int(t["pts"]), c == me_c, CLUBS[c]["k"][0], str(t.get("fm", "")), int(round(car._strength(c)))])
 	var last := []
 	for r in d["last"]:
 		last.append("%s  %d - %d  %s" % [CLUBS[int(r[0])]["s"], int(r[2]), int(r[3]), CLUBS[int(r[1])]["s"]])
@@ -2978,7 +2989,7 @@ func _car_info() -> Dictionary:
 	var roles := _my_form(car.form(), car.lay())
 	return {
 		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
-		"rank": car.rank_of(me_c), "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [], "derby": car._next_derby() if car.d.has("leagues") else false, "rival": str(CLUBS[car.rival_of(me_c)]["n"]) if car.d.has("leagues") and car.rival_of(me_c) >= 0 else "", "drb": car.derby_rec(),
+		"rank": car.rank_of(me_c), "my_r": int(round(car.my_strength())), "opp_r": int(round(car._strength(nm[0]))) if nm[0] >= 0 else 0, "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [], "derby": car._next_derby() if car.d.has("leagues") else false, "rival": str(CLUBS[car.rival_of(me_c)]["n"]) if car.d.has("leagues") and car.rival_of(me_c) >= 0 else "", "drb": car.derby_rec(),
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
 		"div": car.div(), "lgname": car.league_name(), "n": car.ids().size(), "up": int(car.league()["up"]), "down": int(car.league()["down"]), "slen": str(d.get("slen", "full")), "cup": _cup_info(),
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
@@ -3005,6 +3016,7 @@ func _eu_info() -> Dictionary:
 		if oc >= 0:
 			out["opp"] = CLUBS[oc]["n"]
 			out["opp_kit"] = CLUBS[oc]["k"]
+			out["opp_r"] = int(round(car._strength(oc)))
 			out["home"] = bool(eo[1])
 			out["opp_lg"] = car._eu_country(oc)
 	var groups := []
@@ -3230,7 +3242,7 @@ func _cup_info() -> Dictionary:
 		rounds.append({"name": car.cup_round_name(), "ties": rr2, "n": t.size() / 2, "now": true})
 	var opp: int = car.cup_opp()
 	return {"r": int(cp["r"]), "name": car.cup_round_name(), "out": bool(cp["out"]), "won": bool(cp["won"]), "rounds": rounds,
-		"opp": CLUBS[opp]["n"] if opp >= 0 else "", "opp_kit": CLUBS[opp]["k"] if opp >= 0 else [], "opp_rank": car.rank_of(opp) if opp >= 0 else 0,
+		"opp": CLUBS[opp]["n"] if opp >= 0 else "", "opp_kit": CLUBS[opp]["k"] if opp >= 0 else [], "opp_rank": car.rank_of(opp) if opp >= 0 else 0, "opp_r": int(round(car._strength(opp))) if opp >= 0 else 0,
 		"opp_lg": car.league_name(car.league_of(opp)) if opp >= 0 else "", "cname": car.cup_name(), "left": (cp["teams"] as Array).size() + (cp.get("byes", []) as Array).size(), "total": nm.size(), "cups": int(car.stats().get("cups", 0))}
 
 func _stat_rows() -> Array:
@@ -5389,7 +5401,7 @@ func _begin_match(with_intro: bool) -> void:
 	if not autotest:
 		if with_intro:
 			intro_len = 5.4
-			fx("vs", 3.6)
+			fx("vs", [3.6, _team_ovr(0), _team_ovr(1)])
 			snd("whoosh")
 			fx("excite", 0.7)
 
@@ -6280,7 +6292,7 @@ func _tick(dt: float) -> void:
 				for h in humans:
 					if h.evs.has("tap") or h.evs.has("shoot_down") or h.evs.has("pass_down"):
 						state_t = intro_len - 1.9
-						fx("vs", 0.0)
+						fx("vs", [0.0, _team_ovr(0), _team_ovr(1)])
 			if state_t > intro_len:
 				_kickoff(kick_team)
 		"play":
