@@ -1,5 +1,6 @@
 extends Control
 const ClubDB := preload("res://clubdb.gd")
+const Names := preload("res://names.gd")
 # Everything drawn on top of the 3D view: touch controls, score bug, banners, minimap and all menus.
 
 var stick := Vector2.ZERO
@@ -349,11 +350,20 @@ func _ord(n: int) -> String:
 func _fit_col(c: int) -> Color:
 	return GREEN if c >= 80 else (GOLD if c >= 60 else Color(0.92, 0.35, 0.3))
 
+# the biggest font size (down to 12) at which a text fits a width
+func _fit_fs(txt: String, fs: int, w: float, f: Font = null) -> int:
+	var ff: Font = f if f != null else font
+	while fs > 12 and ff.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > w:
+		fs -= 1
+	return fs
+
 # One squad player as a button: position stripe, name, rating.
 func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dictionary, chosen: bool, wrong_at: String) -> Button:
-	var nm := str(pl["n"])
-	if nm.length() > 9:
-		nm = nm.substr(0, 9)
+	# on the small card only the surname, as on a shirt; it shrinks to fit rather than being cut off
+	var nm := Names.surname(str(pl["n"])).capitalize()
+	var nfs := 19
+	while nfs > 13 and font3.get_string_size(nm, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x > sz.x - 24:
+		nfs -= 1
 	var b := _btn("", "c_pick", idx, "alt", pos, sz, 15)
 	for st in ["normal", "hover", "focus", "pressed", "disabled"]:
 		b.add_theme_stylebox_override(st, _box(Color(0.20, 0.25, 0.22, 0.97) if chosen else Color(0.06, 0.10, 0.08, 0.94), 10, GOLD if chosen else Color(1, 1, 1, 0.2)))
@@ -363,7 +373,7 @@ func _player_btn(pl: Dictionary, idx: int, pos: Vector2, sz: Vector2, pcol: Dict
 	chip.size = Vector2(6, sz.y - 14)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(chip)
-	var n1 := _label(nm.capitalize(), 19, Color.WHITE, font3)
+	var n1 := _label(nm, nfs, Color.WHITE, font3)
 	n1.position = Vector2(18, 1)
 	n1.clip_text = true
 	n1.size = Vector2(sz.x - 22, 24)
@@ -2567,7 +2577,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					for ti in xi:
 						var tpl2: Dictionary = sqd[int(ti)]
 						if int(tpl2.get("cond", 100)) < 75 and not bool(tpl2.get("inj", false)):
-							tired.append([int(tpl2["cond"]), str(tpl2["n"]).capitalize()])
+							tired.append([int(tpl2["cond"]), Names.surname(str(tpl2["n"])).capitalize()])
 					tired.sort()
 					var tnm := []
 					for tz in mini(tired.size(), 3):
@@ -2669,7 +2679,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				ch6.size = Vector2(6, rh6 - 24)
 				ch6.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				ob.add_child(ch6)
-				var on1 := _label("%d  %s" % [int(op["num"]), str(op["n"])], 18, Color.WHITE if not bool(op["off"]) else Color(1, 1, 1, 0.4))
+				var ont := "%d  %s" % [int(op["num"]), Names.surname(str(op["n"]))]
+				var on1 := _label(ont, _fit_fs(ont, 18, lw6 * 0.5 - 40), Color.WHITE if not bool(op["off"]) else Color(1, 1, 1, 0.4))
 				on1.position = Vector2(22, 4)
 				ob.add_child(on1)
 				var on2 := _label("%s  %d" % [str(op["role"]), int(op["ovr"])], 16, Color(1, 1, 1, 0.7), font2)
@@ -2710,7 +2721,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				ch7.size = Vector2(6, rb6 - 20)
 				ch7.mouse_filter = Control.MOUSE_FILTER_IGNORE
 				bb6.add_child(ch7)
-				var bn1 := _label(str(bp["n"]).substr(0, 9), 17, Color.WHITE)
+				var bn1 := _label(Names.surname(str(bp["n"])), _fit_fs(Names.surname(str(bp["n"])), 17, bw6 * 0.5 - 34, font), Color.WHITE)
 				bn1.position = Vector2(22, 2)
 				bb6.add_child(bn1)
 				var bn2 := _label("%s  %d" % [str(bp["pos"]), int(bp["ovr"])], 16, Color(1, 1, 1, 0.7), font2)

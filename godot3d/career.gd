@@ -2,6 +2,7 @@ extends RefCounted
 # Career: your club in the world of ClubDB (England's four leagues, Denmark's two). Holds the save, the leagues,
 # the fixtures, the table, your squad and the other clubs' squads.
 const ClubDB := preload("res://clubdb.gd")
+const Names := preload("res://names.gd")
 const FIRST := 8 # world indices below this are the quick-match clubs
 
 var key := "bb3d-career" # localStorage key (native: user://<key>.json); the cup mode keeps its own
@@ -104,6 +105,10 @@ func load_save(is_web: bool) -> void:
 			if not d.has("gkv"):
 				gk_fix(d)
 				d["gkv"] = 1
+				save()
+			if not d.has("nmv"):
+				_names_fix()
+				d["nmv"] = 1
 				save()
 
 # JSON turns whole numbers into floats: put the ones used as indices back
@@ -1434,14 +1439,12 @@ static func sell_value(pl: Dictionary) -> int:
 func market_refresh() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
-	var taken := []
-	for pl in d["squad"]:
-		taken.append(str(pl["n"]))
 	var pool := []
-	for n in names:
-		if not taken.has(str(n)):
-			pool.append(n)
-	pool.shuffle()
+	var tk := _taken()
+	for i in 6:
+		var nm := new_name(rng, "", 0.45, tk)
+		tk[nm] = true
+		pool.append(nm)
 	var lv := int(round(my_strength()))
 	var roles := ["GK", "DF", "DF", "MF", "MF", "FW", "FW"]
 	roles.shuffle()
@@ -1451,7 +1454,7 @@ func market_refresh() -> void:
 		var base: Array = ROLE_BASE[role]
 		var q: int = lv - 72 + [-3, 0, 2, 4, 6, 9][i] + rng.randi_range(-1, 1)
 		var pl := {
-			"n": pool[i], "num": 0, "pos": role, "age": rng.randi_range(17, 31), "xp": 0, "g": 0, "apps": 0,
+			"n": pool[i], "num": 0, "pos": role, "age": rng.randi_range(17, 31), "xp": 0, "g": 0, "apps": 0, "nat": _nat_idx(str(pool[i])),
 			"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
 			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
 		}
@@ -1489,17 +1492,12 @@ func open_pack(tier: int) -> Dictionary:
 	for s in d["squad"]:
 		taken.append(str(s["n"]))
 		used.append(int(s["num"]))
-	var pool := []
-	for n in names:
-		if not taken.has(str(n)):
-			pool.append(n)
-	if pool.is_empty():
-		return {"err": "No players left to sign."}
+	var pnm := new_name(rng, "", 0.45)
 	var role: String = ["GK", "DF", "DF", "DF", "MF", "MF", "MF", "FW", "FW", "FW"][rng.randi_range(0, 9)]
 	var base: Array = ROLE_BASE[role]
 	var want := clampi(int(round(my_strength())) + rng.randi_range(PACK_Q[tier][0], PACK_Q[tier][1]), 45, 94)
 	var pl := {
-		"n": pool[rng.randi_range(0, pool.size() - 1)], "num": 0, "pos": role, "age": rng.randi_range(17, 30), "xp": 0, "g": 0, "apps": 0,
+		"n": pnm, "num": 0, "pos": role, "age": rng.randi_range(17, 30), "xp": 0, "g": 0, "apps": 0, "nat": _nat_idx(pnm),
 		"pac": clampi(base[0] - 8 + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] - 8 + rng.randi_range(-4, 4), 25, 95),
 		"pas": clampi(base[2] - 8 + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] - 8 + rng.randi_range(-4, 4), 25, 95),
 	}
@@ -1670,23 +1668,13 @@ func fac_up(k: String) -> String:
 func youth_arrives(rng: RandomNumberGenerator) -> String:
 	if (d["squad"] as Array).size() >= SQUAD_MAX:
 		return "YOUTH: NO ROOM IN THE SQUAD FOR A NEW TALENT"
-	var taken := []
-	for pl in d["squad"]:
-		taken.append(str(pl["n"]))
-	for pl in d.get("market", []):
-		taken.append(str(pl["n"]))
-	var pool := []
-	for n in names:
-		if not taken.has(str(n)):
-			pool.append(n)
-	if pool.is_empty():
-		return ""
+	var ynm := new_name(rng, "", 0.08)
 	var lv := fac("youth")
 	var role: String = ["GK", "DF", "DF", "MF", "MF", "FW", "FW"][rng.randi() % 7]
 	var base: Array = ROLE_BASE[role]
 	var q := -16 + lv * 2
 	var pl := {
-		"n": pool[rng.randi() % pool.size()], "num": 0, "pos": role, "age": rng.randi_range(16, 18), "xp": 0, "g": 0, "apps": 0,
+		"n": ynm, "num": 0, "pos": role, "age": rng.randi_range(16, 18), "xp": 0, "g": 0, "apps": 0, "nat": _nat_idx(ynm),
 		"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
 		"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
 	}
@@ -2421,15 +2409,22 @@ func take_job(i: int) -> void:
 	save()
 
 func _make_squad(q_xi: int, q_bench: int, rng: RandomNumberGenerator) -> Array:
-	var pool := names.duplicate()
-	pool.shuffle()
+	var pool := []
+	var tk := _taken()
+	var sur := {}
+	var fs := Names.foreign_share(W[int(d["club"])] if int(d.get("club", -1)) >= 0 and int(d["club"]) < W.size() else {})
+	for i in SQUAD_ROLES.size():
+		var nm := Names.make(Names.roll_nat(my_ctry(), fs, rng), rng, tk, sur)
+		tk[nm] = true
+		sur[Names.surname(nm)] = true
+		pool.append(nm)
 	var squad := []
 	for i in SQUAD_ROLES.size():
 		var role: String = SQUAD_ROLES[i]
 		var base: Array = ROLE_BASE[role]
 		var q := q_xi if i < 11 else q_bench
 		var pl := {
-			"n": pool[i % pool.size()], "num": SQUAD_NUMS[i], "pos": role, "age": rng.randi_range(18, 31), "xp": 0, "g": 0, "apps": 0,
+			"n": pool[i % pool.size()], "num": SQUAD_NUMS[i], "pos": role, "age": rng.randi_range(18, 31), "xp": 0, "g": 0, "apps": 0, "nat": _nat_idx(str(pool[i % pool.size()])),
 			"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
 			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95),
 		}
@@ -2533,18 +2528,111 @@ func academy() -> Array:
 		d["acad"] = []
 	return d["acad"]
 
-func _free_name(rng: RandomNumberGenerator) -> String:
-	var taken := {}
-	for l in [d["squad"], d.get("market", []), prospects(), academy()]:
-		for pl in l:
-			taken[str(pl["n"])] = true
-	var pool := []
-	for n in names:
-		if not taken.has(str(n)):
-			pool.append(n)
-	if pool.is_empty():
-		return str(names[rng.randi() % names.size()]) if not names.is_empty() else "KID"
-	return str(pool[rng.randi() % pool.size()])
+func _free_name(rng: RandomNumberGenerator, ctry := "") -> String:
+	return new_name(rng, ctry, 0.05)
+
+# ---- names (names.gd): every man has a full made-up name that fits his country, and none repeats
+func club_ctry(c: int) -> String:
+	if c >= 0 and c < W.size() and str(W[c].get("c", "")) != "":
+		return str(W[c]["c"])
+	return "ENGLAND"
+
+func my_ctry() -> String:
+	return club_ctry(int(d.get("club", -1)))
+
+# every name this career uses already: its own men, the ones it made, and the computer men it changed
+func _taken() -> Dictionary:
+	var t := {}
+	for k in ["squad", "market", "pros", "acad"]:
+		for pl in d.get(k, []):
+			t[str(pl["n"])] = true
+	var cx: Dictionary = d.get("cx", {})
+	for k in cx:
+		for pl in cx[k]:
+			t[str(pl["n"])] = true
+	return t
+
+# a new name for a man from this country (or from abroad, `foreign` of the time); no surname twice in your squad
+func new_name(rng: RandomNumberGenerator, ctry := "", foreign := 0.25, tk := {}) -> String:
+	var home := ctry if ctry != "" else my_ctry()
+	var sur := {}
+	for pl in d.get("squad", []):
+		sur[Names.surname(str(pl["n"]))] = true
+	var t := tk if not tk.is_empty() else _taken()
+	return Names.make(Names.roll_nat(home, foreign, rng), rng, t, sur)
+
+# A save from before full names (2026-11-22): your men keep their surname and get a first name from your
+# club's country, everywhere the save names them; computer men the save changed get new names.
+func _names_fix() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = int(d.get("club", 0)) * 31 + int(d.get("season", 1)) + 5
+	var tk := _taken()
+	var ctry := my_ctry()
+	var mp := {}
+	for k in ["squad", "acad", "pros", "market"]:
+		for pl in d.get(k, []):
+			var o := str(pl["n"])
+			if o == "" or o.find(" ") >= 0 or pl.has("me"):
+				continue
+			var nm := ""
+			if mp.has(o):
+				nm = new_name(rng, ctry, 0.1, tk)
+			else:
+				for t in 30:
+					nm = Names.first_for(ctry, rng) + " " + o
+					if not tk.has(nm) and not Names.in_world(nm):
+						break
+				mp[o] = nm
+			tk[nm] = true
+			pl["n"] = nm
+	var cx: Dictionary = d.get("cx", {})
+	for k in cx:
+		var sur := {}
+		for pl in cx[k]:
+			var o2 := str(pl["n"])
+			if o2.find(" ") < 0 and not pl.has("me"):
+				var n2 := Names.make(club_ctry(int(k)), rng, tk, sur)
+				tk[n2] = true
+				pl["n"] = n2
+			sur[Names.surname(str(pl["n"]))] = true
+	if mp.is_empty():
+		return
+	var own := "%d:" % int(d.get("club", -1))
+	for k in d.keys():
+		if k in ["squad", "acad", "pros", "market", "cx", "pro", "pro2"]:
+			continue
+		d[k] = _nm_swap(d[k], mp, own)
+
+func _nm_swap(v, mp: Dictionary, own: String):
+	if v is String:
+		return mp.get(v, v)
+	if v is Array:
+		var a := []
+		for x in v:
+			a.append(_nm_swap(x, mp, own))
+		return a
+	if v is Dictionary:
+		var o := {}
+		for k in v:
+			var k2 = k
+			if k is String:
+				if mp.has(k):
+					k2 = mp[k]
+				elif (k as String).begins_with(own) and mp.has((k as String).substr(own.length())):
+					k2 = own + str(mp[(k as String).substr(own.length())])
+			o[k2] = _nm_swap(v[k], mp, own)
+		return o
+	return v
+
+# the national team a name belongs to (-1 = not one of NATIONS: nat_of() then picks one)
+func _nat_idx(nm: String) -> int:
+	var c := Names.nat_of(nm)
+	if c == "FRANCE_AF":
+		c = "FRANCE"
+	for i in NATIONS.size():
+		if str(NATIONS[i][0]) == c:
+			return i
+	return -1
 
 # a young player: real level and potential, and what your scout thinks they are (a range)
 func _youth(rng: RandomNumberGenerator, rg: int, stars: int) -> Dictionary:
@@ -2552,7 +2640,8 @@ func _youth(rng: RandomNumberGenerator, rg: int, stars: int) -> Dictionary:
 	var role: String = ["GK", "DF", "DF", "MF", "MF", "FW", "FW"][rng.randi() % 7]
 	var base: Array = ROLE_BASE[role]
 	var q := -20 + rng.randi_range(-3, 4)
-	var pl := {"n": _free_name(rng), "num": 0, "pos": role, "age": rng.randi_range(15, 17), "xp": 0, "g": 0, "apps": 0,
+	var yn := _free_name(rng, str(R[0]).to_upper())
+	var pl := {"n": yn, "num": 0, "pos": role, "age": rng.randi_range(15, 17), "xp": 0, "g": 0, "apps": 0, "nat": _nat_idx(yn),
 		"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
 		"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "rg": rg}
 	# a better scout finds better boys, and some countries have more of them
@@ -3001,12 +3090,10 @@ func cpu_squad(c: int) -> Array:
 		return cx[str(c)]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = c * 7919 + 13
-	var pool := names.duplicate()
-	for n in range(pool.size() - 1, 0, -1):
-		var sw := rng.randi_range(0, n)
-		var tmp = pool[n]
-		pool[n] = pool[sw]
-		pool[sw] = tmp
+	var pool: Array = Names.club(c)
+	# the old name shuffle drew 59 numbers: still draw them, so every club keeps the same men as before
+	for n in range(59, 0, -1):
+		rng.randi_range(0, n)
 	var q := rating(c) - 72
 	var out := []
 	var stars := [9, 6 + c % 2]
@@ -3015,7 +3102,7 @@ func cpu_squad(c: int) -> Array:
 		var base: Array = ROLE_BASE[role]
 		var qq := q + (6 if stars.has(i) else 0) - (5 if i >= 11 else 0)
 		var pl := {
-			"n": pool[i % pool.size()], "num": [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7, 13, 15, 16, 14, 18, 19, 20][i], "pos": role, "age": rng.randi_range(18, 33), "xp": 0, "g": 0, "apps": 0,
+			"n": pool[i % pool.size()], "num": [1, 3, 4, 5, 2, 8, 6, 10, 11, 9, 7, 13, 15, 16, 14, 18, 19, 20][i], "pos": role, "age": rng.randi_range(18, 33), "xp": 0, "g": 0, "apps": 0, "nat": _nat_idx(str(pool[i % pool.size()])),
 			"pac": clampi(base[0] + qq + rng.randi_range(-5, 5), 30, 97), "sho": clampi(base[1] + qq + rng.randi_range(-5, 5), 25, 97),
 			"pas": clampi(base[2] + qq + rng.randi_range(-5, 5), 30, 97), "dfn": clampi(base[3] + qq + rng.randi_range(-5, 5), 25, 97),
 		}
@@ -3208,7 +3295,8 @@ func _complete_bid(c: int, i: int, amount: int, wk: int, yrs: int, ex := {}) -> 
 		var role := str(pl["pos"])
 		var base: Array = ROLE_BASE[role]
 		var q := rating(c) - 76
-		var nw := {"n": names[rng.randi() % names.size()], "num": int(pl["num"]), "pos": role, "age": rng.randi_range(18, 23), "xp": 0, "g": 0, "apps": 0,
+		var nwn := new_name(rng, club_ctry(c), 0.25)
+		var nw := {"n": nwn, "nat": _nat_idx(nwn), "num": int(pl["num"]), "pos": role, "age": rng.randi_range(18, 23), "xp": 0, "g": 0, "apps": 0,
 			"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
 			"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "ab": []}
 		nw["pot"] = clampi(ovr_of(nw) + rng.randi_range(4, 12), ovr_of(nw), 94)
@@ -4081,7 +4169,8 @@ func deal_text(x: Array) -> String:
 func _fill_in(c: int, role: String, num: int, rng: RandomNumberGenerator) -> Dictionary:
 	var base: Array = ROLE_BASE[role]
 	var q := rating(c) - 76
-	var nw := {"n": names[rng.randi() % names.size()], "num": num, "pos": role, "age": rng.randi_range(18, 23), "xp": 0, "g": 0, "apps": 0,
+	var nwn := new_name(rng, club_ctry(c), 0.25)
+	var nw := {"n": nwn, "nat": _nat_idx(nwn), "num": num, "pos": role, "age": rng.randi_range(18, 23), "xp": 0, "g": 0, "apps": 0,
 		"pac": clampi(base[0] + q + rng.randi_range(-4, 4), 30, 95), "sho": clampi(base[1] + q + rng.randi_range(-4, 4), 25, 95),
 		"pas": clampi(base[2] + q + rng.randi_range(-4, 4), 30, 95), "dfn": clampi(base[3] + q + rng.randi_range(-4, 4), 25, 95), "ab": []}
 	nw["pot"] = clampi(ovr_of(nw) + rng.randi_range(4, 12), ovr_of(nw), 94)
@@ -5730,7 +5819,7 @@ func _home_nat() -> int:
 	return 1
 
 func nat_of(pl: Dictionary) -> int:
-	if pl.has("nat"):
+	if pl.has("nat") and int(pl["nat"]) >= 0:
 		return int(pl["nat"])
 	var h := absi(hash(str(pl.get("n", "")) + "#" + str(pl.get("num", 0))))
 	var v := _home_nat() if h % 100 < 72 else (h / 100) % NATIONS.size()
@@ -5741,12 +5830,17 @@ func nat_of(pl: Dictionary) -> int:
 func nat_pool(n: int) -> Array:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = n * 4099 + int(d.get("season", 1)) * 131 + 7
-	var pool := names.duplicate()
-	for k in range(pool.size() - 1, 0, -1):
-		var sw := rng.randi_range(0, k)
-		var tmp = pool[k]
-		pool[k] = pool[sw]
-		pool[sw] = tmp
+	for k in range(59, 0, -1):
+		rng.randi_range(0, k)
+	# the country's own men, with names from that country (the same on every phone)
+	var nrng := RandomNumberGenerator.new()
+	nrng.seed = n * 4099 + int(d.get("season", 1)) * 131 + 11
+	var pool := []
+	var nsur := {}
+	for k in 40:
+		var nm := Names.make(str(NATIONS[n][0]), nrng, {}, nsur, false)
+		nsur[Names.surname(nm)] = true
+		pool.append(nm)
 	var q := int(NATIONS[n][3]) - 72
 	var out := []
 	var i := 0
@@ -5754,7 +5848,7 @@ func nat_pool(n: int) -> Array:
 		for k in int(NAT_ROLES[role]) + 2:
 			var base: Array = ROLE_BASE[role]
 			var qq := q + rng.randi_range(-7, 3) + (4 if k == 0 else 0)
-			var pl := {"n": str(pool[(i + 40) % maxi(pool.size(), 1)]) if not pool.is_empty() else "PLAYER", "pos": role, "age": rng.randi_range(20, 33), "num": 0, "key": "g%d" % i,
+			var pl := {"n": str(pool[i % maxi(pool.size(), 1)]) if not pool.is_empty() else "PLAYER", "nat": n, "pos": role, "age": rng.randi_range(20, 33), "num": 0, "key": "g%d" % i,
 				"pac": clampi(base[0] + qq + rng.randi_range(-5, 5), 30, 97), "sho": clampi(base[1] + qq + rng.randi_range(-5, 5), 25, 97),
 				"pas": clampi(base[2] + qq + rng.randi_range(-5, 5), 30, 97), "dfn": clampi(base[3] + qq + rng.randi_range(-5, 5), 25, 97)}
 			pl["ab"] = ab_roll(role, ovr_of(pl), rng)
