@@ -342,3 +342,82 @@ static func start_leagues(first_n: int) -> Array:
 				i += 1
 		out.append(ids2)
 	return out
+
+# ---------------------------------------------------------------- how each club plays
+# Every club has its own way of playing, like in FIFA and Top Eleven: how hard it presses (pr), how high its back
+# line stands (ln), how wide it plays (wd), how quickly it moves the ball on (tp) and how direct it is: the ball
+# over the top and long early (dr) or short and patient. All 0..1. Each club also has a manager with his own
+# nerve (bold): a bold one chases a game early and goes for the win, a careful one protects what he has.
+# [shown name, pr, ln, wd, tp, dr, what it means]
+const STYLES := {
+	"possession": ["POSSESSION", 0.70, 0.72, 0.60, 0.15, 0.12, "Keeps the ball and passes short and patiently, and presses to win it back"],
+	"press": ["HIGH PRESS", 1.00, 0.88, 0.50, 0.80, 0.55, "Hunts the ball high up the pitch and attacks fast the moment it wins it"],
+	"counter": ["COUNTER-ATTACK", 0.30, 0.22, 0.45, 0.92, 0.88, "Sits off you and breaks at speed with balls in behind the moment it has it"],
+	"long": ["LONG BALL", 0.48, 0.40, 0.65, 0.72, 1.00, "Plays it long early, over the top to the forwards, and fights for the second ball"],
+	"wing": ["WING PLAY", 0.52, 0.55, 1.00, 0.55, 0.50, "Stretches the pitch, goes down the flanks and gets crosses in"],
+	"block": ["LOW BLOCK", 0.10, 0.05, 0.22, 0.45, 0.72, "Compact and deep, hard to break down, and it hits you on the break"],
+	"balanced": ["BALANCED", 0.50, 0.50, 0.50, 0.50, 0.50, "A bit of everything: it presses in its own half and mixes short and long"],
+}
+# the clubs that are known for a way of playing (by short name)
+const CLUB_STYLE := {
+	"BIS": "press", "SHA": "wing", "ROV": "possession", "LIO": "balanced", "WOL": "block", "STO": "counter", "KIN": "possession", "FOX": "long",
+	"MSK": "possession", "MER": "press", "NLR": "possession", "WLB": "balanced", "TYN": "press", "NLW": "press", "MRE": "counter", "BCL": "balanced",
+	"BRS": "possession", "TRE": "counter", "SLE": "counter", "SCC": "press", "WLE": "long", "MEB": "block", "MWO": "counter", "YOW": "press",
+	"MAW": "counter", "CAT": "possession", "MST": "block", "BAL": "press", "SEW": "balanced", "VIL": "possession",
+	"MSE": "wing", "TUZ": "block", "NAS": "possession", "MDE": "counter", "BEG": "press", "ROW": "block",
+	"MUR": "possession", "LEL": "possession", "DOB": "counter", "LEB": "press",
+	"PAB": "possession", "MOD": "counter", "MAR": "press", "LLM": "balanced",
+	"LIE": "wing", "LIL": "possession", "POD": "press", "EIL": "wing", "AML": "possession", "ROP": "press",
+}
+# the rest play the way football is played in their country (picked by the club's name, so always the same)
+const COUNTRY_STYLES := {
+	"ENGLAND": ["long", "press", "counter", "balanced", "wing", "block", "long", "balanced"],
+	"SPAIN": ["possession", "balanced", "counter", "block", "possession", "wing"],
+	"ITALY": ["block", "balanced", "counter", "possession", "block", "wing"],
+	"GERMANY": ["press", "counter", "balanced", "wing", "press"],
+	"FRANCE": ["counter", "balanced", "wing", "press", "block"],
+	"NETHERLANDS": ["possession", "wing", "balanced", "press"],
+	"PORTUGAL": ["possession", "balanced", "counter", "wing"],
+	"DENMARK": ["balanced", "press", "long", "counter", "wing", "block"],
+}
+
+static func _h(s: String) -> int:
+	var h := 7
+	for i in s.length():
+		h = (h * 31 + s.unicode_at(i)) % 1000003
+	return h
+
+# a club's way of playing: {k, n, pr, ln, wd, tp, dr, bold, d}
+static func style(c: Dictionary) -> Dictionary:
+	var sh := str(c.get("s", "")).to_upper()
+	var h := _h(str(c.get("n", "")) + sh)
+	var k := str(CLUB_STYLE.get(sh, ""))
+	if k == "":
+		var opts: Array = COUNTRY_STYLES.get(str(c.get("c", "")), ["balanced", "press", "counter", "possession", "long", "wing", "block"])
+		k = str(opts[h % opts.size()])
+	var r: Array = STYLES[k]
+	# each club its own shade of it, and a big club stands higher than a small one
+	var rt := float(c.get("r", 74))
+	var lnk := clampf((rt - 75.0) / 30.0, -0.2, 0.15)
+	var o := {"k": k, "n": str(r[0]), "d": str(r[6])}
+	var keys := ["pr", "ln", "wd", "tp", "dr"]
+	for i in 5:
+		var v: float = float(r[i + 1]) + (float((h >> (i * 3)) % 17) / 16.0 - 0.5) * 0.14
+		if keys[i] == "ln":
+			v += lnk
+		o[keys[i]] = clampf(v, 0.0, 1.0)
+	o["bold"] = float((h >> 4) % 101) / 100.0
+	if k in ["press", "counter"]:
+		o["bold"] = 0.35 + o["bold"] * 0.65
+	elif k == "block":
+		o["bold"] = o["bold"] * 0.6
+	return o
+
+# the plan a club starts a match with: its style, how much stronger or weaker it is (gap, in rating points:
+# a big favourite comes at you, an underdog sits deeper) and a derby. [mentality 0-4, press 0-2, width 0-2]
+static func plan_for(st: Dictionary, gap: float, derby := false) -> Array:
+	var mv: float = (float(st.get("ln", 0.5)) - 0.5) * 1.6 + clampf(gap / 7.0, -2.0, 2.0) * 0.75
+	var pv: float = (float(st.get("pr", 0.5)) - 0.5) * 2.2 + clampf(gap / 9.0, -1.0, 1.0) * 0.5 + (0.6 if derby else 0.0)
+	var ment := clampi(2 + roundi(mv), 0, 4)
+	var wv: float = (float(st.get("wd", 0.5)) - 0.5) * 2.2 - (0.45 if ment <= 1 else 0.0)
+	return [ment, clampi(1 + roundi(pv), 0, 2), clampi(1 + roundi(wv), 0, 2)]

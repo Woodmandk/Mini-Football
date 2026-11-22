@@ -6193,7 +6193,7 @@ func _tac_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		["Width", ["Narrow", "Normal", "Wide"], ["Stay compact through the middle: hard to play through", "The usual shape",
 			"Stretch the pitch: good against a deep, narrow side"]]]
 	var y := 112.0
-	var ph := 128.0
+	var ph := 128.0 if str(c.get("ostyle_d", "")) == "" else 118.0
 	for ri in 3:
 		var r: Array = rows[ri]
 		var cur := clampi(int(t[ri]), 0, (r[1] as Array).size() - 1)
@@ -6213,10 +6213,16 @@ func _tac_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 			menu.add_child(b)
 		y += ph
 	if opp != "":
-		var sc := _label(_trim("Scout:  %s will most likely play %s" % [opp, _tac_short(o).to_lower()], font3, 19, w - 140), 19, GOLD, font3)
+		var ost := str(c.get("ostyle", ""))
+		var sc := _label(_trim("Scout:  %s%s will most likely play %s" % [opp, (", a %s side," % ost.to_lower()) if ost != "" else "", _tac_short(o).to_lower()], font3, 19, w - 140), 19, GOLD, font3)
 		sc.position = Vector2(64, y + 4)
 		sc.size = Vector2(w - 128, 28)
 		menu.add_child(sc)
+		if str(c.get("ostyle_d", "")) != "":
+			var sd := _label(_trim(str(c.get("ostyle_d", "")) + ". Their manager changes it during the match.", font3, 17, w - 140), 17, MUT, font3)
+			sd.position = Vector2(64, y + 30)
+			sd.size = Vector2(w - 128, 26)
+			menu.add_child(sd)
 	menu.add_child(_back("tab", "career"))
 
 
