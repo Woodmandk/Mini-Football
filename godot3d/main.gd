@@ -9,6 +9,7 @@ const World := preload("res://world.gd")
 const NetS := preload("res://net.gd")
 const Career := preload("res://career.gd")
 const ClubDB := preload("res://clubdb.gd")
+const Names := preload("res://names.gd")
 const RankS := preload("res://rank.gd")
 const FB := "https://banebold-default-rtdb.europe-west1.firebasedatabase.app/"
 
@@ -2404,12 +2405,9 @@ func _build_teams() -> void:
 	for t in 2:
 		var rng := RandomNumberGenerator.new()
 		rng.seed = clubs[t] * 977 + 7
-		var names := SURNAMES.duplicate()
-		for n in range(names.size() - 1, 0, -1):
-			var sw := rng.randi_range(0, n)
-			var tmp = names[n]
-			names[n] = names[sw]
-			names[sw] = tmp
+		var names: Array = Names.club(clubs[t])
+		for n in range(SURNAMES.size() - 1, 0, -1):
+			rng.randi_range(0, n) # the old shuffle's dice, so the rest of the line-up stays as before
 		var gk_col: Color = gk_cols[0]
 		for c in gk_cols:
 			if _cdist(c, Color(kits[0][0])) > 0.5 and _cdist(c, Color(kits[1][0])) > 0.5 and not gk_used.has(c):
@@ -2921,10 +2919,11 @@ func _gen_bench(t: int) -> Array:
 	for role in ["GK", "DF", "MF", "MF", "FW"]:
 		var base: Array = Career.ROLE_BASE[role]
 		var q := int(round(avg)) - 72 - 3 + rng.randi_range(-2, 2)
-		var nm: String = SURNAMES[rng.randi() % SURNAMES.size()]
+		var cn: Array = Names.club(clubs[t])
+		var nm: String = cn[rng.randi() % cn.size()]
 		var tries := 0
-		while taken.has(nm) and tries < 20:
-			nm = SURNAMES[rng.randi() % SURNAMES.size()]
+		while taken.has(nm) and tries < 30:
+			nm = cn[rng.randi() % cn.size()]
 			tries += 1
 		taken.append(nm)
 		while used.has(num):
