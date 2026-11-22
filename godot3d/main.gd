@@ -116,6 +116,7 @@ var clubs := [0, 1]
 var kits := [[], []]
 var teams_from := "main"
 var start_li := 3 # the league picked on the new-career screen
+var pick_ctry := "ENGLAND" # the country tab on the new-career, cup and other screens
 var cup_ctry := "ENGLAND" # the cup mode's country
 var opt_slen := "full" # a new career's season: "full" (home and away) or "short" (each club once)
 var scout_li := -1 # the league shown on the other clubs' screen
@@ -184,6 +185,7 @@ var so_turn := 0
 var so_shot := false
 var so_t := 0.0
 var so_win := -1
+var agg_off := [0, 0] # the first leg of a two-legged tie, [team 0, team 1]
 var so_last := false
 var car_goals := []
 var y_tab := 0 # youth page: 0 scouts, 1 reports, 2 academy
@@ -1104,10 +1106,21 @@ func _ready() -> void:
 					if rwho != "s":
 						proc.add_pro2("SCHALDE", "MF")
 				else:
-					carc.new_career(carc.weakest(3), true)
+					carc.new_career(carc.weakest(int(OS.get_environment("RVLG")) if OS.get_environment("RVLG") != "" else 3), true)
 					carc.set_mode("full")
 					_cr_enter(false)
-				for rr in 3:
+				var nsm := int(OS.get_environment("RVSIM")) if OS.get_environment("RVSIM") != "" else 3
+				for rr in nsm:
+					if rp[2] == "m" and OS.get_environment("RVPO") != "" and int(carc.d["round"]) == carc.rounds_total() - 1:
+						# steer into the play-off places before the last league round
+						var me8 := int(carc.d["club"])
+						var o8: Array = carc.order()
+						o8.erase(me8)
+						var tg8: int = int(o8[int(carc.league()["pf"][0]) - 1])
+						for k8 in ["pts", "gf", "ga"]:
+							carc.d["table"][str(me8)][k8] = int(carc.d["table"][str(tg8)][k8]) + (1 if k8 == "gf" else 0)
+					if carc.season_over():
+						break
 					_sim_mine()
 				var rsrc = proc if rp[2] == "p" else carc
 				if OS.get_environment("RVOOP") != "" and rp[2] == "m":
@@ -1729,6 +1742,99 @@ func _ready() -> void:
 				score = [2, 1]
 				_rk_finish()
 				menu_arg = "full"
+			if OS.get_environment("PCTRY") != "":
+				pick_ctry = OS.get_environment("PCTRY")
+			if menu_arg == "legtest":
+				# a two-legged cup semi-final (Spain): the first leg settles nothing, the second counts both
+				car.new_career(ClubDB.start_leagues(Career.FIRST)[6][0], false)
+				var gg := 0
+				while not car.cup_over() and gg < 20:
+					gg += 1
+					var leg: int = car.cup_leg()
+					var two: bool = car.cup_two_legs()
+					var nm9: String = car.cup_round_name()
+					var fl: bool = car.cup_first_leg()
+					var ln: Array = car.cup_finish(2 if not two else (3 if leg == 1 else 0), 0 if not two else (1 if leg == 1 else 2), false)
+					print("LEGTEST ", nm9, " two=", two, " leg=", leg, " first=", fl, " agg_next=", car.cup_agg(), " -> ", ln.filter(func(x): return not str(x).contains("TP")))
+				print("LEGTEST won=", car.cup()["won"], " out=", car.cup()["out"])
+				get_tree().quit()
+				return
+			if menu_arg == "migtest":
+				# a save from before the new leagues: six leagues only; it gets the new ones and plays on
+				car.new_career(ClubDB.start_leagues(Career.FIRST)[1][3], false)
+				(car.d["leagues"] as Array).resize(6)
+				car.save()
+				car.d = {}
+				car.load_save(false)
+				print("MIGTEST leagues=", (car.d["leagues"] as Array).size(), " spain=", car.ids(6).size(), " my league=", car.league_name(), " club=", CLUBS[int(car.d["club"])]["n"])
+				for k in 5:
+					car.finish_match(1, 0, [])
+				print("MIGTEST round=", car.d["round"], " rank=", car.rank_of(int(car.d["club"])))
+				get_tree().quit()
+				return
+			if menu_arg == "lgtest":
+				# every league: a season with your club steered into its play-off (or the title), the play-off played,
+				# then the summer: the moves, the league sizes and Europe
+				var only := OS.get_environment("LG")
+				var sizes := []
+				for L0 in ClubDB.start_leagues(Career.FIRST):
+					sizes.append((L0 as Array).size())
+				for li in ClubDB.LEAGUES.size():
+					if only != "" and int(only) != li:
+						continue
+					var LD: Dictionary = ClubDB.LEAGUES[li]
+					car.new_career(ClubDB.start_leagues(Career.FIRST)[li][0], false, "short" if OS.get_environment("SHORT") != "" else "full")
+					var me9 := int(car.d["club"])
+					var want := int(LD["pf"][0]) if str(LD["po"]) != "" else (int(LD["rp"]) if int(LD["rp"]) > 0 else 1)
+					if OS.get_environment("WANT") != "":
+						want = int(OS.get_environment("WANT"))
+					var pl9 := []
+					var g9 := 0
+					while not car.season_over() and g9 < 120:
+						g9 += 1
+						if OS.get_environment("STOPLEG") != "" and car.po_leg2():
+							car.save()
+							print("LGTEST stopped before ", car.round_name(int(car.d["round"])), " agg=", car.po_agg(), " need winner=", car.po_need_winner(), " next=", CLUBS[car.next_match()[0]]["n"])
+							get_tree().quit()
+							return
+						if car.cup_due():
+							car.cup_finish(0, 1, false)
+							continue
+						if car.eu_due():
+							car.eu_finish(0, 1, false)
+							continue
+						if car.nat_due():
+							car.nat_quit()
+						if int(car.d["round"]) == car.rounds_total() - 1:
+							var o9: Array = car.order()
+							o9.erase(me9)
+							var tg: int = int(o9[mini(want - 1, o9.size() - 1)])
+							car.d["table"][str(me9)]["pts"] = int(car.d["table"][str(tg)]["pts"])
+							car.d["table"][str(me9)]["gf"] = int(car.d["table"][str(tg)]["gf"]) + 1
+							car.d["table"][str(me9)]["ga"] = int(car.d["table"][str(tg)]["ga"])
+						var por9: bool = car.po_round()
+						var nm9: String = car.round_name(int(car.d["round"]))
+						var ln9: Array = car.finish_match(1, 1, [], [], 1 if OS.get_environment("PENWIN") != "" else 0)
+						if por9 or int(car.d["round"]) == car.rounds_total() or str(ln9).contains("SPLIT"):
+							pl9.append("%s 1-1 v? -> %s" % [nm9, str(ln9.filter(func(x): return str(x).contains("PLAY") or str(x).contains("SPLIT") or str(x).contains("LEG") or str(x).contains("AGGREGATE") or str(x).contains("THROUGH")))])
+					print("LGTEST ", LD["n"], " rounds=", car.rounds_total(), "+", (car.d["fix"] as Array).size() - car.rounds_total(), " pos=", car.rank_of(me9), " want=", want, " move=", car.d.get("move", 0), " note=", car.d["note"])
+					for x in pl9:
+						print("LGTEST    ", x)
+					var poi: Dictionary = car.po_info()
+					if not poi.is_empty():
+						for rr in poi["rounds"]:
+							print("LGTEST    PO ", rr["nm"], " ", rr["ties"].map(func(t): return "%s %d-%d %s" % [CLUBS[int(t[0])]["s"], int(t[2]), int(t[3]), CLUBS[int(t[1])]["s"]]))
+					var pw9: Dictionary = car.d.get("pow", {})
+					print("LGTEST    play-off winners ", pw9.keys().map(func(k): return "%s:%s" % [ClubDB.LEAGUES[int(k)]["s"], CLUBS[int(pw9[k])]["s"]]))
+					car.next_season()
+					var bad := []
+					for lj in ClubDB.LEAGUES.size():
+						if car.ids(lj).size() != int(sizes[lj]):
+							bad.append("%s %d!=%d" % [ClubDB.LEAGUES[lj]["s"], car.ids(lj).size(), sizes[lj]])
+					var e9: Dictionary = car.d.get("eu", {})
+					print("LGTEST    next: ", car.league_name(), " sizes ", "OK" if bad.is_empty() else str(bad), " europe=", ("%s k=%d groups=%d" % [car.eu_name(), int(e9.get("k", 0)), (e9.get("grp", []) as Array).size()]) if not e9.is_empty() else "none")
+				get_tree().quit()
+				return
 			if menu_arg == "strtest":
 				for li in 6:
 					car.new_career(car.ids(li)[0] if li < 0 else ClubDB.start_leagues(Career.FIRST)[li][0], false)
@@ -1740,6 +1846,8 @@ func _ready() -> void:
 			if menu_arg in ["scout", "scout_sq", "bidtest"] and not has_meta("rv"):
 				_action("career")
 				scout_li = 0
+				if OS.get_environment("SCLI") != "":
+					scout_li = int(OS.get_environment("SCLI"))
 				if menu_arg != "scout":
 					scout_c = car.ids(0)[2]
 					scout_i = 9
@@ -2007,6 +2115,8 @@ func _ready() -> void:
 						room = "4821"
 						opt_mode = "coop"
 				menu_arg = {"coopl": "lobby", "quickst": "quick"}.get(menu_arg, "teams")
+				if OS.get_environment("TLI") != "":
+					team_li = int(OS.get_environment("TLI"))
 			if menu_arg == "tmtest":
 				# a quick match with a league club against a Champions Cup club: own men, own strength, own formation
 				var avg := func(t: int) -> float:
@@ -2652,7 +2762,7 @@ func _menu_info() -> Dictionary:
 		"diff": DIFF_NAMES[opt_diff], "len": LEN_NAMES[opt_len], "mode": opt_mode, "code": room,
 		"connected": net.connected, "role": net.role, "version": version, "web": net.web, "snd": SND_NAMES[opt_snd], "voice": opt_voice,
 		"score": "%d - %d" % [score[0], score[1]], "online": net.role != "", "result": _result(), "stats": _stat_rows(), "club": opt_club, "gclub": guest_club, "own_ft": opt_own and _has_own(), "lclub": _lobby_club(), "gname": _guest_name(), "own_i": int(car_main.d["club"]) if _has_own() else -1, "clubs": CLUBS, "from": teams_from, "rates": _club_rates(), "tgroups": _team_groups(), "tside": team_side, "tli": team_li, "opp": opt_opp,
-		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on or nat_on, "subs": _subs_info(), "mtac": _mtac_info(), "paused_by": paused_by, "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "pxp": pro_bar, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "slen": opt_slen, "scout": _scout_info(),
+		"car": _car_info(), "pro": _pro_info(), "pro_new": _pro_new_info(), "pro_tile": _pro_tile(), "upd": upd_ready, "inst": app_inst, "own_new": own_new, "own_cols": OWN_COLS, "tab": hub_tab, "pstats": _rec(), "packs": car.packs() if car.has_save() else [], "pack": pack_res, "career": career_on or nat_on, "subs": _subs_info(), "mtac": _mtac_info(), "paused_by": paused_by, "can_sub": screen == "match" and state != "full" and pro_sq < 0 and not _subs_info().is_empty(), "car_lines": car_lines, "pxp": pro_bar, "co_text": _co_text() if net.role == "host" else co_text, "co_cup": opt_cup, "has_car": car.has_save(), "world": _world_info(), "start_li": start_li, "pick_ctry": pick_ctry, "slen": opt_slen, "scout": _scout_info(),
 		"rank": _rk_info(), "fr": fr, "fr_inv": fr_inv, "rk": rk_on, "start_kind": start_kind, "cup_ctry": cup_ctry, "new_sure": new_sure, "cupm": cup_mode, "cupc": _cupc_info(), "my": _my_info(), "car_on": carc.has_save() and carc.on(), "incar": in_career or assist, "assist": assist, "has_cv": carv.has_save() and net.role == "guest" and net.connected, "cv_pro": carv.has_save() and carv.pro(), "sug": sug_cur, "co_room": room if (net.role == "host" and in_career and opt_car) else "", "co_conn": net.connected, "co_rdy": co_rdy, "co_car": opt_car and in_career, "eur": car.eur, "has_cr": carc.has_save(), "cr": _cr_tile(),
 		"g0": ",  ".join(PackedStringArray(tst[0].get("g", []))), "g1": ",  ".join(PackedStringArray(tst[1].get("g", []))),
 	}
@@ -2988,10 +3098,10 @@ func _car_info() -> Dictionary:
 		mk.append({"n": str(pl["n"]).to_upper(), "pos": str(pl["pos"]), "ovr": Career.ovr_of(pl), "pot": int(pl["pot"]), "age": int(pl["age"]), "st": [int(pl["pac"]), int(pl["sho"]), int(pl["pas"]), int(pl["dfn"])], "price": Career.value(pl), "wk": Career.wage_of(pl), "no": car.refuses(pl, -1, true)})
 	var roles := _my_form(car.form(), car.lay())
 	return {
-		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "coins": int(d["coins"]),
+		"name": CLUBS[me_c]["n"], "kit": CLUBS[me_c]["k"], "season": int(d["season"]), "round": int(d["round"]), "rounds": car.rounds_total(), "po_now": car.po_round() and not car.season_over(), "rname": car.round_name(int(d["round"])), "po": car.po_info(), "rules": Career.rules_text(car.lg()), "split": d.has("spl"), "coins": int(d["coins"]),
 		"rank": car.rank_of(me_c), "my_r": int(round(car.my_strength())), "opp_r": int(round(car._strength(nm[0]))) if nm[0] >= 0 else 0, "opp": CLUBS[nm[0]]["n"] if nm[0] >= 0 else "", "opp_rank": car.rank_of(nm[0]) if nm[0] >= 0 else 0, "opp_kit": CLUBS[nm[0]]["k"] if nm[0] >= 0 else [], "derby": car._next_derby() if car.d.has("leagues") else false, "rival": str(CLUBS[car.rival_of(me_c)]["n"]) if car.d.has("leagues") and car.rival_of(me_c) >= 0 else "", "drb": car.derby_rec(),
 		"home": nm[1], "over": car.season_over(), "note": str(d.get("note", "")), "last": last, "table": rows, "squad": squad, "xi": d["xi"], "sel": car_sel,
-		"div": car.div(), "lgname": car.league_name(), "n": car.ids().size(), "up": int(car.league()["up"]), "down": int(car.league()["down"]), "slen": str(d.get("slen", "full")), "cup": _cup_info(),
+		"div": car.div(), "lgname": car.league_name(), "n": car.ids().size(), "up": int(car.league()["up"]), "down": int(car.league()["down"]), "pf": car.league()["pf"], "rp": int(car.league()["rp"]), "sp": int(car.league()["sp"]), "slen": str(d.get("slen", "full")), "cup": _cup_info(),
 		"fac": _fac_info(), "tp": tp_all, "market": mk, "sell_sure": car_sell, "form": roles, "fname": car.form(), "moved": not car.lay().is_empty(), "str": int(round(car.my_strength())), "msg": car_msg, "sure": car_sure,
 		"ab_pick": _ab_pick_info(), "board": _board_info(), "cup_due": car.cup_due(), "cup_after": car.cup_after(), "mode": car.mode(),
 		"sacked": car.d.has("sacked"), "on": car.on(),
@@ -3023,7 +3133,7 @@ func _eu_info() -> Dictionary:
 	for g in 8:
 		var rows := []
 		for c in car.eu_group(g):
-			var r: Array = e["gt"][str(c)]
+			var r: Array = e["gt"][str(int(c))]
 			rows.append([str(CLUBS[int(c)]["n"]).capitalize(), int(r[0]), int(r[4]) - int(r[5]), int(r[6]), int(c) == me_c, CLUBS[int(c)]["k"]])
 		groups.append(rows)
 	var rounds := []
@@ -3184,7 +3294,7 @@ func _world_info() -> Array:
 			cl.append({"i": int(c), "n": cc0[int(c)]["n"], "k": cc0[int(c)]["k"], "r": car.rating(int(c)), "me": car.has_save() and int(c) == int(car.d.get("club", -1))})
 		cl.sort_custom(func(a, b): return int(a["r"]) > int(b["r"]))
 		var L: Dictionary = ClubDB.LEAGUES[li]
-		out.append({"n": L["n"], "c": L["c"], "t": int(L["t"]), "clubs": cl, "up": int(L["up"]), "down": int(L["down"])})
+		out.append({"n": L["n"], "c": L["c"], "t": int(L["t"]), "clubs": cl, "up": int(L["up"]), "down": int(L["down"]), "rules": Career.rules_text(li), "pf": L["pf"], "rp": int(L["rp"]), "sp": int(L["sp"])})
 	return out
 
 func _scout_info() -> Dictionary:
@@ -3439,7 +3549,13 @@ func _pro_enter(show := true) -> void:
 func _pro_picks() -> Array:
 	var lgs: Array = ClubDB.start_leagues(Career.FIRST)
 	var out := []
-	for li in [3, 5, 3, 2, 5, 4]:
+	# a few from England and Denmark as before, and one from somewhere else in Europe each time
+	var abroad := []
+	for li2 in ClubDB.LEAGUES.size():
+		if li2 > 5:
+			abroad.append(li2)
+	abroad.shuffle()
+	for li in [3, 5, 3, 2, 5, int(abroad[0])]:
 		if li < lgs.size():
 			var ids: Array = (lgs[li] as Array).duplicate()
 			ids.shuffle()
@@ -3470,7 +3586,9 @@ func _cup_start_mine(ctry: String) -> void:
 	var mc := _my_club()
 	if mc.is_empty():
 		return
-	var li := 3 if ctry == "ENGLAND" else 5
+	# your club takes the place of the weakest club of the country's lowest league
+	var lc: Array = ClubDB.leagues_of(ctry)
+	var li: int = int(lc[lc.size() - 1]) if not lc.is_empty() else 3
 	cupc.new_career(cupc.weakest(li), true)
 	cupc.d["own"] = (mc["own"] as Dictionary).duplicate(true) if mc.has("own") else {"n": "MY CLUB", "s": "MYC", "k": ["dc2424", "f4f4f4", "dc2424"]}
 	# your team goes into the cup as a copy: what happens there stays there
@@ -4025,6 +4143,15 @@ func _action(act: String, arg = null) -> void:
 		"sc_lg":
 			scout_li = int(arg)
 			hud.refresh(_menu_info())
+		"sc_ctry":
+			# a country tab: its top league
+			var lc: Array = ClubDB.leagues_of(str(arg))
+			if not lc.is_empty():
+				scout_li = int(lc[0])
+			hud.refresh(_menu_info())
+		"pk_ctry":
+			pick_ctry = str(arg)
+			hud.refresh(_menu_info())
 		"sc_club":
 			scout_c = int(arg)
 			scout_i = -1
@@ -4339,6 +4466,7 @@ func _action(act: String, arg = null) -> void:
 		"cm_club":
 			start_kind = "cup"
 			cup_ctry = str(arg)
+			pick_ctry = cup_ctry
 			hud.show_menu("start_lg", _menu_info())
 		"cm_back":
 			_cm_leave()
@@ -4360,7 +4488,8 @@ func _action(act: String, arg = null) -> void:
 			team_li = _team_tab(cur) if not (team_side == "me" and opt_own and _has_own()) else -98
 			hud.show_menu("teams", _menu_info())
 		"tm_lg":
-			team_li = int(arg)
+			if int(arg) == -98 or int(arg) >= -1:
+				team_li = int(arg)
 			hud.show_menu("teams", _menu_info())
 		"opp_any":
 			# the computer picks its own team again
@@ -4544,6 +4673,8 @@ func _co_text() -> String:
 		return "CUP %s  ·  %s v %s  ·  BOARD: %s" % [car.cup_round_name(), CLUBS[int(car.d["club"])]["n"], CLUBS[car.cup_opp()]["n"], Career.mood_of(car.conf())]
 	if car.season_over():
 		return "%s  ·  NEW SEASON" % CLUBS[int(car.d["club"])]["n"]
+	if car.po_round():
+		return "%s v %s  ·  %s  ·  BOARD: %s" % [CLUBS[int(car.d["club"])]["n"], CLUBS[car.next_match()[0]]["n"], car.round_name(int(car.d["round"])).to_upper(), Career.mood_of(car.conf())]
 	return "%s v %s  ·  ROUND %d OF %d  ·  %s IN THE TABLE  ·  BOARD: %s" % [CLUBS[int(car.d["club"])]["n"], CLUBS[car.next_match()[0]]["n"], int(car.d["round"]) + 1, car.rounds_total(), Career.ordinal(car.rank_of(int(car.d["club"]))), Career.mood_of(car.conf())]
 
 # ---------------------------------------------------------------- ranked online
@@ -4647,8 +4778,7 @@ func _team_groups() -> Array:
 		for ci in range(Career.FIRST, base.size()):
 			if int(base[ci].get("lg", -9)) == li and ci != oi:
 				ids.append(ci)
-		var ln := str(ClubDB.LEAGUES[li]["n"]).replace("DIVISION ", "").replace("ENGLAND", "ENG").replace("DENMARK", "DEN")
-		g.append({"li": li, "n": ln, "ids": ids})
+		g.append({"li": li, "n": str(ClubDB.LEAGUES[li]["s"]), "ids": ids, "c": str(ClubDB.LEAGUES[li]["c"]), "t": int(ClubDB.LEAGUES[li]["t"])})
 	var eu := []
 	for ci in range(Career.FIRST, base.size()):
 		if int(base[ci].get("lg", -9)) == -1 and ci != oi:
@@ -4984,6 +5114,9 @@ func _host_start() -> void:
 		start_msg["ft"] = 1
 		start_msg["ta"] = tov[0]
 		start_msg["tb"] = tov[1]
+	var ag2 := _agg_now()
+	if bool(ag2[0]):
+		start_msg["agg"] = ag2[1]
 	wait_friend = 0.0
 	net.send(start_msg)
 	_begin_match(true)
@@ -5026,6 +5159,10 @@ func _guest_start(m: Dictionary) -> void:
 				CLUBS[mi] = base0[mi]
 	sq_over = m.get("sq", [])
 	sq1_over = m.get("sq1", [])
+	# a second leg: the guest's score line shows the aggregate too
+	hud.agg_on = m.has("agg")
+	hud.agg = m.get("agg", [0, 0])
+	agg_off = [0, 0]
 	co_got = false
 	car_lines = []
 	pro_bar = {}
@@ -5347,6 +5484,12 @@ func _begin_match(with_intro: bool) -> void:
 	so_g = [0, 0]
 	so_n = [0, 0]
 	so_win = -1
+	# a second leg: the first leg's goals count (the play-offs)
+	if net.role != "guest":
+		var ag := _agg_now()
+		agg_off = ag[1]
+		hud.agg_on = bool(ag[0])
+		hud.agg = agg_off.duplicate()
 	subs_left = 3
 	sub_sel = -1
 	sub_off = []
@@ -6902,18 +7045,32 @@ func _play(dt: float) -> void:
 		snd("whistle_half")
 		snd("clap_big", 0.7)
 		_banner("HALF TIME", Color(1, 1, 1), 2.2, "%d - %d" % [score[0], score[1]])
-	elif half == 2 and clock >= 5400.0 and score[0] == score[1] and _needs_winner() and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 5550.0):
+	elif half == 2 and clock >= 5400.0 and _level() and _needs_winner() and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 5550.0):
 		# level after 90 minutes in a tie that needs a winner: two halves of extra time
 		_break(3, 5400.0, randi() % 2, "EXTRA TIME", "2 x 15 MINUTES")
 	elif half == 3 and clock >= 6300.0 and (ball_owner != null or clock > 6390.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 6450.0):
 		_break(4, 6300.0, 1 - et_kick, "HALF TIME", "EXTRA TIME  %d - %d" % [score[0], score[1]])
 	elif half == 4 and clock >= 7200.0 and (ball_owner != null or clock > 7290.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 7350.0):
-		if score[0] == score[1]:
+		if _level():
 			_so_start()
 		else:
 			_full_time()
 	elif half == 2 and clock >= 5400.0 and (ball_owner != null or clock > 5490.0 or autotest) and (absf(ball.position.x) < 32.0 or autotest or clock > 5550.0):
 		_full_time()
+
+# a second leg now? [shown, first-leg goals [team 0, team 1]] (a play-off or a two-legged cup round)
+func _agg_now() -> Array:
+	if not career_on or not car.has_save():
+		return [false, [0, 0]]
+	if cup_on:
+		return [car.cup_leg() == 2, car.cup_agg()]
+	if not eu_on and not nat_on and car.d.has("leagues") and car.po_round():
+		return [car.po_leg2(), car.po_agg()]
+	return [false, [0, 0]]
+
+# level, counting the first leg of a two-legged tie
+func _level() -> bool:
+	return score[0] + int(agg_off[0]) == score[1] + int(agg_off[1])
 
 # a cup tie, or a single match where you play against each other, cannot end level
 func _needs_winner() -> bool:
@@ -6921,7 +7078,11 @@ func _needs_winner() -> bool:
 		# ranked is like a league match: a draw is a draw
 		return false
 	if cup_on:
-		return true
+		# the first leg of a two-legged cup round may end level
+		return not (career_on and car.has_save() and car.cup_first_leg())
+	if career_on and not eu_on and not nat_on and car.has_save() and car.po_round():
+		# a play-off: the last leg needs a winner when the rule is penalties
+		return car.po_need_winner()
 	if career_on:
 		return false
 	return _team_human(0) and _team_human(1)
@@ -7071,8 +7232,8 @@ func _so_end() -> void:
 
 # who won the match: the score, or the shootout after a draw (-1 = a draw)
 func _winner() -> int:
-	if score[0] != score[1]:
-		return 0 if score[0] > score[1] else 1
+	if not _level():
+		return 0 if score[0] + int(agg_off[0]) > score[1] + int(agg_off[1]) else 1
 	return so_win
 
 func _full_time() -> void:
@@ -7122,7 +7283,7 @@ func _full_time() -> void:
 		co_pay = [car.last_coins, _winner() == 0, ([car_lines[2]] if car_lines.size() > 2 else []) + ([car_lines[1]] if car_lines.size() > 1 else [])]
 		_car_coins(false)
 	elif career_on:
-		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played)
+		car_lines = car.finish_match(score[0], score[1], car_goals, sub_played, (1 if _winner() == 0 else 0) if so_win >= 0 else -1)
 		adv_from = car.today() if (car == carc or car == proc) and in_career else -99
 		car_lines.append("%s IN THE TABLE" % Career.ordinal(car.rank_of(int(car.d["club"]))))
 		_car_coins(true)
@@ -10283,7 +10444,7 @@ func _bot_inputs(dt: float) -> void:
 # The host's phone sends its career to the friend's phone whenever it changes. The friend can open it and look at
 # everything: the squad, the table, the transfers, the club and the office. What he changes there is not done: it goes
 # to the manager as a suggestion, and the manager says yes or no.
-const AS_LOOK := ["tab", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
+const AS_LOOK := ["tab", "sc_ctry", "pk_ctry", "c_table", "c_squad", "c_board", "c_club", "c_market", "scout", "sc_lg", "sc_club", "sc_pl", "sc_back",
 	"c_ab", "c_abback", "c_review", "cup", "how_ok", "how", "as_open", "as_back", "career", "c_trainm", "pause", "resume", "snd_opt", "voice_opt", "mtac", "mtac_set",
 	"cab", "cab_tab", "cal", "inbox", "mail", "tnews", "scorers", "eu", "youth", "y_tab", "y_pick", "adv_done", "ct_back", "cset", "ct_open", "ct_w", "ct_y", "p_skills", "ctac", "nat", "nat_tab", "ct_rc", "sc_swp"]
 const AS_SUG := ["c_train", "c_abuy", "c_tp", "c_fac", "c_buy", "c_spot", "c_swap", "c_lay0", "c_form", "sc_bid", "c_plan",
@@ -10736,7 +10897,7 @@ func _sim_mine() -> void:
 		so_win = 0 if randf() < clampf(0.5 + df, 0.2, 0.8) else 1
 		pens = "Won on penalties" if so_win == 0 else "Lost on penalties"
 	var date: String = car.date_text(car.next_day(), true)
-	var what: String = (car.cup_name().capitalize() + ", " + car.cup_round_name().capitalize()) if cupt else ((car.eu_name().capitalize() + ", " + car.eu_round_name().capitalize()) if eut else (car.league_name().capitalize() + ", round %d" % (int(car.d["round"]) + 1)))
+	var what: String = (car.cup_name().capitalize() + ", " + car.cup_round_name().capitalize()) if cupt else ((car.eu_name().capitalize() + ", " + car.eu_round_name().capitalize()) if eut else (car.league_name().capitalize() + ", " + car.round_name(int(car.d["round"])).to_lower()))
 	if cupt:
 		car_lines = car.cup_finish(score[0], score[1], so_win == 0)
 		_car_coins(false)

@@ -97,6 +97,7 @@ func load_save(is_web: bool) -> void:
 			if not d.has("leagues"):
 				_migrate()
 				save()
+			_world_fix()
 			if not d.has("on"):
 				# a save from before the career was a choice: it is a running career
 				d["on"] = true
@@ -345,6 +346,14 @@ func _new_season() -> void:
 			rd2.append([m[1], m[0]])
 		back.append(rd2)
 	d["fix"] = rounds + ([] if str(d.get("slen", "full")) == "short" else back)
+	# a league with a split (Denmark) plays more rounds after it: the halves meet again among themselves
+	var lr: int = (d["fix"] as Array).size()
+	var sp := int(league().get("sp", 0))
+	if sp > 0 and n == 12:
+		lr += 5 if str(d.get("slen", "full")) == "short" else 10
+	d["lr"] = lr
+	for k in ["spl", "po", "pow", "hh", "final"]:
+		d.erase(k)
 	var table := {}
 	for c in ids0:
 		table[str(c)] = {"p": 0, "w": 0, "d": 0, "l": 0, "gf": 0, "ga": 0, "pts": 0}
@@ -360,11 +369,24 @@ func _new_season() -> void:
 	d["mon"] = -1
 	d["aw"] = []
 
+# the league rounds of the season (the split rounds of a league like Denmark's count, the play-offs do not)
 func rounds_total() -> int:
-	return (d["fix"] as Array).size()
+	return int(d.get("lr", (d["fix"] as Array).size()))
 
+# over when every round is played: the league, a split and any play-off you are in
 func season_over() -> bool:
-	return int(d["round"]) >= rounds_total()
+	return int(d["round"]) >= maxi((d["fix"] as Array).size(), rounds_total())
+
+# a play-off round of yours (played after the league rounds)
+func po_round(r := -1) -> bool:
+	return (r if r >= 0 else int(d["round"])) >= rounds_total()
+
+# the name of a round on the calendar and the match card
+func round_name(r: int) -> String:
+	if po_round(r):
+		var nm: Dictionary = (d.get("po", {}) as Dictionary).get("nm", {})
+		return str(nm.get(str(r), "Play-off")).capitalize()
+	return "Round %d" % (r + 1)
 
 # The other club in your next match, and whether you are at home.
 func next_match() -> Array:
@@ -398,8 +420,23 @@ func league(li := -1) -> Dictionary:
 func league_name(li := -1) -> String:
 	return str(league(li)["n"])
 
+# A save from before the new leagues: they join the world as they are at the start of the game. Their clubs that
+# played only in Europe before keep their place in the world list, so nothing in the save points at a wrong club.
+func _world_fix() -> void:
+	if not d.has("leagues"):
+		return
+	var lgs: Array = d["leagues"]
+	if lgs.size() >= ClubDB.LEAGUES.size():
+		return
+	var st := ClubDB.start_leagues(FIRST)
+	for li in range(lgs.size(), ClubDB.LEAGUES.size()):
+		lgs.append((st[li] as Array).duplicate())
+	d["leagues"] = lgs
+	d.erase("final")
+
 # the clubs in a league now (your league when li is left out)
 func ids(li := -1) -> Array:
+	_world_fix()
 	var out := []
 	for x in (d["leagues"] as Array)[lg() if li < 0 else li]:
 		out.append(int(x))
@@ -490,11 +527,11 @@ func weakest(li: int) -> int:
 	return best
 
 static func start_coins(li: int) -> int:
-	return [2500, 1000, 450, 200, 700, 250][clampi(li, 0, 5)]
+	return int(ClubDB.LEAGUES[clampi(li, 0, ClubDB.LEAGUES.size() - 1)]["sc"])
 
 # how much a league's matches pay, against the bottom league
 static func pay_k(li: int) -> float:
-	return [3.0, 2.0, 1.4, 1.0, 1.8, 1.1][clampi(li, 0, 5)]
+	return float(ClubDB.LEAGUES[clampi(li, 0, ClubDB.LEAGUES.size() - 1)]["pk"])
 
 # The career is a ladder of four divisions: you start in Division 4. The top two go up, the bottom two go down.
 # the level inside the country: 1 = the top league
@@ -546,12 +583,19 @@ func _book(a: int, b: int, ga: int, gb: int) -> void:
 		ta["pts"] = int(ta["pts"]) + 1
 		tb["pts"] = int(tb["pts"]) + 1
 	# the last five results, newest last: W, D or L
+	# the games between two clubs, for leagues where they split clubs level on points
+	var hh: Dictionary = d.get("hh", {})
+	var hk := "%d:%d" % [mini(a, b), maxi(a, b)]
+	var hv: Array = hh.get(hk, [0, 0])
+	hv = [int(hv[0]) + (ga if a < b else gb), int(hv[1]) + (gb if a < b else ga)]
+	hh[hk] = hv
+	d["hh"] = hh
 	ta["fm"] = (str(ta.get("fm", "")) + ("W" if ga > gb else ("L" if ga < gb else "D"))).right(5)
 	tb["fm"] = (str(tb.get("fm", "")) + ("W" if gb > ga else ("L" if gb < ga else "D"))).right(5)
 
 # Books your result, plays the rest of the round, pays out coins and grows the players who played.
 # Returns lines for the full-time screen.
-func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) -> Array:
+func finish_match(mine: int, theirs: int, scorers: Array, played: Array = [], won_tie := -1) -> Array:
 	var fit0 := _fit_pre()
 	var me: int = int(d["club"])
 	var was_home: bool = next_match()[1]
@@ -559,11 +603,16 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var last := []
+	var por := po_round()
 	for m in d["fix"][int(d["round"])]:
 		var a: int = int(m[0])
 		var b: int = int(m[1])
 		var ga := 0
 		var gb := 0
+		if por:
+			# a play-off leg: no points, it goes to the play-off's own book
+			last.append([a, b, mine if a == me else theirs, theirs if a == me else mine])
+			continue
 		if a == me:
 			ga = mine
 			gb = theirs
@@ -590,6 +639,10 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	d["day"] = lg_day(int(d["round"]))
 	d["cur"] = int(d["day"])
 	d["round"] = int(d["round"]) + 1
+	var po_lines := []
+	if por:
+		_po_leg(mine, theirs, won_tie, po_lines)
+	_after_round(po_lines)
 	var stt: Dictionary = stats()
 	stt["p"] = int(stt["p"]) + 1
 	stt["w" if mine > theirs else ("d" if mine == theirs else "l")] = int(stt["w" if mine > theirs else ("d" if mine == theirs else "l")]) + 1
@@ -597,7 +650,7 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 	stt["ga"] = int(stt["ga"]) + theirs
 	d["st"] = stt
 	_rec_result(mine, theirs, opp_c, false)
-	var lines := []
+	var lines := po_lines
 	var coins := int(round((15 + mine * 5 + (40 if mine > theirs else (15 if mine == theirs else 0))) * pay_k(lg())))
 	if eur:
 		# a real club does not get rich from one match: the money is in the season (prize, board, sales)
@@ -667,24 +720,24 @@ func finish_match(mine: int, theirs: int, scorers: Array, played: Array = []) ->
 		if pos == 1:
 			stt["titles"] = int(stt["titles"]) + 1
 			_honour("lg", "Champions of %s" % league_name().capitalize())
-		if pos <= int(league()["up"]):
+		_sim_others()
+		var mv := my_move()
+		if mv < 0:
 			_honour("up", "Promoted from %s" % league_name().capitalize())
 		_season_awards(lines)
 		_rec_season(pos)
-		var mv := 0
 		var what := ""
-		var lgd := league()
-		if pos <= int(lgd["up"]):
-			mv = -1
+		if mv < 0:
 			what = "  PROMOTED TO %s!" % league_name(lg() - 1)
-		elif int(lgd["down"]) > 0 and pos > n - int(lgd["down"]):
-			mv = 1
+		elif mv > 0:
 			what = "  RELEGATED TO %s." % league_name(lg() + 1)
+		var pw: Dictionary = (d.get("po", {}) as Dictionary)
+		if pw.has("li") and bool(pw.get("in", false)):
+			what = ("  YOU WON THE PLAY-OFF." if int(pw.get("win", -1)) == me else "  THE PLAY-OFF WAS LOST.") + what
 		if pos == 1:
 			what = ("  CHAMPIONS OF %s!" % league_name()) + what
 		d["move"] = mv
 		d["note"] = "%s, SEASON %d: YOU FINISHED %s.%s  +%s" % [league_name(), int(d["season"]), ordinal(pos), what, money(prize)]
-		_sim_others()
 		_board_review()
 		lines.append("SEASON OVER: THE BOARD'S GRADE IS %s" % str(review().get("grade", "C")))
 	_fac_tick(lines)
@@ -766,63 +819,542 @@ func next_season() -> void:
 	world_tick([])
 	save()
 
-# The end of the season everywhere else: every other league plays its season in a blink.
+# The end of the season everywhere else: every other league plays its season in a blink, with its own rules
+# (a split, head-to-head), and every play-off you are not in is played. Done once, when your league ends.
 func _sim_others() -> void:
+	if d.has("final") and (d["final"] as Array).size() == ClubDB.LEAGUES.size():
+		return
 	var rng := RandomNumberGenerator.new()
 	rng.randomize()
 	var fin := []
+	var fp := []
 	for li in ClubDB.LEAGUES.size():
 		if li == lg():
 			fin.append(order())
+			var tp := {}
+			for c in ids():
+				tp[str(c)] = int(d["table"][str(c)]["pts"])
+			fp.append(tp)
 			continue
-		var cl: Array = ids(li)
-		var pts := {}
-		for c in cl:
-			pts[c] = [0, 0, 0]
-		for i in cl.size():
-			for j in cl.size():
-				if i == j:
-					continue
-				var a: int = cl[i]
-				var b: int = cl[j]
-				var df := (float(rating(a)) - float(rating(b))) / 14.0
-				var ga := _poisson(rng, 1.35 * exp(df) + 0.15)
-				var gb := _poisson(rng, 1.35 * exp(-df))
-				pts[a][0] += 3 if ga > gb else (1 if ga == gb else 0)
-				pts[b][0] += 3 if gb > ga else (1 if ga == gb else 0)
-				pts[a][1] += ga - gb
-				pts[b][1] += gb - ga
-				pts[a][2] += ga
-				pts[b][2] += gb
-		var ord := cl.duplicate()
-		ord.sort_custom(func(x, y): return pts[x] > pts[y] if pts[x] != pts[y] else x < y)
-		fin.append(ord)
+		var res := _sim_league(ids(li), rng, ClubDB.LEAGUES[li])
+		fin.append(res[0])
+		fp.append(res[1])
 	d["final"] = fin
+	d["fpts"] = fp
+	# the play-offs of every other league (yours is played on the pitch)
+	var pw: Dictionary = d.get("pow", {})
+	for li in ClubDB.LEAGUES.size():
+		if str(ClubDB.LEAGUES[li].get("po", "")) == "" or pw.has(str(li)):
+			continue
+		var po := _po_make(li)
+		if po.is_empty():
+			continue
+		while not bool(po["done"]):
+			_po_step(po, rng)
+		pw[str(li)] = int(po["win"])
+	d["pow"] = pw
 
-# Promotion and relegation in every country, by each league's own rules.
-func _move_clubs() -> void:
+# a league played in a blink: home and away, then the split if the league has one. Returns [order, points]
+func _sim_league(cl: Array, rng: RandomNumberGenerator, L: Dictionary) -> Array:
+	var rows := {}
+	var hh := {}
+	for c in cl:
+		rows[c] = [0, 0, 0]
+	_sim_rr(cl, rows, hh, rng)
+	var ord := _rank(cl, rows, hh, str(L.get("tb", "gd")))
+	if int(L.get("sp", 0)) > 0 and cl.size() == 12:
+		var top: Array = ord.slice(0, 6)
+		var bot: Array = ord.slice(6)
+		_sim_rr(top, rows, hh, rng)
+		_sim_rr(bot, rows, hh, rng)
+		ord = _rank(top, rows, hh, str(L.get("tb", "gd"))) + _rank(bot, rows, hh, str(L.get("tb", "gd")))
+	var pts := {}
+	for c in cl:
+		pts[str(c)] = int(rows[c][0])
+	return [ord, pts]
+
+func _sim_rr(cl: Array, rows: Dictionary, hh: Dictionary, rng: RandomNumberGenerator) -> void:
+	for i in cl.size():
+		for j in cl.size():
+			if i == j:
+				continue
+			var a: int = cl[i]
+			var b: int = cl[j]
+			var df := (float(rating(a)) - float(rating(b))) / 14.0
+			var ga := _poisson(rng, 1.35 * exp(df) + 0.15)
+			var gb := _poisson(rng, 1.35 * exp(-df))
+			rows[a][0] += 3 if ga > gb else (1 if ga == gb else 0)
+			rows[b][0] += 3 if gb > ga else (1 if ga == gb else 0)
+			rows[a][1] += ga
+			rows[a][2] += gb
+			rows[b][1] += gb
+			rows[b][2] += ga
+			var hk := "%d:%d" % [mini(a, b), maxi(a, b)]
+			var hv: Array = hh.get(hk, [0, 0])
+			hh[hk] = [int(hv[0]) + (ga if a < b else gb), int(hv[1]) + (gb if a < b else ga)]
+
+# Table order. rows = {club: [points, for, against]}. Level on points: "gd" = goal difference then goals scored;
+# "h2h" (Spain, Italy) = first the games between the clubs that are level (points, then goal difference in them).
+func _rank(cl: Array, rows: Dictionary, hh: Dictionary, tb: String) -> Array:
+	var ord := cl.duplicate()
+	ord.sort_custom(func(x, y):
+		var kx := [int(rows[x][0]), int(rows[x][1]) - int(rows[x][2]), int(rows[x][1])]
+		var ky := [int(rows[y][0]), int(rows[y][1]) - int(rows[y][2]), int(rows[y][1])]
+		return kx > ky if kx != ky else x < y)
+	if tb != "h2h":
+		return ord
+	var out := []
+	var i := 0
+	while i < ord.size():
+		var j := i
+		while j + 1 < ord.size() and int(rows[ord[j + 1]][0]) == int(rows[ord[i]][0]):
+			j += 1
+		var grp: Array = ord.slice(i, j + 1)
+		if grp.size() > 1:
+			var mini_t := {}
+			for c in grp:
+				mini_t[c] = [0, 0]
+			for x in grp.size():
+				for y in range(x + 1, grp.size()):
+					var a: int = grp[x]
+					var b: int = grp[y]
+					var hv: Array = hh.get("%d:%d" % [mini(a, b), maxi(a, b)], [0, 0])
+					var ga: int = int(hv[0]) if a < b else int(hv[1])
+					var gb: int = int(hv[1]) if a < b else int(hv[0])
+					# the goals over both games decide it, as the points over both games mostly do
+					mini_t[a][0] += 3 if ga > gb else (1 if ga == gb else 0)
+					mini_t[b][0] += 3 if gb > ga else (1 if ga == gb else 0)
+					mini_t[a][1] += ga - gb
+					mini_t[b][1] += gb - ga
+			grp.sort_custom(func(x, y):
+				var kx := [int(mini_t[x][0]), int(mini_t[x][1]), int(rows[x][1]) - int(rows[x][2]), int(rows[x][1])]
+				var ky := [int(mini_t[y][0]), int(mini_t[y][1]), int(rows[y][1]) - int(rows[y][2]), int(rows[y][1])]
+				return kx > ky if kx != ky else x < y)
+		out.append_array(grp)
+		i = j + 1
+	return out
+
+# After each of your rounds: the split comes when its round is reached, and when the league is over the
+# play-offs you are in are drawn (your games are added to your season, the others are played in a blink).
+func _after_round(lines: Array) -> void:
+	var r := int(d["round"])
+	var nfix: int = (d["fix"] as Array).size()
+	if r == nfix and nfix < rounds_total() and not d.has("spl"):
+		_split_now(lines)
+		return
+	if r == rounds_total() and not d.has("po"):
+		_sim_others()
+		_po_mine(lines)
+
+# Denmark: after the first rounds the top six play for the title, the bottom six against the drop. Points stay.
+func _split_now(lines: Array) -> void:
+	var ord := order()
+	var top: Array = ord.slice(0, 6)
+	var bot: Array = ord.slice(6)
+	d["spl"] = top
+	var short := str(d.get("slen", "full")) == "short"
+	var ra := _rr_rounds(top, short)
+	var rb := _rr_rounds(bot, short)
+	for k in ra.size():
+		(d["fix"] as Array).append((ra[k] as Array) + (rb[k] as Array))
+	var me := int(d["club"])
+	if top.has(me):
+		lines.append("THE SPLIT: YOU ARE IN THE CHAMPIONSHIP GROUP. THE TOP SIX PLAY FOR THE TITLE")
+		_mail("split", "The split: the championship group", "The league has split in two. You finished in the top six, so the last rounds are against the other five at the top. The points you have stay with you: win the group and you are champions.")
+	else:
+		lines.append("THE SPLIT: YOU ARE IN THE RELEGATION GROUP. THE BOTTOM SIX FIGHT TO STAY UP")
+		_mail("split", "The split: the relegation group", "The league has split in two. You finished in the bottom six, so the last rounds are against the other five down there. The points you have stay with you: the bottom of the group goes down.")
+
+# a round robin of the clubs: [rounds of [home, away]], each pair once (short) or twice
+func _rr_rounds(cl: Array, short: bool) -> Array:
+	var ids2 := cl.duplicate()
+	var n := ids2.size()
+	var rounds := []
+	for r in n - 1:
+		var rd := []
+		for i in n / 2:
+			var a: int = ids2[i]
+			var b: int = ids2[n - 1 - i]
+			rd.append([a, b] if ((i % 2 == 0) if i > 0 else (r % 2 == 0)) else [b, a])
+		rounds.append(rd)
+		ids2.insert(1, ids2.pop_back())
+	if short:
+		return rounds
+	var back := []
+	for rd in rounds:
+		var rd2 := []
+		for m in rd:
+			rd2.append([m[1], m[0]])
+		back.append(rd2)
+	return rounds + back
+
+# ---------------------------------------------------------------- the play-offs
+# Each league's own play-off, as in the real game (ClubDB po). A plan is a list of rounds; a tie names its two
+# clubs by their place among the play-off clubs (1 = the highest of them, e.g. 3rd in England's second league), "w0" = the winner of the first tie in the round before, "T" = the
+# top league's relegation play-off club. legs: 1 or 2. lvl: what settles a level tie: "pen" extra time and
+# penalties, "hs" the club that finished higher goes through (Italy, Spain), "ets" extra time, then the higher one.
+const PO_PLANS := {
+	"eng": [{"ties": [[1, 4], [2, 3]], "legs": 2, "lvl": "pen", "nm": "PLAY-OFF SEMI-FINAL"}, {"ties": [["w0", "w1"]], "legs": 1, "lvl": "pen", "nm": "PLAY-OFF FINAL", "neutral": true}],
+	"esp": [{"ties": [[1, 4], [2, 3]], "legs": 2, "lvl": "hs", "nm": "PLAY-OFF SEMI-FINAL"}, {"ties": [["w0", "w1"]], "legs": 2, "lvl": "hs", "nm": "PLAY-OFF FINAL"}],
+	"ita": [{"ties": [[3, 6], [4, 5]], "legs": 1, "lvl": "ets", "nm": "PLAY-OFF FIRST ROUND"}, {"ties": [[1, "w1"], [2, "w0"]], "legs": 2, "lvl": "hs", "nm": "PLAY-OFF SEMI-FINAL"}, {"ties": [["w0", "w1"]], "legs": 2, "lvl": "hs", "nm": "PLAY-OFF FINAL"}],
+	"fra": [{"ties": [[2, 3]], "legs": 1, "lvl": "pen", "nm": "PLAY-OFF FIRST ROUND"}, {"ties": [[1, "w0"]], "legs": 1, "lvl": "pen", "nm": "PLAY-OFF SECOND ROUND"}, {"ties": [["T", "w0"]], "legs": 2, "lvl": "pen", "nm": "PLAY-OFF FINAL"}],
+	"ger": [{"ties": [["T", 1]], "legs": 2, "lvl": "pen", "nm": "RELEGATION PLAY-OFF"}],
+}
+
+# a new play-off for league li (the lower league) from the final tables; {} when there is none this season
+func _po_make(li: int) -> Dictionary:
+	var L: Dictionary = ClubDB.LEAGUES[li]
+	var kind := str(L.get("po", ""))
+	if kind == "" or not PO_PLANS.has(kind):
+		return {}
 	var fin: Array = d.get("final", [])
 	if fin.size() != ClubDB.LEAGUES.size():
+		return {}
+	var ord: Array = fin[li]
+	var seeds := {}
+	for pos in range(int(L["pf"][0]), int(L["pf"][1]) + 1):
+		if pos - 1 < ord.size():
+			seeds[str(pos - int(L["pf"][0]) + 1)] = int(ord[pos - 1])
+	var top := -1
+	if li > 0 and str(ClubDB.LEAGUES[li - 1]["c"]) == str(L["c"]) and int(ClubDB.LEAGUES[li - 1].get("rp", 0)) > 0:
+		var rp := int(ClubDB.LEAGUES[li - 1]["rp"])
+		top = int((fin[li - 1] as Array)[rp - 1])
+		seeds["T"] = top
+	var po := {"li": li, "k": kind, "seeds": seeds, "r": 0, "w": [], "done": false, "win": -1, "log": [], "top": top}
+	# Italy: a third place 15 points or more clear of fourth goes up without a play-off
+	if kind == "ita":
+		var fp: Array = d.get("fpts", [])
+		if fp.size() > li:
+			var p3 := int((fp[li] as Dictionary).get(str(int(ord[2])), 0))
+			var p4 := int((fp[li] as Dictionary).get(str(int(ord[3])), 0))
+			if p3 - p4 >= 15:
+				po["done"] = true
+				po["win"] = int(ord[2])
+				po["clear"] = true
+	return po
+
+# a club's place for "the higher club": the top league's club is above them all
+func _po_seed(po: Dictionary, c: int) -> int:
+	for k in po["seeds"]:
+		if int(po["seeds"][k]) == c:
+			return 0 if str(k) == "T" else int(k)
+	return 99
+
+# the ties of the round the play-off is in: [[a, b], ...] with a the higher club
+func _po_ties(po: Dictionary) -> Array:
+	var plan: Array = PO_PLANS[str(po["k"])]
+	var rd: Dictionary = plan[int(po["r"])]
+	var out := []
+	for t in rd["ties"]:
+		var pair := []
+		for x in t:
+			if x is String and str(x).begins_with("w"):
+				pair.append(int(po["w"][int(str(x).substr(1))]))
+			else:
+				pair.append(int(po["seeds"].get(str(x), -1)))
+		if _po_seed(po, int(pair[1])) < _po_seed(po, int(pair[0])):
+			pair = [pair[1], pair[0]]
+		out.append(pair)
+	return out
+
+# who goes through a tie on goals ga-gb for the higher club a (over both legs), penalties when needed
+func _po_through(po: Dictionary, a: int, b: int, ga: int, gb: int, rng: RandomNumberGenerator, pen_a := -1) -> int:
+	if ga != gb:
+		return a if ga > gb else b
+	var rd: Dictionary = PO_PLANS[str(po["k"])][int(po["r"])]
+	if str(rd["lvl"]) == "hs" or str(rd["lvl"]) == "ets":
+		return a
+	if pen_a >= 0:
+		return a if pen_a == 1 else b
+	var df := (_strength(a) - _strength(b)) / 30.0
+	return a if rng.randf() < 0.5 + df else b
+
+# plays the round the play-off is in, in a blink (no club of yours in it)
+func _po_step(po: Dictionary, rng: RandomNumberGenerator) -> void:
+	var plan: Array = PO_PLANS[str(po["k"])]
+	var rd: Dictionary = plan[int(po["r"])]
+	var w := []
+	var lg_ := []
+	for t in _po_ties(po):
+		var a: int = int(t[0])
+		var b: int = int(t[1])
+		var ga := 0
+		var gb := 0
+		for leg in int(rd["legs"]):
+			var df := (_strength(a) - _strength(b)) / 14.0
+			ga += _poisson(rng, 1.25 * exp(df))
+			gb += _poisson(rng, 1.25 * exp(-df))
+		var win := _po_through(po, a, b, ga, gb, rng)
+		w.append(win)
+		lg_.append([a, b, ga, gb, win])
+	(po["log"] as Array).append(lg_)
+	po["w"] = w
+	po["r"] = int(po["r"]) + 1
+	if int(po["r"]) >= plan.size():
+		po["done"] = true
+		po["win"] = int(w[0])
+
+# When your league is over: are you in a play-off (your own league's, or as the top league's play-off club
+# against the league below)? Then your ties are added to the season and the rest is played in a blink.
+func _po_mine(lines: Array) -> void:
+	var me := int(d["club"])
+	var li := -1
+	var pos := rank_of(me)
+	var L := league()
+	if str(L.get("po", "")) != "" and pos >= int(L["pf"][0]) and pos <= int(L["pf"][1]):
+		li = lg()
+	elif int(L.get("rp", 0)) > 0 and pos == int(L["rp"]) and lg() + 1 < ClubDB.LEAGUES.size() and str(ClubDB.LEAGUES[lg() + 1]["c"]) == str(L["c"]):
+		li = lg() + 1
+	if li < 0:
+		d["po"] = {}
 		return
+	var po := _po_make(li)
+	if po.is_empty() or bool(po["done"]):
+		if not po.is_empty():
+			(d["pow"] as Dictionary)[str(li)] = int(po["win"])
+			if bool(po.get("clear", false)):
+				var cn := str(cname(int(po["win"]))).capitalize()
+				lines.append("NO PLAY-OFF: %s WERE 15 POINTS CLEAR IN THIRD AND GO UP" % cn.to_upper())
+		d["po"] = {}
+		return
+	po["in"] = true
+	po["nm"] = {}
+	d["po"] = po
+	(d["pow"] as Dictionary).erase(str(li))
+	_po_next(lines, true)
+
+# the play-off goes on: rounds without you are played, your next tie (or leg) is added to your season
+func _po_next(lines: Array, first := false) -> void:
+	var po: Dictionary = d["po"]
+	var me := int(d["club"])
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	while not bool(po["done"]):
+		var mine := []
+		for t in _po_ties(po):
+			if int(t[0]) == me or int(t[1]) == me:
+				mine = t
+		if mine.is_empty():
+			_po_step(po, rng)
+			continue
+		var rd: Dictionary = PO_PLANS[str(po["k"])][int(po["r"])]
+		var opp: int = int(mine[1]) if int(mine[0]) == me else int(mine[0])
+		var high: bool = int(mine[0]) == me
+		# the higher club is at home in a one-off game and in the second leg
+		var legs := int(rd["legs"])
+		var leg := 1
+		var home := high if legs == 1 else not high
+		po["cur"] = {"t": mine, "leg": leg, "legs": legs, "agg": [0, 0]}
+		(d["fix"] as Array).append([[me, opp] if home else [opp, me]])
+		var nm := str(rd["nm"]) + (", FIRST LEG" if legs == 2 else "")
+		(po["nm"] as Dictionary)[str((d["fix"] as Array).size() - 1)] = nm
+		var cn := str(cname(opp)).capitalize()
+		lines.append("%s: %s %s" % [nm, "AT A NEUTRAL GROUND AGAINST" if bool(rd.get("neutral", false)) else ("AT HOME TO" if home else "AWAY AT"), cn.to_upper()])
+		if first:
+			_mail("po", "You are in the play-off", "%s is next: %s against %s. %s" % [str(rd["nm"]).capitalize(), "two legs" if legs == 2 else "one game", cn, _po_rule_text(str(po["k"]))])
+		return
+	d["pow"][str(po["li"])] = int(po["win"])
+
+# for the match: your play-off game must end with a winner (the last leg, with penalties as the rule)
+func po_need_winner() -> bool:
+	var po: Dictionary = d.get("po", {})
+	if not po.has("cur") or not po_round():
+		return false
+	var cur: Dictionary = po["cur"]
+	var rd: Dictionary = PO_PLANS[str(po["k"])][int(po["r"])]
+	return int(cur["leg"]) == int(cur["legs"]) and str(rd["lvl"]) == "pen"
+
+# a second leg of a play-off tie
+func po_leg2() -> bool:
+	var po: Dictionary = d.get("po", {})
+	return po.has("cur") and po_round() and int(po["cur"]["leg"]) == 2
+
+# the goals so far in this tie (the first leg), as [yours, theirs]
+func po_agg() -> Array:
+	var po: Dictionary = d.get("po", {})
+	if not po.has("cur") or not po_round():
+		return [0, 0]
+	return [int(po["cur"]["agg"][0]), int(po["cur"]["agg"][1])]
+
+# the play-off for the screens: the name of your next game and the ties so far
+func po_info() -> Dictionary:
+	var po: Dictionary = d.get("po", {})
+	if not po.has("li"):
+		return {}
+	var rounds := []
+	var plan: Array = PO_PLANS[str(po["k"])]
+	for i in (po["log"] as Array).size():
+		var ts := []
+		for t in po["log"][i]:
+			ts.append([int(t[0]), int(t[1]), int(t[2]), int(t[3]), int(t[4])])
+		rounds.append({"nm": str(plan[i]["nm"]), "ties": ts})
+	var nx := ""
+	if po_round() and not season_over():
+		nx = round_name(int(d["round"]))
+	return {"li": int(po["li"]), "k": str(po["k"]), "rounds": rounds, "next": nx, "agg": po_agg(), "done": bool(po["done"]), "win": int(po["win"]), "rule": _po_rule_text(str(po["k"])), "in": bool(po.get("in", false))}
+
+# a league's rules in one line, for the menus
+static func rules_text(li: int) -> String:
+	var L: Dictionary = ClubDB.LEAGUES[li]
+	var bits := []
+	if int(L["up"]) > 0:
+		bits.append("%d up" % int(L["up"]))
+	if str(L.get("po", "")) != "":
+		var pf: Array = L["pf"]
+		bits.append(("play-off for %s" % ordinal(int(pf[0])).to_lower()) if int(pf[0]) == int(pf[1]) else ("play-off %s-%s" % [ordinal(int(pf[0])).to_lower(), ordinal(int(pf[1])).to_lower()]))
+	if int(L["down"]) > 0:
+		bits.append("%d down" % int(L["down"]))
+	if int(L.get("rp", 0)) > 0:
+		bits.append("%s in a relegation play-off" % ordinal(int(L["rp"])).to_lower())
+	if int(L.get("sp", 0)) > 0:
+		bits.append("splits in two after %d rounds" % int(L["sp"]))
+	if str(L.get("tb", "gd")) == "h2h":
+		bits.append("level on points: head-to-head")
+	if int(L.get("eu", 0)) > 0:
+		bits.append("top %d to the Champions Cup" % int(L["eu"]))
+	var t := ", ".join(PackedStringArray(bits))
+	return t.left(1).to_upper() + t.substr(1)
+
+func _po_rule_text(k: String) -> String:
+	return {"eng": "The semi-finals are over two legs, the final is one game at a neutral ground. Level after extra time: penalties.",
+		"esp": "Every round is over two legs. Level after extra time: the club that finished higher goes through.",
+		"ita": "The first round is one game at the higher club, then two legs. Level: the club that finished higher goes through.",
+		"fra": "One game at the higher club each round, then the final over two legs against the top league's club. Level: penalties.",
+		"ger": "Two legs between the top league's 16th and the 3rd of the league below. Level after extra time: penalties."}.get(k, "")
+
+# your play-off leg is played: a second leg comes next, or the tie is settled and the play-off goes on
+func _po_leg(mine: int, theirs: int, won_tie: int, lines: Array) -> void:
+	var po: Dictionary = d.get("po", {})
+	if po.is_empty() or not po.has("cur"):
+		return
+	var me := int(d["club"])
+	var cur: Dictionary = po["cur"]
+	var t: Array = cur["t"]
+	var high: bool = int(t[0]) == me
+	var agg: Array = cur["agg"]
+	agg = [int(agg[0]) + mine, int(agg[1]) + theirs]
+	cur["agg"] = agg
+	var opp: int = int(t[1]) if high else int(t[0])
+	var rd: Dictionary = PO_PLANS[str(po["k"])][int(po["r"])]
+	if int(cur["leg"]) < int(cur["legs"]):
+		cur["leg"] = int(cur["leg"]) + 1
+		var home2 := high
+		(d["fix"] as Array).append([[me, opp] if home2 else [opp, me]])
+		(po["nm"] as Dictionary)[str((d["fix"] as Array).size() - 1)] = str(rd["nm"]) + ", SECOND LEG"
+		lines.append("FIRST LEG %d-%d. THE SECOND LEG IS %s" % [mine, theirs, "AT HOME" if home2 else "AWAY"])
+		return
+	# settled: on aggregate, then by the round's own rule (penalties = the shootout you just played)
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var ga: int = agg[0] if high else agg[1]
+	var gb: int = agg[1] if high else agg[0]
+	var pen_a := -1
+	if ga == gb and won_tie >= 0:
+		pen_a = 1 if ((won_tie == 1) == high) else 0
+	var win := _po_through(po, int(t[0]), int(t[1]), ga, gb, rng, pen_a)
+	# the other ties of the round
+	var w := []
+	var lg_ := []
+	for t2 in _po_ties(po):
+		if int(t2[0]) == int(t[0]) and int(t2[1]) == int(t[1]):
+			w.append(win)
+			lg_.append([int(t[0]), int(t[1]), ga, gb, win])
+			continue
+		var a: int = int(t2[0])
+		var b: int = int(t2[1])
+		var x := 0
+		var y := 0
+		for leg in int(rd["legs"]):
+			var df := (_strength(a) - _strength(b)) / 14.0
+			x += _poisson(rng, 1.25 * exp(df))
+			y += _poisson(rng, 1.25 * exp(-df))
+		var w2 := _po_through(po, a, b, x, y, rng)
+		w.append(w2)
+		lg_.append([a, b, x, y, w2])
+	(po["log"] as Array).append(lg_)
+	po["w"] = w
+	po.erase("cur")
+	po["r"] = int(po["r"]) + 1
+	var plan: Array = PO_PLANS[str(po["k"])]
+	var last := int(po["r"]) >= plan.size()
+	if last:
+		po["done"] = true
+		po["win"] = int(w[0])
+	var agg_t := ("%d-%d ON AGGREGATE" % [agg[0], agg[1]]) if int(cur["legs"]) == 2 else ("%d-%d" % [agg[0], agg[1]])
+	if win == me:
+		if last:
+			var up_t := "PROMOTED!" if int(po["li"]) == lg() else "YOU STAY UP!"
+			lines.append("%s WON, %s %s" % [str(rd["nm"]), agg_t, up_t])
+		else:
+			lines.append("THROUGH, %s: ON TO THE %s" % [agg_t, str(plan[int(po["r"])]["nm"])])
+			_po_next(lines)
+	else:
+		lines.append("OUT OF THE PLAY-OFF, %s%s" % [agg_t, ". RELEGATED." if int(po["li"]) != lg() else ""])
+		# the rest is played without you
+		while not bool(po["done"]):
+			_po_step(po, rng)
+	if bool(po["done"]):
+		d["pow"][str(po["li"])] = int(po["win"])
+
+# your club's move this summer: -1 up, 1 down, 0 stays
+func my_move() -> int:
+	var nl := _moves()
+	if nl.is_empty():
+		return 0
+	var me := int(d["club"])
+	for li in nl.size():
+		if (nl[li] as Array).has(me):
+			return signi(li - lg())
+	return 0
+
+# Promotion and relegation in every country, by each league's own rules: the straight places, then the play-off
+# winners (up from the league below), and the relegation play-off swap (Germany, France).
+func _moves() -> Array:
+	var fin: Array = d.get("final", [])
+	if fin.size() != ClubDB.LEAGUES.size():
+		return []
+	var pw: Dictionary = d.get("pow", {})
 	var lgs := []
+	var fi := []
 	for li in fin.size():
-		lgs.append((fin[li] as Array).duplicate())
+		var row := []
+		for c in fin[li]:
+			row.append(int(c))
+		fi.append(row)
+		lgs.append(row.duplicate())
+	fin = fi
 	for li in ClubDB.LEAGUES.size() - 1:
 		var a: Dictionary = ClubDB.LEAGUES[li]
 		var b: Dictionary = ClubDB.LEAGUES[li + 1]
 		if str(a["c"]) != str(b["c"]):
 			continue
-		var dn := int(a["down"])
-		var up := int(b["up"])
-		var down_cl: Array = (fin[li] as Array).slice((fin[li] as Array).size() - dn)
-		var up_cl: Array = (fin[li + 1] as Array).slice(0, up)
+		var fa: Array = fin[li]
+		var fb: Array = fin[li + 1]
+		var down_cl: Array = fa.slice(fa.size() - int(a["down"]))
+		var up_cl: Array = fb.slice(0, int(b["up"]))
+		var pwin := int(pw.get(str(li + 1), -1))
+		if str(b.get("po", "")) != "" and pwin >= 0:
+			if int(a.get("rp", 0)) > 0:
+				# the relegation play-off: the lower club takes the top league's place if it won
+				var t := int(fa[int(a["rp"]) - 1])
+				if pwin != t:
+					down_cl.append(t)
+					up_cl.append(pwin)
+			elif not up_cl.has(pwin):
+				up_cl.append(pwin)
 		for c in down_cl:
 			lgs[li].erase(c)
 			lgs[li + 1].append(c)
 		for c in up_cl:
 			lgs[li + 1].erase(c)
 			lgs[li].append(c)
-	d["leagues"] = lgs
+	return lgs
+
+func _move_clubs() -> void:
+	var nl := _moves()
+	if nl.is_empty():
+		return
+	d["leagues"] = nl
 	d.erase("final")
 
 # A year on for the other clubs: their ratings drift a little, so the world does not stand still.
@@ -841,17 +1373,27 @@ func _age_world() -> void:
 	d["rb"] = rb
 
 # Clubs in table order (points, goal difference, goals for).
-# Clubs in table order (points, goal difference, goals for).
+# By the league's own rule for clubs level on points (head-to-head in Spain and Italy); after a split the
+# championship group stays above the relegation group whatever the points.
 func order() -> Array:
 	var ids0 := ids()
 	var t: Dictionary = d["table"]
-	ids0.sort_custom(func(a, b):
-		var ra: Dictionary = t[str(a)]
-		var rb2: Dictionary = t[str(b)]
-		var ka := [int(ra["pts"]), int(ra["gf"]) - int(ra["ga"]), int(ra["gf"])]
-		var kb := [int(rb2["pts"]), int(rb2["gf"]) - int(rb2["ga"]), int(rb2["gf"])]
-		return ka > kb if ka != kb else a < b)
-	return ids0
+	var rows := {}
+	for c in ids0:
+		var r: Dictionary = t[str(c)]
+		rows[c] = [int(r["pts"]), int(r["gf"]), int(r["ga"])]
+	var tb := str(league().get("tb", "gd"))
+	var hh: Dictionary = d.get("hh", {})
+	if d.has("spl"):
+		var top := []
+		var bot := []
+		for c in ids0:
+			if (d["spl"] as Array).has(c) or (d["spl"] as Array).has(float(c)):
+				top.append(c)
+			else:
+				bot.append(c)
+		return _rank(top, rows, hh, tb) + _rank(bot, rows, hh, tb)
+	return _rank(ids0, rows, hh, tb)
 
 func rank_of(c: int) -> int:
 	return order().find(c) + 1
@@ -1194,7 +1736,6 @@ func spend_tp(i: int, si: int) -> String:
 # ---------------------------------------------------------------- the cup
 # Each country's knockout cup with every club in it, one a season, its rounds spread through the league season.
 # The strongest clubs wait for the first round to be played (a bye) so the rest is a clean bracket.
-const CUP_NAMES := {"ENGLAND": "THE ENGLISH CUP", "DENMARK": "THE DANISH CUP"}
 
 func cup() -> Dictionary:
 	if not d.has("cup"):
@@ -1234,7 +1775,7 @@ func cup_new() -> void:
 	save()
 
 func cup_name() -> String:
-	return str(CUP_NAMES.get(str(cup().get("c", league()["c"])), "THE CUP"))
+	return str((ClubDB.CUPS.get(str(cup().get("c", league()["c"])), {}) as Dictionary).get("n", "THE CUP"))
 
 func cup_names() -> Array:
 	return cup().get("names", ["QUARTER-FINAL", "SEMI-FINAL", "FINAL"])
@@ -1299,6 +1840,9 @@ func cup_opp() -> int:
 		return -1
 	return int(t[i + 1]) if i % 2 == 0 else int(t[i - 1])
 
+func nm_now() -> String:
+	return cup_round_name()
+
 func cup_round_name() -> String:
 	var nm := cup_names()
 	return str(nm[clampi(int(cup()["r"]), 0, nm.size() - 1)])
@@ -1317,6 +1861,33 @@ func cup_finish(mine: int, theirs: int, won_tie := false) -> Array:
 		d["day"] = cup_day(r)
 		d["cur"] = int(d["day"])
 	var copp := cup_opp()
+	if cup_first_leg():
+		# the first leg: nothing is settled yet, the second leg comes a week later
+		cp["l1"] = [mine, theirs]
+		cp["leg"] = 2
+		if not bool(d.get("cupmode", false)):
+			_rec_result(mine, theirs, copp, true)
+		var c1 := int(round((10 + mine * 5) * pay_k(lg()) * (0.3 if eur else 1.0)))
+		d["coins"] = int(d["coins"]) + c1
+		last_coins = c1
+		lines.append("+" + money(c1))
+		lines.append("%s, FIRST LEG %d-%d. THE SECOND LEG DECIDES IT" % [str(nm_now()), mine, theirs])
+		var rng1 := RandomNumberGenerator.new()
+		rng1.randomize()
+		_rt_tick(d["xi"], lines)
+		_fit_post(fit0, [], lines, rng1)
+		world_tick(lines)
+		save()
+		return lines
+	if cup_leg() == 2:
+		# the second leg: the goals of both games count; level after extra time = penalties
+		var l1: Array = cp.get("l1", [0, 0])
+		mine += int(l1[0])
+		theirs += int(l1[1])
+		cp.erase("l1")
+		cp["leg"] = 1
+		lines.append("%d-%d ON AGGREGATE" % [mine, theirs])
+	won = mine > theirs or (mine == theirs and won_tie)
 	if not bool(d.get("cupmode", false)):
 		_derby_after(mine + (1 if mine == theirs and won_tie else 0), theirs, copp, lines)
 	_cup_round(mine, theirs, won_tie)
@@ -1875,7 +2446,8 @@ func cup_due() -> bool:
 		return false
 	if bool(d.get("cupmode", false)):
 		return true
-	var due := int(d["round"]) >= cup_after() or season_over()
+	# the second leg comes a league round after the first
+	var due := int(d["round"]) >= cup_after() + (1 if cup_leg() == 2 else 0) or season_over()
 	if due and eu_due() and eu_day(int(eu()["md"])) < cup_day(int(cup()["r"])):
 		return false
 	return due
@@ -1893,7 +2465,14 @@ func cup_after_r(cr: int) -> int:
 # You see a range ("can reach 74-86"); a better scout gives a narrower one, and it narrows while the boy is in
 # your academy. Now and then a scout finds a wonderkid. You sign the ones you like into the academy, where they
 # grow, and promote them to the squad when they are ready.
-const REGIONS := [["England", 0.0, 1.0], ["Denmark", -1.0, 0.9], ["Spain", 2.0, 1.1], ["Brazil", 3.0, 1.4], ["Netherlands", 1.0, 1.0], ["Germany", 1.0, 0.9], ["France", 2.0, 1.1], ["Argentina", 2.5, 1.3]]
+const REGIONS := [["England", 0.0, 1.0], ["Denmark", -1.0, 0.9], ["Spain", 2.0, 1.1], ["Brazil", 3.0, 1.4], ["Netherlands", 1.0, 1.0], ["Germany", 1.0, 0.9], ["France", 2.0, 1.1], ["Argentina", 2.5, 1.3], ["Italy", 1.5, 1.0], ["Portugal", 2.0, 1.2]]
+
+# the scouting region of a country (the academy's local boys come from there)
+static func region_of(ctry: String) -> int:
+	for i in REGIONS.size():
+		if str(REGIONS[i][0]).to_upper() == ctry:
+			return i
+	return 0
 const SCOUT_NAMES := ["Pete Harlow", "Jens Mogensen", "Rui Alves", "Marta Diaz", "Tom Becker", "Ole Krag", "Sam Okafor", "Luis Pardo"]
 const ACAD_MAX := 6
 const PROS_MAX := 8
@@ -2092,7 +2671,7 @@ func youth_local(rng: RandomNumberGenerator) -> String:
 	if academy().size() >= ACAD_MAX:
 		return ""
 	var ctry := str(league()["c"])
-	var pl := _youth(rng, 1 if ctry == "DENMARK" else 0, 1 + fac("youth"))
+	var pl := _youth(rng, region_of(ctry), 1 + fac("youth"))
 	pl.erase("exp")
 	pl["olo"] = ovr_of(pl)
 	pl["ohi"] = ovr_of(pl)
@@ -2141,11 +2720,39 @@ func lg_day(r: int) -> int:
 		return 0
 	if r < ds.size():
 		return int(ds[maxi(r, 0)])
-	return int(ds[ds.size() - 1]) + 7 * (r - ds.size() + 1)
+	# after the league: the play-offs, two games a week
+	return int(ds[ds.size() - 1]) + 4 * (r - ds.size() + 1)
 
 # a cup tie: the Wednesday after its league round
 func cup_day(cr: int) -> int:
-	return lg_day(maxi(cup_after_r(cr) - 1, 0)) + 4
+	return lg_day(maxi(cup_after_r(cr) - 1, 0)) + 4 + (7 if cr == int(cup().get("r", 0)) and cup_leg() == 2 else 0)
+
+# Two legs, as in the real cups (ClubDB.CUPS two): the rounds before the final that are home and away.
+func cup_two_legs(r := -1) -> bool:
+	if bool(d.get("cupmode", false)) and not d.has("cup"):
+		return false
+	var cp: Dictionary = cup()
+	var rr := int(cp["r"]) if r < 0 else r
+	var two := int((ClubDB.CUPS.get(str(cp.get("c", "")), {}) as Dictionary).get("two", 0))
+	var last := cup_rounds() - 1
+	return two > 0 and rr < last and rr >= last - two
+
+# 1 or 2: the leg of your tie in this round (always 1 in a one-off round)
+func cup_leg() -> int:
+	if not d.has("cup"):
+		return 1
+	return int(d["cup"].get("leg", 1))
+
+# the first leg's goals, as [yours, theirs], in a second leg
+func cup_agg() -> Array:
+	if cup_leg() != 2:
+		return [0, 0]
+	var l1: Array = d["cup"].get("l1", [0, 0])
+	return [int(l1[0]), int(l1[1])]
+
+# a cup match that may end level: the first leg of a two-legged round
+func cup_first_leg() -> bool:
+	return d.has("cup") and cup_two_legs() and cup_leg() == 1
 
 # the first match day: the first Saturday from the 8th of August, one year on for each season
 func _day0() -> int:
@@ -2185,7 +2792,7 @@ func calendar() -> Array:
 				opp = int(m[0])
 				home = false
 		var res: Array = mr.get(str(r), [])
-		out.append({"day": lg_day(r), "kind": "lg", "opp": opp, "home": home, "res": res, "played": r < int(d["round"]), "name": "Round %d" % (r + 1), "next": false})
+		out.append({"day": lg_day(r), "kind": "lg", "opp": opp, "home": home, "res": res, "played": r < int(d["round"]), "name": round_name(r), "next": false})
 	if not bool(d.get("cupmode", false)) and d.has("cup"):
 		var cp: Dictionary = cup()
 		var nm := cup_names()
@@ -2450,12 +3057,14 @@ func cpu_xi(c: int, roles: Array) -> Array:
 		out.append(sq[best])
 	return out
 
-# A club in your country at the player's level that would buy him.
+# A club at the player's level that would buy him: mostly in your country, now and then a top club abroad.
 func _buyer_for(pl: Dictionary, rng: RandomNumberGenerator) -> int:
 	var o := ovr_of(pl)
 	var cand := []
 	for li in ClubDB.LEAGUES.size():
-		if str(ClubDB.LEAGUES[li]["c"]) != str(league()["c"]):
+		var home: bool = str(ClubDB.LEAGUES[li]["c"]) == str(league()["c"])
+		# clubs abroad bid too, for a man good enough for their top league
+		if not home and (int(ClubDB.LEAGUES[li]["t"]) != 1 or rng.randf() < 0.6):
 			continue
 		for c in ids(li):
 			if c != int(d["club"]) and absi(rating(c) - o) <= 5:
@@ -2496,7 +3105,7 @@ func ask_price(c: int, i: int) -> int:
 static func league_prestige(li: int) -> int:
 	if li < 0 or li >= ClubDB.LEAGUES.size():
 		return 1
-	return int(ClubDB.LEAGUES[li]["t"]) + (1 if str(ClubDB.LEAGUES[li]["c"]) == "DENMARK" else 0)
+	return int(ClubDB.LEAGUES[li]["pr"])
 
 func club_prestige(c: int) -> int:
 	if c == int(d["club"]):
@@ -3345,6 +3954,15 @@ func mail_read(id: int) -> void:
 func deals() -> Array:
 	return d.get("deals", [])
 
+# every club in a league anywhere (not yours)
+func _world_clubs() -> Array:
+	var out := []
+	for li in ClubDB.LEAGUES.size():
+		for c in ids(li):
+			if int(c) != int(d["club"]):
+				out.append(int(c))
+	return out
+
 func _country_clubs() -> Array:
 	var out := []
 	var ctry := str(league()["c"])
@@ -3490,6 +4108,14 @@ func _cpu_deal(rng: RandomNumberGenerator, day: int) -> Array:
 				sellers.append(x)
 		if sellers.is_empty():
 			continue
+		if rng.randf() < 0.3:
+			# now and then the man comes from a club abroad
+			var fs := []
+			for x in _world_clubs():
+				if rating(x) < rb and rating(x) >= rb - 8 and not cl.has(x):
+					fs.append(x)
+			if not fs.is_empty():
+				sellers = fs
 		var seller: int = sellers[rng.randi() % sellers.size()]
 		var ssq: Array = cpu_squad(seller).duplicate(true)
 		var bsq: Array = cpu_squad(buyer).duplicate(true)
@@ -4056,39 +4682,41 @@ func eu_opp() -> Array:
 			return [int(t[0]), md == 9] # the final is played as our home night
 	return [-1, true]
 
+# The places in Europe, by each league's own number (ClubDB eu and eu2): the clubs at the top of each top league
+# go to the Champions Cup, the next ones to the Euro Trophy. fin = the final tables (empty = by strength, at the start).
+func _eu_lists(fin: Array) -> Array:
+	var q1 := []
+	var q2 := []
+	for li in ClubDB.LEAGUES.size():
+		var L: Dictionary = ClubDB.LEAGUES[li]
+		var n1 := int(L.get("eu", 0))
+		var n2 := int(L.get("eu2", 0))
+		if n1 + n2 <= 0:
+			continue
+		var cl: Array
+		if fin.size() == ClubDB.LEAGUES.size():
+			cl = []
+			for c in fin[li]:
+				cl.append(int(c))
+		else:
+			cl = ids(li)
+			cl.sort_custom(func(x, y): return _strength(x) > _strength(y))
+		q1.append_array(cl.slice(0, n1))
+		q2.append_array(cl.slice(n1, n1 + n2))
+	return [q1, q2]
+
 func _eu_quals_by_rating() -> Array:
-	var out := []
-	for li in [0, 4]:
-		var cl := ids(li)
-		cl.sort_custom(func(a, b): return _strength(a) > _strength(b))
-		out.append_array(cl.slice(0, 4 if li == 0 else 2))
-	return out
+	return _eu_lists([])[0]
 
 func _eu_quals_final() -> Array:
-	var fin: Array = d.get("final", [])
-	if fin.size() != ClubDB.LEAGUES.size():
-		return _eu_quals_by_rating()
-	var out := []
-	out.append_array((fin[0] as Array).slice(0, 4))
-	out.append_array((fin[4] as Array).slice(0, 2))
-	return out
+	return _eu_lists(d.get("final", []))[0]
 
-# the Euro Trophy: the next ones down, by rating at the start of a career
+# the Euro Trophy: the next ones down
 func _eu2_quals_by_rating() -> Array:
-	var out := []
-	for li in [0, 4]:
-		var cl := ids(li)
-		cl.sort_custom(func(a, b): return _strength(a) > _strength(b))
-		out.append_array(cl.slice(4, 7) if li == 0 else cl.slice(2, 5))
-	return out
+	return _eu_lists([])[1]
 
 func _eu2_quals_final(cup_won: bool) -> Array:
-	var fin: Array = d.get("final", [])
-	if fin.size() != ClubDB.LEAGUES.size():
-		return _eu2_quals_by_rating()
-	var out := []
-	out.append_array((fin[0] as Array).slice(4, 7))
-	out.append_array((fin[4] as Array).slice(2, 5))
+	var out: Array = _eu_lists(d.get("final", []))[1]
 	# the domestic cup winner plays in Europe too, whatever league he is in
 	var me := int(d["club"])
 	if cup_won and not out.has(me) and not _eu_quals_final().has(me):
@@ -4100,10 +4728,10 @@ func eu_start(q1: Array, q2: Array) -> void:
 	if q1.has(int(d["club"])):
 		eu_new(q1, 0)
 	else:
-		eu_new(q2, 1)
+		eu_new(q2, 1, q1)
 
 # a new Champions Cup for this season; it only runs when your club is in it
-func eu_new(quals: Array, k := 0) -> void:
+func eu_new(quals: Array, k := 0, other: Array = []) -> void:
 	var me := int(d["club"])
 	if bool(d.get("cupmode", false)) or not quals.has(me):
 		d.erase("eu")
@@ -4115,15 +4743,26 @@ func eu_new(quals: Array, k := 0) -> void:
 		if c < W.size():
 			fo.append(c)
 	fo.sort_custom(func(a, b): return int(W[a]["r"]) > int(W[b]["r"]))
-	var need := 32 - all.size()
-	for c in (fo.slice(0, need) if k == 0 else fo.slice(26, 26 + need)):
-		all.append(c)
+	# the clubs from the smaller countries fill the places left: the best of them in the Champions Cup
+	var skip := maxi(32 - other.size(), 0) if k == 1 else 0
+	for c in fo.slice(skip):
+		if all.size() >= 32:
+			break
+		if not all.has(c) and not other.has(c):
+			all.append(c)
 	if all.size() < 32:
-		for c in fo:
+		# still room: the next clubs of the top leagues, best first
+		var more := []
+		for li in ClubDB.LEAGUES.size():
+			if int(ClubDB.LEAGUES[li]["t"]) == 1:
+				for c in ids(li):
+					if not all.has(c) and not other.has(c):
+						more.append(c)
+		more.sort_custom(func(a, b): return rating(a) > rating(b))
+		for c in more:
 			if all.size() >= 32:
 				break
-			if not all.has(c):
-				all.append(c)
+			all.append(c)
 	# four pots by strength; each group gets one club from each pot, never two from the same country
 	all.sort_custom(func(a, b): return rating(a) > rating(b))
 	var grp := []
@@ -4148,7 +4787,7 @@ func eu_new(quals: Array, k := 0) -> void:
 						break
 	var gt := {}
 	for c in all:
-		gt[str(c)] = [0, 0, 0, 0, 0, 0, 0]
+		gt[str(int(c))] = [0, 0, 0, 0, 0, 0, 0]
 	var gl := "A"
 	for g in 8:
 		if (grp[g] as Array).has(me):
@@ -4204,8 +4843,8 @@ func eu_group(g: int) -> Array:
 	var gt: Dictionary = e["gt"]
 	var cl: Array = (e["grp"][g] as Array).duplicate()
 	cl.sort_custom(func(a, b):
-		var ra: Array = gt[str(a)]
-		var rb: Array = gt[str(b)]
+		var ra: Array = gt[str(int(a))]
+		var rb: Array = gt[str(int(b))]
 		var ka := [int(ra[6]), int(ra[4]) - int(ra[5]), int(ra[4])]
 		var kb := [int(rb[6]), int(rb[4]) - int(rb[5]), int(rb[4])]
 		return ka > kb if ka != kb else rating(a) > rating(b))
@@ -5091,7 +5730,11 @@ func tour_name() -> String:
 
 # where a man is from: most men come from the country they play in, the rest from all over
 func _home_nat() -> int:
-	return 0 if str(league().get("c", "ENGLAND")) == "DENMARK" else 1
+	var cn := str(league().get("c", "ENGLAND"))
+	for i in NATIONS.size():
+		if str(NATIONS[i][0]) == cn:
+			return i
+	return 1
 
 func nat_of(pl: Dictionary) -> int:
 	if pl.has("nat"):
