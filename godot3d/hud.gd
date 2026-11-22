@@ -1,4 +1,5 @@
 extends Control
+const ClubDB := preload("res://clubdb.gd")
 # Everything drawn on top of the 3D view: touch controls, score bug, banners, minimap and all menus.
 
 var stick := Vector2.ZERO
@@ -37,6 +38,7 @@ var font3: Font # body text, bold
 var _t := 0.0
 
 var score_lbl: Label
+var agg_lbl: Label
 var clock_lbl: Label
 var banner: Label
 var sub: Label
@@ -116,6 +118,15 @@ func _ready() -> void:
 	score_lbl.size = Vector2(184, 32)
 	score_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bug.add_child(score_lbl)
+	# a second leg: the aggregate in a small line under the score
+	agg_lbl = _label("", 16, GOLD)
+	agg_lbl.position = Vector2(22, 40)
+	agg_lbl.size = Vector2(184, 20)
+	agg_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	agg_lbl.add_theme_constant_override("outline_size", 6)
+	agg_lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	agg_lbl.visible = false
+	bug.add_child(agg_lbl)
 	clock_lbl = _label("0'", 20, GOLD)
 	clock_lbl.position = Vector2(220, 7)
 	clock_lbl.size = Vector2(64, 32)
@@ -564,17 +575,28 @@ func _teams_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 	for k in gs.size():
 		if int(gs[k]["li"]) == li:
 			gi = k
-	# the tabs: the classic eight, every league, the rest of Europe
-	var tw := (w - 64.0 - (gs.size() - 1) * 6.0) / maxf(gs.size(), 1)
+	# the tabs: the classic eight, every country, the rest of Europe; then the country's leagues
+	var cur_c := str(gs[gi].get("c", "")) if gs.size() > 0 else ""
+	var row1 := [["CLASSIC", -98]]
+	var lit = -98 if li == -98 else li
+	for cn in ClubDB.COUNTRIES:
+		var first_li := -1
+		for k in gs.size():
+			if str(gs[k].get("c", "")) == cn and first_li < 0:
+				first_li = int(gs[k]["li"])
+		row1.append([str(cn).substr(0, 3) if w < 1000.0 else str(cn).capitalize(), first_li])
+		if cn == cur_c:
+			lit = first_li
+	row1.append(["EUROPE", -1])
+	_tab_row(row1, lit, "tm_lg", 92, w, 40, 15)
+	var top := 138.0
+	var row2 := []
 	for k in gs.size():
-		var tb := _btn(str(gs[k]["n"]), "tm_lg", int(gs[k]["li"]), "ghost", Vector2(32 + k * (tw + 6.0), 92), Vector2(tw, 42), 16)
-		if k == gi:
-			for st in ["normal", "hover", "focus", "pressed"]:
-				tb.add_theme_stylebox_override(st, _box(Color(0.94, 0.95, 0.92), 12))
-			for cc in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-				tb.add_theme_color_override(cc, Color(0.03, 0.08, 0.05))
-		menu.add_child(tb)
-	var top := 144.0
+		if cur_c != "" and str(gs[k].get("c", "")) == cur_c:
+			row2.append(["DIVISION %d" % int(gs[k].get("t", 1)), int(gs[k]["li"])])
+	if row2.size() > 1:
+		_tab_row(row2, li, "tm_lg", 138, w * 0.5 + 32.0, 36, 15)
+		top = 180.0
 	# your own club (your team only) or the computer's random pick (the opponent only)
 	if (not opp and oi >= 0) or opp:
 		var ob: Button
@@ -593,7 +615,7 @@ func _teams_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		top += 56.0
 	var cl: Array = info.get("clubs", [])
 	var ids: Array = gs[gi]["ids"] if gs.size() > 0 else []
-	var cols := 4 if ids.size() <= 8 else 5
+	var cols := 4 if ids.size() <= 8 else (5 if ids.size() <= 20 else 6)
 	var rows := maxi(int(ceil(ids.size() / float(cols))), 1)
 	var gw := (w - 64.0 - (cols - 1) * 8.0) / cols
 	var gh := minf(96.0 if ids.size() <= 8 else 70.0, (h - top - 12.0) / rows - 6.0)
@@ -643,6 +665,27 @@ func _teams_page(info: Dictionary, w: float, h: float, items: Array) -> void:
 		bt.add_child(rl)
 	menu.add_child(_back("teams_back", null))
 
+# a row of tabs (countries, leagues): [[text, arg], ...]; the one with arg == cur is lit
+func _tab_row(tabs: Array, cur, act: String, y: float, w: float, hh := 40.0, fs := 16) -> void:
+	var n := maxi(tabs.size(), 1)
+	var tw := minf((w - 64.0 - (n - 1) * 6.0) / n, 190.0)
+	for k in tabs.size():
+		var tb := _btn(str(tabs[k][0]), act, tabs[k][1], "ghost", Vector2(32 + k * (tw + 6.0), y), Vector2(tw, hh), fs)
+		if tabs[k][1] == cur:
+			for st in ["normal", "hover", "focus", "pressed"]:
+				tb.add_theme_stylebox_override(st, _box(Color(0.94, 0.95, 0.92), 12))
+			for cc in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+				tb.add_theme_color_override(cc, Color(0.03, 0.08, 0.05))
+		menu.add_child(tb)
+
+# the country tabs; only = show just these countries
+func _ctry_tabs(cur: String, act: String, y: float, w: float, only: Array = []) -> void:
+	var tabs := []
+	for c in ClubDB.COUNTRIES:
+		if only.is_empty() or only.has(c):
+			tabs.append([str(c).capitalize() if w > 1000.0 else str(c).substr(0, 3), c])
+	_tab_row(tabs, cur, act, y, w)
+
 func _slide_in(c: Control, from: Vector2, delay: float) -> void:
 	var to := c.position
 	c.position = to + from
@@ -671,8 +714,14 @@ func set_teams(names: Array, shorts: Array, cols: Array) -> void:
 func _seen(c: Color) -> Color:
 	return c.lightened(0.38) if c.get_luminance() < 0.2 else c
 
+var agg_on := false # a second leg: the score line shows the aggregate too
+var agg := [0, 0]
+
 func set_score(a: int, b: int) -> void:
 	score_lbl.text = "%s  %d - %d  %s" % [t_short[0], a, b, t_short[1]]
+	agg_lbl.visible = agg_on
+	if agg_on:
+		agg_lbl.text = "AGG %d - %d" % [a + int(agg[0]), b + int(agg[1])]
 
 func set_clock(minute: int) -> void:
 	clock_lbl.text = "%d'" % minute
@@ -970,7 +1019,8 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			var t0 := _label(str(c.get("name", "")), 40, Color.WHITE)
 			t0.position = Vector2(160, 10)
 			menu.add_child(t0)
-			var sub0 := _label("DIVISION %d   ·   SEASON %d   ·   ROUND %d OF %d   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("div", 4)), int(c.get("season", 1)), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 18, Color(1, 1, 1, 0.8), font2)
+			var rtx := str(c.get("rname", "")).to_upper() if bool(c.get("po_now", false)) else "ROUND %d OF %d" % [mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14))]
+			var sub0 := _label("DIVISION %d   ·   SEASON %d   ·   %s   ·   %s PLACE   ·   TEAM RATING %d" % [int(c.get("div", 4)), int(c.get("season", 1)), rtx, _ord(int(c.get("rank", 1))), int(c.get("str", 0))], 18, Color(1, 1, 1, 0.8), font2)
 			sub0.position = Vector2(162, 58)
 			menu.add_child(sub0)
 			var co := _label(_mb(int(c.get("coins", 0))), 24, GOLD)
@@ -1090,9 +1140,19 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				keys7.append([GREEN, "TOP %d GO UP" % up7])
 			else:
 				keys7.append([GOLD, "1ST WINS THE LEAGUE"])
+			var pf7: Array = c7.get("pf", [])
+			var rp7 := int(c7.get("rp", 0))
+			var PO_C := Color(1.0, 0.62, 0.2)
+			if pf7.size() == 2:
+				keys7.append([PO_C, ("%s: PLAY-OFF" % _ord(int(pf7[0]))) if int(pf7[0]) == int(pf7[1]) else ("%s-%s: PLAY-OFF" % [_ord(int(pf7[0])), _ord(int(pf7[1]))])])
+			if rp7 > 0:
+				keys7.append([PO_C, "%s: PLAY-OFF TO STAY UP" % _ord(rp7)])
 			if dn7 > 0:
 				keys7.append([Color(0.92, 0.3, 0.3), "BOTTOM %d GO DOWN" % dn7])
-			var kx7 := w * 0.5 - 200.0 * keys7.size() * 0.5
+			if int(c7.get("sp", 0)) > 0:
+				keys7.append([Color(1, 1, 1, 0.7), "SPLIT AFTER ROUND %d" % int(c7.get("sp", 0)) if not bool(c7.get("split", false)) else "SPLIT: TOP 6 / BOTTOM 6"])
+			var kw7 := minf(250.0, (w - 64.0) / maxf(keys7.size(), 1))
+			var kx7 := w * 0.5 - kw7 * keys7.size() * 0.5
 			for kk in keys7:
 				var kc := ColorRect.new()
 				kc.color = kk[0]
@@ -1102,7 +1162,7 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				var kl := _label(str(kk[1]), 18, Color(1, 1, 1, 0.8), font2)
 				kl.position = Vector2(kx7 + 14, 69)
 				menu.add_child(kl)
-				kx7 += 200.0
+				kx7 += kw7
 			var tw2 := minf(w - 64.0, 1000.0)
 			var tx := (w - tw2) * 0.5
 			var rh2 := 48.0
@@ -1150,6 +1210,10 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					zc = GOLD
 				elif dn7 > 0 and ri >= n7 - dn7:
 					zc = Color(0.92, 0.3, 0.3)
+				elif pf7.size() == 2 and ri + 1 >= int(pf7[0]) and ri + 1 <= int(pf7[1]):
+					zc = PO_C
+				elif rp7 > 0 and ri + 1 == rp7:
+					zc = PO_C
 				if zc.a > 0.0:
 					var ze := ColorRect.new()
 					ze.color = zc
@@ -1254,27 +1318,32 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 		"cm_pick":
 			var my2: Dictionary = info.get("my", {})
 			_title("The cup", "A cup on its own: every club in the country, lose once and you are out. Your coins go to your club.")
+			# the countries as tabs, the chosen country's cup in a panel with its rules
+			var pc2 := str(info.get("pick_ctry", "ENGLAND"))
+			_ctry_tabs(pc2, "pk_ctry", 92, w)
+			var cu: Dictionary = ClubDB.CUPS.get(pc2, {})
+			var ncl := 0
+			for L3 in info.get("world", []):
+				if str(L3["c"]) == pc2:
+					ncl += (L3["clubs"] as Array).size()
+			var pn2 := _panel(Vector2(32, 146), Vector2(w - 64.0, minf(h - 146.0 - 110.0, 120.0)), 0.9)
+			items.append([pn2, Vector2(0, 50), 0.0])
+			var t1 := _label(str(cu.get("n", "THE CUP")), 30, GOLD)
+			t1.position = Vector2(24, 16)
+			pn2.add_child(t1)
+			var t2 := _label("%d clubs.  %s" % [ncl, str(cu.get("desc", ""))], 18, Color(1, 1, 1, 0.85), font2)
+			t2.autowrap_mode = TextServer.AUTOWRAP_WORD
+			t2.position = Vector2(26, 62)
+			t2.size = Vector2(pn2.size.x - 52, 90)
+			pn2.add_child(t2)
+			var by2 := 146.0 + pn2.size.y + 14.0
 			var cw2 := (w - 64.0 - 20.0) * 0.5
-			var cups := [["ENGLAND", "THE ENGLISH CUP", "92 clubs from the top league to League Two. Seven rounds to the final."], ["DENMARK", "THE DANISH CUP", "24 clubs from both Danish leagues. Five rounds to the final."]]
-			for i in 2:
-				var px2 := 32.0 + i * (cw2 + 20.0)
-				var pn2 := _panel(Vector2(px2, 100), Vector2(cw2, minf(h - 100.0 - 190.0, 150.0)), 0.9)
-				items.append([pn2, Vector2(0, 50), 0.06 * i])
-				var t1 := _label(cups[i][1], 30, GOLD)
-				t1.position = Vector2(24, 18)
-				pn2.add_child(t1)
-				var t2 := _label(cups[i][2], 18, Color(1, 1, 1, 0.85), font2)
-				t2.autowrap_mode = TextServer.AUTOWRAP_WORD
-				t2.position = Vector2(26, 64)
-				t2.size = Vector2(cw2 - 52, 60)
-				pn2.add_child(t2)
-				var by2 := 100.0 + pn2.size.y + 14.0
-				var b1 := _btn(("WITH %s" % str(my2.get("n", "MY CLUB"))) if not my2.is_empty() else "WITH MY CLUB", "cm_mine", cups[i][0], "primary" if not my2.is_empty() else "off", Vector2(px2, by2), Vector2(cw2, 70), 22)
-				menu.add_child(b1)
-				var b2 := _btn("WITH ANOTHER CLUB", "cm_club", cups[i][0], "alt", Vector2(px2, by2 + 80.0), Vector2(cw2, 62), 20)
-				menu.add_child(b2)
-				items.append([b1, Vector2(0, 60), 0.1 + 0.05 * i])
-				items.append([b2, Vector2(0, 60), 0.14 + 0.05 * i])
+			var b1 := _btn(("WITH %s" % str(my2.get("n", "MY CLUB"))) if not my2.is_empty() else "WITH MY CLUB", "cm_mine", pc2, "primary" if not my2.is_empty() else "off", Vector2(32, by2), Vector2(cw2, 70), 22)
+			menu.add_child(b1)
+			var b2 := _btn("WITH ANOTHER CLUB", "cm_club", pc2, "alt", Vector2(32 + cw2 + 20.0, by2), Vector2(cw2, 70), 22)
+			menu.add_child(b2)
+			items.append([b1, Vector2(0, 60), 0.1])
+			items.append([b2, Vector2(0, 60), 0.14])
 			menu.add_child(_back("tab", "play"))
 		"online":
 			var rk: Dictionary = info.get("rank", {})
@@ -1548,31 +1617,36 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 			var only_c := str(info.get("cup_ctry", "")) if sk == "cup" else ""
 			_title("Where do you start?" if sk != "cup" else "Pick your club", {"mine": "Pick the league your own club starts in. It takes the place of the league's weakest club.", "new": "A new club starts at the bottom. Pick the country.", "cup": "Pick a league, then the club you play the cup with."}.get(sk, "Pick a league, then the club you will run. The clubs are made up but remind you of the real ones."))
 			var cwl := (w - 64.0 - 20.0) * 0.5
-			var ctry := ["ENGLAND", "DENMARK"]
-			for ci in 2:
-				var hx := 32.0 + ci * (cwl + 20.0)
-				var hl := _label(ctry[ci], 18, GOLD, font2)
-				hl.position = Vector2(hx + 4, 100)
-				menu.add_child(hl)
-				var row := 0
-				for li in wl.size():
-					var L: Dictionary = wl[li]
-					if str(L["c"]) != ctry[ci] or (only_c != "" and only_c != ctry[ci]) or (sk == "new" and int(L.get("down", 0)) != 0):
-						continue
-					var cls: Array = L["clubs"]
-					var lo := 99
-					var hi := 0
-					for cc in cls:
-						lo = mini(lo, int(cc["r"]))
-						hi = maxi(hi, int(cc["r"]))
-					var th := (h - 130.0 - 110.0) / 4.0 - 8.0
-					var sub := "%d clubs   ·   team ratings %d to %d" % [cls.size(), lo, hi]
-					if int(L["t"]) == 1:
-						sub += "   ·   the top league"
-					var tl := _tile(str(L["n"]), sub, "st_lg", li, Vector2(hx, 128.0 + row * (th + 8.0)), Vector2(cwl, th), Color.WHITE, 22)
-					menu.add_child(tl)
-					items.append([tl, Vector2(0, 40), 0.04 * li])
-					row += 1
+			# the countries as tabs, the chosen country's leagues as tiles
+			var pc := str(info.get("pick_ctry", "ENGLAND")) if only_c == "" else only_c
+			if only_c == "":
+				_ctry_tabs(pc, "pk_ctry", 96, w)
+			var shown := []
+			for li in wl.size():
+				var L: Dictionary = wl[li]
+				if str(L["c"]) != pc or (sk == "new" and int(L.get("down", 0)) != 0):
+					continue
+				shown.append(li)
+			var ty := 148.0 if only_c == "" else 104.0
+			var th := minf(130.0, (h - ty - 110.0) / 2.0 - 8.0)
+			for k in shown.size():
+				var li: int = shown[k]
+				var L: Dictionary = wl[li]
+				var cls: Array = L["clubs"]
+				var lo := 99
+				var hi := 0
+				for cc in cls:
+					lo = mini(lo, int(cc["r"]))
+					hi = maxi(hi, int(cc["r"]))
+				var sub := "%d clubs   ·   team ratings %d to %d" % [cls.size(), lo, hi]
+				if int(L["t"]) == 1:
+					sub += "   ·   the top league"
+				var rl := str(L.get("rules", ""))
+				if rl != "":
+					sub += "\n" + rl
+				var tl := _tile(str(L["n"]), sub, "st_lg", li, Vector2(32 + (k % 2) * (cwl + 20.0), ty + (k / 2) * (th + 8.0)), Vector2(cwl, th), Color.WHITE, 22)
+				menu.add_child(tl)
+				items.append([tl, Vector2(0, 40), 0.04 * k])
 			var short := str(info.get("slen", "full")) == "short"
 			if sk == "cup":
 				menu.add_child(_back("cupm", null))
@@ -1600,21 +1674,18 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 				_title(str(L2["n"]), "Play the cup with a club as it is." if str(info.get("start_kind", "")) == "cup" else "Take over a club as it is: its squad, its strength and its board.")
 			else:
 				_title("Other clubs", "See any club's squad and bid for its players.")
-				# the six leagues as tabs
-				var tw2 := (w - 64.0 - 5 * 8.0) / 6.0
+				# the countries as tabs, then the leagues of the country
+				var sc_c := str(L2["c"])
+				_ctry_tabs(sc_c, "sc_ctry", 92, w)
+				var lt := []
 				for lj in wl2.size():
-					var on2 := lj == li2
-					var tb2 := _btn(str(wl2[lj]["n"]).replace("DIVISION ", "").replace("ENGLAND", "ENG").replace("DENMARK", "DEN"), "sc_lg", lj, "ghost", Vector2(32 + lj * (tw2 + 8.0), 96), Vector2(tw2, 40), 16)
-					if on2:
-						for st in ["normal", "hover", "focus", "pressed"]:
-							tb2.add_theme_stylebox_override(st, _box(Color(0.94, 0.95, 0.92), 12))
-						for cc2 in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-							tb2.add_theme_color_override(cc2, Color(0.03, 0.08, 0.05))
-					menu.add_child(tb2)
-				top2 = 146.0
+					if str(wl2[lj]["c"]) == sc_c:
+						lt.append(["DIVISION %d" % int(wl2[lj]["t"]), lj])
+				_tab_row(lt, li2, "sc_lg", 138, w * 0.5 + 32.0, 38, 15)
+				top2 = 184.0
 			var tiles := []
 			tiles.append_array(cls2)
-			var cols2 := 5 if tiles.size() > 20 else 4
+			var cols2 := (6 if top2 > 150.0 else 5) if tiles.size() > 20 else (5 if top2 > 150.0 and tiles.size() > 16 else 4)
 			var rows2 := int(ceil(tiles.size() / float(cols2)))
 			var gw2 := (w - 64.0 - (cols2 - 1) * 8.0) / cols2
 			var gh2 := minf(70.0, (h - top2 - 14.0) / rows2 - 6.0)
@@ -1642,13 +1713,14 @@ func _build_menu2(n: String, info: Dictionary, anim: bool) -> void:
 					bt.add_child(kb3)
 				var fs2 := 16
 				var nm2 := str(cl2["n"])
-				while fs2 > 11 and font.get_string_size(nm2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > gw2 - 74.0:
+				while fs2 > 11 and font.get_string_size(nm2, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2).x > gw2 - 82.0:
 					fs2 -= 1
 				var nl := _label(nm2, fs2, GOLD if own2 else Color.WHITE)
 				var two := not own2 and gh2 >= 44.0
 				nl.position = Vector2(28 if not own2 else 14, (gh2 * 0.5 - fs2 - 4.0) if two else (gh2 * 0.5 - fs2 * 0.7))
-				nl.size = Vector2(gw2 - 70.0, fs2 + 8)
+				nl.size = Vector2(gw2 - 80.0, fs2 + 8)
 				nl.clip_text = true
+				nl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 				bt.add_child(nl)
 				var rl2 := _label("NEW" if own2 else str(int(cl2["r"])), 18 if not own2 else 14, GOLD if not own2 else GOLD, font if not own2 else font2)
 				rl2.position = Vector2(gw2 - 48.0, gh2 * 0.5 - 13)
@@ -4094,7 +4166,8 @@ func _hub(info: Dictionary, w: float, h: float, items: Array, anim: bool) -> voi
 	var tx := 24.0 + font.get_string_size(ttl.text, HORIZONTAL_ALIGNMENT_LEFT, -1, 34).x + 16.0
 	var chip_t := ""
 	if incar:
-		chip_t = ("Together  ·  " if assist else "") + "%s  ·  round %d of %d  ·  %s" % [str(c.get("lgname", "")).capitalize(), mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14)), _ord(int(c.get("rank", 1))).to_lower()]
+		var rtx2 := str(c.get("rname", "")).to_lower() if bool(c.get("po_now", false)) else "round %d of %d" % [mini(int(c.get("round", 0)) + 1, int(c.get("rounds", 14))), int(c.get("rounds", 14))]
+		chip_t = ("Together  ·  " if assist else "") + "%s  ·  %s  ·  %s" % [str(c.get("lgname", "")).capitalize(), rtx2, _ord(int(c.get("rank", 1))).to_lower()]
 	else:
 		chip_t = "%s  ·  rating %d" % [str(c.get("name", "")).capitalize(), int(c.get("str", 0))]
 	var money := _label(_mp(int(c.get("coins", 0))) if (info.get("pro", {}) as Dictionary).is_empty() else "", 30, GOLD)
