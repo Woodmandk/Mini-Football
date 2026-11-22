@@ -2917,22 +2917,15 @@ func cpu_tac(opp: int) -> Array:
 	if opp < 0:
 		return [2, 1, 1]
 	var gap := _strength(opp) - match_strength()
-	var ment := 2
-	if gap > 6.0:
-		ment = 4 if gap > 12.0 else 3
-	elif gap < -6.0:
-		ment = 0 if gap < -12.0 else 1
-	var press := 1
-	if gap > 4.0 or derby(opp):
-		press = 2
-	elif gap < -8.0:
-		press = 0
-	var width := 1
-	if ment <= 1:
-		width = 0
-	elif (opp * 7) % 3 == 0:
-		width = 2
-	return [ment, press, width]
+	return ClubDB.plan_for(cpu_style(opp), gap, derby(opp))
+
+# how a club plays (its own style: see ClubDB.style)
+func cpu_style(c: int) -> Dictionary:
+	if c < 0 or c >= W.size():
+		return ClubDB.style({})
+	var cc: Dictionary = (W[c] as Dictionary).duplicate()
+	cc["r"] = rating(c)
+	return ClubDB.style(cc)
 
 # What two plans do to a simulated match: [your goals x, their goals x, plus to the strength gap].
 # Going forward scores more but leaves holes behind; pressing high pays most for the better side;

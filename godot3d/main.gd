@@ -345,6 +345,17 @@ var tac_m := [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]] # 
 var tac_t := [[2, 1, 1], [2, 1, 1]] # each team's plan: mentality 0-4, press 0-2, width 0-2 (career sets them)
 var tac_base := [[2, 1, 1], [2, 1, 1]] # the plan the team started with (the computer manager changes tac_t from it)
 var tac_mood := ["", ""] # what the computer manager is doing right now ("push", "allout", "sit", "bus", "ten", "")
+# The plan each side plays right now, as smooth numbers the AI reads: [mentality -2..2, press 0..2, width 0..2,
+# back line -1..1, tempo 0..1, direct 0..1]. A computer side starts from its club's own style and its manager
+# moves it through the match; a human side plays exactly the tactics you picked.
+var live := [[0.0, 1.0, 1.0, 0.0, 0.5, 0.5], [0.0, 1.0, 1.0, 0.0, 0.5, 0.5]]
+var live_tgt := [[0.0, 1.0, 1.0, 0.0, 0.5, 0.5], [0.0, 1.0, 1.0, 0.0, 0.5, 0.5]]
+var sty := [{}, {}] # each side's club style (ClubDB.style)
+var sty_on := [false, false] # true when the computer runs that side (it plays its club's style)
+var spell := [[0.0, 0.0], [0.0, 0.0]] # a pressing spell at level score: [until (clock), next chance (clock)]
+var conceded_at := [-9999.0, -9999.0] # match clock of the last goal each side let in
+var terr := [0.0, 0.0] # who has the ball where, over the last minutes: +1 camped in their half, -1 pinned back
+var mood_at := [-9999.0, -9999.0] # clock of the manager's last change that was shown
 var mgr_t := 0.0
 var cpu_sub_at := [0.0, 0.0] # match clock of the computer's last change
 var sub_hint := {} # players we already told you are tired (instance id)
@@ -2843,7 +2854,8 @@ func _mtac_info() -> Dictionary:
 	var opp := ""
 	if not _team_human(o):
 		var md := str(tac_mood[o])
-		opp = "%s: %s" % [str(TEAM_NAMES[o]).capitalize(), (str(MOOD_TXT[md][0]).to_lower() if md != "" else "playing their usual game")]
+		var stn: String = str((sty[o] as Dictionary).get("n", "")).to_lower() if sty_on[o] else ""
+		opp = "%s: %s" % [str(TEAM_NAMES[o]).capitalize(), (str(MOOD_TXT[md][0]).to_lower() if md != "" else ("playing their usual game" if stn == "" else "their usual %s game" % stn))]
 	return {"tac": tac_t[t], "opp": opp, "sub": "%s  %d - %d  %s   ·   %d'" % [str(TEAM_NAMES[0]), score[0], score[1], str(TEAM_NAMES[1]), int(clock / 60.0) + 1]}
 
 func _my_side() -> int:
@@ -3108,7 +3120,7 @@ func _car_info() -> Dictionary:
 		"eur": car.eur, "wg": car.wages_on(), "wages": car.wages() if car.eur else 0, "wb": car.wb() if car.eur else 0, "talk": car.talk(), "talk_rc": [0, car.clause_of_talk({"rc": 1, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))}), car.clause_of_talk({"rc": 2, "ovr": int(car.talk().get("ovr", 60)), "pot": int(car.talk().get("pot", 60)), "age": int(car.talk().get("age", 25))})], "fbuild": car.d.get("fbuild", {}), "conf": car.conf(), "plan": car.plan(),
 		"club_n": CLUBS[int(car.talk().get("from", -1))]["n"] if int(car.talk().get("from", -1)) >= 0 else "",
 		"cal": _cal_info(), "today": car.today(), "tdate": [int(car.date_of(car.today())["y"]), int(car.date_of(car.today())["m"]), int(car.date_of(car.today())["d"])], "nday": car.next_day(), "ndate": car.date_text(car.next_day()) if car.next_day() >= 0 else "", "cdate": car.date_text(car.now(), true), "dleft": maxi(car.next_day() - car.now(), 0) if car.next_day() >= 0 and not bool(car.d.get("cupmode", false)) else 0,
-		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(), "nat_due": car.nat_due(), "natm": _natm_info(), "natp": _nat_info(),
+		"tac": car.tac(), "otac": car.cpu_tac(car._next_opp()) if car.d.has("leagues") else [2, 1, 1], "ostyle": str(car.cpu_style(car._next_opp())["n"]) if car.d.has("leagues") else "", "ostyle_d": str(car.cpu_style(car._next_opp())["d"]) if car.d.has("leagues") else "", "cdiff": int(car.d.get("diff", 1)), "clen": int(car.d.get("len", 1)), "cal_m": cal_m, "sim": sim_res, "adv": adv_info, "yth": _youth_info(), "live": _live_info(), "hon": _hon_info(), "eu_due": car.eu_due(), "eu": _eu_info(), "nat_due": car.nat_due(), "natm": _natm_info(), "natp": _nat_info(),
 	}
 
 # The Champions Cup for the hud: your next European match, the groups and the knockout rounds.
@@ -5473,6 +5485,15 @@ func _begin_match(with_intro: bool) -> void:
 				tac_t[ti] = [int(tp[0]), int(tp[1]), int(tp[2])]
 	tac_base = tac_t.duplicate(true)
 	tac_mood = ["", ""]
+	sty_on = [false, false]
+	spell = [[0.0, 0.0], [0.0, 0.0]]
+	conceded_at = [-9999.0, -9999.0]
+	terr = [0.0, 0.0]
+	mood_at = [-9999.0, -9999.0]
+	for ti in 2:
+		live[ti] = _plan_of(tac_t[ti], 0.0, 0.5, 0.5)
+		live_tgt[ti] = (live[ti] as Array).duplicate()
+		sty[ti] = ClubDB.style(CLUBS[clubs[ti]] if clubs[ti] >= 0 and clubs[ti] < CLUBS.size() else {})
 	mgr_t = 0.0
 	cpu_sub_at = [0.0, 0.0]
 	sub_hint = {}
@@ -5656,6 +5677,7 @@ func _goal(team: int) -> void:
 			_so_result(true)
 		return
 	score[team] += 1
+	conceded_at[1 - team] = clock
 	if long_test:
 		var gk0 = teams[1 - team][0]
 		print("LONGDBG ball=", snappedf(ball.position.z, 0.01), ",", snappedf(ball.position.y, 0.01), " gk=", snappedf(gk0.position.x, 0.1), ",", snappedf(gk0.position.z, 0.01), " dive=", snappedf(gk0.dive_t, 0.01), " react=", snappedf(gk0.react_t, 0.01), " gkv=", snappedf(gk0.vel.z, 0.1), " bv=", snappedf(ball_vel.length(), 0.1), " stun=", snappedf(gk0.stun, 0.01))
@@ -5933,6 +5955,7 @@ func _skill(p, dir3: Vector3) -> void:
 
 # A ball at head height: the nearest man jumps for it.
 func _header(p) -> void:
+	_lob_touch(p, "head")
 	var s := side(p.team)
 	var b := ball.position
 	var to_goal := Vector2(HL * s - p.position.x, p.position.z).length()
@@ -7748,7 +7771,7 @@ func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0, thru := false):
 			# power picks the distance: a tap finds the near man, a long hold the far one
 			sc -= (absf(d - want_d) * 0.07) if want_d > 0.0 else d * 0.02
 		else:
-			sc += n.x * s * (2.2 if ai and p.position.x * s > 0.0 else 1.6) - absf(d - 15.0) * 0.04
+			sc += n.x * s * (2.2 if ai and p.position.x * s > 0.0 else 1.6) * (_sk(float(live[p.team][5]), 0.7, 1.45) if ai else 1.0) - absf(d - 15.0) * (0.04 if not ai else 0.04 * _sk(float(live[p.team][5]), 1.5, 0.6))
 			if ai and p.position.x * s > -22.0:
 				# in their half the computer looks for the dangerous ball: a man near goal, in the box, between the lines
 				var gdm: float = Vector2(HL * s - m.position.x, m.position.z).length()
@@ -7773,7 +7796,8 @@ func _pass_target(p, dir3: Vector3, ai: bool, want_d := -1.0, thru := false):
 			if ai:
 				continue
 			sc -= 2.5
-		sc += minf(mark, 6.0) * 0.18
+		# a passing side wants the free man above all, a direct one takes a ball to a marked man up front
+		sc += minf(mark, 6.0) * 0.18 * (_sk(float(live[p.team][5]), 1.4, 0.8) if ai else 1.0)
 		if ai and mark > 2.5 and _is_pro_man(m):
 			# the player career: your team mates look for you when you are free, more the further forward you are
 			sc += 1.2 + clampf((m.position.x - p.position.x) * s, 0.0, 12.0) * 0.06
@@ -7808,6 +7832,34 @@ func _roll_left(v0: float, t: float) -> float:
 
 var lead_dir := Vector3.ZERO
 var loft_at := -99.0 # when the last high pass was struck (sim_t)
+
+# Flight time of a lofted pass over d metres. A real chipped ball climbs well over head height: about
+# 3 m at the top over 10 m, 4.5 m over 20 m, 6 m over 30 m, 7.5 m for a long diagonal. It is only
+# within a defender's reach near the man who struck it and where it comes down (Daniel: high balls
+# did not feel high, they were stopped far from where they landed: before this a 20 m lob peaked at 2.2 m).
+var lob_rec := [-1, Vector3.ZERO, -99.0, true, 0.0, Vector3.ZERO] # test numbers: the last lob [team, landing spot, struck at, done]
+
+# who first touched the last lob, how far from where it was coming down, and how high the ball was
+func _lob_touch(p, kind: String) -> void:
+	if lob_rec[3] or sim_t - float(lob_rec[2]) > 4.0:
+		return
+	lob_rec[3] = true
+	if state != "play" or set_piece != "" or Vector2(ball.position.x - p.position.x, ball.position.z - p.position.z).length() > 3.0:
+		return # out of play, or a restart: not a touch on the lob
+	var dl: float = Vector2(ball.position.x - lob_rec[1].x, ball.position.z - lob_rec[1].z).length()
+	var own: bool = p.team == int(lob_rec[0])
+	var k := "lob_own" if own else "lob_opp"
+	stats[k] = int(stats.get(k, 0)) + 1
+	if not own:
+		stats["lob_opp_d"] = float(stats.get("lob_opp_d", 0.0)) + dl
+		if dl > 5.0:
+			stats["lob_opp_far"] = int(stats.get("lob_opp_far", 0)) + 1
+		if OS.get_cmdline_user_args().has("--lobdbg"):
+			print("LOBCUT ", kind, " d_land=", snappedf(dl, 0.1), " y=", snappedf(ball.position.y, 0.01), " t=", snappedf(sim_t - float(lob_rec[2]), 0.01), " role=", p.role, " lob_d=", snappedf(float(lob_rec[4]), 0.1), " from_kicker=", snappedf(Vector2(ball.position.x - lob_rec[5].x, ball.position.z - lob_rec[5].z).length(), 0.1), " vy=", snappedf(ball_vel.y, 0.1))
+
+func _lob_t(d: float) -> float:
+	var apex := clampf(1.3 + d * 0.16, 2.6, 7.6)
+	return sqrt(apex / 1.225)
 var thru_rx = null
 var thru_left := 0.0
 
@@ -7852,7 +7904,7 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 			spot.z = clampf(spot.z, -HW + 3.0, HW - 3.0)
 			var dd: float = Vector2(spot.x - p.position.x, spot.z - p.position.z).length()
 			if lofted:
-				thru_t = clampf(0.62 + dd * 0.034, 0.8, 2.15)
+				thru_t = _lob_t(dd)
 				# in the air it lands a step short of him and runs on with him
 				if absf(thru_t * 0.85 - tl) < 0.05:
 					break
@@ -7935,14 +7987,14 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 			sp = clampf(thru_v, 11.0, 27.0)
 		v = dir.normalized() * sp + Vector3(0, 0.6, 0)
 	else:
-		# a real high ball: about 1.0 s over 10 m, 1.6 s over 30 m, and drops at the receiver's feet
-		var t := clampf(0.62 + d * 0.034, 0.8, 2.15)
-		var aim2: Vector3 = (m.position + leadv) if lead > 0.0 else (m.position + m.vel * t * 0.7 + Vector3(side(p.team) * 2.0, 0, 0))
+		# a real high ball: it goes UP (about 3 m over 10 m, 6 m over 30 m) and drops at the receiver's feet
+		var t := _lob_t(d)
+		var aim2: Vector3 = (m.position + leadv) if lead > 0.0 else (m.position + m.vel * t * 0.7 + Vector3(side(p.team) * 0.8, 0, 0))
 		aim2.x = clampf(aim2.x, -HL + 3.0, HL - 3.0)
 		aim2.z = clampf(aim2.z, -HW + 2.0, HW - 2.0)
 		var dir2: Vector3 = (aim2 - p.position)
 		dir2.y = 0.0
-		t = clampf(0.62 + dir2.length() * 0.034, 0.8, 2.15)
+		t = _lob_t(dir2.length())
 		var vh := dir2.length() / t * (1.0 + 0.026 * t)
 		v = dir2.normalized() * vh + Vector3(0, 4.9 * t + 0.12 * t * t, 0)
 		# struck under the ball: backspin makes it hang and then sit down where it lands
@@ -7959,6 +8011,9 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 	_release(p, v, 2 if thrown else 0, ft, fb)
 	if lofted and not thrown:
 		loft_at = sim_t
+	if lofted and not thrown and not cross:
+		lob_rec = [p.team, _land()[0], sim_t, false, d, p.position]
+		stats["lob_n"] = int(stats.get("lob_n", 0)) + 1
 	if cross:
 		ball_spin = 0.0
 		ball_bs = 0.0
@@ -7967,6 +8022,16 @@ func _pass(p, m, lofted: bool, cross := false, lead := 0.0) -> void:
 		m.offside = true
 		off_spot = m.position
 	stats["passes"] += 1
+	if autotest:
+		var tq: Dictionary = tst[p.team]
+		tq["pas"] = int(tq.get("pas", 0)) + 1
+		if lofted and not cross:
+			tq["lob"] = int(tq.get("lob", 0)) + 1
+		if lead > 0.0:
+			tq["thru"] = int(tq.get("thru", 0)) + 1
+		if cross:
+			tq["cross"] = int(tq.get("cross", 0)) + 1
+		tq["pas_d"] = float(tq.get("pas_d", 0.0)) + d
 	pass_from = p
 	pass_pw = -1.0
 	if thrown:
@@ -8143,6 +8208,7 @@ func _shoot(p, power: float, aim_z: float, err_k: float, curl := 0.0) -> void:
 # ---------------------------------------------------------------- winning the ball
 
 func _give(p) -> void:
+	_lob_touch(p, "foot")
 	if ai_ev[0] != "" and not ai_ev[3] and sim_t - ai_ev[2] < 4.0:
 		# what came of the computer's last attacking ball (test numbers)
 		var rk: String = ai_ev[0] + ("_off" if p.offside else ("_ok" if p.team == ai_ev[1] else "_lost"))
@@ -8748,15 +8814,29 @@ func _pickups() -> void:
 				g.feet = bp
 			return
 	if b.y > 1.7:
-		if b.y < 2.75 and hs < 27.0 and ball_vel.y < 3.0 and state == "play":
+		if b.y < 3.1 and hs < 27.0 and ball_vel.y < 3.0 and state == "play":
+			# Only a man who can really get his head to it: how high he gets (his size and spring: the
+			# physical rating, the Air skill) and how far he can stretch sideways for it. No dice: the best
+			# placed man wins it, and a strong man wins the tie (before, anybody within 1.6 m headed anything
+			# up to 2.75 m, so a high ball was cut out far from where it came down).
 			var hb = null
-			var hd := 1.25
+			var hd := 1e9
 			for p in players:
 				if p.stun > 0.0 or p.role == "GK" or p.off or (p == ball_ignore and ignore_t > 0.0) or p.head_t >= 0.0:
 					continue
-				var d2 := Vector2(b.x - p.position.x, b.z - p.position.z).length() - randf() * 0.35 - (0.45 if p.has_ab("luft") else 0.0)
-				if d2 < hd:
-					hd = d2
+				var pk: float = clampf((p.phy - 45.0) / 45.0, 0.0, 1.0)
+				var luft: bool = p.has_ab("luft")
+				var top: float = 2.35 + 0.35 * pk + (0.2 if luft else 0.0)
+				if b.y > top:
+					continue
+				# the higher he has to jump, the less he can reach out sideways
+				var hr: float = (0.62 + 0.22 * pk + (0.25 if luft else 0.0)) * clampf(1.15 - (b.y - 1.9) / (top - 1.9 + 0.01) * 0.45, 0.6, 1.0)
+				var d2 := Vector2(b.x - p.position.x, b.z - p.position.z).length()
+				if d2 > hr:
+					continue
+				var sc2: float = d2 / hr - pk * 0.15
+				if sc2 < hd:
+					hd = sc2
 					hb = p
 			if hb != null:
 				if hb.offside:
@@ -8778,6 +8858,9 @@ func _pickups() -> void:
 			# like a pass to his feet (Daniel: the high through balls were always taken). Only lower, or with his head.
 			continue
 		var d := Vector2(b.x - p.position.x, b.z - p.position.z).length()
+		if ball_vel.y > 1.5 and sim_t - loft_at < 0.45 and ball_last != null and p.team != ball_last.team and d > 0.4:
+			# a chip climbs steeply off the boot: a man in front only blocks it if he is right on the ball
+			continue
 		# a fast ball that is not meant for you only hits you if it really hits your body
 		var rd_k: float = 1.15 if (p.has_ab("laeser") and not shot_live and ball_last != null and ball_last.team != p.team) else (0.42 if shot_live else 0.55)
 		if hs > 12.0 and not p.recv and d > rd_k:
@@ -8848,13 +8931,18 @@ var hold_m := [0, 0.0, 0, 0] # test: AI passes, sum of time on the ball, frames 
 func _press_on(t: int, c) -> bool:
 	var s := side(t)
 	var cu: float = c.position.x * s
-	var pr: int = int(tac_t[t][1])
-	if cu < [-24.0, -14.0, 6.0][pr]:
+	# how hard this side presses right now (0 low .. 2 high, from its style and its manager's plan)
+	var pf: float = clampf(float(live[t][1]), 0.0, 2.0)
+	var zone: float = lerpf(-24.0, -14.0, pf) if pf < 1.0 else lerpf(-14.0, 6.0, pf - 1.0)
+	if cu < zone:
 		# the last 38 metres (a low block waits until the box, a high press hunts him in his own half)
 		return true
-	if sim_t - poss_t < [1.2, 2.5, 4.0][pr] and ball_last != null:
+	if sim_t - poss_t < (lerpf(1.2, 2.5, pf) if pf < 1.0 else lerpf(2.5, 4.0, pf - 1.0)) and ball_last != null:
 		return true
-	if sim_t - own_at < 0.45 and c.vel.length() < c.top_speed * 0.6:
+	if pf > 1.4 and c.role in ["GK", "DF"] and cu > 0.0 and cu < 30.0 and c.vel.length() < 3.0:
+		# a pressing side goes after a defender who dwells on it at the back
+		return true
+	if sim_t - own_at < (0.45 if pf < 1.3 else 0.7) and c.vel.length() < c.top_speed * 0.6:
 		# his first touch, and it is not running for him: the moment to close him down
 		return true
 	if c.vel.length() > 1.0 and c.vel.normalized().x * s > 0.6:
@@ -8874,6 +8962,51 @@ func _press_on(t: int, c) -> bool:
 # Like a real manager the computer changes its plan during the match: behind late on it presses high and
 # throws men forward, ahead it sits deeper and sees it out, a man down it tightens up. It also brings on
 # fresh legs. For a human side it only suggests a change (tired men); you make it in the pause menu.
+func _plan_of(t: Array, line: float, tempo: float, direct: float) -> Array:
+	return [float(int(t[0]) - 2), float(int(t[1])), float(int(t[2])), line, tempo, direct]
+
+# Below 0.5 towards lo, above it towards hi, and exactly 1 for a team that plays it down the middle.
+func _sk(v: float, lo: float, hi: float) -> float:
+	return lerpf(lo, 1.0, v * 2.0) if v < 0.5 else lerpf(1.0, hi, (v - 0.5) * 2.0)
+
+func _avg_fit(t: int) -> float:
+	var a := 0.0
+	var n := 0
+	for p in teams[t]:
+		if not p.off and p.role != "GK":
+			a += p.fit
+			n += 1
+	return a / maxf(n, 1)
+
+# The computer side's start: its club's style, and in a quick match how strong it is against you (in the career
+# the plan already comes from the career, which knows the clubs' strength and derbies).
+func _style_start(t: int) -> void:
+	var st: Dictionary = sty[t]
+	sty_on[t] = true
+	var base: Array = tac_t[t]
+	if not (career_on and in_career and car.has_save() and car.d.has("leagues") and not car.pro()):
+		if OS.get_environment("TACT%d" % t) == "":
+			base = ClubDB.plan_for(st, float(_team_ovr(t) - _team_ovr(1 - t)), derby_on)
+	tac_t[t] = (base as Array).duplicate()
+	tac_base[t] = (base as Array).duplicate()
+	var pl := _plan_of(base, (float(st["ln"]) - 0.5) * 1.4, float(st["tp"]), float(st["dr"]))
+	# the press and width numbers carry the club's own shade too, not only the three steps
+	pl[1] = clampf(pl[1] + (float(st["pr"]) - 0.5) * 0.5, 0.0, 2.0)
+	pl[2] = clampf(pl[2] + (float(st["wd"]) - 0.5) * 0.5, 0.0, 2.0)
+	live[t] = pl
+	live_tgt[t] = pl.duplicate()
+	spell[t] = [0.0, 60.0 * (6.0 + randf() * 10.0)]
+	if not autotest:
+		fx("say", "%s like to play %s." % [str(TEAM_NAMES[t]).capitalize(), _style_say(str(st["k"]))])
+
+func _style_say(k: String) -> String:
+	return {"possession": "a patient passing game", "press": "a high pressing game", "counter": "on the counter-attack",
+		"long": "it long and direct", "wing": "down the wings", "block": "deep and compact", "balanced": "a balanced game"}.get(k, "their own game")
+
+# Like a real manager the computer keeps changing how his side plays, from his club's style and his own nerve:
+# behind he pushes up (a bold one sooner), ahead he protects it (a careful one sooner), straight after a goal
+# against he wants a reaction, at level score his side goes through spells of pressing high, late on he goes
+# for the win or settles for the point, tired legs drop off, a man down tightens up and a man up goes for it.
 const MOOD_TXT := {
 	"push": ["PUSHING FOR A GOAL", "%s push up and press higher, they need a goal."],
 	"allout": ["ALL OUT ATTACK", "%s are throwing everyone forward now!"],
@@ -8881,6 +9014,14 @@ const MOOD_TXT := {
 	"bus": ["PARKING THE BUS", "Everyone behind the ball for %s, they want to see this out."],
 	"ten": ["TIGHTENING UP", "%s are a man down and tighten up at the back."],
 	"ease": ["EASING OFF", "%s are cruising and take the foot off the gas."],
+	"react": ["STUNG INTO ACTION", "%s want an answer straight away and press higher."],
+	"spell": ["PRESSING HIGH", "%s turn up the heat and press high up the pitch."],
+	"winner": ["GOING FOR THE WIN", "%s are not happy with a draw, they go for the winner."],
+	"point": ["HAPPY WITH A POINT", "%s look happy with a point and keep it tight."],
+	"tired": ["TIRED LEGS", "%s are tiring and drop off, the pressing has stopped."],
+	"manup": ["MAN ADVANTAGE", "%s have the extra man and push on."],
+	"pinned": ["UNDER THE COSH", "%s are pinned back in their own half."],
+	"keep": ["KEEPING THE BALL", "%s slow it down and keep the ball."],
 }
 
 func _men_on(t: int) -> int:
@@ -8894,58 +9035,167 @@ func _managers() -> void:
 	if state != "play" or screen != "match" or teams[0].size() < 2:
 		return
 	var mn: float = clock / 60.0
+	# where the ball has been lately (about the last three match minutes)
+	for t in 2:
+		var bx: float = ball.position.x * side(t)
+		var v := clampf(bx / 30.0, -1.0, 1.0)
+		terr[t] = lerpf(float(terr[t]), v, clampf(2.0 * 90.0 / LENGTHS[opt_len] * 60.0 / 180.0, 0.02, 0.5))
 	for t in 2:
 		if _team_human(t):
 			_sub_hints(t, mn)
+			live[t] = _plan_of(tac_t[t], 0.0, 0.5, 0.5)
 			continue
 		if humans.is_empty() and not autotest:
 			continue
+		if not sty_on[t]:
+			_style_start(t)
+		var st: Dictionary = sty[t]
+		var bold: float = float(st["bold"])
 		var b: Array = tac_base[t]
-		var m: int = int(b[0])
-		var pr: int = int(b[1])
-		var w: int = int(b[2])
+		var g := _plan_of(b, (float(st["ln"]) - 0.5) * 1.4, float(st["tp"]), float(st["dr"]))
+		g[1] += (float(st["pr"]) - 0.5) * 0.5
+		g[2] += (float(st["wd"]) - 0.5) * 0.5
 		var gd: int = score[t] - score[1 - t]
+		var men: int = _men_on(t) - _men_on(1 - t)
 		var mood := ""
+		var prio := 0
 		if gd < 0:
-			if mn >= 80.0 or (gd <= -2 and mn >= 62.0):
-				m = 4
-				pr = 2
-				w = 2
-				mood = "allout"
-			elif mn >= 58.0 or gd <= -2:
-				m = maxi(m, 3)
-				pr = 2
-				mood = "push"
+			# behind: the later it gets (and the bolder the manager) the more he throws at it
+			var u: float = clampf((mn - lerpf(68.0, 42.0, bold)) / 24.0, 0.0, 1.0)
+			if gd <= -2:
+				u = maxf(u, clampf((mn - 50.0) / 25.0, 0.3, 1.0))
+			if clock - float(conceded_at[t]) < 5.0 * 60.0 and mn < 82.0:
+				u = maxf(u, 0.3 + 0.3 * bold)
+				mood = "react"
+			if u > 0.15:
+				g[0] += 2.4 * u
+				g[1] += 1.3 * u
+				g[2] += 0.6 * u
+				g[3] += 0.9 * u
+				g[4] += 0.35 * u
+				g[5] += 0.3 * u
+				if u > 0.8:
+					mood = "allout"
+					prio = 3
+				elif u > 0.4 or mood == "":
+					mood = "push"
+					prio = 2
 		elif gd > 0:
-			if mn >= 82.0 and gd == 1:
-				m = 0
-				pr = 0
-				w = mini(w, 1)
-				mood = "bus"
-			elif mn >= 65.0 and gd <= 2:
-				m = mini(m, 1)
-				pr = mini(pr, 1)
-				mood = "sit"
-			elif gd >= 3:
-				m = mini(m, 2)
-				pr = mini(pr, 1)
-				mood = "ease"
-		if mood == "" or mood == "push":
-			if _men_on(t) < _men_on(1 - t):
-				m = maxi(mini(m, int(b[0])) - 1, 0)
-				pr = mini(pr, 1)
+			# ahead: a careful manager starts to protect it earlier, a bold one keeps going
+			var q: float = clampf((mn - lerpf(55.0, 78.0, bold)) / 20.0, 0.0, 1.0) * (1.0 if gd == 1 else 0.65)
+			if gd >= 3:
+				q = maxf(q, 0.35)
+			if q > 0.1:
+				g[0] -= 2.2 * q
+				g[1] -= 1.0 * q
+				g[2] -= 0.5 * q
+				g[3] -= 0.9 * q
+				# a passing side kills the game with the ball, the rest get rid of it
+				if float(st["dr"]) < 0.45:
+					g[4] -= 0.4 * q
+					g[5] -= 0.2 * q
+				else:
+					g[5] += 0.25 * q
+				mood = "bus" if q > 0.8 and gd == 1 and mn >= 80.0 else ("ease" if gd >= 3 else ("keep" if float(st["dr"]) < 0.45 and q > 0.45 else "sit"))
+				prio = 2
+		if gd == 0 and mn >= 72.0:
+			# level late on: does he go for it? A bold manager or the better side does, a careful underdog does not
+			var want: float = bold + clampf((float(_team_ovr(t) - _team_ovr(1 - t))) / 16.0, -0.4, 0.4) + (0.25 if _needs_winner() else 0.0) + (0.15 if derby_on else 0.0)
+			var k2: float = clampf((mn - 72.0) / 12.0, 0.0, 1.0)
+			if want > 0.62:
+				g[0] += 1.4 * k2
+				g[1] += 0.6 * k2
+				g[3] += 0.5 * k2
+				mood = "winner"
+				prio = 2
+			elif want < 0.3:
+				g[0] -= 1.0 * k2
+				g[1] -= 0.5 * k2
+				g[3] -= 0.4 * k2
+				mood = "point"
+				prio = 2
+		# spells of pressing at level score or one goal in it: not only when behind (Daniel)
+		var sp: Array = spell[t]
+		if absi(gd) <= 1 and mood not in ["bus", "sit", "keep", "allout"] and mn < 85.0:
+			if clock < float(sp[0]):
+				g[0] += 0.5
+				g[1] += 0.9
+				g[3] += 0.55
+				g[4] += 0.15
+				if prio < 2:
+					mood = "spell"
+					prio = 1
+			elif clock >= float(sp[1]):
+				# how likely a spell is: a pressing club, a bold manager, a side that has been on the back foot
+				var ch: float = 0.2 + 0.45 * float(st["pr"]) + 0.2 * bold + clampf(-float(terr[t]) * 0.4, 0.0, 0.25) + (0.2 if gd < 0 else 0.0)
+				if randf() < ch:
+					sp[0] = clock + 60.0 * (3.5 + randf() * 4.5)
+					sp[1] = float(sp[0]) + 60.0 * (8.0 + randf() * 10.0)
+				else:
+					sp[1] = clock + 60.0 * (4.0 + randf() * 6.0)
+		# pinned back for minutes: a careful side drops deeper still, a bold one tries to press its way out
+		if float(terr[t]) < (-0.25 if str(tac_mood[t]) in ["pinned", "spell"] else -0.42) and gd >= 0 and mood == "":
+			if bold < 0.5:
+				g[3] -= 0.4
+				g[0] -= 0.4
+				mood = "pinned"
+			else:
+				g[1] += 0.5
+				mood = "spell"
+		# tired legs cannot keep pressing
+		var fa := _avg_fit(t)
+		if fa < 0.76:
+			var tk: float = clampf((0.76 - fa) / 0.14, 0.0, 1.0)
+			g[1] -= 0.9 * tk
+			g[3] -= 0.5 * tk
+			g[4] -= 0.15 * tk
+			if tk > 0.5 and prio < 1:
+				mood = "tired"
+		# a man down or a man up
+		if men < 0:
+			g[0] -= 0.9 * (0.5 if mood in ["push", "allout"] else 1.0)
+			g[1] -= 0.6
+			g[2] -= 0.4
+			g[5] += 0.2
+			if prio < 3:
 				mood = "ten"
-		var nt := [m, pr, w]
+		elif men > 0:
+			g[0] += 0.6
+			g[1] += 0.4
+			g[2] += 0.4
+			if prio < 2:
+				mood = "manup"
+		g[0] = clampf(g[0], -2.0, 2.0)
+		g[1] = clampf(g[1], 0.0, 2.0)
+		g[2] = clampf(g[2], 0.0, 2.0)
+		g[3] = clampf(g[3], -1.0, 1.0)
+		g[4] = clampf(g[4], 0.0, 1.0)
+		g[5] = clampf(g[5], 0.0, 1.0)
+		live_tgt[t] = g
+		# a team does not switch its whole shape in a second: it moves into the new plan
+		var cur: Array = live[t]
+		for k in 6:
+			cur[k] = lerpf(float(cur[k]), float(g[k]), 0.3)
+		var nt := [clampi(roundi(cur[0]) + 2, 0, 4), clampi(roundi(cur[1]), 0, 2), clampi(roundi(cur[2]), 0, 2)]
 		if nt != tac_t[t]:
 			tac_t[t] = nt
 		if mood != tac_mood[t]:
 			tac_mood[t] = mood
-			if mood != "" and not autotest:
+			# the toast only for a real change of plan, and not every minute
+			if mood != "" and not autotest and (clock - float(mood_at[t]) > (6.0 if mood in ["spell", "pinned", "tired", "keep"] else 4.0) * 60.0 or mood in ["allout", "ten", "manup", "react"]):
+				mood_at[t] = clock
 				var tx: Array = MOOD_TXT[mood]
 				fx("say", str(tx[1]) % str(TEAM_NAMES[t]).capitalize())
 				hud.toast("%s  ·  %s" % [str(TEAM_NAMES[t]).to_upper(), tx[0]])
 				_net_toast("%s  ·  %s" % [str(TEAM_NAMES[t]).to_upper(), tx[0]], -1)
 			stats["mood_" + (mood if mood != "" else "plan")] = int(stats.get("mood_" + (mood if mood != "" else "plan"), 0)) + 1
+		if autotest:
+			stats["press_sum%d" % t] = float(stats.get("press_sum%d" % t, 0.0)) + float(cur[1])
+			stats["ment_sum%d" % t] = float(stats.get("ment_sum%d" % t, 0.0)) + float(cur[0])
+			stats["mgr_n%d" % t] = int(stats.get("mgr_n%d" % t, 0)) + 1
+			if gd == 0:
+				stats["press_lvl%d" % t] = float(stats.get("press_lvl%d" % t, 0.0)) + float(cur[1])
+				stats["lvl_n%d" % t] = int(stats.get("lvl_n%d" % t, 0)) + 1
 		_cpu_subs(t, mn, mood)
 
 # The computer's substitutions: tired men off from about the hour, an extra forward when it chases the game.
@@ -9063,12 +9313,43 @@ func _lane_block(t: int, a: Vector3, b: Vector3, r: float) -> int:
 			k += 1
 	return k
 
+func _near_opp(q) -> float:
+	var nd := 99.0
+	for o in teams[1 - q.team]:
+		if not o.off:
+			nd = minf(nd, o.position.distance_to(q.position))
+	return nd
+
+# the man up front a long ball goes to: a forward (or a midfielder up the pitch) lo..hi metres away, onside and not
+# smothered, the tallest and strongest of them first (the target man)
+func _long_target(p, lo: float, hi: float):
+	var s := side(p.team)
+	var best = null
+	var bs := -1e9
+	for m in teams[p.team]:
+		if m == p or m.off or m.role in ["GK", "DF"] or m.stun > 0.0:
+			continue
+		var d: float = m.position.distance_to(p.position)
+		var up: float = (m.position.x - p.position.x) * s
+		if d < lo or d > hi or up < lo * 0.6 or _is_offside(p, m):
+			continue
+		var nd: float = _near_opp(m)
+		if nd < 1.2:
+			continue
+		var sc: float = up * 0.05 + minf(nd, 5.0) * 0.4 + m.phy * 0.03 + (1.0 if m.role == "FW" else 0.0) - absf(m.position.z) * 0.03
+		if sc > bs:
+			bs = sc
+			best = m
+	return best
+
 # A run in behind that is on: a man going forward near their last line, onside, with grass in front of him
 # that he gets to before any defender (or the keeper). Returns [man, lofted, lead time] or null.
 func _ai_thru(p):
 	var s := side(p.team)
 	var t: int = p.team
-	if p.position.x * s < -20.0:
+	var drc: float = float(live[t][5])
+	# a direct side plays the ball over the top from deep, a passing side only from around halfway
+	if p.position.x * s < lerpf(-12.0, -34.0, drc):
 		return null
 	var best = null
 	var bs := -1e9
@@ -9081,7 +9362,7 @@ func _ai_thru(p):
 		if _is_offside(p, m):
 			continue
 		var d: float = m.position.distance_to(p.position)
-		if d < 8.0 or d > 42.0:
+		if d < 8.0 or d > lerpf(36.0, 50.0, drc):
 			continue
 		var rd := Vector3(s, 0, 0) * 0.55
 		var mv: Vector3 = m.vel
@@ -9113,7 +9394,7 @@ func _ai_thru(p):
 		var lofted := false
 		if _lane_block(t, p.position, spot, 1.7) > 0:
 			# the ground is shut: over the top, but only a real passer tries the chip
-			if d < 14.0 or p.pas < 62:
+			if d < 14.0 or p.pas < int(lerpf(68.0, 55.0, drc)):
 				continue
 			lofted = true
 		var sc: float = (spot.x * s - p.position.x * s) * 0.12 + minf(margin, 1.5) * 2.0 - d * 0.03
@@ -9162,6 +9443,18 @@ func _ai_carrier(p, dt: float) -> Vector3:
 		p.hold_t += dt
 		if p.hold_t > (0.45 if p.feet else 1.1):
 			var m = _pass_target(p, Vector3.ZERO, true)
+			var gdr: float = float(live[p.team][5])
+			if not p.feet and gdr > 0.62 and randf() < (gdr - 0.45) * 1.6:
+				# a direct side's keeper kicks it long to the men up front
+				var far = _long_target(p, 30.0, 62.0)
+				if far != null:
+					m = far
+			elif gdr < 0.38 and m != null and p.position.distance_to(m.position) > 22.0:
+				# a passing side builds from the back: short to a defender
+				for q in teams[p.team]:
+					if q.role == "DF" and not q.off and q.position.distance_to(p.position) < 22.0 and _near_opp(q) > 5.0:
+						m = q
+						break
 			if m == null:
 				m = teams[p.team][1 + randi() % 4]
 			_pass(p, m, p.position.distance_to(m.position) > 22.0)
@@ -9243,11 +9536,20 @@ func _ai_carrier(p, dt: float) -> Vector3:
 			return Vector3.ZERO
 		# A run in behind: a passer with his head up sees it and plays it straight away, he does not
 		# wait for the build-up clock. A poor passer or an easy computer side misses more of them.
-		if p.hold_t > 0.35 and randf() < (0.3 + 0.55 * pas_q) * vis:
+		if p.hold_t > 0.35 and randf() < minf((0.3 + 0.55 * pas_q) * vis * _sk(float(live[p.team][5]), 0.7, 1.35), 0.97):
 			var th = _ai_thru(p)
 			if th != null:
 				_ai_mark("ai_thru_lob" if th[1] else "ai_thru", p.team)
 				_pass(p, th[0], th[1], false, th[2])
+				return Vector3.ZERO
+		# A direct side goes long early: from its own half straight up to the forwards, to win the
+		# header or the second ball, instead of passing it through midfield.
+		var drc2: float = float(live[p.team][5])
+		if drc2 > 0.6 and p.hold_t > 0.4 and p.position.x * s < 8.0 and p.role != "FW" and randf() < (drc2 - 0.55) * (0.5 + 0.5 * pas_q) * 1.3:
+			var lt = _long_target(p, 24.0, 48.0)
+			if lt != null:
+				_ai_mark("ai_long_ball", p.team)
+				_pass(p, lt, true)
 				return Vector3.ZERO
 		# Out wide in the last third: whip it in for the men in the box, or pull it back
 		var wide_now: bool = absf(p.position.z) > 13.0 and p.position.x * s > HL - 30.0
@@ -9260,13 +9562,13 @@ func _ai_carrier(p, dt: float) -> Vector3:
 					_pass(p, cb2, false)
 					return Vector3.ZERO
 				var cm = _cross_target(p)
-				if cm != null and Vector2(HL * s - cm.position.x, cm.position.z).length() < 16.0 and randf() < 0.45 + 0.4 * pas_q:
+				if cm != null and Vector2(HL * s - cm.position.x, cm.position.z).length() < 16.0 and randf() < (0.45 + 0.4 * pas_q) * _sk(float(live[p.team][2]) * 0.5, 0.8, 1.25):
 					_ai_mark("ai_cross", p.team)
 					_pass(p, cm, true, true)
 					return Vector3.ZERO
 		# how long he is happy to keep it: a calm playmaker longer, everybody shorter near their own goal
 		var own_d: float = p.position.distance_to(Vector3(-HL * s, 0, 0))
-		var keep_t: float = lerpf(1.6, 3.2, randf()) * (0.6 if own_d < 25.0 else 1.0)
+		var keep_t: float = lerpf(1.6, 3.2, randf()) * (0.6 if own_d < 25.0 else 1.0) * _sk(float(live[p.team][4]), 1.15, 0.7) * _sk(float(live[p.team][5]), 0.75, 1.05)
 		if p.position.x * s > 0.0:
 			# calm at the back, but in their half the ball moves quicker
 			keep_t *= 0.75
@@ -9281,11 +9583,12 @@ func _ai_carrier(p, dt: float) -> Vector3:
 			# someone is right on him from the front: move it on
 			go = true
 		elif closing:
-			# pressure is coming: half the time he plays it, otherwise he keeps it and turns away from it
-			go = p.hold_t > 0.9 and randf() < 0.35
+			# pressure is coming: half the time he plays it, otherwise he keeps it and turns away from it.
+			# A passing side moves it on early, one and two touches, before the man gets there.
+			go = p.hold_t > lerpf(0.55, 0.9, clampf(float(live[p.team][5]) * 2.0, 0.0, 1.0)) and randf() < 0.35 * _sk(float(live[p.team][5]), 2.2, 0.85)
 		elif p.hold_t > keep_t:
 			go = true
-		elif p.hold_t > 0.8 and randf() < (0.2 + 0.15 * pas_q) * (1.6 if p.position.x * s > -12.0 else 1.0):
+		elif p.hold_t > 0.8 and randf() < (0.2 + 0.15 * pas_q) * (1.6 if p.position.x * s > -12.0 else 1.0) * _sk(float(live[p.team][5]), 0.65, 1.6):
 			# room to play: only a real chance makes him pass early (a man free in front, a run in behind)
 			m3 = _pass_target(p, Vector3.ZERO, true)
 			if m3 != null and (m3.position.x - p.position.x) * s > 10.0:
@@ -9343,9 +9646,10 @@ func _ai_carrier(p, dt: float) -> Vector3:
 	# Building up he jogs with it, head up, instead of sprinting into the next man; he only runs at
 	# full pace into open grass near their goal or on the break.
 	var pace_k := 0.99
-	var brk: bool = sim_t - poss_t < 4.0 or dist < 30.0
+	var tpo: float = float(live[p.team][4])
+	var brk: bool = sim_t - poss_t < lerpf(2.5, 6.0, tpo) or dist < 30.0
 	if not brk:
-		pace_k = 0.88
+		pace_k = lerpf(0.84, 0.93, tpo)
 		if ux > -15.0 and (near == null or nd > 9.0 or (near.position - p.position).dot(dir) < 0.0):
 			# open grass in front of him past halfway: he drives into it, like FIFA's AI does
 			pace_k = 0.96
@@ -9449,8 +9753,9 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 	var z: float = p.home.y * s * 21.0 + ball.position.z * 0.42
 	var hurry := false
 	# the manager's plan: how far up the team sits, and how wide it plays
-	var tm: float = float(int(tac_t[t][0]) - 2)
-	var tw: float = [0.82, 1.0, 1.18][int(tac_t[t][2])]
+	var lv: Array = live[t]
+	var tm: float = float(lv[0])
+	var tw: float = 0.82 + 0.18 * float(lv[2])
 	u += tm * 3.2
 	if att:
 		# With the ball the whole team moves up with it, like a real side: the back line squeezes up,
@@ -9488,7 +9793,7 @@ func _ai_offball(p, chaser: Array, second: Array, aim: Vector3) -> Vector3:
 		# Without the ball the back four hold a line instead of running back to the six-yard box: they stay
 		# around the edge of the box while the ball is out in front, and drop off with it, a few metres goal
 		# side, as it comes at them. Close to goal they squeeze in towards the ball.
-		var dl: float = minf(-35.5 + (p.home.x - 0.17) * 20.0 + tm * 3.0 + (int(tac_t[t][1]) - 1) * 3.0, bu - 7.0)
+		var dl: float = minf(-35.5 + (p.home.x - 0.17) * 20.0 + tm * 3.0 + (float(lv[1]) - 1.0) * 3.0 + float(lv[3]) * 4.0, bu - 7.0)
 		u = clampf(maxf(u, dl), -47.0, 14.0)
 		if not loose and ball_owner.team != t:
 			u = maxf(minf(u, ball_owner.position.x * s - 2.5), -50.5)
@@ -10137,13 +10442,18 @@ func _process(dt: float) -> void:
 			test_drag = []
 	if shot_path != "" and OS.get_environment("STRIP") != "":
 		# test pictures of a computer attack: a frame every 0.6 s once team 1 has it in the last 40 m
-		if strip_n < 0 and real_t > shot_at and ball_owner != null and ball_owner.team == 1 and ball_owner.position.x * side(1) > HL - 40.0 and state == "play":
+		var lobs := OS.get_environment("LOBSTRIP") != ""
+		if lobs and strip_n < 0 and real_t > shot_at and not lob_rec[3] and sim_t - float(lob_rec[2]) < 0.1 and float(lob_rec[4]) > 18.0:
+			# test: frames of a long lob from the moment it is struck
+			strip_n = 0
+			strip_t = real_t
+		if not lobs and strip_n < 0 and real_t > shot_at and ball_owner != null and ball_owner.team == 1 and ball_owner.position.x * side(1) > HL - 40.0 and state == "play":
 			strip_n = 0
 			strip_t = real_t
 		if strip_n >= 0 and real_t >= strip_t:
 			get_viewport().get_texture().get_image().save_png(shot_path.replace(".png", "_%d.png" % strip_n))
 			strip_n += 1
-			strip_t = real_t + 0.6
+			strip_t = real_t + (0.3 if OS.get_environment("LOBSTRIP") != "" else 0.6)
 			if strip_n >= int(OS.get_environment("STRIP")):
 				get_tree().quit()
 		return
